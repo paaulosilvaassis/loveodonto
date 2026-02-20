@@ -118,20 +118,27 @@ export async function authenticateByEmailPassword(email, password) {
   const row = (db.userAuth || []).find(
     (r) => (r.email || '').toLowerCase() === emailNorm && r.isActive !== false
   );
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'userAuthService.js:auth',message:'auth step 1 userAuth',data:{emailNorm,hasRow:!!row,userAuthCount:(db.userAuth||[]).length,userAuthEmails:(db.userAuth||[]).map(r=>r.email)},timestamp:Date.now(),hypothesisId:'H-auth'})}).catch(()=>{});
+  // #endregion
   if (!row || !row.passwordHash) return null;
 
   const ok = await verifyPassword(password, row.passwordHash);
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'userAuthService.js:auth',message:'auth step 2 password',data:{passwordOk:ok,collaboratorId:row?.collaboratorId},timestamp:Date.now(),hypothesisId:'H-auth'})}).catch(()=>{});
+  // #endregion
   if (!ok) return null;
 
   const access = (db.collaboratorAccess || []).find((a) => a.collaboratorId === row.collaboratorId);
-  if (!access?.userId) return null;
-
   const tenant = getDefaultTenant();
-  if (!tenant) return null;
-
   const membership = (db.memberships || []).find(
-    (m) => m.tenant_id === tenant.id && m.user_id === access.userId && m.status === 'active'
+    (m) => m.tenant_id === tenant?.id && m.user_id === access?.userId && m.status === 'active'
   );
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'userAuthService.js:auth',message:'auth step 3 access+tenant+membership',data:{hasAccess:!!access?.userId,accessUserId:access?.userId,tenantId:tenant?.id,hasMembership:!!membership,membershipHasAccess:membership?.has_system_access},timestamp:Date.now(),hypothesisId:'H-auth'})}).catch(()=>{});
+  // #endregion
+  if (!access?.userId) return null;
+  if (!tenant) return null;
   if (!membership || membership.has_system_access === false) return null;
 
   const now = new Date().toISOString();

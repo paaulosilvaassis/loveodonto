@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { LogIn, Shield } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { authenticateByEmailPassword } from '../services/userAuthService.js';
-import { seedAdminCredentialsIfEmpty } from '../db/index.js';
+import { seedAdminCredentialsIfEmpty, forceSeedAdminCredentials } from '../db/index.js';
 import Button from '../components/Button.jsx';
 import appLogo from '../assets/love-odonto-logo.png';
 
@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(false);
   const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [forceSeedLoading, setForceSeedLoading] = useState(false);
   const [AdminGateModalComponent, setAdminGateModalComponent] = useState(null);
   const shownActivatedRef = useRef(false);
   const navigate = useNavigate();
@@ -89,6 +90,20 @@ export default function LoginPage() {
       setError(err?.message || 'Erro ao fazer login.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForceSeedAdmin = async () => {
+    setForceSeedLoading(true);
+    setError('');
+    try {
+      await forceSeedAdminCredentials();
+      setToast({ message: 'Admin recriado: admin@loveodonto.com / admin123', type: 'success' });
+      setTimeout(() => setToast(null), 5000);
+    } catch (err) {
+      setError(err?.message || 'Erro ao recriar admin.');
+    } finally {
+      setForceSeedLoading(false);
     }
   };
 
@@ -220,6 +235,17 @@ export default function LoginPage() {
               )}
               <Link to="/activate" className="link">Recebeu um convite? Ativar acesso</Link>
               <Link to="/forgot-password" className="link">Esqueci minha senha</Link>
+              {import.meta.env?.DEV && (
+                <button
+                  type="button"
+                  className="link"
+                  onClick={handleForceSeedAdmin}
+                  disabled={forceSeedLoading}
+                  style={{ background: 'none', border: 'none', cursor: forceSeedLoading ? 'wait' : 'pointer', padding: 0, font: 'inherit' }}
+                >
+                  {forceSeedLoading ? 'Recriando admin…' : 'Criar admin (dev)'}
+                </button>
+              )}
             </div>
           </form>
 

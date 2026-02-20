@@ -1066,3 +1066,60 @@
 {"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622694013,"hypothesisId":"H4"}
 {"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":true,"path":"/dashboard"},"timestamp":1771622694066,"hypothesisId":"H3"}
 {"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":true,"path":"/dashboard"},"timestamp":1771622694067,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"index.html:boot","message":"inline boot","data":{"readyState":"loading","title":"LOVE ODONTO","href":"https://paaulosilvaassis-loveodonto26.vercel.app/login"},"timestamp":1771622748066,"hypothesisId":"H0"}
+{"sessionId":"53053a","location":"accessService.js:load","message":"accessService loaded","data":{"hasCanManage":"function"},"timestamp":1771622748273,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"userAuthService.js:load","message":"userAuthService loaded","data":{"hasCanManage":"function"},"timestamp":1771622748441,"hypothesisId":"H5"}
+{"sessionId":"53053a","location":"main.jsx:before-createRoot","message":"main before createRoot","data":{"hasRoot":true},"timestamp":1771622748486,"hypothesisId":"H2"}
+{"sessionId":"53053a","location":"bootstrap.jsx:1","message":"bootstrap start","data":{},"timestamp":1771622748491,"hypothesisId":"H1"}
+{"sessionId":"53053a","location":"App.jsx:render","message":"App render","data":{},"timestamp":1771622748512,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"index.html:boot","message":"inline boot","data":{"readyState":"loading","title":"LOVE ODONTO","href":"https://paaulosilvaassis-loveodonto26.vercel.app/login"},"timestamp":1771622751361,"hypothesisId":"H0"}
+{"sessionId":"53053a","location":"accessService.js:load","message":"accessService loaded","data":{"hasCanManage":"function"},"timestamp":1771622751563,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"userAuthService.js:load","message":"userAuthService loaded","data":{"hasCanManage":"function"},"timestamp":1771622751592,"hypothesisId":"H5"}
+{"sessionId":"53053a","location":"main.jsx:before-createRoot","message":"main before createRoot","data":{"hasRoot":true},"timestamp":1771622751607,"hypothesisId":"H2"}
+{"sessionId":"53053a","location":"bootstrap.jsx:1","message":"bootstrap start","data":{},"timestamp":1771622751609,"hypothesisId":"H1"}
+{"sessionId":"53053a","location":"App.jsx:render","message":"App render","data":{},"timestamp":1771622751615,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622876672,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622876675,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622876748,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622876751,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622876907,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622876905,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622881739,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622881747,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622881742,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622881750,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622882738,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771622882740,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"index.html:boot","message":"inline boot","data":{"readyState":"loading","title":"LOVE ODONTO","href":"http://localhost:5175/"},"timestamp":1771623420481,"hypothesisId":"H0"}
+{"sessionId":"53053a","location":"bootstrap.jsx:1","message":"bootstrap start","data":{},"timestamp":1771623421910,"hypothesisId":"H1"}
+{"sessionId":"53053a","location":"db/index.js:seedAdmin","message":"seedAdmin check","data":{"hasAdmin":true,"hasUserAdmin":true,"storageKey":"appgestaoodonto.db","userAuthCount":1},"timestamp":1771623421998,"hypothesisId":"H-seed"}
+{"sessionId":"53053a","location":"accessService.js:load","message":"accessService loaded","data":{"hasCanManage":"function"},"timestamp":1771623422744,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"userAuthService.js:load","message":"userAuthService loaded","data":{"hasCanManage":"function"},"timestamp":1771623422770,"hypothesisId":"H5"}
+{"sessionId":"53053a","location":"App.jsx:render","message":"App Routes render","data":{"pathname":"/"},"timestamp":1771623422806,"hypothesisId":"H2"}
+{"sessionId":"53053a","location":"App.jsx:render","message":"App Routes render","data":{"pathname":"/"},"timestamp":1771623422813,"hypothesisId":"H2"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":true,"path":"/"},"timestamp":1771623422868,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":true,"path":"/"},"timestamp":1771623422869,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":true,"path":"/gestao/dashboard"},"timestamp":1771623422927,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":true,"path":"/gestao/dashboard"},"timestamp":1771623422928,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":false,"path":"/login"},"timestamp":1771623440797,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":false,"path":"/login"},"timestamp":1771623440798,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:redirect","message":"RequireAuth redirecting to login","data":{"path":"/login"},"timestamp":1771623440797,"hypothesisId":"H3","runId":"post-fix"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:redirect","message":"RequireAuth redirecting to login","data":{"path":"/login"},"timestamp":1771623440799,"hypothesisId":"H3","runId":"post-fix"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623440813,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623440818,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"db/index.js:seedAdmin","message":"seedAdmin check","data":{"hasAdmin":true,"hasUserAdmin":true,"storageKey":"appgestaoodonto.db","userAuthCount":1},"timestamp":1771623440904,"hypothesisId":"H-seed"}
+{"sessionId":"53053a","location":"db/index.js:seedAdmin","message":"seedAdmin check","data":{"hasAdmin":true,"hasUserAdmin":true,"storageKey":"appgestaoodonto.db","userAuthCount":1},"timestamp":1771623440912,"hypothesisId":"H-seed"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623450087,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623450089,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623455261,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623455263,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"userAuthService.js:auth","message":"auth step 1 userAuth","data":{"emailNorm":"admin@loveodonto.com","hasRow":true,"userAuthCount":1,"userAuthEmails":["admin@loveodonto.com"]},"timestamp":1771623456271,"hypothesisId":"H-auth"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623456273,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623456275,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"userAuthService.js:auth","message":"auth step 2 password","data":{"passwordOk":true,"collaboratorId":"col-admin"},"timestamp":1771623456437,"hypothesisId":"H-auth"}
+{"sessionId":"53053a","location":"userAuthService.js:auth","message":"auth step 3 access+tenant+membership","data":{"hasAccess":true,"accessUserId":"user-admin","tenantId":"tenant-1","hasMembership":true,"membershipHasAccess":true},"timestamp":1771623456438,"hypothesisId":"H-auth"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623456462,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"LoginPage.jsx:render","message":"LoginPage mounting","data":{},"timestamp":1771623456464,"hypothesisId":"H4"}
+{"sessionId":"53053a","location":"db/index.js:seedAdmin","message":"seedAdmin check","data":{"hasAdmin":true,"hasUserAdmin":true,"storageKey":"appgestaoodonto.db","userAuthCount":1},"timestamp":1771623456490,"hypothesisId":"H-seed"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":true,"path":"/dashboard"},"timestamp":1771623456499,"hypothesisId":"H3"}
+{"sessionId":"53053a","location":"RequireAuth.jsx:render","message":"RequireAuth","data":{"hasUser":true,"path":"/dashboard"},"timestamp":1771623456500,"hypothesisId":"H3"}

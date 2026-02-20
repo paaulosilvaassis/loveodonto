@@ -27,6 +27,36 @@ export const loadDb = () => {
       fresh.crmTags = getSeedCrmTags(createId, fresh.clinicProfile?.id || 'clinic-1', new Date().toISOString());
     }
     if (!fresh.leadTags) fresh.leadTags = [];
+    if (!Array.isArray(fresh.tenants) || fresh.tenants.length === 0) {
+      const now = new Date().toISOString();
+      fresh.tenants = [{
+        id: 'tenant-1',
+        name: (fresh.clinicProfile?.nomeClinica || fresh.clinicProfile?.nomeFantasia || 'Minha Clínica').trim() || 'Minha Clínica',
+        logo_url: fresh.clinicProfile?.logoUrl || null,
+        status: 'active',
+        plan_id: null,
+        created_at: now,
+        updated_at: now,
+      }];
+      fresh.memberships = Array.isArray(fresh.memberships) ? fresh.memberships : [];
+      const membKey = new Set(fresh.memberships.map((m) => `${m.tenant_id}:${m.user_id}`));
+      for (const u of fresh.users || []) {
+        if (!u?.id) continue;
+        const key = `tenant-1:${u.id}`;
+        if (membKey.has(key)) continue;
+        fresh.memberships.push({
+          id: `memb-${crypto.randomUUID()}`,
+          tenant_id: 'tenant-1',
+          user_id: u.id,
+          role: u.role === 'admin' ? 'master' : (u.role || 'atendimento'),
+          has_system_access: u.has_system_access !== false,
+          status: 'active',
+          created_at: now,
+          updated_at: now,
+        });
+        membKey.add(key);
+      }
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
     return clone(fresh);
   }
@@ -163,9 +193,11 @@ const ADMIN_SEED_PASSWORD = 'admin123';
 export async function seedAdminCredentialsIfEmpty() {
   const db = loadDb();
   const hasAdmin = (db.userAuth || []).some((r) => (r.email || '').toLowerCase() === ADMIN_SEED_EMAIL.toLowerCase());
-  if (hasAdmin) return;
-
   const userAdmin = (db.users || []).find((u) => u.id === 'user-admin');
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'db/index.js:seedAdmin',message:'seedAdmin check',data:{hasAdmin:!!hasAdmin,hasUserAdmin:!!userAdmin,storageKey:STORAGE_KEY,userAuthCount:(db.userAuth||[]).length},timestamp:Date.now(),hypothesisId:'H-seed'})}).catch(()=>{});
+  // #endregion
+  if (hasAdmin) return;
   if (!userAdmin) return;
 
   const tenantId = 'tenant-1';
@@ -242,6 +274,22 @@ export async function seedAdminCredentialsIfEmpty() {
     });
   }
   saveDb(next);
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'db/index.js:seedAdmin',message:'seedAdmin done',data:{created:true},timestamp:Date.now(),hypothesisId:'H-seed'})}).catch(()=>{});
+  // #endregion
+}
+
+/** Força recriação do admin (para recuperação em dev). */
+export async function forceSeedAdminCredentials() {
+  const db = loadDb();
+  const userAdmin = (db.users || []).find((u) => u.id === 'user-admin');
+  if (!userAdmin) return Promise.reject(new Error('user-admin não encontrado'));
+  const next = clone(db);
+  next.userAuth = (next.userAuth || []).filter((r) => (r.email || '').toLowerCase() !== ADMIN_SEED_EMAIL.toLowerCase());
+  next.collaboratorAccess = (next.collaboratorAccess || []).filter((a) => a.collaboratorId !== 'col-admin');
+  next.collaborators = (next.collaborators || []).filter((c) => c.id !== 'col-admin');
+  saveDb(next);
+  return seedAdminCredentialsIfEmpty();
 }
 
 export const seedDevDb = () => {
