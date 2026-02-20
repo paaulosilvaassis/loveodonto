@@ -11,15 +11,30 @@
     <!-- #region agent log -->
     <script>
       (function () {
+        function showErr(msg) {
+          var el = document.getElementById('boot-error');
+          if (!el) {
+            el = document.createElement('pre');
+            el.id = 'boot-error';
+            el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#1a1a1a;color:#ef4444;padding:1rem;margin:0;font:12px monospace;white-space:pre-wrap;max-height:50vh;overflow:auto;';
+            document.body.appendChild(el);
+          }
+          el.textContent = (el.textContent || '') + '\n' + msg;
+        }
         try {
           fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'index.html:boot',message:'inline boot',data:{readyState:document.readyState,title:document.title,href:location.href},timestamp:Date.now(),hypothesisId:'H0'})}).catch(function(){});
           window.addEventListener('error', function (event) {
+            var msg = 'ERROR: ' + (event.message || '') + ' | ' + (event.filename || '') + ':' + (event.lineno || '') + ':' + (event.colno || '');
+            showErr(msg);
             var target = event && event.target;
             var isScript = target && target.tagName === 'SCRIPT';
             fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'index.html:windowError',message:'window error',data:{message:event.message,filename:event.filename,lineno:event.lineno,colno:event.colno,scriptSrc:isScript ? target.src : ''},timestamp:Date.now(),hypothesisId:'H6'})}).catch(function(){});
           }, true);
           window.addEventListener('unhandledrejection', function (event) {
-            fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'index.html:unhandledRejection',message:'unhandled rejection',data:{reason:String(event && event.reason || '')},timestamp:Date.now(),hypothesisId:'H6'})}).catch(function(){});
+            var reason = event && event.reason;
+            var msg = 'UNHANDLED REJECTION: ' + (reason && (reason.message || reason.stack || String(reason)) || 'unknown');
+            showErr(msg);
+            fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'index.html:unhandledRejection',message:'unhandled rejection',data:{reason:String(reason || '')},timestamp:Date.now(),hypothesisId:'H6'})}).catch(function(){});
           });
         } catch (e) {}
       })();

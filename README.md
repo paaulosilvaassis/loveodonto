@@ -54,6 +54,12 @@ npm run lint
 npm run test
 ```
 
+## Credenciais padrão (desenvolvimento)
+No primeiro acesso, quando não existem credenciais no banco, o sistema cria automaticamente:
+
+- **E-mail:** `admin@loveodonto.com`
+- **Senha:** `admin123`
+
 ## Observações
 - Persistência local via `localStorage`.
 - Primeiro acesso cria o usuário `Administrador`.

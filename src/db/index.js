@@ -153,6 +153,97 @@ export const resetDb = () => {
   localStorage.removeItem(STORAGE_KEY);
 };
 
+const ADMIN_SEED_EMAIL = 'admin@loveodonto.com';
+const ADMIN_SEED_PASSWORD = 'admin123';
+
+/**
+ * Garante que existam credenciais do admin (admin@loveodonto.com / admin123).
+ * Executa se não houver nenhum userAuth ou se o admin não existir.
+ */
+export async function seedAdminCredentialsIfEmpty() {
+  const db = loadDb();
+  const hasAdmin = (db.userAuth || []).some((r) => (r.email || '').toLowerCase() === ADMIN_SEED_EMAIL.toLowerCase());
+  if (hasAdmin) return;
+
+  const userAdmin = (db.users || []).find((u) => u.id === 'user-admin');
+  if (!userAdmin) return;
+
+  const tenantId = 'tenant-1';
+  const collabId = 'col-admin';
+  const now = new Date().toISOString();
+
+  const next = clone(db);
+  if (!Array.isArray(next.tenants) || next.tenants.length === 0) {
+    next.tenants = [{
+      id: tenantId,
+      name: (next.clinicProfile?.nomeClinica || next.clinicProfile?.nomeFantasia || 'Minha Clínica').trim() || 'Minha Clínica',
+      logo_url: next.clinicProfile?.logoUrl || null,
+      status: 'active',
+      plan_id: null,
+      created_at: now,
+      updated_at: now,
+    }];
+  }
+
+  const bcrypt = await import('bcryptjs');
+  const passwordHash = await bcrypt.hash(ADMIN_SEED_PASSWORD, 10);
+  next.collaborators = next.collaborators || [];
+  if (!next.collaborators.some((c) => c.id === collabId)) {
+    next.collaborators.push({
+      id: collabId,
+      status: 'ativo',
+      apelido: 'Administrador',
+      nomeCompleto: 'Administrador',
+      nomeSocial: '',
+      sexo: '',
+      dataNascimento: '',
+      fotoUrl: '',
+      cargo: 'Administrador',
+      especialidades: [],
+      registroProfissional: '',
+      email: ADMIN_SEED_EMAIL,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+  next.collaboratorAccess = next.collaboratorAccess || [];
+  next.collaboratorAccess = next.collaboratorAccess.filter((a) => a.collaboratorId !== collabId);
+  next.collaboratorAccess.push({
+    collaboratorId: collabId,
+    userId: 'user-admin',
+    role: 'admin',
+    permissions: [],
+    lastLoginAt: '',
+  });
+  next.userAuth = next.userAuth || [];
+  next.userAuth = next.userAuth.filter((r) => (r.email || '').toLowerCase() !== ADMIN_SEED_EMAIL.toLowerCase());
+  next.userAuth.push({
+    id: createId('uauth'),
+    collaboratorId: collabId,
+    email: ADMIN_SEED_EMAIL,
+    passwordHash,
+    mustChangePassword: false,
+    isActive: true,
+    lastLoginAt: null,
+    createdAt: now,
+  });
+  const membExists = (next.memberships || []).some((m) => m.tenant_id === tenantId && m.user_id === 'user-admin');
+  if (!membExists) {
+    next.memberships = next.memberships || [];
+    next.memberships.push({
+      id: `memb-${crypto.randomUUID()}`,
+      tenant_id: tenantId,
+      user_id: 'user-admin',
+      role: 'master',
+      has_system_access: true,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    });
+  }
+  saveDb(next);
+}
+
 export const seedDevDb = () => {
   if (!import.meta?.env?.DEV) return;
   withDb((db) => {

@@ -986,6 +986,15 @@ const migrations = {
       version: 28,
     };
   },
+  29: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 29 };
+    return {
+      ...db,
+      adminSecurity: Array.isArray(db.adminSecurity) ? db.adminSecurity : [],
+      adminGateSessions: Array.isArray(db.adminGateSessions) ? db.adminGateSessions : [],
+      version: 29,
+    };
+  },
 };
 
 const SEED_TAGS_DATA = [

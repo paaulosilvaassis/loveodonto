@@ -1,4 +1,4 @@
-export const DB_VERSION = 28;
+export const DB_VERSION = 29;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -239,6 +239,9 @@ export const defaultDbState = () => ({
   userAuth: [],
   /** Convites para ativação de acesso (token hasheado) */
   userInvites: [],
+  /** PIN do Administrador (hash) e sessões do gate */
+  adminSecurity: [],
+  adminGateSessions: [],
   // version inicial 23 para que a migration 24 (RBAC) rode na primeira carga
   version: 23,
 });
