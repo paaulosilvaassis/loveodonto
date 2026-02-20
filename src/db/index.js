@@ -166,16 +166,10 @@ export const loadDb = () => {
 };
 
 export const saveDb = (db) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/db/index.js:56',message:'db save entry',data:{storageKey:STORAGE_KEY,hasPatients:Array.isArray(db?.patients),patientsCount:Array.isArray(db?.patients) ? db.patients.length : 0,dbKeys:db ? Object.keys(db).slice(0,5) : []},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H13'})}).catch(()=>{});
-  // #endregion
   if (!db || typeof db !== 'object') {
     throw new Error('Tentativa de salvar banco de dados inválido');
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/db/index.js:62',message:'db save done',data:{storageKey:STORAGE_KEY,patientsCount:Array.isArray(db?.patients) ? db.patients.length : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H13'})}).catch(()=>{});
-  // #endregion
   return db;
 };
 
@@ -194,9 +188,6 @@ export async function seedAdminCredentialsIfEmpty() {
   const db = loadDb();
   const hasAdmin = (db.userAuth || []).some((r) => (r.email || '').toLowerCase() === ADMIN_SEED_EMAIL.toLowerCase());
   const userAdmin = (db.users || []).find((u) => u.id === 'user-admin');
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'db/index.js:seedAdmin',message:'seedAdmin check',data:{hasAdmin:!!hasAdmin,hasUserAdmin:!!userAdmin,storageKey:STORAGE_KEY,userAuthCount:(db.userAuth||[]).length},timestamp:Date.now(),hypothesisId:'H-seed'})}).catch(()=>{});
-  // #endregion
   if (hasAdmin) return;
   if (!userAdmin) return;
 
@@ -274,9 +265,6 @@ export async function seedAdminCredentialsIfEmpty() {
     });
   }
   saveDb(next);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'db/index.js:seedAdmin',message:'seedAdmin done',data:{created:true},timestamp:Date.now(),hypothesisId:'H-seed'})}).catch(()=>{});
-  // #endregion
 }
 
 /** Força recriação do admin (para recuperação em dev). */
@@ -367,21 +355,9 @@ export const seedDevDb = () => {
 
 export const withDb = (mutator) => {
   const db = loadDb();
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/db/index.js:141',message:'withDb entry',data:{hasDb:!!db,dbKeys:db ? Object.keys(db).slice(0,5) : []},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H13'})}).catch(()=>{});
-  // #endregion
   const cloned = clone(db);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/db/index.js:145',message:'withDb before mutator',data:{hasCloned:!!cloned,clonedKeys:cloned ? Object.keys(cloned).slice(0,5) : []},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H13'})}).catch(()=>{});
-  // #endregion
   const result = mutator(cloned);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/db/index.js:149',message:'withDb after mutator',data:{hasResult:!!result,resultType:typeof result,resultIsArray:Array.isArray(result),resultKeys:result && typeof result === 'object' ? Object.keys(result).slice(0,5) : [],clonedKeys:cloned ? Object.keys(cloned).slice(0,5) : []},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H13'})}).catch(()=>{});
-  // #endregion
   const next = result && typeof result === 'object' && !Array.isArray(result) && 'patients' in result ? result : cloned;
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/db/index.js:153',message:'withDb before save',data:{hasNext:!!next,nextKeys:next ? Object.keys(next).slice(0,5) : [],usingResult:result === next},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H13'})}).catch(()=>{});
-  // #endregion
   saveDb(next);
   return result;
 };

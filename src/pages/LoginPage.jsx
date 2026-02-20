@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { LogIn, Shield } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { authenticateByEmailPassword } from '../services/userAuthService.js';
 import { seedAdminCredentialsIfEmpty, forceSeedAdminCredentials } from '../db/index.js';
@@ -8,18 +8,13 @@ import Button from '../components/Button.jsx';
 import appLogo from '../assets/love-odonto-logo.png';
 
 export default function LoginPage() {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'LoginPage.jsx:render',message:'LoginPage mounting',data:{},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
-  // #endregion
   const { login, ensureSeedUser, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [forceSeedLoading, setForceSeedLoading] = useState(false);
-  const [AdminGateModalComponent, setAdminGateModalComponent] = useState(null);
   const shownActivatedRef = useRef(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -44,30 +39,6 @@ export default function LoginPage() {
       setTimeout(() => setToast(null), 4000);
     }
   }, [location.state?.activated]);
-
-  useEffect(() => {
-    if (location.state?.adminBlocked) {
-      setAdminModalOpen(true);
-      setToast({ message: 'Acesso administrativo bloqueado. Informe o PIN do Administrador.', type: 'error' });
-      setTimeout(() => setToast(null), 5000);
-    }
-  }, [location.state?.adminBlocked]);
-
-  // Carrega AdminGateModal apenas ao abrir o modal (evita dependência no load inicial)
-  const [adminModalLoadError, setAdminModalLoadError] = useState(false);
-  useEffect(() => {
-    if (adminModalOpen && !AdminGateModalComponent && !adminModalLoadError) {
-      import('../components/AdminGateModal.jsx')
-        .then((mod) => {
-          setAdminGateModalComponent(() => mod.default);
-          setAdminModalLoadError(false);
-        })
-        .catch(() => {
-          setAdminGateModalComponent(null);
-          setAdminModalLoadError(true);
-        });
-    }
-  }, [adminModalOpen, AdminGateModalComponent, adminModalLoadError]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -107,54 +78,8 @@ export default function LoginPage() {
     }
   };
 
-  const handleAdminGateSuccess = () => {
-    const role = (user?.role || '').toLowerCase();
-    const isAdmin = ['admin', 'master', 'gerente'].includes(role) || user?.isMaster;
-    if (user && isAdmin) {
-      if (import.meta.env?.DEV) {
-        console.debug('[LoginPage] AdminGate OK, navegando para painel admin', { role });
-      }
-      navigate('/admin/dados-clinica', { replace: true });
-    } else {
-      setToast({ message: 'PIN válido. Faça login para acessar o painel admin.', type: 'success' });
-      setTimeout(() => setToast(null), 4000);
-    }
-  };
-
   return (
     <div className="login">
-      <button
-        type="button"
-        className="admin-gate-trigger"
-        onClick={() => setAdminModalOpen(true)}
-        title="Administração"
-      >
-        <Shield size={18} />
-        <span>Administração</span>
-      </button>
-
-      {adminModalOpen && AdminGateModalComponent && (
-        <AdminGateModalComponent
-          open={adminModalOpen}
-          onClose={() => { setAdminModalOpen(false); setAdminModalLoadError(false); }}
-          onSuccess={handleAdminGateSuccess}
-        />
-      )}
-      {adminModalOpen && !AdminGateModalComponent && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', padding: '1.5rem', borderRadius: 8, textAlign: 'center' }}>
-            {adminModalLoadError ? (
-              <>
-                <p>Erro ao carregar. Tente novamente.</p>
-                <button type="button" onClick={() => { setAdminModalLoadError(false); setAdminModalOpen(false); }}>Fechar</button>
-              </>
-            ) : (
-              <p>Carregando…</p>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Hero Section - Lado Esquerdo */}
       <div className="login-hero">
         <div className="login-hero-content">
@@ -231,7 +156,10 @@ export default function LoginPage() {
 
             <div className="login-form-footer" style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', fontSize: '0.875rem' }}>
               {user && (
-                <Link to="/dashboard" className="link">Já está logado? Ir para o sistema</Link>
+                <>
+                  <Link to="/dashboard" className="link">Já está logado? Ir para o sistema</Link>
+                  <Link to="/admin" className="link">Área administrativa</Link>
+                </>
               )}
               <Link to="/activate" className="link">Recebeu um convite? Ativar acesso</Link>
               <Link to="/forgot-password" className="link">Esqueci minha senha</Link>
