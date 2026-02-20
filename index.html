@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LOVE ODONTO</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- #region agent log -->
+    <script>
+      (function () {
+        try {
+          fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.html:11',message:'inline boot',data:{readyState:document.readyState,title:document.title,href:location.href},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H6'})}).catch(function(){});
+          window.addEventListener('error', function (event) {
+            var target = event && event.target;
+            var isScript = target && target.tagName === 'SCRIPT';
+            fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.html:15',message:'window error',data:{message:event.message,filename:event.filename,lineno:event.lineno,colno:event.colno,scriptSrc:isScript ? target.src : ''},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H7'})}).catch(function(){});
+          }, true);
+          window.addEventListener('unhandledrejection', function (event) {
+            fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'index.html:19',message:'unhandled rejection',data:{reason:String(event && event.reason || '')},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8'})}).catch(function(){});
+          });
+        } catch (e) {}
+      })();
+    </script>
+    <!-- #endregion -->
+    <script type="module" src="/src/bootstrap.jsx"></script>
+  </body>
+</html>

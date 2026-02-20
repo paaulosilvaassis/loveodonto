@@ -1,0 +1,22 @@
+@import 'tailwindcss';
+
+:root {
+  --console-bg: #0f172a;
+  --console-surface: #1e293b;
+  --console-border: #334155;
+  --console-text: #f1f5f9;
+  --console-muted: #94a3b8;
+  --console-accent: #3b82f6;
+  --console-accent-hover: #2563eb;
+  --console-success: #22c55e;
+  --console-warning: #f59e0b;
+  --console-error: #ef4444;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--console-bg);
+  color: var(--console-text);
+  min-height: 100vh;
+}

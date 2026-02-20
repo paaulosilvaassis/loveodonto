@@ -1,0 +1,16 @@
+-- Seed do PLATFORM_OWNER inicial
+-- 1. Crie um usuário no Supabase Auth (Dashboard > Authentication > Users > Add user)
+-- 2. Copie o UUID do usuário criado e substitua em :platform_owner_id abaixo
+-- 3. Execute: psql ... -v platform_owner_id='<uuid>' -f seed_platform_owner.sql
+-- Ou use a função abaixo após criar o usuário via API/dashboard
+
+-- Exemplo (substitua pelos dados reais):
+-- INSERT INTO platform_users (id, email, name, role, is_active)
+-- VALUES (
+--   'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+--   'seu@email.com',
+--   'Admin Plataforma',
+--   'PLATFORM_OWNER',
+--   true
+-- )
+-- ON CONFLICT (id) DO UPDATE SET role = 'PLATFORM_OWNER', is_active = true;
