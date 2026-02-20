@@ -1,52 +1,65 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { loadDb } from '../db/index.js';
+import { authenticateByEmailPassword } from '../services/userAuthService.js';
 import Button from '../components/Button.jsx';
 import appLogo from '../assets/love-odonto-logo.png';
 
 export default function LoginPage() {
   const { login, ensureSeedUser, user } = useAuth();
-  const [users, setUsers] = useState([]);
-  const [selected, setSelected] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [toast, setToast] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const shownActivatedRef = useRef(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     ensureSeedUser();
-    const db = loadDb();
-    const defaultTenantId = (db.tenants || [])[0]?.id;
-    const memberIds = new Set(
-      (db.memberships || [])
-        .filter((m) => m.tenant_id === defaultTenantId && m.status === 'active' && m.has_system_access !== false)
-        .map((m) => m.user_id)
-    );
-    const list = (db.users || []).filter((item) => item.active && (!defaultTenantId || memberIds.has(item.id)));
-    setUsers(list);
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'LoginPage.jsx:17',message:'login:users',data:{activeUserCount:db.users.filter((item) => item.active).length},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'H11'})}).catch(()=>{});
-    // #endregion
   }, [ensureSeedUser]);
+
+  useEffect(() => {
+    if (import.meta.env?.DEV) {
+      console.log('[LoginPage] Componente renderizado');
+    }
+  }, []);
 
   useEffect(() => {
     if (user) navigate('/dashboard');
   }, [user, navigate]);
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/LoginPage.jsx:26',message:'login:render',data:{hasUser:!!user},timestamp:Date.now(),sessionId:'debug-session',runId:'menu-white-screen-pre-7',hypothesisId:'H11'})}).catch(()=>{});
-    // #endregion
-  }, [user]);
+    if (location.state?.activated && !shownActivatedRef.current) {
+      shownActivatedRef.current = true;
+      setToast({ message: 'Conta ativada com sucesso! Faça login para acessar.', type: 'success' });
+      setTimeout(() => setToast(null), 4000);
+    }
+  }, [location.state?.activated]);
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    const emailTrim = (email || '').trim().toLowerCase();
+    if (!emailTrim || !password) {
+      setError('Preencha e-mail e senha.');
+      return;
+    }
+    setLoading(true);
     try {
-      login({ userId: selected });
-      navigate('/dashboard');
+      const result = await authenticateByEmailPassword(emailTrim, password);
+      if (result) {
+        login({ userId: result.userId, tenantId: result.tenantId });
+        navigate('/dashboard');
+      } else {
+        setError('E-mail ou senha inválidos.');
+      }
     } catch (err) {
-      setError(err.message);
+      setError(err?.message || 'Erro ao fazer login.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -80,30 +93,39 @@ export default function LoginPage() {
             <img className="login-form-logo" src={appLogo} alt="LOVE ODONTO" />
             <span className="login-form-brand-name">LOVE ODONTO</span>
           </div>
-          <h2 className="login-form-title">Bem-vindo de volta!</h2>
-          <p className="login-form-subtitle">Selecione seu usuário para acessar o sistema</p>
-          
+          <h2 className="login-form-title">Acessar Sistema</h2>
+          <p className="login-form-subtitle">Use seu e-mail e senha</p>
+
           <form className="login-form" onSubmit={handleSubmit}>
             <div className="login-form-field">
-              <label className="login-form-label">Usuário</label>
-              <select
-                className="login-form-select"
-                value={selected}
-                onChange={(event) => setSelected(event.target.value)}
-              >
-                <option value="">Selecione um usuário...</option>
-                {users.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} ({item.role})
-                  </option>
-                ))}
-              </select>
+              <label className="login-form-label" htmlFor="login-email">E-mail</label>
+              <input
+                id="login-email"
+                type="email"
+                className="login-form-input"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                autoComplete="email"
+                autoFocus
+              />
+            </div>
+
+            <div className="login-form-field">
+              <label className="login-form-label" htmlFor="login-password">Senha</label>
+              <input
+                id="login-password"
+                type="password"
+                className="login-form-input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+              />
             </div>
 
             {error && (
-              <div className="login-form-error">
-                {error}
-              </div>
+              <div className="login-form-error">{error}</div>
             )}
 
             <Button
@@ -111,12 +133,27 @@ export default function LoginPage() {
               size="lg"
               icon={LogIn}
               type="submit"
-              disabled={!selected}
+              disabled={loading}
               className="login-form-button"
             >
-              Entrar
+              {loading ? 'Entrando…' : 'Entrar'}
             </Button>
+
+            <div className="login-form-footer" style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center', fontSize: '0.875rem' }}>
+              <Link to="/activate" className="link">Recebeu um convite? Ativar acesso</Link>
+              <Link to="/forgot-password" className="link">Esqueci minha senha</Link>
+            </div>
           </form>
+
+          {toast && (
+            <div
+              className={`toast ${toast.type}`}
+              role="status"
+              style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 1000 }}
+            >
+              {toast.message}
+            </div>
+          )}
         </div>
       </div>
     </div>

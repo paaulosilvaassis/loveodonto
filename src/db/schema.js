@@ -1,4 +1,4 @@
-export const DB_VERSION = 26;
+export const DB_VERSION = 28;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -235,6 +235,10 @@ export const defaultDbState = () => ({
   invoices: [],
   payments: [],
   usage_events: [],
+  /** Credenciais de acesso (email + hash) vinculadas ao colaborador */
+  userAuth: [],
+  /** Convites para ativação de acesso (token hasheado) */
+  userInvites: [],
   // version inicial 23 para que a migration 24 (RBAC) rode na primeira carga
   version: 23,
 });

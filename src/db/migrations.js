@@ -970,6 +970,22 @@ const migrations = {
       version: 26,
     };
   },
+  27: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 27 };
+    return {
+      ...db,
+      userAuth: Array.isArray(db.userAuth) ? db.userAuth : [],
+      version: 27,
+    };
+  },
+  28: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 28 };
+    return {
+      ...db,
+      userInvites: Array.isArray(db.userInvites) ? db.userInvites : [],
+      version: 28,
+    };
+  },
 };
 
 const SEED_TAGS_DATA = [

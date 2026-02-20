@@ -13,6 +13,9 @@ export const RequireAuth = ({ children }) => {
     // #endregion
   }, [user]);
   if (!user) {
+    if (import.meta.env?.DEV) {
+      console.log('[RequireAuth] Não autenticado → redirecionando para /login');
+    }
     return <Navigate to="/login" replace />;
   }
   return children;

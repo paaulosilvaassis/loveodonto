@@ -52,6 +52,7 @@ export const menuSections = [
     items: [
       { id: 'dados-clinica', label: 'Dados da Clínica', route: '/admin/dados-clinica', icon: Settings, rolesAllowed: ['admin', 'gerente'], description: 'Base central da clínica.' },
       { id: 'colaboradores', label: 'Dados da Equipe', route: '/admin/colaboradores', icon: Users, rolesAllowed: ['admin', 'gerente'], description: 'Cadastro e gestão de colaboradores.' },
+      { id: 'usuarios', label: 'Usuários', route: '/admin/usuarios', icon: UserCog, rolesAllowed: ['admin', 'master'], description: 'Usuários e convites de ativação.' },
       { id: 'base-preco-admin', label: 'Base de Preço', route: '/gestao-comercial/base-de-preco', icon: BadgeDollarSign, rolesAllowed: ['admin', 'gerente'], description: 'Importação e gestão de preços por procedimento.' },
       { id: 'procedimentos', label: 'Cadastro de Procedimentos', route: '/admin/procedimentos', icon: ClipboardList, rolesAllowed: ['admin', 'gerente'], description: 'Procedimentos e categorias.' },
       { id: 'contratos', label: 'Contratos', route: '/admin/contratos', icon: FileSignature, rolesAllowed: ['admin', 'gerente'], description: 'Contratos de serviço e termos.' },

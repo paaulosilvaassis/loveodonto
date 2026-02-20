@@ -31,6 +31,7 @@ import {
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import { formatCep, formatCpf, formatPhone, validateFileMeta } from '../utils/validators.js';
 import { can } from '../permissions/permissions.js';
+import { canManageAccess } from '../services/accessService.js';
 import AccessTab from '../components/access/AccessTab.jsx';
 import { getUserAccess } from '../services/accessService.js';
 
@@ -150,7 +151,7 @@ export default function CollaboratorsPage() {
 
   const canFinance = can(user, 'collaborators:finance');
   const canAccess = can(user, 'collaborators:access');
-  const canEditAcessos = user?.role === 'admin' || user?.isMaster;
+  const canEditAcessos = canManageAccess(user);
 
   const refresh = () => {
     const list = listCollaborators(filter);
@@ -1102,12 +1103,16 @@ export default function CollaboratorsPage() {
         onSave={null}
         loading={false}
       />
+      {error ? <div className="error">{error}</div> : null}
+      {success ? <div className="success">{success}</div> : null}
       <AccessTab
+        collaboratorId={selectedId}
         targetUserId={draft.access.userId || draft.profile?.user_id || null}
         currentUser={user}
         canEdit={canEditAcessos}
         onVincularUsuario={canAccess ? () => { setActiveTab('cadastro'); setActiveSection('Dados de Acesso'); startEdit('Dados de Acesso'); } : undefined}
         onSaveSuccess={() => {
+          setError('');
           if (draft.access.userId) {
             const access = getUserAccess(draft.access.userId);
             if (access) {

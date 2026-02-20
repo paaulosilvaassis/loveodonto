@@ -9,7 +9,23 @@ import { logAction } from './logService.js';
 import { buildPermissionsCatalog } from '../permissions/catalog.js';
 
 const ROLE_ADMIN = 'admin';
+/** Role de membership para admin (db.users.role=admin → membership.role=master) */
+const ROLE_MASTER = 'master';
 const ROLES = ['admin', 'administrativo', 'comercial', 'financeiro', 'atendimento', 'dentista', 'gerente', 'recepcao', 'profissional'];
+
+/**
+ * Fonte única: usuário pode gerenciar acessos/permissões/perfil.
+ * Aceita: role admin (db.users), role master (membership), isMaster.
+ */
+export function canManageAccess(user) {
+  if (!user) return false;
+  if (user.isMaster === true) return true;
+  const role = (user.role || '').toLowerCase();
+  return role === ROLE_ADMIN || role === ROLE_MASTER;
+}
+// #region agent log
+try { fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'accessService.js:load',message:'accessService loaded',data:{hasCanManage:typeof canManageAccess},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{}); } catch (e) {}
+// #endregion
 const ROLE_LABELS = {
   admin: 'Administrador',
   administrativo: 'Administrativo',
@@ -116,7 +132,7 @@ export function getUserAccess(userId) {
  */
 export function updateUserAccess(actor, targetUserId, payload) {
   const db = loadDb();
-  if (actor.role !== ROLE_ADMIN) {
+  if (!canManageAccess(actor)) {
     const err = new Error('Apenas Administrador pode alterar acessos.');
     err.code = 'PERMISSION_DENIED';
     throw err;

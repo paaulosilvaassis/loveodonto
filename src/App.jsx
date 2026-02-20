@@ -19,6 +19,9 @@ import DevMigratePage from './pages/DevMigratePage.jsx';
 import FinancePage from './pages/FinancePage.jsx';
 import InventoryPage from './pages/InventoryPage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
+import ActivatePage from './pages/ActivatePage.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
+import AdminUsuariosPage from './pages/AdminUsuariosPage.jsx';
 import PatientsPage from './pages/PatientsPage.jsx';
 import PatientCadastroPage from './pages/PatientCadastroPage.jsx';
 import PatientChartPage from './pages/PatientChartPage.jsx';
@@ -66,6 +69,9 @@ const withRole = (route, element) => (
 );
 
 export default function App() {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'App.jsx:render',message:'App render',data:{},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
   return (
     <AuthProvider>
       <BrowserRouter>
@@ -78,7 +84,17 @@ export default function App() {
               <Route path="/dev/seed-db" element={<DevSeedPage />} />
             </>
           ) : null}
+          <Route
+            path="/"
+            element={
+              <RequireAuth>
+                <Navigate to="/gestao/dashboard" replace />
+              </RequireAuth>
+            }
+          />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/activate" element={<ActivatePage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/convite" element={<ConvitePage />} />
           <Route path="/platform/login" element={<PlatformLoginPage />} />
           <Route path="/platform" element={<RequirePlatformAuth><PlatformLayout /></RequirePlatformAuth>}>
@@ -159,6 +175,7 @@ export default function App() {
                     <Route path="/admin/dados-clinica" element={withRole('/admin/dados-clinica', <ClinicSettingsPage />)} />
                     <Route path="/admin/colaboradores" element={withRole('/admin/colaboradores', <CollaboratorsPage />)} />
                     <Route path="/admin/acessos" element={<Navigate to="/admin/colaboradores" replace />} />
+                    <Route path="/admin/usuarios" element={withRole('/admin/usuarios', <AdminUsuariosPage />)} />
                     <Route path="/admin/base-precos" element={withRole('/admin/base-precos', <PriceBasePage />)} />
                     <Route
                       path="/admin/base-precos/tabelas/:priceTableId"

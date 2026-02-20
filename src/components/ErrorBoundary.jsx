@@ -12,7 +12,7 @@ export default class ErrorBoundary extends Component {
 
   componentDidCatch(error, info) {
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ErrorBoundary.jsx:componentDidCatch',message:'ErrorBoundary caught error',data:{message:error?.message,componentStack:info?.componentStack?.slice(0,200)},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'ErrorBoundary.jsx:componentDidCatch',message:'ErrorBoundary caught error',data:{message:error?.message,componentStack:info?.componentStack?.slice(0,200)},timestamp:Date.now(),hypothesisId:'H6'})}).catch(()=>{});
     // #endregion
     if (import.meta?.env?.DEV) {
       // eslint-disable-next-line no-console
