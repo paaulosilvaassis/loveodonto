@@ -239,6 +239,8 @@ export const defaultDbState = () => ({
   userAuth: [],
   /** Convites para ativação de acesso (token hasheado) */
   userInvites: [],
+  /** Log de importações/exportações de pacientes */
+  importExportLogs: [],
   // version inicial 23 para que a migration 24 (RBAC) rode na primeira carga
   version: 23,
 });

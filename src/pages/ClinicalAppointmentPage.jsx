@@ -52,6 +52,7 @@ import DocumentsSection from '../components/clinical/DocumentsSection.jsx';
 import { getLeadById } from '../services/crmService.js';
 import { RegisterPatientFromLeadModal } from '../components/agenda/RegisterPatientFromLeadModal.jsx';
 import { listProcedures, getPriceTableForPatient, getDefaultPriceTable, PROCEDURE_STATUS } from '../services/priceBaseService.js';
+import { getPatient, PENDING_FIELDS_MAP } from '../services/patientService.js';
 
 function ClinicalAppointmentPageContent() {
   // #region agent log
@@ -448,7 +449,7 @@ function ClinicalAppointmentPageContent() {
             <OrcamentoSection appointmentId={appointmentId} user={user} appointment={appointment} patient={patient} />
           )}
           {activeSection === 'contratos' && (
-            <ContratosSection appointmentId={appointmentId} />
+            <ContratosSection appointmentId={appointmentId} patientId={patient?.id} />
           )}
           {activeSection === 'convenios' && patient && (
             <ConveniosSection patient={patient} />
@@ -2929,24 +2930,77 @@ function OrcamentoHistoricoTab({ appointmentId }) {
   );
 }
 
-// Seção: Contratos
-function ContratosSection({ appointmentId }) {
+// Seção: Contratos (bloqueia gerar/vincular contrato se cadastro com campos críticos pendentes)
+function ContratosSection({ appointmentId, patientId }) {
+  const navigate = useNavigate();
+  const fullPatient = patientId ? getPatient(patientId) : null;
+  const pendingCriticalFields = fullPatient?.profile?.pendingCriticalFields || [];
+  const hasBlockingPending = pendingCriticalFields.length > 0;
+  const [showBlockModal, setShowBlockModal] = useState(false);
+
+  const handleContractAction = () => {
+    if (hasBlockingPending) {
+      setShowBlockModal(true);
+      return;
+    }
+    // Futuro: abrir fluxo de vincular/gerar contrato
+  };
+
   return (
-    <SectionCard
-      title="Contratos"
-      description="Vincule contratos relacionados a este atendimento"
-      actions={
-        <button type="button" className="button primary">
-          <Plus size={16} />
-          Vincular Contrato
-        </button>
-      }
-    >
-      <div className="clinical-empty-state">
-        <FileCheck size={48} />
-        <p>Nenhum contrato vinculado ainda.</p>
-      </div>
-    </SectionCard>
+    <>
+      <SectionCard
+        title="Contratos"
+        description="Vincule contratos relacionados a este atendimento"
+        actions={
+          <button type="button" className="button primary" onClick={handleContractAction}>
+            <Plus size={16} />
+            Vincular Contrato
+          </button>
+        }
+      >
+        <div className="clinical-empty-state">
+          <FileCheck size={48} />
+          <p>Nenhum contrato vinculado ainda.</p>
+        </div>
+      </SectionCard>
+      {showBlockModal && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contract-block-modal-title"
+          onClick={(e) => e.target === e.currentTarget && setShowBlockModal(false)}
+        >
+          <div className="modal-content" style={{ maxWidth: '28rem' }}>
+            <h3 id="contract-block-modal-title">Não é possível gerar contrato</h3>
+            <p style={{ marginBottom: '1rem' }}>
+              Não é possível gerar contrato enquanto faltarem informações importantes do cadastro.
+            </p>
+            <p style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Campos críticos faltando:</p>
+            <ul style={{ margin: '0 0 1rem 1rem', padding: 0, fontSize: '0.875rem' }}>
+              {pendingCriticalFields.map((key) => (
+                <li key={key}>{PENDING_FIELDS_MAP[key] || key}</li>
+              ))}
+            </ul>
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button type="button" className="button secondary" onClick={() => setShowBlockModal(false)}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="button primary"
+                onClick={() => {
+                  setShowBlockModal(false);
+                  if (patientId) navigate(`/pacientes/cadastro/${patientId}?highlight=pending`);
+                }}
+              >
+                Preencher agora
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

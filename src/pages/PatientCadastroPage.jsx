@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext.jsx';
+import { canManageAccess } from '../services/accessService.js';
 import { Section } from '../components/Section.jsx';
 import { SectionCard } from '../components/SectionCard.jsx';
+import ImportExportButtons from '../components/ImportExportButtons.jsx';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import {
   addPatientAddress,
@@ -10,6 +12,7 @@ import {
   addPatientPhone,
   createPatientQuick,
   getPatient,
+  PENDING_FIELDS_MAP,
   removePatientAddress,
   removePatientInsurance,
   updatePatientAccess,
@@ -61,6 +64,7 @@ const emptyDraft = () => ({
     father_name: '',
     responsible_name: '',
     responsible_relation: '',
+    responsible_cpf: '',
     personal_email: '',
   },
   birth: {
@@ -172,6 +176,7 @@ const mapPatientToDraft = (patient, record) => {
       father_name: patient.documents?.father_name || '',
       responsible_name: patient.documents?.responsible_name || '',
       responsible_relation: patient.documents?.responsible_relation || '',
+      responsible_cpf: patient.documents?.responsible_cpf || '',
       personal_email: patient.documents?.personal_email || '',
     },
     birth: {
@@ -247,6 +252,7 @@ export default function PatientCadastroPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const location = useLocation();
+  const highlightPending = searchParams.get('highlight') === 'pending';
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dados');
   const [editMode, setEditMode] = useState(!patientId);
@@ -256,6 +262,13 @@ export default function PatientCadastroPage() {
   const photoInputRef = useRef(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [pendingData, setPendingData] = useState({
+    hasPendingData: false,
+    pendingFields: [],
+    pendingCriticalFields: [],
+  });
+  const [showPendingHighlight, setShowPendingHighlight] = useState(false);
+  const [showPendingModal, setShowPendingModal] = useState(false);
 
   // Ler query params para retorno à agenda
   const returnToAgenda = searchParams.get('returnTo') === 'agenda';
@@ -328,6 +341,9 @@ export default function PatientCadastroPage() {
       setDraft(next);
       setEditMode(true);
       setStatus({ error: '', success: '' });
+      setPendingData({ hasPendingData: false, pendingFields: [], pendingCriticalFields: [] });
+      setShowPendingHighlight(false);
+      setShowPendingModal(false);
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:305',message:'cadastro create init',data:{patientId:null,clearedStatus:true,prefillName,returnToAgenda},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2'})}).catch(()=>{});
       // #endregion
@@ -349,6 +365,14 @@ export default function PatientCadastroPage() {
     const next = mapPatientToDraft(patient, record);
     originalRef.current = next;
     setDraft(next);
+    setPendingData({
+      hasPendingData: Boolean(patient.profile?.hasPendingData),
+      pendingFields: Array.isArray(patient.profile?.pendingFields) ? patient.profile.pendingFields : [],
+      pendingCriticalFields: Array.isArray(patient.profile?.pendingCriticalFields) ? patient.profile.pendingCriticalFields : [],
+    });
+    if (highlightPending && patient.profile?.hasPendingData) {
+      setShowPendingModal(true);
+    }
     // #region agent log
     fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:327',message:'cadastro edit loaded',data:{patientId,hasProfile:Boolean(patient?.profile?.id)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3'})}).catch(()=>{});
     // #endregion
@@ -564,6 +588,7 @@ export default function PatientCadastroPage() {
         father_name: draft.documents.father_name,
         responsible_name: draft.documents.responsible_name,
         responsible_relation: draft.documents.responsible_relation,
+        responsible_cpf: draft.documents.responsible_cpf,
         personal_email: draft.documents.personal_email,
       }));
 
@@ -668,6 +693,12 @@ export default function PatientCadastroPage() {
       const nextDraft = mapPatientToDraft(refreshed, record);
       originalRef.current = nextDraft;
       setDraft(nextDraft);
+      setPendingData({
+        hasPendingData: Boolean(refreshed?.profile?.hasPendingData),
+        pendingFields: Array.isArray(refreshed?.profile?.pendingFields) ? refreshed.profile.pendingFields : [],
+        pendingCriticalFields: Array.isArray(refreshed?.profile?.pendingCriticalFields) ? refreshed.profile.pendingCriticalFields : [],
+      });
+      setShowPendingHighlight(false);
       setEditMode(false);
       setStatus({
         error: '',
@@ -740,6 +771,90 @@ export default function PatientCadastroPage() {
           {status.error ? <div className="alert error">{status.error}</div> : null}
           {status.success ? <div className="alert success">{status.success}</div> : null}
 
+          {pendingData.hasPendingData ? (
+            <div className="alert alert-warning pending-data-alert">
+              <span>⚠️ Cadastro com informações pendentes. Atualize para liberar contratos e documentos.</span>
+              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="button secondary button-sm"
+                  onClick={() => setShowPendingModal(true)}
+                >
+                  Ver campos pendentes
+                </button>
+                <button
+                  type="button"
+                  className="button primary button-sm"
+                  onClick={() => {
+                    setEditMode(true);
+                    setShowPendingHighlight(true);
+                    setShowPendingModal(false);
+                    setTimeout(() => {
+                      const first = document.querySelector('.field-pending');
+                      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                  }}
+                >
+                  Atualizar agora
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {showPendingModal && (
+            <div
+              className="modal-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="pending-fields-modal-title"
+              onClick={(e) => e.target === e.currentTarget && setShowPendingModal(false)}
+            >
+              <div className="modal-content" style={{ maxWidth: '28rem' }}>
+                <h3 id="pending-fields-modal-title">Campos pendentes</h3>
+                <p className="muted" style={{ marginBottom: '1rem' }}>
+                  Preencha estes campos para completar o cadastro e liberar a geração de contratos.
+                </p>
+                {pendingData.pendingCriticalFields?.length > 0 && (
+                  <div style={{ marginBottom: '1rem' }}>
+                    <strong style={{ fontSize: '0.875rem', color: 'var(--color-error)' }}>Obrigatórios para contrato:</strong>
+                    <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0, fontSize: '0.875rem' }}>
+                      {pendingData.pendingCriticalFields.map((key) => (
+                        <li key={key}>{PENDING_FIELDS_MAP[key] || key}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div>
+                  <strong style={{ fontSize: '0.875rem' }}>Todos os campos faltando:</strong>
+                  <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0, fontSize: '0.875rem' }}>
+                    {(pendingData.pendingFields || []).map((key) => (
+                      <li key={key}>{PENDING_FIELDS_MAP[key] || key}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>
+                  <button type="button" className="button secondary" onClick={() => setShowPendingModal(false)}>
+                    Fechar
+                  </button>
+                  <button
+                    type="button"
+                    className="button primary"
+                    onClick={() => {
+                      setShowPendingModal(false);
+                      setEditMode(true);
+                      setShowPendingHighlight(true);
+                      setTimeout(() => {
+                        const first = document.querySelector('.field-pending');
+                        if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }, 100);
+                    }}
+                  >
+                    Preencher agora
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="cadastro-card">
             <div className="cadastro-avatar">
               <label
@@ -785,7 +900,7 @@ export default function PatientCadastroPage() {
               />
             </div>
             <div className="cadastro-grid">
-              <div className="form-field">
+              <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('full_name') ? 'field-pending' : ''}`}>
                 <label>Nome Completo *</label>
                 <input
                   type="text"
@@ -807,7 +922,7 @@ export default function PatientCadastroPage() {
                   disabled={!editMode}
                 />
               </div>
-              <div className="form-field">
+              <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('sex') ? 'field-pending' : ''}`}>
                 <label>Sexo *</label>
                 <select
                   value={draft.profile.sex}
@@ -820,7 +935,7 @@ export default function PatientCadastroPage() {
                   <option value="O">Outro</option>
                 </select>
               </div>
-              <div className="form-field">
+              <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('birth_date') ? 'field-pending' : ''}`}>
                 <label>Data de Nascimento *</label>
                 <input
                   type="date"
@@ -833,7 +948,7 @@ export default function PatientCadastroPage() {
                 <label>Idade</label>
                 <input type="text" value={ageDisplay} readOnly disabled />
               </div>
-              <div className="form-field">
+              <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('cpf') ? 'field-pending' : ''}`}>
                 <label>CPF *</label>
                 <input
                   type="text"
@@ -863,7 +978,7 @@ export default function PatientCadastroPage() {
               <div className="tab-content">
                 <h3>Informações Gerais do Paciente</h3>
                 <div className="cadastro-grid">
-                  <div className="form-field">
+                  <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('personal_email') ? 'field-pending' : ''}`}>
                     <label>E-mail Principal</label>
                     <input
                       type="email"
@@ -901,8 +1016,8 @@ export default function PatientCadastroPage() {
               <div className="tab-content">
                 <h3>Documentação</h3>
                 <div className="cadastro-grid">
-                  <div className="form-field">
-                    <label>RG</label>
+                  <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('cpf_or_rg') ? 'field-pending' : ''}`}>
+                    <label>RG (ou CPF acima)</label>
                     <input
                       type="text"
                       value={draft.documents.rg}
@@ -952,12 +1067,21 @@ export default function PatientCadastroPage() {
                       disabled={!editMode}
                     />
                   </div>
-                  <div className="form-field">
+                  <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('responsible_name') ? 'field-pending' : ''}`}>
                     <label>Responsável Legal (se menor)</label>
                     <input
                       type="text"
                       value={draft.documents.responsible_name}
                       onChange={(event) => updateDraft('documents', 'responsible_name', event.target.value)}
+                      disabled={!editMode}
+                    />
+                  </div>
+                  <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('responsible_cpf') ? 'field-pending' : ''}`}>
+                    <label>CPF do Responsável (se menor)</label>
+                    <input
+                      type="text"
+                      value={formatCpf(draft.documents.responsible_cpf || '')}
+                      onChange={(event) => updateDraft('documents', 'responsible_cpf', formatCpf(event.target.value))}
                       disabled={!editMode}
                     />
                   </div>
@@ -1037,7 +1161,7 @@ export default function PatientCadastroPage() {
               <div className="tab-content">
                 <h3>Telefones de Contato</h3>
                 <div className="cadastro-grid">
-                  <div className="form-field">
+                  <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('phone') ? 'field-pending' : ''}`}>
                     <label>Telefone Principal</label>
                     <input
                       type="tel"
@@ -1084,7 +1208,7 @@ export default function PatientCadastroPage() {
                     {cepLoading ? <small className="muted">Buscando CEP...</small> : null}
                     {cepError ? <small className="error">{cepError}</small> : null}
                   </div>
-                  <div className="form-field full">
+                  <div className={`form-field full ${showPendingHighlight && pendingData.pendingFields.includes('street') ? 'field-pending' : ''}`}>
                     <label>Logradouro</label>
                     <input
                       type="text"
@@ -1120,7 +1244,7 @@ export default function PatientCadastroPage() {
                       disabled={!editMode}
                     />
                   </div>
-                  <div className="form-field full">
+                  <div className={`form-field full ${showPendingHighlight && pendingData.pendingFields.includes('city') ? 'field-pending' : ''}`}>
                     <label>Cidade</label>
                     <input
                       type="text"
@@ -1194,7 +1318,7 @@ export default function PatientCadastroPage() {
               <div className="tab-content">
                 <h3>Convênios e Planos de Saúde</h3>
                 <div className="cadastro-grid">
-                  <div className="form-field">
+                  <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('insurance_name') ? 'field-pending' : ''}`}>
                     <label>Convênio</label>
                     <input
                       type="text"
@@ -1268,7 +1392,7 @@ export default function PatientCadastroPage() {
               <div className="tab-content">
                 <h3>Informações de Prontuário</h3>
                 <div className="cadastro-grid">
-                  <div className="form-field">
+                  <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('record_number') ? 'field-pending' : ''}`}>
                     <label>Nº do Prontuário</label>
                     <input
                       type="text"
@@ -1277,7 +1401,7 @@ export default function PatientCadastroPage() {
                       disabled={!editMode}
                     />
                   </div>
-                  <div className="form-field">
+                  <div className={`form-field ${showPendingHighlight && pendingData.pendingFields.includes('preferred_dentist') ? 'field-pending' : ''}`}>
                     <label>Dentista de Preferência</label>
                     <input
                       type="text"
@@ -1344,6 +1468,12 @@ export default function PatientCadastroPage() {
             ) : null}
           </div>
         </SectionCard>
+
+        <ImportExportButtons
+          patientId={patientId}
+          user={user}
+          canUse={canManageAccess(user)}
+        />
       </Section>
     </div>
   );

@@ -6164,6 +6164,22 @@ textarea:focus {
   color: #166534;
 }
 
+.alert.pending-data-alert {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+}
+
+.form-field.field-pending input,
+.form-field.field-pending select {
+  border: 2px solid #f59e0b;
+  background: #fffbeb;
+}
+
 .alert.warning {
   background: #fef3c7;
   color: #92400e;
@@ -6833,6 +6849,133 @@ textarea:focus {
     gap: 2rem;
     align-items: start;
   }
+}
+
+/* Botões discretos Importar/Exportar - rodapé (desktop) */
+.import-export-footer {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  gap: 0.5rem;
+  z-index: 40;
+}
+
+.import-export-footer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #6B7280;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.import-export-footer-btn:hover {
+  color: #6A00FF;
+  border-color: rgba(106, 0, 255, 0.35);
+  box-shadow: 0 2px 6px rgba(106, 0, 255, 0.08);
+}
+
+.import-export-footer-btn:focus-visible {
+  outline: 2px solid #6A00FF;
+  outline-offset: 2px;
+}
+
+/* Mobile: esconder rodapé, mostrar FAB */
+@media (max-width: 767px) {
+  .import-export-footer {
+    display: none;
+  }
+}
+
+/* Botão flutuante "Dados" (mobile) */
+.import-export-fab-wrap {
+  display: none;
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 50;
+}
+
+@media (max-width: 767px) {
+  .import-export-fab-wrap {
+    display: block;
+  }
+}
+
+.import-export-fab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6B7280;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.import-export-fab:hover {
+  color: #6A00FF;
+  border-color: rgba(106, 0, 255, 0.35);
+  box-shadow: 0 2px 10px rgba(106, 0, 255, 0.12);
+}
+
+.import-export-fab .open {
+  transform: rotate(180deg);
+}
+
+.import-export-fab-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+  background: transparent;
+}
+
+.import-export-fab-menu {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 140px;
+  padding: 0.25rem;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 51;
+}
+
+.import-export-fab-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #374151;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+
+.import-export-fab-menu button:hover {
+  background: #F3F4F6;
+  color: #6A00FF;
 }
 
 /* BLOCO ESQUERDO - BUSCA RÁPIDA */
@@ -14969,3 +15112,162 @@ textarea:focus {
   background: var(--color-text);
   color: var(--color-text-white);
 }
+
+/* Import/Export Card & Modal */
+.import-export-buttons {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.import-export-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-border);
+  background: var(--color-bg-card);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  min-width: 160px;
+}
+
+.import-export-btn:hover {
+  border-color: var(--color-primary);
+  background: var(--color-bg);
+  color: var(--color-primary);
+}
+
+.import-export-btn-export:hover { border-color: var(--color-success); color: var(--color-success); }
+.import-export-btn-import:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+.import-export-modal-overlay {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.import-export-modal {
+  max-width: 720px;
+  width: 95%;
+  max-height: 90vh;
+}
+
+.import-export-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.import-export-modal-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.import-export-tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 1rem 1.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.import-export-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: none;
+  background: none;
+  font-size: 0.9375rem;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.import-export-tab:hover { color: var(--color-text); }
+.import-export-tab.active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+  font-weight: 500;
+}
+
+.import-export-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.import-export-message {
+  margin: 1rem 1.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9375rem;
+}
+
+.import-export-message.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--color-success);
+}
+
+.import-export-message.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error);
+}
+
+.import-export-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.export-section h4,
+.import-preview h4 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.export-filters {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.export-filters label { font-size: 0.875rem; color: var(--color-text-muted); }
+.export-filters input { padding: 0.5rem; border-radius: var(--radius-sm); border: 1px solid var(--color-border); }
+
+.export-buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.import-file-input { margin-bottom: 0.5rem; }
+.import-preview-table-wrap { overflow-x: auto; margin: 1rem 0; border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.import-preview-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+.import-preview-table th, .import-preview-table td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+.import-preview-table th { background: var(--color-bg); font-weight: 500; }
+.import-preview-table tr.has-error { background: rgba(239, 68, 68, 0.08); }
+.import-preview-table tr.has-pending { background: rgba(234, 179, 8, 0.1); }
+.import-preview-table tr.has-failure { background: rgba(239, 68, 68, 0.08); }
+.import-errors { margin-top: 0.75rem; }
+.import-errors .error-text { font-size: 0.8125rem; color: var(--color-error); margin: 0.25rem 0; }
+.import-warnings-wrap { margin-top: 0.75rem; }
+.import-pendencias { margin-bottom: 0.75rem; }
+.import-pendencias strong { font-size: 0.8125rem; color: var(--color-warning, #b45309); }
+.import-pendencias .warning-text { font-size: 0.8125rem; color: var(--color-warning, #b45309); margin: 0.25rem 0; }
+.import-falhas strong { font-size: 0.8125rem; color: var(--color-error); }
+.import-falhas .error-text { font-size: 0.8125rem; color: var(--color-error); margin: 0.25rem 0; }
+.logs-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.logs-table th, .logs-table td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--color-border); }
+.logs-table th { background: var(--color-bg); font-weight: 500; }

@@ -12,6 +12,8 @@ import ActionCard from '../components/ActionCard.jsx';
 import GradientButton from '../components/GradientButton.jsx';
 import { loadDb } from '../db/index.js';
 import { can } from '../permissions/permissions.js';
+import { canManageAccess } from '../services/accessService.js';
+import ImportExportButtons from '../components/ImportExportButtons.jsx';
 import {
   addPatientAddress,
   addPatientInsurance,
@@ -767,7 +769,7 @@ export default function PatientsPage() {
           </div>
         </div>
 
-        {/* BLOCO DIREITO - AÇÕES DE CADASTRO */}
+        {/* BLOCO DIREITO - CADASTRAR */}
         <div className="patients-actions-block">
           <div className="patients-actions-card">
             <h3 className="patients-actions-card-title">Cadastrar Paciente</h3>
@@ -791,6 +793,13 @@ export default function PatientsPage() {
           </div>
         </div>
       </div>
+
+      {/* Botões discretos Importar/Exportar (rodapé ou flutuante em mobile) */}
+      <ImportExportButtons
+        patientId={selectedId || null}
+        user={user}
+        canUse={canManageAccess(user)}
+      />
 
       {searchLoading ? (
         <Section title="Resultados">

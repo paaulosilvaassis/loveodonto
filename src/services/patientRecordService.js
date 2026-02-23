@@ -1,4 +1,5 @@
 import { loadDb, withDb } from '../db/index.js';
+import { recalcPendingData } from './patientService.js';
 import { createId, normalizeText } from './helpers.js';
 
 const ensurePatient = (db, patientId) => {
@@ -66,6 +67,7 @@ export const updatePatientRecord = (patientId, payload = {}) => {
       record.preferred_dentist = normalizeText(String(payload.preferred_dentist || ''));
       record.patient_type = normalizeText(String(payload.patient_type || ''));
       record.updated_at = new Date().toISOString();
+      recalcPendingData(db, patientId);
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientRecordService.js:57',message:'record update end',data:{patientId,recordNumber:record.record_number || null},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H9'})}).catch(()=>{});
       // #endregion

@@ -311,9 +311,32 @@ export default function PatientChartPage() {
     );
   }
 
+  const hasPendingData = Boolean(patient.profile?.hasPendingData);
+
   return (
     <div className="stack">
       <Section title={`Prontuário — ${patient.profile?.full_name || 'Paciente'}`}>
+        {hasPendingData && (
+          <div className="alert alert-warning pending-data-alert" style={{ marginBottom: '1rem' }}>
+            <span>⚠️ Cadastro com informações pendentes. Atualize para liberar contratos e documentos.</span>
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="button secondary button-sm"
+                onClick={() => navigate(`/pacientes/cadastro/${patientId}?highlight=pending`)}
+              >
+                Ver campos pendentes
+              </button>
+              <button
+                type="button"
+                className="button primary button-sm"
+                onClick={() => navigate(`/pacientes/cadastro/${patientId}`)}
+              >
+                Atualizar agora
+              </button>
+            </div>
+          </div>
+        )}
         <div className="prontuario-header">
           <Tabs tabs={TAB_CONFIG} active={activeTab} onChange={setActiveTab} />
           <button

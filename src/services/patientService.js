@@ -43,6 +43,15 @@ const ensurePatient = (db, patientId) => {
   return patient;
 };
 
+export function recalcPendingData(db, patientId) {
+  const result = computePendingFields(db, patientId);
+  const p = db.patients.find((x) => x.id === patientId);
+  if (!p) return;
+  p.hasPendingData = result.hasPendingData;
+  p.pendingFields = result.pendingFields;
+  p.pendingCriticalFields = result.pendingCriticalFields;
+}
+
 const ensureCpfUnique = (db, cpf, ignorePatientId) => {
   const normalized = normalizeCpf(cpf);
   if (!normalized) return;
@@ -274,6 +283,225 @@ export const createPatientQuick = (user, payload) => {
   });
 };
 
+/** Campos importantes para alerta de pendências (importação) */
+export const PENDING_FIELDS_MAP = {
+  full_name: 'Nome Completo',
+  cpf: 'CPF',
+  cpf_or_rg: 'CPF ou RG',
+  sex: 'Sexo',
+  birth_date: 'Data de Nascimento',
+  personal_email: 'E-mail',
+  phone: 'Telefone ou Celular',
+  street: 'Endereço',
+  neighborhood: 'Bairro',
+  city: 'Cidade',
+  state: 'UF',
+  cep: 'CEP',
+  address_min: 'Endereço (mínimo: Cidade/UF ou Endereço+Cidade+CEP)',
+  record_number: 'Nº Prontuário',
+  preferred_dentist: 'Preferência (Dentista)',
+  insurance_name: 'Nome do Convênio',
+  responsible_name: 'Nome do Responsável',
+  responsible_cpf: 'CPF do Responsável',
+};
+
+/** Campos obrigatórios para gerar contrato (quando faltando, bloqueiam contrato) */
+export const CRITICAL_FIELDS = [
+  'full_name',
+  'cpf_or_rg',
+  'birth_date',
+  'phone',
+  'address_min',
+  'sex',
+  'responsible_name',
+  'responsible_cpf',
+];
+
+const isMinor = (birthDate) => {
+  if (!birthDate) return false;
+  const birth = new Date(birthDate);
+  if (Number.isNaN(birth.getTime())) return false;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age -= 1;
+  return age < 18;
+};
+
+/**
+ * Calcula pendências a partir do estado do paciente no DB.
+ * Retorna { pendingFields, pendingCriticalFields, hasPendingData }.
+ * Usado na importação e ao salvar/editar (recalcular e limpar quando completar).
+ */
+export function computePendingFields(db, patientId) {
+  const p = db.patients?.find((x) => x.id === patientId);
+  if (!p) return { pendingFields: [], pendingCriticalFields: [], hasPendingData: false };
+
+  const docs = db.patientDocuments?.find((d) => d.patient_id === patientId) || {};
+  const rec = (db.patientRecords || []).find((r) => r.patient_id === patientId);
+  const addresses = (db.patientAddresses || []).filter((a) => a.patient_id === patientId) || [];
+  const phones = (db.patientPhones || []).filter((ph) => ph.patient_id === patientId) || [];
+  const minor = isMinor(p.birth_date);
+
+  const pendingFields = [];
+  const hasCpf = p.cpf && isCpfValid(p.cpf);
+  const hasRg = Boolean(normalizeText(docs.rg));
+  if (!normalizeText(p.full_name)) pendingFields.push('full_name');
+  if (!hasCpf && !hasRg) pendingFields.push('cpf_or_rg');
+  if (!hasCpf) pendingFields.push('cpf');
+  if (!normalizeText(p.sex)) pendingFields.push('sex');
+  if (!normalizeText(p.birth_date)) pendingFields.push('birth_date');
+  if (!normalizeText(docs.personal_email)) pendingFields.push('personal_email');
+  if (phones.length === 0) pendingFields.push('phone');
+  const hasAddressMin =
+    addresses.some(
+      (a) =>
+        (normalizeText(a.street) && normalizeText(a.city) && normalizeText(a.cep)) ||
+        (normalizeText(a.city) && normalizeText(a.state))
+    );
+  if (!hasAddressMin) {
+    pendingFields.push('address_min');
+    if (!addresses.some((a) => normalizeText(a.street))) pendingFields.push('street');
+    if (!addresses.some((a) => normalizeText(a.city))) pendingFields.push('city');
+    if (!addresses.some((a) => normalizeText(a.cep))) pendingFields.push('cep');
+    if (!addresses.some((a) => normalizeText(a.state))) pendingFields.push('state');
+  } else {
+    if (!addresses.some((a) => normalizeText(a.street))) pendingFields.push('street');
+    if (!addresses.some((a) => normalizeText(a.neighborhood))) pendingFields.push('neighborhood');
+    if (!addresses.some((a) => normalizeText(a.city))) pendingFields.push('city');
+    if (!addresses.some((a) => normalizeText(a.state))) pendingFields.push('state');
+    if (!addresses.some((a) => normalizeText(a.cep))) pendingFields.push('cep');
+  }
+  if (!rec?.record_number) pendingFields.push('record_number');
+  if (!normalizeText(rec?.preferred_dentist)) pendingFields.push('preferred_dentist');
+  const ins = (db.patientInsurances || []).find((i) => i.patient_id === patientId);
+  if (!normalizeText(ins?.insurance_name)) pendingFields.push('insurance_name');
+  if (minor) {
+    if (!normalizeText(docs.responsible_name)) pendingFields.push('responsible_name');
+    if (!normalizeText(docs.responsible_cpf)) pendingFields.push('responsible_cpf');
+  }
+
+  const pendingCriticalFields = CRITICAL_FIELDS.filter((f) => pendingFields.includes(f));
+  const hasPendingData = pendingFields.length > 0;
+
+  return {
+    pendingFields: [...new Set(pendingFields)],
+    pendingCriticalFields,
+    hasPendingData,
+  };
+}
+
+/**
+ * Cria paciente a partir de importação (permite dados incompletos, marca pendências).
+ */
+export const createPatientFromImport = (user, payload, pendingFields = []) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'patientService.js:createPatientFromImport',message:'entry',data:{user:!!user,payloadName:payload?.full_name?.slice(0,30)},timestamp:Date.now(),runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  requirePermission(user, 'patients:write');
+  const fullName = normalizeText(payload.full_name) || 'Paciente Importado';
+  const sex = (normalizeText(payload.sex) || 'N').slice(0, 1).toUpperCase();
+  const birthDate = normalizeText(payload.birth_date) || '1990-01-01';
+  let cpf = normalizeCpf(payload.cpf);
+  if (!cpf || !isCpfValid(cpf)) {
+    cpf = generatePlaceholderCpf();
+  }
+
+  const patient = {
+    id: createId('patient'),
+    guid: crypto.randomUUID(),
+    full_name: fullName,
+    nickname: normalizeText(payload.nickname),
+    social_name: normalizeText(payload.social_name),
+    sex,
+    birth_date: birthDate,
+    cpf,
+    photo_url: '',
+    status: 'active',
+    blocked: false,
+    block_reason: '',
+    block_at: '',
+    tags: payload.tags || [],
+    lead_source: normalizeText(payload.lead_source),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    created_by_user_id: user.id,
+    updated_by_user_id: user.id,
+  };
+  if (pendingFields.length > 0) {
+    patient.hasPendingData = true;
+    patient.pendingFields = [...pendingFields];
+    patient.pendingCriticalFields = CRITICAL_FIELDS.filter((f) => pendingFields.includes(f));
+  }
+
+  return withDbResult((db) => {
+    ensureCpfUnique(db, patient.cpf);
+    db.patients.push(patient);
+    const documents = {
+      patient_id: patient.id,
+      rg: '',
+      pis: '',
+      municipal_registration: '',
+      personal_email: (payload.documents?.personal_email ?? payload.personal_email ?? '') || '',
+      marital_status: '',
+      responsible_name: '',
+      responsible_relation: '',
+      responsible_phone: '',
+      responsible_cpf: '',
+      mother_name: '',
+      father_name: '',
+    };
+    if (payload.documents) {
+      Object.assign(documents, {
+        rg: normalizeText(payload.documents.rg),
+        personal_email: normalizeText(payload.documents.personal_email || payload.documents.email),
+        marital_status: normalizeText(payload.documents.marital_status),
+        responsible_name: normalizeText(payload.documents.responsible_name),
+        responsible_cpf: normalizeText(payload.documents.responsible_cpf),
+      });
+    }
+    db.patientDocuments.push(documents);
+    const birthData = payload.birth || {};
+    const birth = {
+      patient_id: patient.id,
+      nationality: normalizeText(birthData.nationality) || 'Brasil',
+      birth_city: normalizeText(birthData.birth_city),
+      birth_state: normalizeText(birthData.birth_state),
+    };
+    db.patientBirth.push(birth);
+    const edu = payload.education || {};
+    const education = {
+      patient_id: patient.id,
+      education_level: normalizeText(edu.education_level),
+      profession: normalizeText(edu.profession),
+      other_profession: '',
+    };
+    db.patientEducation.push(education);
+    const relationships = {
+      patient_id: patient.id,
+      emergency_contact_name: '',
+      emergency_contact_phone: '',
+      dependents: [],
+      notes: '',
+      marital_status: documents.marital_status || '',
+      preferred_contact_period: '',
+      preferred_contact_channel: '',
+      lgpd_whatsapp_opt_in: false,
+    };
+    db.patientRelationships.push(relationships);
+    const activity = {
+      patient_id: patient.id,
+      total_appointments: 0,
+      last_appointment_at: '',
+      total_procedures: 0,
+      last_procedure_at: '',
+    };
+    db.patientActivitySummary.push(activity);
+    logAction('patients:create-import', { patientId: patient.id, userId: user.id });
+    return { patientId: patient.id, profile: patient };
+  });
+};
+
 /**
  * Gera um CPF placeholder válido e único (para criação de paciente a partir de lead).
  * Usa 9 dígitos (1 + 8 aleatórios) + 2 dígitos verificadores; evita sequência repetida.
@@ -368,12 +596,39 @@ export const updatePatientProfile = (user, patientId, payload) => {
     if (!isCpfValid(next.cpf)) throw new Error('CPF inválido.');
     ensureCpfUnique(db, next.cpf, patientId);
     if (existing) {
+      next.hasPendingData = existing.hasPendingData;
+      next.pendingFields = existing.pendingFields || [];
+      next.pendingCriticalFields = existing.pendingCriticalFields || [];
+    }
+    if (existing) {
       db.patients = db.patients.map((item) => (item.id === patientId ? next : item));
     } else {
       db.patients.push(next);
     }
+    recalcPendingData(db, patientId);
     logAction('patients:update-profile', { patientId, userId: user.id });
     return next;
+  });
+};
+
+/**
+ * Atualiza hasPendingData, pendingFields e pendingCriticalFields do paciente (usado na importação).
+ */
+export const updatePatientPendingData = (user, patientId, hasPendingData, pendingFields, pendingCriticalFields = null) => {
+  requirePermission(user, 'patients:write');
+  return withDbResult((db) => {
+    const p = db.patients.find((x) => x.id === patientId);
+    if (!p) throw new Error('Paciente não encontrado.');
+    p.hasPendingData = Boolean(hasPendingData);
+    p.pendingFields = Array.isArray(pendingFields) ? [...pendingFields] : [];
+    if (pendingCriticalFields !== null) {
+      p.pendingCriticalFields = Array.isArray(pendingCriticalFields) ? [...pendingCriticalFields] : [];
+    } else if (p.pendingFields.length > 0) {
+      p.pendingCriticalFields = CRITICAL_FIELDS.filter((f) => p.pendingFields.includes(f));
+    }
+    p.updated_at = new Date().toISOString();
+    p.updated_by_user_id = user.id;
+    return p;
   });
 };
 
@@ -415,6 +670,7 @@ export const updatePatientDocuments = (user, patientId, payload) => {
       responsible_name: normalizeText(payload.responsible_name),
       responsible_relation: normalizeText(payload.responsible_relation),
       responsible_phone: normalizeText(payload.responsible_phone),
+      responsible_cpf: normalizeText(payload.responsible_cpf),
       mother_name: normalizeText(payload.mother_name),
       father_name: normalizeText(payload.father_name),
     };
@@ -426,6 +682,7 @@ export const updatePatientDocuments = (user, patientId, payload) => {
       patient.updated_at = new Date().toISOString();
       patient.updated_by_user_id = user.id;
     }
+    recalcPendingData(db, patientId);
     logAction('patients:update-documents', { patientId, userId: user.id });
     return next;
   });
@@ -457,6 +714,7 @@ export const updatePatientBirth = (user, patientId, payload) => {
       patient.updated_at = new Date().toISOString();
       patient.updated_by_user_id = user.id;
     }
+    recalcPendingData(db, patientId);
     logAction('patients:update-birth', { patientId, userId: user.id });
     return next;
   });
@@ -607,6 +865,7 @@ export const addPatientAddress = (user, patientId, payload) => {
       });
     }
     db.patientAddresses.push(address);
+    recalcPendingData(db, patientId);
     logAction('patients:add-address', { patientId, userId: user.id });
     return address;
   });
@@ -670,6 +929,7 @@ export const addPatientInsurance = (user, patientId, payload) => {
   return withDbResult((db) => {
     ensurePatient(db, patientId);
     db.patientInsurances.push(insurance);
+    recalcPendingData(db, patientId);
     logAction('patients:add-insurance', { patientId, userId: user.id });
     return insurance;
   });
