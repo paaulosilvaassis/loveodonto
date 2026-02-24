@@ -1,4 +1,4 @@
-import { loadDb, withDb } from '../db/index.js';
+import { loadDb, loadDbAsync, withDb } from '../db/index.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
@@ -29,8 +29,7 @@ export const getClinic = () => {
   };
 };
 
-export const getClinicSummary = () => {
-  const db = loadDb();
+const buildClinicSummaryFromDb = (db) => {
   const phone = db.clinicPhones.find((item) => item.principal) || db.clinicPhones[0];
   const address = db.clinicAddresses.find((item) => item.principal) || db.clinicAddresses[0];
   return {
@@ -42,6 +41,14 @@ export const getClinicSummary = () => {
     enderecoPrincipal: address || null,
   };
 };
+
+export const getClinicSummary = () => {
+  const db = loadDb();
+  return buildClinicSummaryFromDb(db);
+};
+
+/** Versão assíncrona para não bloquear o thread (usa loadDbAsync). */
+export const getClinicSummaryAsync = () => loadDbAsync().then(buildClinicSummaryFromDb);
 
 export const updateClinicProfile = (user, payload) => {
   requirePermission(user, 'team:write');

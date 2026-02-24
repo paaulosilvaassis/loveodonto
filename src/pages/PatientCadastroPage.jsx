@@ -13,6 +13,7 @@ import {
   createPatientQuick,
   getPatient,
   PENDING_FIELDS_MAP,
+  recalcAndPersistPendingData,
   removePatientAddress,
   removePatientInsurance,
   updatePatientAccess,
@@ -27,6 +28,10 @@ import {
 } from '../services/patientService.js';
 import { getPatientRecord, updatePatientRecord } from '../services/patientRecordService.js';
 import { formatCep, formatCpf, formatPhone, onlyDigits } from '../utils/validators.js';
+
+/** Campos que não são obrigatórios; removidos da lista de pendências ao exibir (compatível com dados antigos). */
+const PENDING_OPTIONAL_KEYS = ['preferred_dentist', 'insurance_name'];
+const filterOptionalPending = (arr) => (arr || []).filter((k) => !PENDING_OPTIONAL_KEYS.includes(k));
 
 const TAB_CONFIG = [
   { id: 'dados', label: 'Dados Principais' },
@@ -365,10 +370,14 @@ export default function PatientCadastroPage() {
     const next = mapPatientToDraft(patient, record);
     originalRef.current = next;
     setDraft(next);
+    const rawFields = Array.isArray(patient.profile?.pendingFields) ? patient.profile.pendingFields : [];
+    const rawCritical = Array.isArray(patient.profile?.pendingCriticalFields) ? patient.profile.pendingCriticalFields : [];
+    const pendingFields = filterOptionalPending(rawFields);
+    const pendingCriticalFields = filterOptionalPending(rawCritical);
     setPendingData({
-      hasPendingData: Boolean(patient.profile?.hasPendingData),
-      pendingFields: Array.isArray(patient.profile?.pendingFields) ? patient.profile.pendingFields : [],
-      pendingCriticalFields: Array.isArray(patient.profile?.pendingCriticalFields) ? patient.profile.pendingCriticalFields : [],
+      hasPendingData: pendingFields.length > 0,
+      pendingFields,
+      pendingCriticalFields,
     });
     if (highlightPending && patient.profile?.hasPendingData) {
       setShowPendingModal(true);
@@ -688,15 +697,22 @@ export default function PatientCadastroPage() {
         }));
       }
 
+      // Recalcula e persiste pendências com todos os dados já salvos (profile, documents, record, phones, address)
+      recalcAndPersistPendingData(nextPatientId);
+
       const refreshed = getPatient(nextPatientId);
       const record = getPatientRecord(nextPatientId);
       const nextDraft = mapPatientToDraft(refreshed, record);
       originalRef.current = nextDraft;
       setDraft(nextDraft);
+      const rawFields = Array.isArray(refreshed?.profile?.pendingFields) ? refreshed.profile.pendingFields : [];
+      const rawCritical = Array.isArray(refreshed?.profile?.pendingCriticalFields) ? refreshed.profile.pendingCriticalFields : [];
+      const pendingFields = filterOptionalPending(rawFields);
+      const pendingCriticalFields = filterOptionalPending(rawCritical);
       setPendingData({
-        hasPendingData: Boolean(refreshed?.profile?.hasPendingData),
-        pendingFields: Array.isArray(refreshed?.profile?.pendingFields) ? refreshed.profile.pendingFields : [],
-        pendingCriticalFields: Array.isArray(refreshed?.profile?.pendingCriticalFields) ? refreshed.profile.pendingCriticalFields : [],
+        hasPendingData: pendingFields.length > 0,
+        pendingFields,
+        pendingCriticalFields,
       });
       setShowPendingHighlight(false);
       setEditMode(false);
@@ -802,36 +818,38 @@ export default function PatientCadastroPage() {
           ) : null}
           {showPendingModal && (
             <div
-              className="modal-overlay"
+              className="modal-overlay pending-fields-modal-overlay"
               role="dialog"
               aria-modal="true"
               aria-labelledby="pending-fields-modal-title"
               onClick={(e) => e.target === e.currentTarget && setShowPendingModal(false)}
             >
-              <div className="modal-content" style={{ maxWidth: '28rem' }}>
-                <h3 id="pending-fields-modal-title">Campos pendentes</h3>
-                <p className="muted" style={{ marginBottom: '1rem' }}>
+              <div className="modal-content pending-fields-modal">
+                <h3 id="pending-fields-modal-title" className="pending-fields-modal-title">
+                  Campos pendentes
+                </h3>
+                <p className="pending-fields-modal-desc">
                   Preencha estes campos para completar o cadastro e liberar a geração de contratos.
                 </p>
                 {pendingData.pendingCriticalFields?.length > 0 && (
-                  <div style={{ marginBottom: '1rem' }}>
-                    <strong style={{ fontSize: '0.875rem', color: 'var(--color-error)' }}>Obrigatórios para contrato:</strong>
-                    <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0, fontSize: '0.875rem' }}>
+                  <div className="pending-fields-section-critical">
+                    <div className="pending-fields-section-title">Obrigatórios para contrato:</div>
+                    <ul className="pending-fields-list">
                       {pendingData.pendingCriticalFields.map((key) => (
                         <li key={key}>{PENDING_FIELDS_MAP[key] || key}</li>
                       ))}
                     </ul>
                   </div>
                 )}
-                <div>
-                  <strong style={{ fontSize: '0.875rem' }}>Todos os campos faltando:</strong>
-                  <ul style={{ margin: '0.25rem 0 0 1rem', padding: 0, fontSize: '0.875rem' }}>
+                <div className="pending-fields-section-all">
+                  <div className="pending-fields-section-title">Todos os campos faltando:</div>
+                  <ul className="pending-fields-list pending-fields-list-scroll">
                     {(pendingData.pendingFields || []).map((key) => (
                       <li key={key}>{PENDING_FIELDS_MAP[key] || key}</li>
                     ))}
                   </ul>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>
+                <div className="pending-fields-footer">
                   <button type="button" className="button secondary" onClick={() => setShowPendingModal(false)}>
                     Fechar
                   </button>

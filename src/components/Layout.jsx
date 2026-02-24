@@ -7,6 +7,7 @@ import { useClinicSummary } from '../hooks/useClinicSummary.js';
 import { navCategories, getActiveCategory, getActiveItem } from '../navigation/navCategories.js';
 import { logAction } from '../services/logService.js';
 import PatientQuickCreateModal from './PatientQuickCreateModal.jsx';
+import OpeningScreen, { shouldShowOpening } from './OpeningScreen.jsx';
 import appLogo from '../assets/love-odonto-logo.png';
 
 const ACTIVE_CATEGORY_KEY = 'appgestaoodonto.nav.activeCategory';
@@ -39,7 +40,7 @@ export default function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const clinicSummary = useClinicSummary();
-  
+
   // Estado da categoria ativa (restaurado do localStorage ou detectado pela rota)
   const [activeCategoryId, setActiveCategoryId] = useState(() => {
     const saved = readLocal(ACTIVE_CATEGORY_KEY, null);
@@ -51,6 +52,9 @@ export default function Layout({ children }) {
   
   // Estado do modal de pesquisa rápida
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
+
+  // Tela de abertura do app (uma vez por sessão, 30 variações por dia do mês)
+  const [showOpening, setShowOpening] = useState(() => shouldShowOpening());
 
   // Atualiza categoria ativa quando a rota muda
   useEffect(() => {
@@ -237,6 +241,11 @@ export default function Layout({ children }) {
         isOpen={isQuickCreateOpen}
         onClose={() => setIsQuickCreateOpen(false)}
       />
+
+      {/* Tela de abertura (uma vez por sessão) */}
+      {showOpening && (
+        <OpeningScreen onDismiss={() => setShowOpening(false)} />
+      )}
     </div>
   );
 }

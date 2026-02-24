@@ -4,8 +4,8 @@
 import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { isCpfValid, onlyDigits } from '../utils/validators.js';
-import { parseCsvText, parseXlsxFile, parseDate } from './csvXlsxUtils.js';
-import { createPatientFromImport, createPatientQuick, CRITICAL_FIELDS, updatePatientProfile, updatePatientDocuments, updatePatientBirth, updatePatientEducation, addPatientPhone, addPatientAddress, addPatientInsurance, updatePatientPendingData } from './patientService.js';
+import { parseCsvText, parseXlsxFile, parseDate, getCanonicalHeaderMap, normalizeParsedRows } from './csvXlsxUtils.js';
+import { createPatientFromImport, createPatientQuick, createPatientsFromImportBatch, CRITICAL_FIELDS, updatePatientProfile, updatePatientDocuments, updatePatientBirth, updatePatientEducation, addPatientPhone, addPatientAddress, addPatientInsurance, updatePatientPendingData } from './patientService.js';
 import { updatePatientRecord } from './patientRecordService.js';
 import { logImportExport } from './importExportLogService.js';
 
@@ -54,6 +54,19 @@ function getRowKey(row, key) {
   } catch {
     return '';
   }
+}
+
+/** Linha é válida para importar se tiver pelo menos: nome completo OU CPF (11 dígitos) OU telefone/celular (10+ dígitos). Evita criar paciente 100% vazio. */
+export function isRowValidForImport(row) {
+  if (row == null || typeof row !== 'object') return false;
+  const nome = getRowKey(row, 'nome_completo');
+  const cpf = onlyDigits(getRowKey(row, 'cpf'));
+  const tel = onlyDigits(getRowKey(row, 'telefone'));
+  const cel = onlyDigits(getRowKey(row, 'celular'));
+  if (nome && nome.length > 0) return true;
+  if (cpf && cpf.length === 11) return true;
+  if ((tel && tel.length >= 10) || (cel && cel.length >= 10)) return true;
+  return false;
 }
 
 /**
@@ -116,8 +129,6 @@ function getPendingFieldsFromRow(row) {
   const cep = getRowKey(row, 'cep');
   const estado = getRowKey(row, 'estado');
   const record = getRowKey(row, 'numero_prontuario');
-  const dentista = getRowKey(row, 'preferencia_dentista');
-  const convenio = getRowKey(row, 'nome_convenio');
   const nomeResp = getRowKey(row, 'nome_responsavel');
 
   if (!nome) pending.push('full_name');
@@ -144,8 +155,7 @@ function getPendingFieldsFromRow(row) {
     if (!cep) pending.push('cep');
   }
   if (!record) pending.push('record_number');
-  if (!dentista) pending.push('preferred_dentist');
-  if (!convenio) pending.push('insurance_name');
+  // preferred_dentist e insurance_name são opcionais (não entram em pending)
 
   const minor = isMinor(birth);
   if (minor) {
@@ -240,166 +250,172 @@ function findExistingPatient(db, row, conflictMode) {
   return null;
 }
 
-/** Importa CSV ou XLSX (array de linhas). Não bloqueia por erros de validação. */
-export async function importFromCsvOrXlsx(file, user, conflictMode = 'create') {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'importPatientService.js:importFromCsvOrXlsx',message:'import entry',data:{ext:(file?.name||'').toLowerCase().slice(-5),user:!!user,userId:user?.id,conflictMode},timestamp:Date.now(),runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-  // #endregion
+const CHUNK_SIZE = 300;
+const BATCH_CREATE_SIZE = 200;
+const MAX_ROWS_PER_IMPORT = 10000;
+const YIELD_EVERY = 10;
+
+function yieldToMain() {
+  return new Promise((r) => setTimeout(r, 0));
+}
+
+/** Importa CSV ou XLSX em chunks: parse → validar em chunks → salvar em batch/updates com progresso e cancelamento. */
+export async function importFromCsvOrXlsx(file, user, conflictMode = 'create', options = {}) {
+  const { onProgress = () => {}, getCancelRequested = () => false } = options;
   const ext = (file.name || '').toLowerCase();
   let rows = [];
   try {
-  if (ext.endsWith('.csv')) {
-    const text = await file.text();
-    rows = parseCsvText(text);
-  } else if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
-    rows = await parseXlsxFile(file);
-  } else {
-    throw new Error('Formato não suportado. Use CSV ou XLSX.');
-  }
+    onProgress({ phase: 'reading', current: 0, total: 1, message: 'Lendo arquivo…' });
+    if (ext.endsWith('.csv')) {
+      const text = await file.text();
+      rows = parseCsvText(text);
+    } else if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
+      rows = await parseXlsxFile(file);
+    } else {
+      throw new Error('Formato não suportado. Use CSV ou XLSX.');
+    }
   } catch (parseErr) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'importPatientService.js:importFromCsvOrXlsx',message:'parse error',data:{errMsg:parseErr?.message},timestamp:Date.now(),runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     throw parseErr;
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'importPatientService.js:importFromCsvOrXlsx',message:'parse done',data:{rowsCount:rows.length,isArray:Array.isArray(rows)},timestamp:Date.now(),runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
 
-  const safeRows = Array.isArray(rows) ? rows : [];
-  const validated = safeRows.map((row, i) => {
-    try {
-      const { pendingFields = [], pendingCriticalFields = [] } = getPendingFieldsFromRow(row);
-      const { warnings = [], realErrors = [] } = validateRow(row, i);
-      return {
-        row: row != null && typeof row === 'object' ? row : {},
-        index: i + 1,
-        warnings,
-        realErrors,
-        pendingFields,
-        pendingCriticalFields,
-      };
-    } catch (err) {
-      return {
-        row: row != null && typeof row === 'object' ? row : {},
-        index: i + 1,
-        warnings: ['Linha com dados inválidos'],
-        realErrors: [err?.message || 'Erro ao processar linha'],
-        pendingFields: [],
-        pendingCriticalFields: [],
-      };
-    }
-  });
-  const toImport = validated;
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'importPatientService.js:importFromCsvOrXlsx',message:'validated done',data:{toImportLen:toImport.length},timestamp:Date.now(),runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-  // #endregion
+  const rawRows = Array.isArray(rows) ? rows : [];
+  const rawHeaders = rawRows.length && typeof rawRows[0] === 'object' ? Object.keys(rawRows[0]) : [];
+  const headerMap = getCanonicalHeaderMap(rawHeaders);
+  const safeRows = normalizeParsedRows(rawRows, headerMap);
+  const totalRowsInFile = safeRows.length;
+  const toProcessTotal = Math.min(totalRowsInFile, MAX_ROWS_PER_IMPORT);
+  const truncated = totalRowsInFile > MAX_ROWS_PER_IMPORT;
 
   let created = 0;
   let updated = 0;
   let withPending = 0;
+  let ignored = 0;
   const importErrors = [];
+  const createBatch = [];
 
-  for (const item of toImport) {
-    const { row, index, pendingFields = [], pendingCriticalFields = [] } = item;
-    try {
-      const db = loadDb();
-      const existing = findExistingPatient(db, row, conflictMode);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'importPatientService.js:importFromCsvOrXlsx',message:'loop row',data:{index,hasExisting:!!existing},timestamp:Date.now(),runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
+  for (let chunkStart = 0; chunkStart < toProcessTotal; chunkStart += CHUNK_SIZE) {
+    if (getCancelRequested()) break;
 
-      if (existing && (conflictMode === 'update_cpf' || conflictMode === 'update_record' || conflictMode === 'merge')) {
-        const payload = rowToPayload(row, conflictMode);
-        await updatePatientProfile(user, existing.id, {
-        full_name: payload.full_name,
-        nickname: payload.nickname,
-        social_name: payload.social_name,
-        sex: payload.sex,
-        birth_date: payload.birth_date,
-        cpf: payload.cpf,
-        lead_source: payload.lead_source,
-        tags: payload.tags,
-      });
-      updatePatientDocuments(user, existing.id, payload.documents);
-      updatePatientBirth(user, existing.id, payload.birth);
-      updatePatientEducation(user, existing.id, payload.education);
-      updatePatientRecord(existing.id, { record_number: payload.record_number, preferred_dentist: payload.preferred_dentist });
-      if (payload.phone) {
-        const digits = onlyDigits(payload.phone);
-        if (digits.length >= 10) {
-          try {
-            addPatientPhone(user, existing.id, {
-              ddd: digits.slice(0, 2),
-              number: digits.slice(2, 11),
-              is_primary: true,
-              is_whatsapp: true,
-            });
-          } catch (_) {}
+    onProgress({ phase: 'validating', current: chunkStart, total: toProcessTotal, message: `Validando ${Math.min(chunkStart + CHUNK_SIZE, toProcessTotal)} / ${toProcessTotal}…` });
+    await yieldToMain();
+
+    const chunk = safeRows.slice(chunkStart, chunkStart + CHUNK_SIZE);
+    const validatedChunk = chunk.map((row, i) => {
+      try {
+        const { pendingFields = [], pendingCriticalFields = [] } = getPendingFieldsFromRow(row);
+        const { warnings = [], realErrors = [] } = validateRow(row, chunkStart + i);
+        return {
+          row: row != null && typeof row === 'object' ? row : {},
+          index: chunkStart + i + 1,
+          warnings,
+          realErrors,
+          pendingFields,
+          pendingCriticalFields,
+        };
+      } catch (err) {
+        return {
+          row: row != null && typeof row === 'object' ? row : {},
+          index: chunkStart + i + 1,
+          warnings: ['Linha com dados inválidos'],
+          realErrors: [err?.message || 'Erro ao processar linha'],
+          pendingFields: [],
+          pendingCriticalFields: [],
+        };
+      }
+    });
+
+    onProgress({ phase: 'saving', current: chunkStart, total: toProcessTotal, message: `Processando ${chunkStart + validatedChunk.length} / ${toProcessTotal}…` });
+
+    for (let i = 0; i < validatedChunk.length; i++) {
+      if (getCancelRequested()) break;
+      if (i > 0 && i % YIELD_EVERY === 0) await yieldToMain();
+
+      const item = validatedChunk[i];
+      const { row, index, pendingFields = [], pendingCriticalFields = [] } = item;
+      try {
+        if (!isRowValidForImport(row)) {
+          ignored++;
+          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'ignored', line: index, message: `Linha ${index} (sem dados mínimos)` } });
+          continue;
         }
-      }
-      if (payload.address?.street || payload.address?.city) {
-        try {
-          addPatientAddress(user, existing.id, payload.address);
-        } catch (_) {}
-      }
-      if (payload.insurance?.insurance_name) {
-        try {
-          addPatientInsurance(user, existing.id, payload.insurance);
-        } catch (_) {}
-      }
-      if (pendingFields.length > 0) {
-        updatePatientPendingData(user, existing.id, true, pendingFields, pendingCriticalFields);
-        withPending++;
-      }
-        updated++;
-      } else {
-        const payload = rowToPayload(row, conflictMode);
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'importPatientService.js:createPatientFromImport call',message:'before create',data:{index,user:!!user},timestamp:Date.now(),runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-        // #endregion
-        const { patientId } = createPatientFromImport(user, payload, pendingFields);
-        updatePatientDocuments(user, patientId, payload.documents);
-        updatePatientBirth(user, patientId, payload.birth);
-        updatePatientEducation(user, patientId, payload.education);
-        updatePatientRecord(patientId, { record_number: payload.record_number, preferred_dentist: payload.preferred_dentist });
-        if (payload.phone) {
-          const digits = onlyDigits(payload.phone);
-          if (digits.length >= 10) {
-            try {
-              addPatientPhone(user, patientId, {
-                ddd: digits.slice(0, 2),
-                number: digits.slice(2, 11),
-                is_primary: true,
-                is_whatsapp: true,
-              });
-            } catch (_) {}
+
+        const db = loadDb();
+        const existing = findExistingPatient(db, row, conflictMode);
+
+        if (existing && (conflictMode === 'update_cpf' || conflictMode === 'update_record' || conflictMode === 'merge')) {
+          const payload = rowToPayload(row, conflictMode);
+          updatePatientProfile(user, existing.id, {
+            full_name: payload.full_name,
+            nickname: payload.nickname,
+            social_name: payload.social_name,
+            sex: payload.sex,
+            birth_date: payload.birth_date,
+            cpf: payload.cpf,
+            lead_source: payload.lead_source,
+            tags: payload.tags,
+          });
+          updatePatientDocuments(user, existing.id, payload.documents);
+          updatePatientBirth(user, existing.id, payload.birth);
+          updatePatientEducation(user, existing.id, payload.education);
+          updatePatientRecord(existing.id, { record_number: payload.record_number, preferred_dentist: payload.preferred_dentist });
+          if (payload.phone) {
+            const digits = onlyDigits(payload.phone);
+            if (digits.length >= 10) {
+              try {
+                addPatientPhone(user, existing.id, { ddd: digits.slice(0, 2), number: digits.slice(2, 11), is_primary: true, is_whatsapp: true });
+              } catch (_) {}
+            }
+          }
+          if (payload.address?.street || payload.address?.city) {
+            try { addPatientAddress(user, existing.id, payload.address); } catch (_) {}
+          }
+          if (payload.insurance?.insurance_name) {
+            try { addPatientInsurance(user, existing.id, payload.insurance); } catch (_) {}
+          }
+          if (pendingFields.length > 0) {
+            updatePatientPendingData(user, existing.id, true, pendingFields, pendingCriticalFields);
+            withPending++;
+          }
+          updated++;
+          const name = (payload.full_name || '').trim() || 'Sem nome';
+          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: pendingFields.length ? 'imported_pending' : 'imported', line: index, name, message: pendingFields.length ? `faltando: ${pendingFields.slice(0, 3).join(', ')}` : null } });
+        } else {
+          const payload = rowToPayload(row, conflictMode);
+          createBatch.push({ payload, pendingFields, index });
+          if (createBatch.length >= BATCH_CREATE_SIZE) {
+            const { patientIds } = createPatientsFromImportBatch(user, createBatch.map((x) => ({ payload: x.payload, pendingFields: x.pendingFields })));
+            created += patientIds.length;
+            if (createBatch.some((x) => x.pendingFields.length > 0)) withPending += createBatch.filter((x) => x.pendingFields.length > 0).length;
+            createBatch.forEach((x) => {
+              const name = (x.payload.full_name || '').trim() || 'Sem nome';
+              onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: x.pendingFields.length ? 'imported_pending' : 'imported', line: x.index, name, message: x.pendingFields.length ? `faltando: ${x.pendingFields.slice(0, 3).join(', ')}` : null } });
+            });
+            createBatch.length = 0;
+            await yieldToMain();
+            onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…` });
           }
         }
-        if (payload.address?.street || payload.address?.city) {
-          try {
-            addPatientAddress(user, patientId, payload.address);
-          } catch (_) {}
-        }
-        if (payload.insurance?.insurance_name) {
-          try {
-            addPatientInsurance(user, patientId, payload.insurance);
-          } catch (_) {}
-        }
-        if (pendingFields.length > 0) withPending++;
-        created++;
+      } catch (err) {
+        importErrors.push({ row: index, errors: [err?.message || 'Erro ao processar linha'] });
+        onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'error', line: index, message: err?.message || 'Erro ao processar linha' } });
       }
-    } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'importPatientService.js:importFromCsvOrXlsx',message:'loop row catch',data:{index,errMsg:err?.message},timestamp:Date.now(),runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
-      importErrors.push({ row: index, errors: [err?.message || 'Erro ao processar linha'] });
     }
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'importPatientService.js:importFromCsvOrXlsx',message:'import about to return',data:{created,updated,withPending,errorsLen:importErrors.length},timestamp:Date.now(),runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
-  // #endregion
+  if (createBatch.length > 0 && !getCancelRequested()) {
+    try {
+      const { patientIds } = createPatientsFromImportBatch(user, createBatch.map((x) => ({ payload: x.payload, pendingFields: x.pendingFields })));
+      created += patientIds.length;
+      if (createBatch.some((x) => x.pendingFields.length > 0)) withPending += createBatch.filter((x) => x.pendingFields.length > 0).length;
+      createBatch.forEach((x) => {
+        const name = (x.payload.full_name || '').trim() || 'Sem nome';
+        onProgress({ phase: 'saving', current: toProcessTotal, total: toProcessTotal, message: 'Finalizando…', liveItem: { type: x.pendingFields.length ? 'imported_pending' : 'imported', line: x.index, name, message: x.pendingFields.length ? `faltando: ${x.pendingFields.slice(0, 3).join(', ')}` : null } });
+      });
+    } catch (err) {
+      importErrors.push({ row: 'batch', errors: [err?.message || 'Erro ao salvar lote'] });
+    }
+  }
+
   logImportExport({
     type: 'IMPORT',
     format: ext.endsWith('.csv') ? 'csv' : 'xlsx',
@@ -409,10 +425,7 @@ export async function importFromCsvOrXlsx(file, user, conflictMode = 'create') {
     errors: importErrors.length > 0 ? importErrors.map((e) => `Linha ${e.row}: ${e.errors.join(', ')}`) : null,
   });
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'importPatientService.js:importFromCsvOrXlsx',message:'import complete',data:{created,updated,errorsCount:importErrors.length,withPending},timestamp:Date.now(),runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
-  // #endregion
-  return { created, updated, errors: importErrors, withPending };
+  return { created, updated, ignored, errors: importErrors, withPending, truncated, totalRowsInFile, headerMap };
 }
 
 /** Importa JSON completo */

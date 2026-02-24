@@ -67,8 +67,8 @@ export default function ProtectedApp() {
         <Route path="/pacientes/busca" element={withRole('/pacientes/busca', <PatientsPage />)} />
         <Route path="/pacientes/cadastro" element={withRole('/pacientes/cadastro', <PatientCadastroPage />)} />
         <Route path="/pacientes/cadastro/:patientId" element={withRole('/pacientes/cadastro', <PatientCadastroPage />)} />
-        <Route path="/prontuario/:patientId" element={<RequireRole allowedRoles={['admin', 'gerente', 'recepcao', 'profissional']}><PatientChartPage /></RequireRole>} />
-        <Route path="/prontuario/:patientId/odontograma-v2" element={<RequireRole allowedRoles={['admin', 'gerente', 'recepcao', 'profissional']}><OdontogramV2Page /></RequireRole>} />
+        <Route path="/prontuario/:patientId" element={<RequireRole allowedRoles={['admin', 'master', 'gerente', 'recepcao', 'profissional']}><PatientChartPage /></RequireRole>} />
+        <Route path="/prontuario/:patientId/odontograma-v2" element={<RequireRole allowedRoles={['admin', 'master', 'gerente', 'recepcao', 'profissional']}><OdontogramV2Page /></RequireRole>} />
         <Route path="/gestao/dashboard" element={withRole('/gestao/dashboard', <DashboardPage />)} />
         <Route path="/gestao/agenda" element={withRole('/gestao/agenda', <AgendaPage />)} />
         <Route path="/gestao-atendimento" element={withRole('/gestao-atendimento', <GestaoAtendimentoPage />)} />

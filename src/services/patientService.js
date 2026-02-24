@@ -52,6 +52,18 @@ export function recalcPendingData(db, patientId) {
   p.pendingCriticalFields = result.pendingCriticalFields;
 }
 
+/**
+ * Recalcula pendências a partir do estado atual do paciente no DB e persiste.
+ * Deve ser chamado após salvar cadastro completo (profile, documents, record, phones, address)
+ * para que o prontuário e o botão "Gerar contrato" reflitam o estado correto.
+ */
+export function recalcAndPersistPendingData(patientId) {
+  withDb((db) => {
+    recalcPendingData(db, patientId);
+    return db;
+  });
+}
+
 const ensureCpfUnique = (db, cpf, ignorePatientId) => {
   const normalized = normalizeCpf(cpf);
   if (!normalized) return;
@@ -373,9 +385,7 @@ export function computePendingFields(db, patientId) {
     if (!addresses.some((a) => normalizeText(a.cep))) pendingFields.push('cep');
   }
   if (!rec?.record_number) pendingFields.push('record_number');
-  if (!normalizeText(rec?.preferred_dentist)) pendingFields.push('preferred_dentist');
-  const ins = (db.patientInsurances || []).find((i) => i.patient_id === patientId);
-  if (!normalizeText(ins?.insurance_name)) pendingFields.push('insurance_name');
+  // preferred_dentist e insurance_name são opcionais (não entram em pendingFields)
   if (minor) {
     if (!normalizeText(docs.responsible_name)) pendingFields.push('responsible_name');
     if (!normalizeText(docs.responsible_cpf)) pendingFields.push('responsible_cpf');
@@ -499,6 +509,182 @@ export const createPatientFromImport = (user, payload, pendingFields = []) => {
     db.patientActivitySummary.push(activity);
     logAction('patients:create-import', { patientId: patient.id, userId: user.id });
     return { patientId: patient.id, profile: patient };
+  });
+};
+
+const buildPatientFromImportPayload = (payload, pendingFields, user) => {
+  const fullName = normalizeText(payload.full_name) || 'Paciente Importado';
+  const sex = (normalizeText(payload.sex) || 'N').slice(0, 1).toUpperCase();
+  const birthDate = normalizeText(payload.birth_date) || '1990-01-01';
+  let cpf = normalizeCpf(payload.cpf);
+  if (!cpf || !isCpfValid(cpf)) cpf = generatePlaceholderCpf();
+  const patient = {
+    id: createId('patient'),
+    guid: crypto.randomUUID(),
+    full_name: fullName,
+    nickname: normalizeText(payload.nickname),
+    social_name: normalizeText(payload.social_name),
+    sex,
+    birth_date: birthDate,
+    cpf,
+    photo_url: '',
+    status: 'active',
+    blocked: false,
+    block_reason: '',
+    block_at: '',
+    tags: payload.tags || [],
+    lead_source: normalizeText(payload.lead_source),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    created_by_user_id: user.id,
+    updated_by_user_id: user.id,
+  };
+  if (pendingFields.length > 0) {
+    patient.hasPendingData = true;
+    patient.pendingFields = [...pendingFields];
+    patient.pendingCriticalFields = CRITICAL_FIELDS.filter((f) => pendingFields.includes(f));
+  }
+  return { patient, payload };
+};
+
+/**
+ * Cria vários pacientes de importação em uma única escrita no DB (batch).
+ * Evita travar a UI e reduz I/O de localStorage.
+ */
+export const createPatientsFromImportBatch = (user, items) => {
+  if (!items || items.length === 0) return { patientIds: [] };
+  requirePermission(user, 'patients:write');
+  const built = items.map(({ payload, pendingFields = [] }) => buildPatientFromImportPayload(payload, pendingFields, user));
+  const cpfsInBatch = new Set();
+  for (const { patient } of built) {
+    let cpf = normalizeCpf(patient.cpf);
+    while (cpfsInBatch.has(cpf)) {
+      cpf = generatePlaceholderCpf();
+      patient.cpf = cpf;
+    }
+    cpfsInBatch.add(cpf);
+  }
+  return withDbResult((db) => {
+    const patientIds = [];
+    for (const { patient, payload } of built) {
+      ensureCpfUnique(db, patient.cpf);
+      db.patients.push(patient);
+      const documents = {
+        patient_id: patient.id,
+        rg: '',
+        pis: '',
+        municipal_registration: '',
+        personal_email: (payload.documents?.personal_email ?? payload.personal_email ?? '') || '',
+        marital_status: '',
+        responsible_name: '',
+        responsible_relation: '',
+        responsible_phone: '',
+        responsible_cpf: '',
+        mother_name: '',
+        father_name: '',
+      };
+      if (payload.documents) {
+        Object.assign(documents, {
+          rg: normalizeText(payload.documents.rg),
+          personal_email: normalizeText(payload.documents.personal_email || payload.documents.email),
+          marital_status: normalizeText(payload.documents.marital_status),
+          responsible_name: normalizeText(payload.documents.responsible_name),
+          responsible_cpf: normalizeText(payload.documents.responsible_cpf),
+        });
+      }
+      db.patientDocuments.push(documents);
+      const birthData = payload.birth || {};
+      db.patientBirth.push({
+        patient_id: patient.id,
+        nationality: normalizeText(birthData.nationality) || 'Brasil',
+        birth_city: normalizeText(birthData.birth_city),
+        birth_state: normalizeText(birthData.birth_state),
+      });
+      const edu = payload.education || {};
+      db.patientEducation.push({
+        patient_id: patient.id,
+        education_level: normalizeText(edu.education_level),
+        profession: normalizeText(edu.profession),
+        other_profession: '',
+      });
+      db.patientRelationships.push({
+        patient_id: patient.id,
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+        dependents: [],
+        notes: '',
+        marital_status: documents.marital_status || '',
+        preferred_contact_period: '',
+        preferred_contact_channel: '',
+        lgpd_whatsapp_opt_in: false,
+      });
+      db.patientActivitySummary.push({
+        patient_id: patient.id,
+        total_appointments: 0,
+        last_appointment_at: '',
+        total_procedures: 0,
+        last_procedure_at: '',
+      });
+      if (!Array.isArray(db.patientRecords)) db.patientRecords = [];
+      const nextRecNum = (arr) => {
+        const max = (arr || []).reduce((acc, r) => Math.max(acc, Number(String(r?.record_number || '').replace(/\D/g, '')) || 0), 0);
+        return String(max + 1).padStart(8, '0');
+      };
+      const recNum = normalizeText(String(payload.record_number || '')) || nextRecNum(db.patientRecords);
+      db.patientRecords.push({
+        id: createId('record'),
+        patient_id: patient.id,
+        record_number: recNum,
+        preferred_dentist: normalizeText(payload.preferred_dentist || ''),
+        patient_type: '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      const digits = onlyDigits(payload.phone || '');
+      if (digits.length >= 10) {
+        if (!Array.isArray(db.patientPhones)) db.patientPhones = [];
+        db.patientPhones.push({
+          id: createId('phone'),
+          patient_id: patient.id,
+          type: '',
+          country_code: '55',
+          ddd: digits.slice(0, 2),
+          number: digits.slice(2, 11),
+          is_whatsapp: true,
+          is_primary: true,
+          e164: buildE164(digits, '55'),
+        });
+      }
+      if (payload.address?.street || payload.address?.city) {
+        if (!Array.isArray(db.patientAddresses)) db.patientAddresses = [];
+        db.patientAddresses.push({
+          id: createId('addr'),
+          patient_id: patient.id,
+          type: payload.address?.type || 'residencial',
+          cep: normalizeText(payload.address?.cep),
+          street: normalizeText(payload.address?.street),
+          number: normalizeText(payload.address?.number),
+          complement: normalizeText(payload.address?.complement),
+          neighborhood: normalizeText(payload.address?.neighborhood),
+          city: normalizeText(payload.address?.city),
+          state: normalizeText(payload.address?.state),
+          is_primary: true,
+        });
+      }
+      if (payload.insurance?.insurance_name) {
+        if (!Array.isArray(db.patientInsurances)) db.patientInsurances = [];
+        db.patientInsurances.push({
+          id: createId('ins'),
+          patient_id: patient.id,
+          insurance_name: normalizeText(payload.insurance?.insurance_name),
+          membership_number: normalizeText(payload.insurance?.membership_number),
+          company_partner: normalizeText(payload.insurance?.company_partner),
+        });
+      }
+      patientIds.push(patient.id);
+    }
+    logAction('patients:create-import-batch', { count: patientIds.length, userId: user.id });
+    return { patientIds };
   });
 };
 

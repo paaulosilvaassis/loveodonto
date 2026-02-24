@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getClinicSummary } from '../services/clinicService.js';
+import { getClinicSummaryAsync } from '../services/clinicService.js';
 
 const CACHE_KEY = 'clinic.summary.cache';
 const CACHE_TTL = 5 * 60 * 1000;
@@ -20,9 +20,14 @@ export const useClinicSummary = () => {
   const [summary, setSummary] = useState(() => readCache());
 
   useEffect(() => {
-    const next = getClinicSummary();
-    setSummary(next);
-    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: next, timestamp: Date.now() }));
+    let cancelled = false;
+    getClinicSummaryAsync().then((next) => {
+      if (!cancelled) {
+        setSummary(next);
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: next, timestamp: Date.now() }));
+      }
+    });
+    return () => { cancelled = true; };
   }, []);
 
   return summary;

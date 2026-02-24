@@ -1,351 +1,707 @@
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"import entry","data":{"ext":".xlsx","user":true,"userId":"user-admin","conflictMode":"create"},"timestamp":1771845245449,"runId":"run1","hypothesisId":"H1"}
-{"sessionId":"ea6ead","location":"ImportExportModal.jsx:handleConfirmImport","message":"import confirm entry","data":{"hasFile":true,"fileName":"ControleODONTO - Pacientes.xlsx","user":true,"userId":"user-admin"},"timestamp":1771845245445,"runId":"run1","hypothesisId":"H1"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"parse done","data":{"rowsCount":3607,"isArray":true},"timestamp":1771845246094,"runId":"run1","hypothesisId":"H2"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"validated done","data":{"toImportLen":3607},"timestamp":1771845246129,"runId":"run1","hypothesisId":"H3"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":1,"hasExisting":false},"timestamp":1771845246140,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":2,"hasExisting":false},"timestamp":1771845246367,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":3,"hasExisting":false},"timestamp":1771845246572,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":4,"hasExisting":false},"timestamp":1771845246778,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":5,"hasExisting":false},"timestamp":1771845246973,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":6,"hasExisting":false},"timestamp":1771845247195,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":7,"hasExisting":false},"timestamp":1771845247425,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":8,"hasExisting":false},"timestamp":1771845247652,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":9,"hasExisting":false},"timestamp":1771845247891,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":10,"hasExisting":false},"timestamp":1771845248147,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":11,"hasExisting":false},"timestamp":1771845248380,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":12,"hasExisting":false},"timestamp":1771845248624,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":13,"hasExisting":false},"timestamp":1771845248852,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":14,"hasExisting":false},"timestamp":1771845249081,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":15,"hasExisting":false},"timestamp":1771845249313,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":16,"hasExisting":false},"timestamp":1771845249538,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":17,"hasExisting":false},"timestamp":1771845249761,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":18,"hasExisting":false},"timestamp":1771845249999,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":19,"hasExisting":false},"timestamp":1771845250232,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":20,"hasExisting":false},"timestamp":1771845250463,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":21,"hasExisting":false},"timestamp":1771845250707,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":22,"hasExisting":false},"timestamp":1771845250929,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":23,"hasExisting":false},"timestamp":1771845251153,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":24,"hasExisting":false},"timestamp":1771845251419,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":25,"hasExisting":false},"timestamp":1771845251652,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":26,"hasExisting":false},"timestamp":1771845251905,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":27,"hasExisting":false},"timestamp":1771845252158,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":28,"hasExisting":false},"timestamp":1771845252395,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":29,"hasExisting":false},"timestamp":1771845252643,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":30,"hasExisting":false},"timestamp":1771845252913,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":31,"hasExisting":false},"timestamp":1771845253151,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":32,"hasExisting":false},"timestamp":1771845253391,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":33,"hasExisting":false},"timestamp":1771845253649,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":34,"hasExisting":false},"timestamp":1771845253922,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":35,"hasExisting":false},"timestamp":1771845254187,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":36,"hasExisting":false},"timestamp":1771845254400,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":37,"hasExisting":false},"timestamp":1771845254607,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":38,"hasExisting":false},"timestamp":1771845254852,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":39,"hasExisting":false},"timestamp":1771845255108,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":40,"hasExisting":false},"timestamp":1771845255364,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":41,"hasExisting":false},"timestamp":1771845255617,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":42,"hasExisting":false},"timestamp":1771845255890,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":43,"hasExisting":false},"timestamp":1771845256138,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":44,"hasExisting":false},"timestamp":1771845256377,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":45,"hasExisting":false},"timestamp":1771845256636,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":46,"hasExisting":false},"timestamp":1771845256871,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":47,"hasExisting":false},"timestamp":1771845257126,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":48,"hasExisting":false},"timestamp":1771845257421,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":49,"hasExisting":false},"timestamp":1771845257688,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":50,"hasExisting":false},"timestamp":1771845257956,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":51,"hasExisting":false},"timestamp":1771845258235,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":52,"hasExisting":false},"timestamp":1771845258530,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":53,"hasExisting":false},"timestamp":1771845258854,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":54,"hasExisting":false},"timestamp":1771845259158,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":55,"hasExisting":false},"timestamp":1771845259444,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":56,"hasExisting":false},"timestamp":1771845259721,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":57,"hasExisting":false},"timestamp":1771845259969,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":58,"hasExisting":false},"timestamp":1771845260234,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":59,"hasExisting":false},"timestamp":1771845260484,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":60,"hasExisting":false},"timestamp":1771845260736,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":61,"hasExisting":false},"timestamp":1771845260984,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":62,"hasExisting":false},"timestamp":1771845261239,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":63,"hasExisting":false},"timestamp":1771845261489,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":64,"hasExisting":false},"timestamp":1771845261785,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":65,"hasExisting":false},"timestamp":1771845262222,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":66,"hasExisting":false},"timestamp":1771845262696,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":67,"hasExisting":false},"timestamp":1771845263021,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":68,"hasExisting":false},"timestamp":1771845263293,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":69,"hasExisting":false},"timestamp":1771845263622,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":70,"hasExisting":false},"timestamp":1771845263929,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":71,"hasExisting":false},"timestamp":1771845264180,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":72,"hasExisting":false},"timestamp":1771845264450,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":73,"hasExisting":false},"timestamp":1771845264756,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":74,"hasExisting":false},"timestamp":1771845265052,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":75,"hasExisting":false},"timestamp":1771845265302,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":76,"hasExisting":false},"timestamp":1771845265580,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":80,"hasExisting":false},"timestamp":1771845266759,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":77,"hasExisting":false},"timestamp":1771845265861,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":78,"hasExisting":false},"timestamp":1771845266160,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":79,"hasExisting":false},"timestamp":1771845266477,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":81,"hasExisting":false},"timestamp":1771845267078,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":82,"hasExisting":false},"timestamp":1771845267384,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":83,"hasExisting":false},"timestamp":1771845267680,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":84,"hasExisting":false},"timestamp":1771845267979,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":85,"hasExisting":false},"timestamp":1771845268278,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":86,"hasExisting":false},"timestamp":1771845268541,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":87,"hasExisting":false},"timestamp":1771845268807,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":88,"hasExisting":false},"timestamp":1771845269079,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":89,"hasExisting":false},"timestamp":1771845269350,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":90,"hasExisting":false},"timestamp":1771845269637,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":91,"hasExisting":false},"timestamp":1771845269912,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":92,"hasExisting":false},"timestamp":1771845270195,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":93,"hasExisting":false},"timestamp":1771845270495,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":94,"hasExisting":false},"timestamp":1771845270814,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":95,"hasExisting":false},"timestamp":1771845271110,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":96,"hasExisting":false},"timestamp":1771845271401,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":97,"hasExisting":false},"timestamp":1771845271713,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":98,"hasExisting":false},"timestamp":1771845272002,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":99,"hasExisting":false},"timestamp":1771845272282,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":100,"hasExisting":false},"timestamp":1771845272592,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":101,"hasExisting":false},"timestamp":1771845272904,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":102,"hasExisting":false},"timestamp":1771845273212,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":103,"hasExisting":false},"timestamp":1771845273507,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":104,"hasExisting":false},"timestamp":1771845273815,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":105,"hasExisting":false},"timestamp":1771845274096,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":106,"hasExisting":false},"timestamp":1771845274396,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":107,"hasExisting":false},"timestamp":1771845274731,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":108,"hasExisting":false},"timestamp":1771845275020,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":109,"hasExisting":false},"timestamp":1771845275298,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":110,"hasExisting":false},"timestamp":1771845275625,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":111,"hasExisting":false},"timestamp":1771845275988,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":112,"hasExisting":false},"timestamp":1771845276389,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":113,"hasExisting":false},"timestamp":1771845276692,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":114,"hasExisting":false},"timestamp":1771845277062,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":115,"hasExisting":false},"timestamp":1771845277354,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":116,"hasExisting":false},"timestamp":1771845277705,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":117,"hasExisting":false},"timestamp":1771845278090,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":118,"hasExisting":false},"timestamp":1771845278423,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":119,"hasExisting":false},"timestamp":1771845278736,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":120,"hasExisting":false},"timestamp":1771845279070,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":121,"hasExisting":false},"timestamp":1771845279394,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":122,"hasExisting":false},"timestamp":1771845279743,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":123,"hasExisting":false},"timestamp":1771845280096,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":124,"hasExisting":false},"timestamp":1771845280409,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":125,"hasExisting":false},"timestamp":1771845280714,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":126,"hasExisting":false},"timestamp":1771845280999,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":127,"hasExisting":false},"timestamp":1771845281301,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":128,"hasExisting":false},"timestamp":1771845281597,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":129,"hasExisting":false},"timestamp":1771845281880,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":130,"hasExisting":false},"timestamp":1771845282182,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":131,"hasExisting":false},"timestamp":1771845282507,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":132,"hasExisting":false},"timestamp":1771845282833,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":133,"hasExisting":false},"timestamp":1771845283151,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":134,"hasExisting":false},"timestamp":1771845283472,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":135,"hasExisting":false},"timestamp":1771845283794,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":136,"hasExisting":false},"timestamp":1771845284138,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":137,"hasExisting":false},"timestamp":1771845284470,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":138,"hasExisting":false},"timestamp":1771845284808,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":139,"hasExisting":false},"timestamp":1771845285089,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":140,"hasExisting":false},"timestamp":1771845285402,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":141,"hasExisting":false},"timestamp":1771845285725,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":142,"hasExisting":false},"timestamp":1771845286060,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":143,"hasExisting":false},"timestamp":1771845286384,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":144,"hasExisting":false},"timestamp":1771845286690,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":145,"hasExisting":false},"timestamp":1771845286962,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":146,"hasExisting":false},"timestamp":1771845287307,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":147,"hasExisting":false},"timestamp":1771845287692,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":148,"hasExisting":false},"timestamp":1771845288092,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":149,"hasExisting":false},"timestamp":1771845288428,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":150,"hasExisting":false},"timestamp":1771845288862,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":151,"hasExisting":false},"timestamp":1771845289217,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":152,"hasExisting":false},"timestamp":1771845289626,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":153,"hasExisting":false},"timestamp":1771845290050,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":154,"hasExisting":false},"timestamp":1771845290437,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":155,"hasExisting":false},"timestamp":1771845290882,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":156,"hasExisting":false},"timestamp":1771845291280,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":157,"hasExisting":false},"timestamp":1771845291673,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":158,"hasExisting":false},"timestamp":1771845292088,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":159,"hasExisting":false},"timestamp":1771845292890,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":160,"hasExisting":false},"timestamp":1771845293274,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":161,"hasExisting":false},"timestamp":1771845293699,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":162,"hasExisting":false},"timestamp":1771845294225,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":163,"hasExisting":false},"timestamp":1771845294613,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":164,"hasExisting":false},"timestamp":1771845295002,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":165,"hasExisting":false},"timestamp":1771845295395,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":166,"hasExisting":false},"timestamp":1771845295767,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":167,"hasExisting":false},"timestamp":1771845296134,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":168,"hasExisting":false},"timestamp":1771845296537,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":169,"hasExisting":false},"timestamp":1771845296926,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":170,"hasExisting":false},"timestamp":1771845297319,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":171,"hasExisting":false},"timestamp":1771845297734,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":172,"hasExisting":false},"timestamp":1771845298096,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":173,"hasExisting":false},"timestamp":1771845298494,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":175,"hasExisting":false},"timestamp":1771845299420,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":174,"hasExisting":false},"timestamp":1771845298886,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":176,"hasExisting":false},"timestamp":1771845299844,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":177,"hasExisting":false},"timestamp":1771845300309,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":178,"hasExisting":false},"timestamp":1771845300733,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":179,"hasExisting":false},"timestamp":1771845301149,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":180,"hasExisting":false},"timestamp":1771845301555,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":181,"hasExisting":false},"timestamp":1771845301954,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":182,"hasExisting":false},"timestamp":1771845302334,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":183,"hasExisting":false},"timestamp":1771845302762,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":184,"hasExisting":false},"timestamp":1771845303204,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":185,"hasExisting":false},"timestamp":1771845303666,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":186,"hasExisting":false},"timestamp":1771845304193,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":187,"hasExisting":false},"timestamp":1771845304614,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":188,"hasExisting":false},"timestamp":1771845305074,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":189,"hasExisting":false},"timestamp":1771845305568,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":190,"hasExisting":false},"timestamp":1771845305996,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":191,"hasExisting":false},"timestamp":1771845306406,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":192,"hasExisting":false},"timestamp":1771845306933,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"ImportExportModal.jsx:handleConfirmImport","message":"import confirm entry","data":{"hasFile":true,"fileName":"ControleODONTO - Pacientes.xlsx","user":true,"userId":"user-admin"},"timestamp":1771845714780,"runId":"run1","hypothesisId":"H1"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"import entry","data":{"ext":".xlsx","user":true,"userId":"user-admin","conflictMode":"create"},"timestamp":1771845714783,"runId":"run1","hypothesisId":"H1"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"parse done","data":{"rowsCount":3607,"isArray":true},"timestamp":1771845715345,"runId":"run1","hypothesisId":"H2"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"validated done","data":{"toImportLen":3607},"timestamp":1771845715380,"runId":"run1","hypothesisId":"H3"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":1,"hasExisting":false},"timestamp":1771845715397,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":2,"hasExisting":false},"timestamp":1771845715758,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":3,"hasExisting":false},"timestamp":1771845716137,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":4,"hasExisting":false},"timestamp":1771845716542,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":5,"hasExisting":false},"timestamp":1771845716938,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":6,"hasExisting":false},"timestamp":1771845717357,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":7,"hasExisting":false},"timestamp":1771845717767,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":8,"hasExisting":false},"timestamp":1771845718181,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":9,"hasExisting":false},"timestamp":1771845718608,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":10,"hasExisting":false},"timestamp":1771845719045,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":11,"hasExisting":false},"timestamp":1771845719537,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":12,"hasExisting":false},"timestamp":1771845719959,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":13,"hasExisting":false},"timestamp":1771845720528,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":14,"hasExisting":false},"timestamp":1771845721106,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":15,"hasExisting":false},"timestamp":1771845721607,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":16,"hasExisting":false},"timestamp":1771845722084,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":17,"hasExisting":false},"timestamp":1771845722591,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":18,"hasExisting":false},"timestamp":1771845723063,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":19,"hasExisting":false},"timestamp":1771845723524,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":20,"hasExisting":false},"timestamp":1771845723950,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":21,"hasExisting":false},"timestamp":1771845724386,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":22,"hasExisting":false},"timestamp":1771845724856,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":23,"hasExisting":false},"timestamp":1771845725356,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":24,"hasExisting":false},"timestamp":1771845725884,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":25,"hasExisting":false},"timestamp":1771845726393,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":26,"hasExisting":false},"timestamp":1771845726837,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":27,"hasExisting":false},"timestamp":1771845727269,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":28,"hasExisting":false},"timestamp":1771845727713,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":29,"hasExisting":false},"timestamp":1771845728162,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":30,"hasExisting":false},"timestamp":1771845728644,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":31,"hasExisting":false},"timestamp":1771845729144,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":32,"hasExisting":false},"timestamp":1771845729622,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":33,"hasExisting":false},"timestamp":1771845730034,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":34,"hasExisting":false},"timestamp":1771845730477,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":35,"hasExisting":false},"timestamp":1771845730921,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":36,"hasExisting":false},"timestamp":1771845731469,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":37,"hasExisting":false},"timestamp":1771845732000,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":38,"hasExisting":false},"timestamp":1771845732523,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":39,"hasExisting":false},"timestamp":1771845733041,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":40,"hasExisting":false},"timestamp":1771845733510,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":41,"hasExisting":false},"timestamp":1771845734094,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":42,"hasExisting":false},"timestamp":1771845734591,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":43,"hasExisting":false},"timestamp":1771845735043,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":44,"hasExisting":false},"timestamp":1771845735540,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":45,"hasExisting":false},"timestamp":1771845736055,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":46,"hasExisting":false},"timestamp":1771845736552,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":47,"hasExisting":false},"timestamp":1771845737018,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":48,"hasExisting":false},"timestamp":1771845737474,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":49,"hasExisting":false},"timestamp":1771845737978,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":50,"hasExisting":false},"timestamp":1771845738532,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":51,"hasExisting":false},"timestamp":1771845739148,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":52,"hasExisting":false},"timestamp":1771845739657,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":53,"hasExisting":false},"timestamp":1771845740136,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":54,"hasExisting":false},"timestamp":1771845740604,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":55,"hasExisting":false},"timestamp":1771845741098,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":56,"hasExisting":false},"timestamp":1771845741637,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":57,"hasExisting":false},"timestamp":1771845742140,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":58,"hasExisting":false},"timestamp":1771845742583,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":59,"hasExisting":false},"timestamp":1771845743048,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":60,"hasExisting":false},"timestamp":1771845743558,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":61,"hasExisting":false},"timestamp":1771845744257,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":62,"hasExisting":false},"timestamp":1771845744811,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":63,"hasExisting":false},"timestamp":1771845745319,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":64,"hasExisting":false},"timestamp":1771845745860,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":65,"hasExisting":false},"timestamp":1771845746379,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":66,"hasExisting":false},"timestamp":1771845746932,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":67,"hasExisting":false},"timestamp":1771845747474,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":68,"hasExisting":false},"timestamp":1771845747965,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":69,"hasExisting":false},"timestamp":1771845748487,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":70,"hasExisting":false},"timestamp":1771845748984,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":71,"hasExisting":false},"timestamp":1771845749489,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":72,"hasExisting":false},"timestamp":1771845749984,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":73,"hasExisting":false},"timestamp":1771845750507,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":74,"hasExisting":false},"timestamp":1771845751022,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":75,"hasExisting":false},"timestamp":1771845751556,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":76,"hasExisting":false},"timestamp":1771845752028,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":77,"hasExisting":false},"timestamp":1771845752513,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":78,"hasExisting":false},"timestamp":1771845753248,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":79,"hasExisting":false},"timestamp":1771845753829,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":80,"hasExisting":false},"timestamp":1771845754409,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":81,"hasExisting":false},"timestamp":1771845754930,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":82,"hasExisting":false},"timestamp":1771845755476,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":83,"hasExisting":false},"timestamp":1771845756045,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":84,"hasExisting":false},"timestamp":1771845756566,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":85,"hasExisting":false},"timestamp":1771845757120,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":86,"hasExisting":false},"timestamp":1771845757789,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":87,"hasExisting":false},"timestamp":1771845758278,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":88,"hasExisting":false},"timestamp":1771845758798,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":89,"hasExisting":false},"timestamp":1771845759330,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":90,"hasExisting":false},"timestamp":1771845759860,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":91,"hasExisting":false},"timestamp":1771845760453,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":92,"hasExisting":false},"timestamp":1771845760972,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":93,"hasExisting":false},"timestamp":1771845761478,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":94,"hasExisting":false},"timestamp":1771845761993,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":95,"hasExisting":false},"timestamp":1771845762503,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":96,"hasExisting":false},"timestamp":1771845763016,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":97,"hasExisting":false},"timestamp":1771845763545,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":98,"hasExisting":false},"timestamp":1771845764055,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":99,"hasExisting":false},"timestamp":1771845764580,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":100,"hasExisting":false},"timestamp":1771845765083,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":101,"hasExisting":false},"timestamp":1771845765587,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":102,"hasExisting":false},"timestamp":1771845766135,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":103,"hasExisting":false},"timestamp":1771845766866,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":104,"hasExisting":false},"timestamp":1771845767547,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":105,"hasExisting":false},"timestamp":1771845768137,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":106,"hasExisting":false},"timestamp":1771845768878,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":107,"hasExisting":false},"timestamp":1771845769442,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":108,"hasExisting":false},"timestamp":1771845770098,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":109,"hasExisting":false},"timestamp":1771845770667,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":110,"hasExisting":false},"timestamp":1771845771192,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":111,"hasExisting":false},"timestamp":1771845771788,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":112,"hasExisting":false},"timestamp":1771845772363,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":113,"hasExisting":false},"timestamp":1771845772928,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":114,"hasExisting":false},"timestamp":1771845773502,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":115,"hasExisting":false},"timestamp":1771845774026,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":116,"hasExisting":false},"timestamp":1771845774571,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":117,"hasExisting":false},"timestamp":1771845775173,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":118,"hasExisting":false},"timestamp":1771845775824,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":119,"hasExisting":false},"timestamp":1771845776408,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":120,"hasExisting":false},"timestamp":1771845777047,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":121,"hasExisting":false},"timestamp":1771845777596,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":122,"hasExisting":false},"timestamp":1771845778157,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":123,"hasExisting":false},"timestamp":1771845778699,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":124,"hasExisting":false},"timestamp":1771845779254,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":125,"hasExisting":false},"timestamp":1771845779776,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":126,"hasExisting":false},"timestamp":1771845780299,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":127,"hasExisting":false},"timestamp":1771845780866,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":128,"hasExisting":false},"timestamp":1771845781394,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":129,"hasExisting":false},"timestamp":1771845781933,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":130,"hasExisting":false},"timestamp":1771845782467,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":131,"hasExisting":false},"timestamp":1771845783005,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":132,"hasExisting":false},"timestamp":1771845783552,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":133,"hasExisting":false},"timestamp":1771845784105,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":134,"hasExisting":false},"timestamp":1771845784641,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":135,"hasExisting":false},"timestamp":1771845785291,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":136,"hasExisting":false},"timestamp":1771845785879,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":137,"hasExisting":false},"timestamp":1771845786582,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":138,"hasExisting":false},"timestamp":1771845787186,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":139,"hasExisting":false},"timestamp":1771845787809,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":140,"hasExisting":false},"timestamp":1771845788459,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":141,"hasExisting":false},"timestamp":1771845789164,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":142,"hasExisting":false},"timestamp":1771845789799,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":143,"hasExisting":false},"timestamp":1771845790422,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":144,"hasExisting":false},"timestamp":1771845790978,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":145,"hasExisting":false},"timestamp":1771845791557,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":146,"hasExisting":false},"timestamp":1771845792217,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":147,"hasExisting":false},"timestamp":1771845792803,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":148,"hasExisting":false},"timestamp":1771845793402,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":149,"hasExisting":false},"timestamp":1771845794093,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":150,"hasExisting":false},"timestamp":1771845794736,"runId":"run1","hypothesisId":"H4"}
-{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":151,"hasExisting":false},"timestamp":1771845799308,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":342,"hasExisting":false},"timestamp":1771847724268,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":343,"hasExisting":false},"timestamp":1771847725009,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":344,"hasExisting":false},"timestamp":1771847725801,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":345,"hasExisting":false},"timestamp":1771847726547,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":346,"hasExisting":false},"timestamp":1771847727302,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":347,"hasExisting":false},"timestamp":1771847728063,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":348,"hasExisting":false},"timestamp":1771847728825,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":349,"hasExisting":false},"timestamp":1771847729590,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":350,"hasExisting":false},"timestamp":1771847730373,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":351,"hasExisting":false},"timestamp":1771847766925,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":352,"hasExisting":false},"timestamp":1771847767876,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":353,"hasExisting":false},"timestamp":1771847768530,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":354,"hasExisting":false},"timestamp":1771847769255,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":355,"hasExisting":false},"timestamp":1771847769959,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":356,"hasExisting":false},"timestamp":1771847770796,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":357,"hasExisting":false},"timestamp":1771847771661,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":358,"hasExisting":false},"timestamp":1771847772379,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":359,"hasExisting":false},"timestamp":1771847773118,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":360,"hasExisting":false},"timestamp":1771847773898,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":361,"hasExisting":false},"timestamp":1771847774584,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":362,"hasExisting":false},"timestamp":1771847775471,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":363,"hasExisting":false},"timestamp":1771847776176,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":364,"hasExisting":false},"timestamp":1771847776896,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":365,"hasExisting":false},"timestamp":1771847777622,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":366,"hasExisting":false},"timestamp":1771847778290,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":367,"hasExisting":false},"timestamp":1771847778970,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":368,"hasExisting":false},"timestamp":1771847779779,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":369,"hasExisting":false},"timestamp":1771847780494,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":370,"hasExisting":false},"timestamp":1771847781216,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":371,"hasExisting":false},"timestamp":1771847781999,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":372,"hasExisting":false},"timestamp":1771847782721,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":373,"hasExisting":false},"timestamp":1771847783433,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":374,"hasExisting":false},"timestamp":1771847784145,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":375,"hasExisting":false},"timestamp":1771847784907,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":376,"hasExisting":false},"timestamp":1771847785709,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":377,"hasExisting":false},"timestamp":1771847786585,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":378,"hasExisting":false},"timestamp":1771847787587,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":379,"hasExisting":false},"timestamp":1771847788437,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":380,"hasExisting":false},"timestamp":1771847789422,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":381,"hasExisting":false},"timestamp":1771847790249,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":382,"hasExisting":false},"timestamp":1771847791028,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":383,"hasExisting":false},"timestamp":1771847791735,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":384,"hasExisting":false},"timestamp":1771847792454,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":385,"hasExisting":false},"timestamp":1771847793231,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":386,"hasExisting":false},"timestamp":1771847793937,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":387,"hasExisting":false},"timestamp":1771847794699,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":388,"hasExisting":false},"timestamp":1771847795410,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":389,"hasExisting":false},"timestamp":1771847796144,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":390,"hasExisting":false},"timestamp":1771847796907,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":391,"hasExisting":false},"timestamp":1771847797629,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":392,"hasExisting":false},"timestamp":1771847798317,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":393,"hasExisting":false},"timestamp":1771847799198,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":394,"hasExisting":false},"timestamp":1771847799965,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":395,"hasExisting":false},"timestamp":1771847800781,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":396,"hasExisting":false},"timestamp":1771847801666,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":397,"hasExisting":false},"timestamp":1771847802435,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":398,"hasExisting":false},"timestamp":1771847803200,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":399,"hasExisting":false},"timestamp":1771847804054,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":400,"hasExisting":false},"timestamp":1771847804816,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":401,"hasExisting":false},"timestamp":1771847834671,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":402,"hasExisting":false},"timestamp":1771847835444,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":403,"hasExisting":false},"timestamp":1771847836124,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":404,"hasExisting":false},"timestamp":1771847836858,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":405,"hasExisting":false},"timestamp":1771847837620,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":406,"hasExisting":false},"timestamp":1771847838417,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":407,"hasExisting":false},"timestamp":1771847839166,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":408,"hasExisting":false},"timestamp":1771847839868,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":409,"hasExisting":false},"timestamp":1771847840578,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":410,"hasExisting":false},"timestamp":1771847841266,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":411,"hasExisting":false},"timestamp":1771847842198,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":412,"hasExisting":false},"timestamp":1771847843031,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":413,"hasExisting":false},"timestamp":1771847844842,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":414,"hasExisting":false},"timestamp":1771847845592,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":415,"hasExisting":false},"timestamp":1771847846300,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":416,"hasExisting":false},"timestamp":1771847847032,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":417,"hasExisting":false},"timestamp":1771847847737,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":418,"hasExisting":false},"timestamp":1771847848423,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":419,"hasExisting":false},"timestamp":1771847849194,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":420,"hasExisting":false},"timestamp":1771847849939,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":421,"hasExisting":false},"timestamp":1771847850699,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":422,"hasExisting":false},"timestamp":1771847851444,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":423,"hasExisting":false},"timestamp":1771847852084,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":424,"hasExisting":false},"timestamp":1771847852728,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":425,"hasExisting":false},"timestamp":1771847853538,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":426,"hasExisting":false},"timestamp":1771847854397,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":427,"hasExisting":false},"timestamp":1771847855204,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":428,"hasExisting":false},"timestamp":1771847855991,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":433,"hasExisting":false},"timestamp":1771847860132,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":429,"hasExisting":false},"timestamp":1771847856822,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":430,"hasExisting":false},"timestamp":1771847857678,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":431,"hasExisting":false},"timestamp":1771847858533,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":432,"hasExisting":false},"timestamp":1771847859432,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":434,"hasExisting":false},"timestamp":1771847860878,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":435,"hasExisting":false},"timestamp":1771847861630,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":436,"hasExisting":false},"timestamp":1771847862437,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":437,"hasExisting":false},"timestamp":1771847863258,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":438,"hasExisting":false},"timestamp":1771847863975,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":439,"hasExisting":false},"timestamp":1771847864649,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":440,"hasExisting":false},"timestamp":1771847865431,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":441,"hasExisting":false},"timestamp":1771847866597,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":442,"hasExisting":false},"timestamp":1771847867522,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":443,"hasExisting":false},"timestamp":1771847868393,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":444,"hasExisting":false},"timestamp":1771847869290,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":445,"hasExisting":false},"timestamp":1771847870113,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":446,"hasExisting":false},"timestamp":1771847870939,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":447,"hasExisting":false},"timestamp":1771847871810,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":448,"hasExisting":false},"timestamp":1771847872619,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":449,"hasExisting":false},"timestamp":1771847873411,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":450,"hasExisting":false},"timestamp":1771847874316,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":451,"hasExisting":false},"timestamp":1771847912452,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":452,"hasExisting":false},"timestamp":1771847913213,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":453,"hasExisting":false},"timestamp":1771847913891,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":454,"hasExisting":false},"timestamp":1771847915594,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":455,"hasExisting":false},"timestamp":1771847916871,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":456,"hasExisting":false},"timestamp":1771847918143,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":457,"hasExisting":false},"timestamp":1771847919478,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":458,"hasExisting":false},"timestamp":1771847921188,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":459,"hasExisting":false},"timestamp":1771847922871,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":460,"hasExisting":false},"timestamp":1771847924036,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":461,"hasExisting":false},"timestamp":1771847925717,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":462,"hasExisting":false},"timestamp":1771847927146,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":463,"hasExisting":false},"timestamp":1771847928095,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":464,"hasExisting":false},"timestamp":1771847928964,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":465,"hasExisting":false},"timestamp":1771847930010,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":466,"hasExisting":false},"timestamp":1771847931160,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":467,"hasExisting":false},"timestamp":1771847932349,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":468,"hasExisting":false},"timestamp":1771847933486,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":469,"hasExisting":false},"timestamp":1771847934738,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":470,"hasExisting":false},"timestamp":1771847936213,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":471,"hasExisting":false},"timestamp":1771847937634,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":472,"hasExisting":false},"timestamp":1771847939640,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":473,"hasExisting":false},"timestamp":1771847944315,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":474,"hasExisting":false},"timestamp":1771847946632,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":475,"hasExisting":false},"timestamp":1771847948286,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":476,"hasExisting":false},"timestamp":1771847949568,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":477,"hasExisting":false},"timestamp":1771847950695,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":478,"hasExisting":false},"timestamp":1771847952411,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":479,"hasExisting":false},"timestamp":1771847954135,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":480,"hasExisting":false},"timestamp":1771847956127,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":481,"hasExisting":false},"timestamp":1771847958359,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":482,"hasExisting":false},"timestamp":1771847961174,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":483,"hasExisting":false},"timestamp":1771847962638,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":484,"hasExisting":false},"timestamp":1771847963903,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":485,"hasExisting":false},"timestamp":1771847965534,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":486,"hasExisting":false},"timestamp":1771847967462,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":487,"hasExisting":false},"timestamp":1771847969805,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":488,"hasExisting":false},"timestamp":1771847971987,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":489,"hasExisting":false},"timestamp":1771847973445,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"importPatientService.js:importFromCsvOrXlsx","message":"loop row","data":{"index":490,"hasExisting":false},"timestamp":1771847975348,"runId":"run1","hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771848581127,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771848585572,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771848585573,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771848598678,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771848598679,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771848598680,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771848598734,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771848598871,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771848598871,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771848605548,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771848605549,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771848605550,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771848605649,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771848605845,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771848605846,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771848605844,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771848658637,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771848658635,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771848658636,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771848658718,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771848659203,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771848659204,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771848659206,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771848662723,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771848662724,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771848662724,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771848662784,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771848663396,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771848663396,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771848663400,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771848847738,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771848847726,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771848949782,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771848949783,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771848949784,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771848950073,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771848950761,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771848950762,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771848950764,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771848956102,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771848956111,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771848956134,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771848956152,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771848962306,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771848962305,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771848962304,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771848962545,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771848962745,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771848962745,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771848962748,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771848963517,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771848963531,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771848963554,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771848963568,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771848966618,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771848966618,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771848966619,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771848966736,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771848967076,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771848967076,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771848967078,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849038006,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849038010,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849038012,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849038013,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849042015,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849042016,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849042018,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849042082,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849042350,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849042351,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849042353,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849078384,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849078385,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849078386,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849078448,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849078585,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849078586,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849078587,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849123692,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849123691,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849123690,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849123780,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849124686,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849124686,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849124689,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849148114,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849148115,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849148116,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849148118,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849248937,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849248938,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849248939,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849249043,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849249203,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849249204,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849249206,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849261901,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849261907,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849261917,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849261914,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849379530,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849379531,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849379535,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849379536,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849392291,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849392295,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849432675,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849432673,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849432674,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849432823,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849433086,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849433089,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849433085,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849434806,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849434811,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849436090,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849436091,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849436092,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849436229,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849436477,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849436478,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849436481,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849438037,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849438044,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849438945,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849438946,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849438947,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849439002,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849439185,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849439186,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849439188,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849440727,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849440728,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849442780,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849442781,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849442782,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849442855,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849443040,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849443041,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849443056,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849445097,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849445098,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849453670,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849453672,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849453673,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849453739,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849453949,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849453951,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849453949,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849455253,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849455254,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849455864,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849455865,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849455863,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849455920,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849456146,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849456140,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849456143,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849457967,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849457979,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849496998,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849496999,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849497000,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849497098,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849497730,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849497732,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849497729,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849501287,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849501288,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849571632,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849571626,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849571633,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849572384,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849573119,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849573119,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849573121,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849578775,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849578776,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849682530,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849682531,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849682532,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849682636,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849682874,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849682875,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849682882,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849684327,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849684329,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849726343,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849726345,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849726344,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849726596,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849726959,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849726957,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849726956,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb start","data":{},"timestamp":1771849729156,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"DashboardPage.jsx:useEffect","message":"loadDb done","data":{},"timestamp":1771849729158,"hypothesisId":"H7"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849833958,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849833954,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849833959,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849834159,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849834415,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849834416,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849834418,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849872184,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849872185,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849872186,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849872346,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849873096,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849873097,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849873099,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849989607,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849989608,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849989609,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849989699,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849989959,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849989960,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849989965,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771849999097,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771849999099,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771849999098,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771849999210,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771849999476,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771849999477,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771849999479,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771850220322,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771850220323,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771850220323,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771850220421,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771850220979,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771850220979,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771850220980,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771850362115,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771850362116,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771850362117,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771850362219,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771850362946,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771850362947,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771850362952,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771850432883,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771850432884,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771850432885,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771850432900,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771850432901,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771850432902,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771850433014,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771850433018,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771850433771,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771850433772,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771850433776,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771850438257,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771850438257,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771850438260,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771850656308,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771850656307,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771850656309,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771850656514,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771850656699,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771850656702,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771850656699,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771850664209,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771850664208,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771850664211,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771850664299,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771850664561,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771850664562,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771850664564,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771850752002,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771850752003,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771850752003,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771850752101,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771850752835,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771850752836,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771850752841,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771851019098,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771851019097,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771851019096,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771851019283,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771851020552,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771851020554,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771851020558,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771851049694,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771851049695,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771851049696,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771851049757,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771851049936,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771851049936,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771851049941,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771851315132,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771851315131,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771851315133,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771851315213,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771851315214,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771851315215,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771851315463,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771851315624,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771851316611,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771851316611,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771851316614,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771851323660,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771851323661,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771851323666,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771851858300,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771851858301,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771851858302,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771851858347,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771851858346,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771851858348,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771851858401,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771851858494,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771851858993,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771851858994,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771851858996,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771851863761,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771851863762,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771851863775,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771852457812,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771852457814,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771852457815,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771852457964,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771852458805,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771852458806,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771852458811,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771853083178,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771853083178,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771853083179,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771853083341,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771853083545,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771853083546,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771853083549,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771853125183,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771853125185,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771853125184,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771853125340,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771853125483,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771853125484,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771853125486,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771853441981,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771853441983,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771853441982,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771853442110,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771853442321,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771853442321,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771853442327,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771854759604,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771854759606,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771854759605,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771854759675,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771854759674,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771854759679,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771854759856,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771854760029,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771854760821,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771854760823,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771854760828,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771854763216,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771854763217,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771854763224,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771856000566,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771856000626,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771856000567,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771856000569,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771856000915,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771856000916,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771856000920,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771856591488,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771856591489,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771856591490,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771856591547,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771856591750,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771856591751,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771856591754,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771858660845,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771858660846,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771858660847,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771858661169,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771858661483,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771858661484,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771858661488,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771858661544,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771858661546,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771858661548,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771858662209,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771858663465,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771858663466,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771858663473,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771858672430,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771858672431,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771858672432,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771858672488,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771858672669,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771858672671,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771858672668,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771858687680,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771858687680,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771858687681,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771858687723,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771858687852,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771858687852,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771858687853,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771858719363,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771858719362,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771858719363,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771858719364,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771858719364,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771858719365,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771858719576,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771858719589,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771858720341,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771858720341,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771858720344,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771858720356,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771858720357,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771858720359,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771858792047,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771858792048,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771858792049,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771858792087,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771858792190,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771858792191,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771858792193,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771859909131,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771859909132,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771859909134,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771859909178,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771859909393,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771859909393,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771859909397,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771860096417,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771860096418,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771860096419,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771860096446,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771860096596,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771860096597,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771860096599,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771860113376,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771860113377,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771860113377,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771860113431,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771860113521,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771860113521,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771860113523,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771860492885,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771860492887,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771860492888,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771860492946,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771860493128,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771860493129,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771860493133,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771860504627,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771860504628,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771860504628,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771860504679,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771860504769,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771860504770,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771860504772,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771860521811,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771860521813,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771860521814,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771860521971,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771860522972,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771860522972,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771860522976,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771861248089,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771861248089,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771861248090,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771861248151,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771861248300,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771861248301,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771861248303,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771930580040,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771930580088,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771930580044,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771930580045,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771930580336,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771930580337,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771930580342,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771938001809,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771938001814,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771938001812,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771938001893,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771938002099,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771938002100,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771938002105,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771952177082,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771952177087,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771952177074,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771952178039,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771952179172,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771952179172,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771952179185,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771952202502,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771952202504,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771952202503,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771952202522,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771952202524,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771952202525,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771952202643,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771952203421,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771952203780,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771952203781,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771952203785,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771952203992,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771952203999,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771952204024,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771952244462,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771952244462,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771952244463,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771952244724,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771952245153,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771952245153,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771952245157,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771953534042,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771953534043,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771953534044,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771953534047,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771953534051,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771953534052,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771953534176,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771953534203,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771953535018,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771953535018,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771953535022,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771953535074,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771953535075,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771953535085,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771955233306,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771955233354,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771955233310,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771955233309,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771955233555,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771955233556,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771955233557,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771955233586,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771955233587,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771955233592,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771955233697,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771955234222,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771955234223,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771955234223,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771955234262,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771955234264,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771955234265,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771955234285,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771955234460,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771955234511,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771955234512,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771955234514,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771955234887,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771955234888,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771955234899,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1771955237250,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1771955237251,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1771955237252,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1771955237306,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1771955237566,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1771955237567,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1771955237569,"hypothesisId":"H6"}

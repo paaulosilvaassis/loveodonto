@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, useEffect } from 'react';
-import { loadDb, withDb } from '../db/index.js';
+import { loadDb, loadDbAsync, withDb } from '../db/index.js';
 import { roles } from '../permissions/permissions.js';
 import { logAction } from '../services/logService.js';
 import { getDefaultTenant, getTenant } from '../services/tenantService.js';
@@ -29,8 +29,49 @@ const getStoredSession = () => {
   }
 };
 
+function resolveUserFromSession(session, loadDbFn) {
+  if (!session) return null;
+  const db = loadDbFn();
+  const u = db.users.find((item) => item.id === session.userId) || null;
+  if (!u) return null;
+  const tenantId = session.tenantId || (getDefaultTenant()?.id);
+  if (!tenantId) return null;
+  const membership = getMembership(tenantId, session.userId);
+  if (!membership || membership.has_system_access === false) return null;
+  return {
+    ...u,
+    role: membership.role,
+    has_system_access: membership.has_system_access,
+    isMaster: membership.role === ROLE_MASTER,
+    tenantId,
+  };
+}
+
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(() => getStoredSession());
+  const [user, setUser] = useState(undefined);
+
+  useEffect(() => {
+    if (!session) {
+      setUser(null);
+      return;
+    }
+    let cancelled = false;
+    const rafId = requestAnimationFrame(() => {
+      if (cancelled) return;
+      loadDbAsync().then(() => {
+        if (cancelled) return;
+        const resolved = resolveUserFromSession(session, loadDb);
+        if (!cancelled) setUser(resolved);
+      }).catch(() => {
+        if (!cancelled) setUser(null);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, [session]);
 
   const login = ({ userId, tenantId: explicitTenantId }) => {
     const db = loadDb();
@@ -76,31 +117,14 @@ export const AuthProvider = ({ children }) => {
     });
   };
 
-  const user = useMemo(() => {
-    if (!session) return null;
-    const db = loadDb();
-    const u = db.users.find((item) => item.id === session.userId) || null;
-    if (!u) return null;
-    const tenantId = session.tenantId || (getDefaultTenant()?.id);
-    if (!tenantId) return null;
-    const membership = getMembership(tenantId, session.userId);
-    if (!membership || membership.has_system_access === false) return null;
-    return {
-      ...u,
-      role: membership.role,
-      has_system_access: membership.has_system_access,
-      isMaster: membership.role === ROLE_MASTER,
-      tenantId,
-    };
-  }, [session]);
-
   useEffect(() => {
-    if (!session) return;
+    if (!session || !user) return;
     const db = loadDb();
     const u = db.users.find((item) => item.id === session.userId);
     if (u && u.has_system_access === false) {
       localStorage.removeItem(SESSION_KEY);
       setSession(null);
+      setUser(null);
     }
   }, [session, user]);
 

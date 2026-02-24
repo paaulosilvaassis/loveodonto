@@ -1,0 +1,8 @@
+{"sessionId":"39b707","location":"Layout.jsx:render","message":"Layout render","data":{"path":"/gestao/dashboard"},"timestamp":1771851323118,"hypothesisId":"H2"}
+{"sessionId":"39b707","location":"Layout.jsx:render","message":"Layout render","data":{"path":"/gestao/dashboard"},"timestamp":1771851323120,"hypothesisId":"H2"}
+{"sessionId":"39b707","location":"DashboardPage.jsx:afterState","message":"DashboardPage render","data":{"hasDb":false},"timestamp":1771851323171,"hypothesisId":"H1"}
+{"sessionId":"39b707","location":"DashboardPage.jsx:afterState","message":"DashboardPage render","data":{"hasDb":false},"timestamp":1771851323172,"hypothesisId":"H1"}
+{"sessionId":"39b707","location":"Layout.jsx:render","message":"Layout render","data":{"path":"/gestao/dashboard"},"timestamp":1771851323190,"hypothesisId":"H2"}
+{"sessionId":"39b707","location":"Layout.jsx:render","message":"Layout render","data":{"path":"/gestao/dashboard"},"timestamp":1771851323196,"hypothesisId":"H2"}
+{"sessionId":"39b707","location":"DashboardPage.jsx:afterState","message":"DashboardPage render","data":{"hasDb":true},"timestamp":1771851323206,"hypothesisId":"H1"}
+{"sessionId":"39b707","location":"DashboardPage.jsx:afterState","message":"DashboardPage render","data":{"hasDb":true},"timestamp":1771851323222,"hypothesisId":"H1"}

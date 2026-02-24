@@ -24,9 +24,6 @@ const DevResetPage = lazy(() => import('./pages/DevResetPage.jsx'));
 const DevSeedPage = lazy(() => import('./pages/DevSeedPage.jsx'));
 
 export default function App() {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'App.jsx:render',message:'App Routes render',data:{pathname:typeof window!=='undefined'?window.location.pathname:'ssr'},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
   return (
     <AuthProvider>
       <BrowserRouter>

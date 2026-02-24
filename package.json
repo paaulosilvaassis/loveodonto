@@ -14,6 +14,7 @@
     "db:migrate:dev": "node scripts/migrate-dev-db.js",
     "db:seed:dev": "node scripts/seed-dev-db.js",
     "db:reset:dev": "node scripts/reset-dev-db.js",
+    "organize-export": "node scripts/organize-patient-export.js",
     "console:dev": "cd console && npm run dev",
     "console:build": "cd console && npm run build",
     "server:dev": "cd server && npm run dev",

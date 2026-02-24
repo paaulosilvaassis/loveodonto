@@ -1,6 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
+// #region agent log
+fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'main.jsx:after imports',message:'main.jsx module evaluated',data:{},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+// #endregion
 
 const rootElement = document.getElementById('root');
 
@@ -12,12 +15,27 @@ function showLoadError(err) {
 }
 
 (async () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'main.jsx:async start',message:'main async IIFE started',data:{hasRoot:!!rootElement},timestamp:Date.now(),hypothesisId:'H5'})}).catch(()=>{});
+  // #endregion
   const dbMod = await import('./db/index.js');
-  await (dbMod.seedAdminCredentialsIfEmpty?.() ?? Promise.resolve()).catch(() => {});
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'main.jsx:after db',message:'db module loaded',data:{},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  // Seed adiado para próxima tarefa para não rodar loadDb() síncrono na mesma volta do event loop (evita Página sem resposta).
+  setTimeout(() => {
+    (dbMod.seedAdminCredentialsIfEmpty?.() ?? Promise.resolve()).catch(() => {});
+  }, 0);
   const [appMod, ebMod] = await Promise.all([import('./App.jsx'), import('./components/ErrorBoundary.jsx')]);
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'main.jsx:after App import',message:'App and ErrorBoundary loaded',data:{},timestamp:Date.now(),hypothesisId:'H4'})}).catch(()=>{});
+  // #endregion
   const App = appMod.default;
   const ErrorBoundary = ebMod.default;
   if (rootElement) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'main.jsx:before createRoot',message:'about to createRoot',data:{},timestamp:Date.now(),hypothesisId:'H6'})}).catch(()=>{});
+    // #endregion
     createRoot(rootElement).render(
       <StrictMode>
         <ErrorBoundary>
@@ -25,5 +43,13 @@ function showLoadError(err) {
         </ErrorBoundary>
       </StrictMode>
     );
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'main.jsx:after render',message:'React render called',data:{},timestamp:Date.now(),hypothesisId:'H6'})}).catch(()=>{});
+    // #endregion
   }
-})().catch(showLoadError);
+})().catch((err) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ea6ead'},body:JSON.stringify({sessionId:'ea6ead',location:'main.jsx:catch',message:'main async error',data:{message:String(err?.message||err),stack:String(err?.stack||'')},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
+  showLoadError(err);
+});

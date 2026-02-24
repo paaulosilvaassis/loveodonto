@@ -1,4 +1,4 @@
-import { defaultDbState } from './schema.js';
+import { defaultDbState, DB_VERSION } from './schema.js';
 import { migrateDb, getSeedCrmTags } from './migrations.js';
 import { createId } from '../services/helpers.js';
 
@@ -19,8 +19,122 @@ const STORAGE_KEY = resolveStorageKey();
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
+let cachedDb = null;
+let cachedRaw = null;
+
+let loadDbWorker = null;
+const getLoadDbWorker = () => {
+  if (!loadDbWorker) {
+    loadDbWorker = new Worker(new URL('./loadDb.worker.js', import.meta.url), { type: 'module' });
+  }
+  return loadDbWorker;
+};
+
+function applyPostMigrationFixes(migrated) {
+  if (!migrated.clinicalAppointments) migrated.clinicalAppointments = [];
+  if (!migrated.clinicalEvents) migrated.clinicalEvents = [];
+  if (!migrated.patientJourneyEntries) migrated.patientJourneyEntries = [];
+  if (migrated.version >= 21) {
+    if (!migrated.crmTags || migrated.crmTags.length === 0) {
+      migrated.crmTags = getSeedCrmTags(createId, migrated.clinicProfile?.id || 'clinic-1', new Date().toISOString());
+    }
+    if (!migrated.leadTags) migrated.leadTags = [];
+  }
+  if (migrated.version >= 22 && !Array.isArray(migrated.crmTasks)) migrated.crmTasks = [];
+  const tenants = Array.isArray(migrated.tenants) ? migrated.tenants : [];
+  if (tenants.length === 0 && migrated.clinicProfile) {
+    const now = new Date().toISOString();
+    migrated.tenants = [{
+      id: 'tenant-1',
+      name: (migrated.clinicProfile.nomeClinica || migrated.clinicProfile.nomeFantasia || 'Minha Clínica').trim() || 'Minha Clínica',
+      logo_url: migrated.clinicProfile.logoUrl || null,
+      status: 'active',
+      plan_id: null,
+      created_at: now,
+      updated_at: now,
+    }];
+    const defaultTenantId = 'tenant-1';
+    migrated.memberships = Array.isArray(migrated.memberships) ? migrated.memberships : [];
+    const membershipByKey = new Set(migrated.memberships.map((m) => `${m.tenant_id}:${m.user_id}`));
+    if (Array.isArray(migrated.users)) {
+      for (const u of migrated.users) {
+        if (!u.id) continue;
+        const key = `${defaultTenantId}:${u.id}`;
+        if (membershipByKey.has(key)) continue;
+        migrated.memberships.push({
+          id: `memb-${crypto.randomUUID()}`,
+          tenant_id: defaultTenantId,
+          user_id: u.id,
+          role: u.role === 'admin' ? 'master' : (u.role || 'atendimento'),
+          has_system_access: u.has_system_access !== false,
+          status: 'active',
+          created_at: now,
+          updated_at: now,
+        });
+        membershipByKey.add(key);
+      }
+    }
+  }
+  return migrated;
+}
+
+/**
+ * Carrega o DB de forma assíncrona no Worker (parse + migrate no thread secundário).
+ * Evita "Página sem resposta" com bancos grandes. Use para bootstrap e dashboard.
+ */
+export function loadDbAsync() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    const fresh = loadDb();
+    return Promise.resolve(clone(fresh));
+  }
+  if (cachedDb !== null && cachedRaw === raw) {
+    return Promise.resolve(clone(cachedDb));
+  }
+  return new Promise((resolve, reject) => {
+    const worker = getLoadDbWorker();
+    const onMessage = (e) => {
+      worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
+      const { ok, db: dbFromWorker, error } = e.data || {};
+      if (ok && dbFromWorker) {
+        const migrated = applyPostMigrationFixes(dbFromWorker);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        cachedDb = migrated;
+        cachedRaw = raw;
+        resolve(clone(migrated));
+      } else {
+        setTimeout(() => {
+          try {
+            resolve(clone(loadDb()));
+          } catch (err) {
+            reject(err);
+          }
+        }, 0);
+      }
+    };
+    const onError = () => {
+      worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
+      setTimeout(() => {
+        try {
+          resolve(clone(loadDb()));
+        } catch (err) {
+          reject(err);
+        }
+      }, 0);
+    };
+    worker.addEventListener('message', onMessage);
+    worker.addEventListener('error', onError);
+    worker.postMessage({ raw });
+  });
+}
+
 export const loadDb = () => {
   const raw = localStorage.getItem(STORAGE_KEY);
+  if (cachedDb !== null && cachedRaw === raw) {
+    return clone(cachedDb);
+  }
   if (!raw) {
     const fresh = defaultDbState();
     if (!fresh.crmTags || fresh.crmTags.length === 0) {
@@ -58,6 +172,8 @@ export const loadDb = () => {
       }
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
+    cachedDb = fresh;
+    cachedRaw = raw;
     return clone(fresh);
   }
   try {
@@ -143,6 +259,8 @@ export const loadDb = () => {
       }
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    cachedDb = migrated;
+    cachedRaw = raw;
     return clone(migrated);
   } catch (err) {
     console.error('Erro ao carregar banco de dados:', err);
@@ -153,7 +271,7 @@ export const loadDb = () => {
     } catch (freshErr) {
       console.error('Erro crítico ao criar banco de dados fresh:', freshErr);
       // Retornar um objeto mínimo para evitar crash total
-      return {
+      const minimal = {
         version: DB_VERSION,
         patients: [],
         appointments: [],
@@ -161,6 +279,9 @@ export const loadDb = () => {
         clinicalEvents: [],
         patientJourneyEntries: [],
       };
+      cachedDb = minimal;
+      cachedRaw = raw;
+      return clone(minimal);
     }
   }
 };
@@ -170,11 +291,15 @@ export const saveDb = (db) => {
     throw new Error('Tentativa de salvar banco de dados inválido');
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  cachedDb = null;
+  cachedRaw = null;
   return db;
 };
 
 export const resetDb = () => {
   localStorage.removeItem(STORAGE_KEY);
+  cachedDb = null;
+  cachedRaw = null;
 };
 
 const ADMIN_SEED_EMAIL = 'admin@loveodonto.com';

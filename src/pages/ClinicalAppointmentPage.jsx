@@ -2952,7 +2952,13 @@ function ContratosSection({ appointmentId, patientId }) {
         title="Contratos"
         description="Vincule contratos relacionados a este atendimento"
         actions={
-          <button type="button" className="button primary" onClick={handleContractAction}>
+          <button
+            type="button"
+            className="button primary"
+            disabled={hasBlockingPending}
+            title={hasBlockingPending ? 'Preencha os campos críticos do cadastro do paciente para habilitar.' : undefined}
+            onClick={handleContractAction}
+          >
             <Plus size={16} />
             Vincular Contrato
           </button>

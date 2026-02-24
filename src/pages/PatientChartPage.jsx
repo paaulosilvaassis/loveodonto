@@ -102,17 +102,18 @@ const ensureAnswers = (questions, stored = []) =>
     };
   });
 
-const canViewChart = (role) =>
-  [roles.admin, roles.gerente, roles.profissional, roles.recepcao].includes(role);
+/** Admin/master têm acesso sempre; demais roles conforme lista. Prontuário nunca é bloqueado por pendências. */
+const canViewChart = (user) =>
+  Boolean(user && (user.isMaster === true || user.role === 'master' || [roles.admin, roles.gerente, roles.profissional, roles.recepcao].includes(user.role)));
 
-const canEditChart = (role) =>
-  [roles.admin, roles.gerente, roles.profissional].includes(role);
+const canEditChart = (user) =>
+  Boolean(user && (user.isMaster === true || user.role === 'master' || [roles.admin, roles.gerente, roles.profissional].includes(user.role)));
 
-const canViewConfidential = (role) =>
-  [roles.admin, roles.profissional].includes(role);
+const canViewConfidential = (user) =>
+  Boolean(user && (user.isMaster === true || user.role === 'master' || [roles.admin, roles.profissional].includes(user.role)));
 
-const canEditFiles = (role) =>
-  [roles.admin, roles.gerente, roles.profissional].includes(role);
+const canEditFiles = (user) =>
+  Boolean(user && (user.isMaster === true || user.role === 'master' || [roles.admin, roles.gerente, roles.profissional].includes(user.role)));
 
 export default function PatientChartPage() {
   const { patientId } = useParams();
@@ -141,14 +142,26 @@ export default function PatientChartPage() {
     setPatient(getPatient(patientId));
   }, [patientId]);
 
+  // Carrega dados dos formulários (Anamnese Clínica, ATM, Situação Bucal) assim que há patientId.
+  // Não depende de permissão/pendências, para as abas nunca ficarem vazias.
+  useEffect(() => {
+    if (!patientId) return;
+    try {
+      setCharacteristics(getCharacteristics(patientId));
+      setClinicalAnswers(ensureAnswers(CLINICAL_QUESTIONS, getClinicalAnamnesis(patientId).answers));
+      setAtmAnswers(ensureAnswers(ATM_QUESTIONS, getAtmAnamnesis(patientId).answers));
+      setOdontogram(getOdontogram(patientId));
+    } catch (err) {
+      if (typeof console !== 'undefined' && console.warn) console.warn('[Prontuário] Erro ao carregar formulários:', err);
+      setAtmAnswers(ensureAnswers(ATM_QUESTIONS, []));
+      setOdontogram({ tooth_status: {}, patient_id: patientId });
+    }
+  }, [patientId]);
+
   useEffect(() => {
     if (!patientId || !user) return;
-    if (!canViewChart(user.role)) return;
+    if (!canViewChart(user)) return;
     getPatientChart(patientId);
-    setCharacteristics(getCharacteristics(patientId));
-    setClinicalAnswers(ensureAnswers(CLINICAL_QUESTIONS, getClinicalAnamnesis(patientId).answers));
-    setAtmAnswers(ensureAnswers(ATM_QUESTIONS, getAtmAnamnesis(patientId).answers));
-    setOdontogram(getOdontogram(patientId));
     setFiles(listFiles(patientId, { confidential: false }));
     setConfidentialFiles(listFiles(patientId, { confidential: true }));
     const existingAlbums = listAlbums(patientId);
@@ -162,7 +175,7 @@ export default function PatientChartPage() {
 
   useEffect(() => {
     if (!user) return;
-    if (activeTab === 'confidential' && canViewConfidential(user.role) && confidentialConfirmed) {
+    if (activeTab === 'confidential' && canViewConfidential(user) && confidentialConfirmed) {
       logAccess({
         entityType: 'CONFIDENTIAL_DOC',
         entityId: patientId,
@@ -176,7 +189,7 @@ export default function PatientChartPage() {
 
   useEffect(() => {
     if (!patientId || !user || chartViewLogged) return;
-    if (!canViewChart(user.role)) return;
+    if (!canViewChart(user)) return;
     logAccess({
       entityType: 'CHART',
       entityId: patientId,
@@ -204,7 +217,7 @@ export default function PatientChartPage() {
   }, [activeTab]);
 
   const startEdit = () => {
-    if (!user || !canEditChart(user.role)) return;
+    if (!user || !canEditChart(user)) return;
     setStatus({ error: '', success: '' });
     setEditingTab(activeTab);
     if (activeTab === 'odontogram') {
@@ -241,8 +254,9 @@ export default function PatientChartPage() {
         });
       }
       if (editingTab === 'anamnesisClinical') {
+        const clinicalToSave = clinicalAnswers.length > 0 ? clinicalAnswers : ensureAnswers(CLINICAL_QUESTIONS, getClinicalAnamnesis(patientId).answers);
         const before = snapshot(getClinicalAnamnesis(patientId).answers);
-        const after = updateClinicalAnamnesis(patientId, clinicalAnswers).answers;
+        const after = updateClinicalAnamnesis(patientId, clinicalToSave).answers;
         logAccess({
           entityType: 'ANAMNESIS_CLINICAL',
           entityId: patientId,
@@ -253,8 +267,9 @@ export default function PatientChartPage() {
         });
       }
       if (editingTab === 'anamnesisAtm') {
+        const atmToSave = atmAnswers.length > 0 ? atmAnswers : ensureAnswers(ATM_QUESTIONS, getAtmAnamnesis(patientId).answers);
         const before = snapshot(getAtmAnamnesis(patientId).answers);
-        const after = updateAtmAnamnesis(patientId, atmAnswers).answers;
+        const after = updateAtmAnamnesis(patientId, atmToSave).answers;
         logAccess({
           entityType: 'ANAMNESIS_ATM',
           entityId: patientId,
@@ -312,13 +327,26 @@ export default function PatientChartPage() {
   }
 
   const hasPendingData = Boolean(patient.profile?.hasPendingData);
+  const pendingCriticalFields = Array.isArray(patient.profile?.pendingCriticalFields) ? patient.profile.pendingCriticalFields : [];
+  const canView = canViewChart(user);
+
+  // DIAGNÓSTICO PRONTUÁRIO (remover após validar fluxo master/admin + pendências)
+  if (typeof console !== 'undefined' && console.debug) {
+    console.debug('[Prontuário]', {
+      role: user?.role,
+      isMaster: user?.isMaster,
+      hasPendingData,
+      pendingCriticalFields,
+      canViewChart: canView,
+    });
+  }
 
   return (
     <div className="stack">
       <Section title={`Prontuário — ${patient.profile?.full_name || 'Paciente'}`}>
         {hasPendingData && (
           <div className="alert alert-warning pending-data-alert" style={{ marginBottom: '1rem' }}>
-            <span>⚠️ Cadastro com informações pendentes. Atualize para liberar contratos e documentos.</span>
+            <span>Cadastro pendente: atualize para liberar geração de contrato.</span>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -347,7 +375,7 @@ export default function PatientChartPage() {
             Odontograma V2 (Beta)
           </button>
         </div>
-        {!canViewChart(user?.role) ? (
+        {!canViewChart(user) ? (
           <SectionCard>
             <div className="alert warning">Acesso restrito ao prontuário clínico.</div>
           </SectionCard>
@@ -410,13 +438,20 @@ export default function PatientChartPage() {
 
             {activeTab === 'anamnesisClinical' ? (
               <div className="anamnesis-grid">
-                {clinicalAnswers.map((item, index) => (
+                {(() => {
+                  const displayClinical = clinicalAnswers.length > 0 ? clinicalAnswers : ensureAnswers(CLINICAL_QUESTIONS, []);
+                  if (displayClinical.length === 0) {
+                    if (typeof console !== 'undefined' && console.warn) console.warn('[Prontuário] Anamnese Clínica: nenhuma pergunta definida.');
+                    return <div className="alert warning">Formulário não carregou. Recarregue a página ou contate o suporte.</div>;
+                  }
+                  return displayClinical.map((item, index) => (
                   <div key={item.code} className="anamnesis-item">
                     <div className="anamnesis-question">{index + 1}. {item.label}</div>
                     <select
                       value={item.answer}
                       onChange={(event) => {
-                        const next = [...clinicalAnswers];
+                        const current = clinicalAnswers.length > 0 ? clinicalAnswers : ensureAnswers(CLINICAL_QUESTIONS, []);
+                        const next = [...current];
                         next[index] = { ...next[index], answer: event.target.value };
                         setClinicalAnswers(next);
                       }}
@@ -430,26 +465,35 @@ export default function PatientChartPage() {
                       placeholder="Descrição/detalhes"
                       value={item.details}
                       onChange={(event) => {
-                        const next = [...clinicalAnswers];
+                        const current = clinicalAnswers.length > 0 ? clinicalAnswers : ensureAnswers(CLINICAL_QUESTIONS, []);
+                        const next = [...current];
                         next[index] = { ...next[index], details: event.target.value };
                         setClinicalAnswers(next);
                       }}
                       disabled={editingTab !== activeTab || item.answer !== 'sim'}
                     />
                   </div>
-                ))}
+                  ));
+                })()}
               </div>
             ) : null}
 
             {activeTab === 'anamnesisAtm' ? (
               <div className="anamnesis-grid">
-                {atmAnswers.map((item, index) => (
+                {(() => {
+                  const displayAtm = atmAnswers.length > 0 ? atmAnswers : ensureAnswers(ATM_QUESTIONS, []);
+                  if (displayAtm.length === 0) {
+                    if (typeof console !== 'undefined' && console.warn) console.warn('[Prontuário] Anamnese ATM: nenhuma pergunta definida.');
+                    return <div className="alert warning">Formulário não carregou. Recarregue a página ou contate o suporte.</div>;
+                  }
+                  return displayAtm.map((item, index) => (
                   <div key={item.code} className="anamnesis-item">
                     <div className="anamnesis-question">{index + 1}. {item.label}</div>
                     <select
                       value={item.answer}
                       onChange={(event) => {
-                        const next = [...atmAnswers];
+                        const current = atmAnswers.length > 0 ? atmAnswers : ensureAnswers(ATM_QUESTIONS, []);
+                        const next = [...current];
                         next[index] = { ...next[index], answer: event.target.value };
                         setAtmAnswers(next);
                       }}
@@ -463,14 +507,16 @@ export default function PatientChartPage() {
                       placeholder="Descrição/detalhes"
                       value={item.details}
                       onChange={(event) => {
-                        const next = [...atmAnswers];
+                        const current = atmAnswers.length > 0 ? atmAnswers : ensureAnswers(ATM_QUESTIONS, []);
+                        const next = [...current];
                         next[index] = { ...next[index], details: event.target.value };
                         setAtmAnswers(next);
                       }}
                       disabled={editingTab !== activeTab || item.answer !== 'sim'}
                     />
                   </div>
-                ))}
+                  ));
+                })()}
               </div>
             ) : null}
 
@@ -489,12 +535,16 @@ export default function PatientChartPage() {
                   ) : null}
                 </div>
                 <div className="odontogram-core-layout">
+                  {odontogram === null && patientId ? (
+                    <div className="alert warning">Carregando situação bucal…</div>
+                  ) : (
                   <OdontogramModule
                     patientId={patientId}
-                    value={odontogram}
+                    value={odontogram || { tooth_status: {}, patient_id: patientId }}
                     onChange={(next) => setOdontogram(next)}
                     readOnly={editingTab !== activeTab}
                   />
+                  )}
                   <div className="odontogram-sidebar">
                     <div className="odontogram-legend">
                       <strong>Legenda</strong>
@@ -529,7 +579,7 @@ export default function PatientChartPage() {
                     <select
                       value={fileForm.category}
                       onChange={(event) => setFileForm((prev) => ({ ...prev, category: event.target.value }))}
-                      disabled={!canEditFiles(user?.role)}
+                      disabled={!canEditFiles(user)}
                     >
                       {FILE_CATEGORIES.map((category) => (
                         <option key={category} value={category}>{category}</option>
@@ -542,7 +592,7 @@ export default function PatientChartPage() {
                       type="date"
                       value={fileForm.validity}
                       onChange={(event) => setFileForm((prev) => ({ ...prev, validity: event.target.value }))}
-                      disabled={!canEditFiles(user?.role)}
+                      disabled={!canEditFiles(user)}
                     />
                   </label>
                   <label className="button secondary">
@@ -551,7 +601,7 @@ export default function PatientChartPage() {
                       type="file"
                       hidden
                       accept={FILE_ACCEPT}
-                      disabled={!canEditFiles(user?.role)}
+                      disabled={!canEditFiles(user)}
                       onChange={(event) => {
                         const file = event.target.files?.[0];
                         if (!file || !patientId) return;
@@ -602,7 +652,7 @@ export default function PatientChartPage() {
             ) : null}
 
             {activeTab === 'confidential' ? (
-              !canViewConfidential(user?.role) ? (
+              !canViewConfidential(user) ? (
                 <div className="alert warning">Acesso restrito. Apenas Admin e Profissional.</div>
               ) : (
                 <div className="files-grid">
@@ -629,7 +679,7 @@ export default function PatientChartPage() {
                           <select
                             value={confidentialForm.category}
                             onChange={(event) => setConfidentialForm((prev) => ({ ...prev, category: event.target.value }))}
-                            disabled={!canEditFiles(user?.role)}
+                            disabled={!canEditFiles(user)}
                           >
                             {FILE_CATEGORIES.map((category) => (
                               <option key={category} value={category}>{category}</option>
@@ -642,7 +692,7 @@ export default function PatientChartPage() {
                             type="date"
                             value={confidentialForm.validity}
                             onChange={(event) => setConfidentialForm((prev) => ({ ...prev, validity: event.target.value }))}
-                            disabled={!canEditFiles(user?.role)}
+                            disabled={!canEditFiles(user)}
                           />
                         </label>
                         <label className="button secondary">
@@ -651,7 +701,7 @@ export default function PatientChartPage() {
                             type="file"
                             hidden
                             accept={FILE_ACCEPT}
-                            disabled={!canEditFiles(user?.role)}
+                            disabled={!canEditFiles(user)}
                             onChange={(event) => {
                               const file = event.target.files?.[0];
                               if (!file || !patientId) return;
@@ -714,7 +764,7 @@ export default function PatientChartPage() {
                         key={preset}
                         className="button secondary"
                         type="button"
-                        disabled={!canEditFiles(user?.role) || exists}
+                        disabled={!canEditFiles(user) || exists}
                         onClick={() => {
                           if (!patientId) return;
                           const album = createAlbum(patientId, { name: preset }, user?.id);
@@ -737,7 +787,7 @@ export default function PatientChartPage() {
                   <button
                     className="button secondary"
                     type="button"
-                    disabled={!canEditFiles(user?.role)}
+                    disabled={!canEditFiles(user)}
                     onClick={() => {
                       const name = window.prompt('Nome do álbum');
                       if (!name || !patientId) return;
@@ -772,7 +822,7 @@ export default function PatientChartPage() {
                             ...prev,
                             [album.id]: { ...prev[album.id], taken_at: event.target.value },
                           }))}
-                          disabled={!canEditFiles(user?.role)}
+                          disabled={!canEditFiles(user)}
                         />
                       </label>
                       <label>
@@ -783,7 +833,7 @@ export default function PatientChartPage() {
                             ...prev,
                             [album.id]: { ...prev[album.id], procedure: event.target.value },
                           }))}
-                          disabled={!canEditFiles(user?.role)}
+                          disabled={!canEditFiles(user)}
                         />
                       </label>
                       <label>
@@ -794,7 +844,7 @@ export default function PatientChartPage() {
                             ...prev,
                             [album.id]: { ...prev[album.id], note: event.target.value },
                           }))}
-                          disabled={!canEditFiles(user?.role)}
+                          disabled={!canEditFiles(user)}
                         />
                       </label>
                       <label className="button secondary">
@@ -804,7 +854,7 @@ export default function PatientChartPage() {
                           hidden
                           multiple
                           accept="image/*"
-                          disabled={!canEditFiles(user?.role)}
+                          disabled={!canEditFiles(user)}
                           onChange={(event) => {
                             const filesList = Array.from(event.target.files || []);
                             if (filesList.length === 0) return;
@@ -850,7 +900,7 @@ export default function PatientChartPage() {
                         onDragOver={(event) => event.preventDefault()}
                         onDrop={(event) => {
                           event.preventDefault();
-                          if (!canEditFiles(user?.role)) return;
+                          if (!canEditFiles(user)) return;
                           const filesList = Array.from(event.dataTransfer.files || []);
                           if (filesList.length === 0) return;
                           const meta = albumForms[album.id] || {};

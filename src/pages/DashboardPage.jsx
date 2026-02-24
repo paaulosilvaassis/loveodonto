@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Area, 
@@ -24,18 +24,39 @@ import {
   BarChart3,
   Activity
 } from 'lucide-react';
-import { loadDb } from '../db/index.js';
+import { loadDbAsync } from '../db/index.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
 
 export default function DashboardPage() {
   const navigate = useNavigate();
   const clinic = useClinicSummary();
   const kpiGridRef = useRef(null);
-  
-  const db = useMemo(() => loadDb(), []);
-  const appointments = db.appointments;
-  const transactions = db.transactions;
-  const patients = db.patients || [];
+  const [db, setDb] = useState(null);
+
+  // Limpa preferências de assistente de voz removidas do sistema
+  useEffect(() => {
+    try {
+      localStorage.removeItem('appgestaoodonto.homeVoiceAssistant.enabled');
+      localStorage.removeItem('appgestaoodonto.voiceWelcomeEnabled');
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const rafId = requestAnimationFrame(() => {
+      if (cancelled) return;
+      loadDbAsync().then((data) => {
+        if (!cancelled) setDb(data);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafId);
+    };
+  }, []);
+
   const session = useMemo(() => {
     try {
       return JSON.parse(localStorage.getItem('appgestaoodonto.session') || 'null');
@@ -43,15 +64,26 @@ export default function DashboardPage() {
       return null;
     }
   }, []);
-  const currentUser = db.users.find((item) => item.id === session?.userId) || db.users[0];
 
-  // Cálculo de métricas do dia e mês
   const metrics = useMemo(() => {
+    if (!db) {
+      return {
+        atendimentosHoje: 0,
+        faturamentoHoje: 0,
+        faturamentoMes: 0,
+        pacientesEmEspera: 0,
+        orcamentosPendentes: 0,
+        pacientesEmTratamento: 0,
+        consultasHoje: 0,
+      };
+    }
+    const appointments = db.appointments;
+    const transactions = db.transactions;
     const today = new Date().toISOString().slice(0, 10);
     const now = new Date();
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
     const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-    
+
     const atendimentosHoje = appointments.filter(
       (apt) => apt.date === today && apt.status === 'atendido'
     ).length;
@@ -70,10 +102,11 @@ export default function DashboardPage() {
 
     const orcamentosPendentes = 0; // TODO: implementar quando schema estiver disponível
 
-    // Pacientes em tratamento (simulado - pacientes com consultas agendadas futuras)
     const pacientesEmTratamento = appointments.filter(
       (apt) => apt.date > today && ['agendado', 'confirmado'].includes(apt.status)
     ).length;
+
+    const consultasHoje = appointments.filter((apt) => apt.date === today).length;
 
     return {
       atendimentosHoje,
@@ -82,32 +115,35 @@ export default function DashboardPage() {
       pacientesEmEspera,
       orcamentosPendentes,
       pacientesEmTratamento,
+      consultasHoje,
     };
-  }, [appointments, transactions]);
+  }, [db]);
 
-  // Dados para gráficos (últimos 7 dias)
   const chartData = useMemo(() => {
+    if (!db) return [];
+    const appointments = db.appointments;
+    const transactions = db.transactions;
     const days = [];
     const today = new Date();
-    
+
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().slice(0, 10);
       const label = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
-      
+
       const agendados = appointments.filter(
         (apt) => apt.date === dateStr && ['agendado', 'confirmado'].includes(apt.status)
       ).length;
-      
+
       const atendidos = appointments.filter(
         (apt) => apt.date === dateStr && apt.status === 'atendido'
       ).length;
-      
+
       const faturamento = transactions
         .filter((txn) => txn.type === 'receber' && txn.dueDate === dateStr)
         .reduce((sum, txn) => sum + txn.amount, 0);
-      
+
       days.push({
         date: dateStr,
         label,
@@ -116,9 +152,112 @@ export default function DashboardPage() {
         faturamento: Math.round(faturamento),
       });
     }
-    
+
     return days;
-  }, [appointments, transactions]);
+  }, [db]);
+
+  const currentUser = db ? (db.users.find((item) => item.id === session?.userId) || db.users[0]) : null;
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:174',message:'dashboard:render',data:{hasUser:!!currentUser},timestamp:Date.now(),sessionId:'debug-session',runId:'menu-white-screen-pre-7',hypothesisId:'H10'})}).catch(()=>{});
+    // #endregion
+  }, [currentUser]);
+
+  useEffect(() => {
+    const grid = kpiGridRef.current;
+    if (!grid) return;
+
+    const logLayout = (runId) => {
+      const style = window.getComputedStyle(grid);
+      const cards = Array.from(grid.querySelectorAll('.app-dashboard-kpi-card'));
+      const valueEls = Array.from(grid.querySelectorAll('.app-dashboard-kpi-value'));
+      const headerEls = Array.from(grid.querySelectorAll('.app-dashboard-kpi-header'));
+      const labelEls = Array.from(grid.querySelectorAll('.app-dashboard-kpi-label'));
+      const dashboardRoot = document.querySelector('.app-dashboard');
+      const section = grid.closest('.app-dashboard-section');
+      const gridRect = grid.getBoundingClientRect();
+      const sectionRect = section?.getBoundingClientRect();
+      const rootRect = dashboardRoot?.getBoundingClientRect();
+      const rootStyle = dashboardRoot ? window.getComputedStyle(dashboardRoot) : null;
+      const columnCount = style.gridTemplateColumns
+        ? style.gridTemplateColumns.split(' ').length
+        : 0;
+      const overflowCount = valueEls.reduce((count, el) => {
+        if (!el) return count;
+        return el.scrollWidth > el.clientWidth ? count + 1 : count;
+      }, 0);
+      const firstCard = cards[0];
+      const lastCard = cards[cards.length - 1];
+      const cardRects = cards.map((card) => {
+        const rect = card.getBoundingClientRect();
+        return {
+          left: Math.round(rect.left),
+          top: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        };
+      });
+      const headerHeights = headerEls.map((el) => el?.clientHeight || 0);
+      const labelHeights = labelEls.map((el) => el?.clientHeight || 0);
+      const valueHeights = valueEls.map((el) => el?.clientHeight || 0);
+      const headerMin = headerHeights.length ? Math.min(...headerHeights) : 0;
+      const headerMax = headerHeights.length ? Math.max(...headerHeights) : 0;
+      const labelMin = labelHeights.length ? Math.min(...labelHeights) : 0;
+      const labelMax = labelHeights.length ? Math.max(...labelHeights) : 0;
+      const valueMin = valueHeights.length ? Math.min(...valueHeights) : 0;
+      const valueMax = valueHeights.length ? Math.max(...valueHeights) : 0;
+      const viewportScale = window.visualViewport?.scale ?? 1;
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:226',message:'kpi grid metrics',data:{gridWidth:grid.clientWidth,gridTemplateColumns:style.gridTemplateColumns,gap:style.gap,cardCount:cards.length,viewportWidth:window.innerWidth,viewportHeight:window.innerHeight},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:230',message:'kpi card widths',data:{firstCardWidth:firstCard?.clientWidth || 0,lastCardWidth:lastCard?.clientWidth || 0,firstCardHeight:firstCard?.clientHeight || 0,lastCardHeight:lastCard?.clientHeight || 0},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:234',message:'kpi value overflow',data:{valueCount:valueEls.length,overflowCount},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H3'})}).catch(()=>{});
+      // #endregion
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:238',message:'kpi grid overflow',data:{gridClientWidth:grid.clientWidth,gridScrollWidth:grid.scrollWidth,gridOverflowX:grid.scrollWidth>grid.clientWidth},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H4'})}).catch(()=>{});
+      // #endregion
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:242',message:'kpi header/label/value heights',data:{headerMin,headerMax,labelMin,labelMax,valueMin,valueMax},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H5'})}).catch(()=>{});
+      // #endregion
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:246',message:'kpi layout positions',data:{columnCount,gridRect:{left:Math.round(gridRect.left),width:Math.round(gridRect.width)},sectionRect:sectionRect?{left:Math.round(sectionRect.left),width:Math.round(sectionRect.width)}:null,rootRect:rootRect?{left:Math.round(rootRect.left),width:Math.round(rootRect.width)}:null,cardRects},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H6'})}).catch(()=>{});
+      // #endregion
+
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:250',message:'dashboard root padding',data:{paddingLeft:rootStyle?.paddingLeft || null,paddingRight:rootStyle?.paddingRight || null,viewportScale},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H7'})}).catch(()=>{});
+      // #endregion
+    };
+
+    logLayout('kpi-layout-pre-1');
+    const handleResize = () => logLayout('kpi-layout-resize-1');
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  if (!db) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '50vh', color: 'var(--text-secondary, #94a3b8)' }}>
+        Carregando dashboard…
+      </div>
+    );
+  }
+
+  const appointments = db.appointments;
+  const transactions = db.transactions;
+  const patients = db.patients || [];
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -211,95 +350,6 @@ export default function DashboardPage() {
       color: '#F59E0B',
     },
   ];
-
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:174',message:'dashboard:render',data:{hasUser:!!currentUser},timestamp:Date.now(),sessionId:'debug-session',runId:'menu-white-screen-pre-7',hypothesisId:'H10'})}).catch(()=>{});
-    // #endregion
-  }, [currentUser]);
-
-  useEffect(() => {
-    const grid = kpiGridRef.current;
-    if (!grid) return;
-
-    const logLayout = (runId) => {
-      const style = window.getComputedStyle(grid);
-      const cards = Array.from(grid.querySelectorAll('.app-dashboard-kpi-card'));
-      const valueEls = Array.from(grid.querySelectorAll('.app-dashboard-kpi-value'));
-      const headerEls = Array.from(grid.querySelectorAll('.app-dashboard-kpi-header'));
-      const labelEls = Array.from(grid.querySelectorAll('.app-dashboard-kpi-label'));
-      const dashboardRoot = document.querySelector('.app-dashboard');
-      const section = grid.closest('.app-dashboard-section');
-      const gridRect = grid.getBoundingClientRect();
-      const sectionRect = section?.getBoundingClientRect();
-      const rootRect = dashboardRoot?.getBoundingClientRect();
-      const rootStyle = dashboardRoot ? window.getComputedStyle(dashboardRoot) : null;
-      const columnCount = style.gridTemplateColumns
-        ? style.gridTemplateColumns.split(' ').length
-        : 0;
-      const overflowCount = valueEls.reduce((count, el) => {
-        if (!el) return count;
-        return el.scrollWidth > el.clientWidth ? count + 1 : count;
-      }, 0);
-      const firstCard = cards[0];
-      const lastCard = cards[cards.length - 1];
-      const cardRects = cards.map((card) => {
-        const rect = card.getBoundingClientRect();
-        return {
-          left: Math.round(rect.left),
-          top: Math.round(rect.top),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-        };
-      });
-      const headerHeights = headerEls.map((el) => el?.clientHeight || 0);
-      const labelHeights = labelEls.map((el) => el?.clientHeight || 0);
-      const valueHeights = valueEls.map((el) => el?.clientHeight || 0);
-      const headerMin = headerHeights.length ? Math.min(...headerHeights) : 0;
-      const headerMax = headerHeights.length ? Math.max(...headerHeights) : 0;
-      const labelMin = labelHeights.length ? Math.min(...labelHeights) : 0;
-      const labelMax = labelHeights.length ? Math.max(...labelHeights) : 0;
-      const valueMin = valueHeights.length ? Math.min(...valueHeights) : 0;
-      const valueMax = valueHeights.length ? Math.max(...valueHeights) : 0;
-      const viewportScale = window.visualViewport?.scale ?? 1;
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:226',message:'kpi grid metrics',data:{gridWidth:grid.clientWidth,gridTemplateColumns:style.gridTemplateColumns,gap:style.gap,cardCount:cards.length,viewportWidth:window.innerWidth,viewportHeight:window.innerHeight},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:230',message:'kpi card widths',data:{firstCardWidth:firstCard?.clientWidth || 0,lastCardWidth:lastCard?.clientWidth || 0,firstCardHeight:firstCard?.clientHeight || 0,lastCardHeight:lastCard?.clientHeight || 0},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:234',message:'kpi value overflow',data:{valueCount:valueEls.length,overflowCount},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H3'})}).catch(()=>{});
-      // #endregion
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:238',message:'kpi grid overflow',data:{gridClientWidth:grid.clientWidth,gridScrollWidth:grid.scrollWidth,gridOverflowX:grid.scrollWidth>grid.clientWidth},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:242',message:'kpi header/label/value heights',data:{headerMin,headerMax,labelMin,labelMax,valueMin,valueMax},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H5'})}).catch(()=>{});
-      // #endregion
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:246',message:'kpi layout positions',data:{columnCount,gridRect:{left:Math.round(gridRect.left),width:Math.round(gridRect.width)},sectionRect:sectionRect?{left:Math.round(sectionRect.left),width:Math.round(sectionRect.width)}:null,rootRect:rootRect?{left:Math.round(rootRect.left),width:Math.round(rootRect.width)}:null,cardRects},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H6'})}).catch(()=>{});
-      // #endregion
-
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/DashboardPage.jsx:250',message:'dashboard root padding',data:{paddingLeft:rootStyle?.paddingLeft || null,paddingRight:rootStyle?.paddingRight || null,viewportScale},timestamp:Date.now(),sessionId:'debug-session',runId,hypothesisId:'H7'})}).catch(()=>{});
-      // #endregion
-    };
-
-    logLayout('kpi-layout-pre-1');
-    const handleResize = () => logLayout('kpi-layout-resize-1');
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
 
   return (
     <div className="app-dashboard">

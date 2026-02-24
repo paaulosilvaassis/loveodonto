@@ -163,7 +163,8 @@ export function exportPatientJsonFull(patientId, userId) {
   return payload;
 }
 
-export function exportPatientsBatch(filters, userId) {
+export async function exportPatientsBatch(filters, userId, options = {}) {
+  const { onProgress } = options;
   const db = loadDb();
   let list = [...(db.patients || [])];
 
@@ -208,23 +209,54 @@ export function exportPatientsBatch(filters, userId) {
     list = list.filter((p) => addrIds.includes(p.id));
   }
 
-  const rows = list.map((p) => {
-    const pt = getPatient(p.id);
-    const rec = getPatientRecord(p.id);
-    return patientToFlatRow(
-      pt?.profile || p,
-      rec,
-      pt?.documents,
-      pt?.birth,
-      pt?.education,
-      pt?.phones,
-      pt?.addresses,
-      pt?.insurances,
-      pt?.activity
-    );
-  });
+  const CHUNK = options.chunkSize ?? 200;
+  const progressMsgFn = options.progressMessage ?? ((cur, tot) => `Preparando exportação ${cur} / ${tot}`);
+  const rows = [];
+  for (let i = 0; i < list.length; i += CHUNK) {
+    const chunk = list.slice(i, i + CHUNK);
+    const chunkRows = chunk.map((p) => {
+      const pt = getPatient(p.id);
+      const rec = getPatientRecord(p.id);
+      return patientToFlatRow(
+        pt?.profile || p,
+        rec,
+        pt?.documents,
+        pt?.birth,
+        pt?.education,
+        pt?.phones,
+        pt?.addresses,
+        pt?.insurances,
+        pt?.activity
+      );
+    });
+    rows.push(...chunkRows);
+    if (onProgress) {
+      const current = Math.min(i + CHUNK, list.length);
+      onProgress({
+        current,
+        total: list.length,
+        message: progressMsgFn(current, list.length),
+        names: chunk.map((p) => (p.full_name || '').trim() || 'Sem nome'),
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
 
   const csv = toCsv(rows);
   logImportExport({ type: 'EXPORT', format: 'csv', count: rows.length, success: true, userId });
   return { csv, json: rows, count: rows.length, format: 'csv' };
+}
+
+const EXPORT_ALL_CHUNK = 500;
+
+/**
+ * Exporta todos os pacientes (sem filtros), em chunks, com progresso.
+ * Somente admin/master devem chamar (checado na UI).
+ */
+export async function exportPatientsAll(userId, options = {}) {
+  return exportPatientsBatch({}, userId, {
+    ...options,
+    chunkSize: EXPORT_ALL_CHUNK,
+    progressMessage: (current, total) => `Exportando ${current} / ${total}`,
+  });
 }
