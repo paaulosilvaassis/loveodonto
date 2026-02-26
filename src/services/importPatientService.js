@@ -5,7 +5,7 @@ import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { isCpfValid, onlyDigits } from '../utils/validators.js';
 import { parseCsvText, parseXlsxFile, parseDate, getCanonicalHeaderMap, normalizeParsedRows } from './csvXlsxUtils.js';
-import { createPatientFromImport, createPatientQuick, createPatientsFromImportBatch, CRITICAL_FIELDS, updatePatientProfile, updatePatientDocuments, updatePatientBirth, updatePatientEducation, addPatientPhone, addPatientAddress, addPatientInsurance, updatePatientPendingData } from './patientService.js';
+import { createPatientFromImport, createPatientQuick, createPatientsFromImportBatch, CRITICAL_FIELDS, getPatient, updatePatientProfile, updatePatientDocuments, updatePatientBirth, updatePatientEducation, addPatientPhone, addPatientAddress, addPatientInsurance, updatePatientPendingData, recalcAndPersistPendingData } from './patientService.js';
 import { updatePatientRecord } from './patientRecordService.js';
 import { logImportExport } from './importExportLogService.js';
 
@@ -250,13 +250,147 @@ function findExistingPatient(db, row, conflictMode) {
   return null;
 }
 
+/** Mescla dados da linha no paciente existente: preferir valor não vazio do payload. */
+function mergePatientFromRow(user, patientId, payload, row) {
+  const current = getPatient(patientId);
+  if (!current?.profile) return;
+  const p = current.profile;
+  const doc = current.documents || {};
+  const birth = current.birth || {};
+  const edu = current.education || {};
+  const db = loadDb();
+  const rec = (db.patientRecords || []).find((r) => r.patient_id === patientId);
+  const mergeStr = (a, b) => (normalize(b) || normalize(a) || '');
+  const mergeProfile = {
+    full_name: mergeStr(p.full_name, payload.full_name),
+    nickname: mergeStr(p.nickname, payload.nickname),
+    social_name: mergeStr(p.social_name, payload.social_name),
+    sex: mergeStr(p.sex, payload.sex) || p.sex,
+    birth_date: mergeStr(p.birth_date, payload.birth_date) || p.birth_date,
+    cpf: normCpf(payload.cpf) || p.cpf,
+    lead_source: mergeStr(p.lead_source, payload.lead_source),
+    tags: Array.isArray(payload.tags) && payload.tags.length > 0 ? payload.tags : (p.tags || []),
+  };
+  updatePatientProfile(user, patientId, mergeProfile);
+  const mergedDocs = {
+    rg: mergeStr(doc.rg, payload.documents?.rg),
+    personal_email: mergeStr(doc.personal_email, payload.documents?.personal_email),
+    marital_status: mergeStr(doc.marital_status, payload.documents?.marital_status),
+    responsible_name: mergeStr(doc.responsible_name, payload.documents?.responsible_name),
+    responsible_cpf: mergeStr(doc.responsible_cpf, payload.documents?.responsible_cpf),
+  };
+  updatePatientDocuments(user, patientId, mergedDocs);
+  const mergedBirth = {
+    nationality: mergeStr(birth.nationality, payload.birth?.nationality),
+    birth_city: mergeStr(birth.birth_city, payload.birth?.birth_city),
+    birth_state: mergeStr(birth.birth_state, payload.birth?.birth_state),
+  };
+  updatePatientBirth(user, patientId, mergedBirth);
+  const mergedEdu = {
+    education_level: mergeStr(edu.education_level, payload.education?.education_level),
+    profession: mergeStr(edu.profession, payload.education?.profession),
+  };
+  updatePatientEducation(user, patientId, mergedEdu);
+  updatePatientRecord(patientId, {
+    record_number: mergeStr(rec?.record_number, payload.record_number) || rec?.record_number || '',
+    preferred_dentist: mergeStr(rec?.preferred_dentist, payload.preferred_dentist),
+  });
+  if (payload.phone && onlyDigits(payload.phone).length >= 10) {
+    try { addPatientPhone(user, patientId, { ddd: onlyDigits(payload.phone).slice(0, 2), number: onlyDigits(payload.phone).slice(2, 11), is_primary: true, is_whatsapp: true }); } catch (_) {}
+  }
+  if (payload.address && (payload.address.street || payload.address.city)) {
+    try { addPatientAddress(user, patientId, payload.address); } catch (_) {}
+  }
+  if (payload.insurance?.insurance_name) {
+    try { addPatientInsurance(user, patientId, payload.insurance); } catch (_) {}
+  }
+  recalcAndPersistPendingData(patientId);
+}
+
+/** Flush do createBatch: persiste e retorna ids + itens para o relatório.
+ * GUARDRAIL: Nunca permitir que ensureCpfUnique derrube o batch inteiro.
+ * Se o bulk insert falhar, faz retry item a item para salvar o máximo possível e classificar cada linha.
+ * CPF já cadastrado nunca é tratado como erro técnico (status DUPLICATE_SKIPPED).
+ */
+async function flushCreateBatch(user, batch) {
+  if (!batch || batch.length === 0) return { patientIds: [], reportItems: [] };
+  const items = batch.map((x) => ({ payload: x.payload, pendingFields: x.pendingFields || [] }));
+  const toReportItem = (x, status, motivo) => ({
+    linha: x.index,
+    nome: x.rowName || (x.payload?.full_name || '').trim() || '',
+    cpf: x.rowCpf || '',
+    status,
+    motivo,
+  });
+
+  try {
+    const { patientIds } = createPatientsFromImportBatch(user, items);
+    const reportItems = batch.map((x) => toReportItem(x, IMPORT_ROW_STATUS.CREATED, 'Novo cadastro criado'));
+    return { patientIds, reportItems };
+  } catch (bulkErr) {
+    const reportItems = [];
+    const patientIds = [];
+    for (let idx = 0; idx < batch.length; idx++) {
+      const x = batch[idx];
+      try {
+        const { patientIds: ids } = createPatientsFromImportBatch(user, [{ payload: x.payload, pendingFields: x.pendingFields || [] }]);
+        patientIds.push(...ids);
+        reportItems.push(toReportItem(x, IMPORT_ROW_STATUS.CREATED, 'Novo cadastro criado'));
+      } catch (itemErr) {
+        const msg = String(itemErr?.message || '');
+        if (msg.includes('CPF já cadastrado')) {
+          reportItems.push(toReportItem(x, IMPORT_ROW_STATUS.DUPLICATE_SKIPPED, 'CPF já cadastrado'));
+        } else {
+          reportItems.push(toReportItem(x, IMPORT_ROW_STATUS.ERROR, msg || 'Erro ao processar linha'));
+        }
+      }
+      if (idx > 0 && idx % 10 === 0) await yieldToMain();
+    }
+    return { patientIds, reportItems };
+  }
+}
+
+/*
+ * CAUSA DO BUG "SÓ ~400 IMPORTADOS COM 3600 LINHAS":
+ * No modo "Criar novo", linhas com CPF já cadastrado eram enviadas ao createBatch.
+ * createPatientsFromImportBatch chama ensureCpfUnique() para cada paciente; no primeiro
+ * CPF duplicado o batch inteiro falhava e nenhum dos 200 era persistido. Solução: quando
+ * conflictMode === 'create' e findExistingPatient retorna existente, NÃO adicionar ao
+ * createBatch; contar como DUPLICATE_SKIPPED. Assim todas as linhas são processadas.
+ *
+ * REGRESSÃO: Nunca permitir que ensureCpfUnique derrube o batch. flushCreateBatch faz
+ * retry item a item se o bulk falhar; CPF já cadastrado nunca incrementa technicalErrors.
+ */
 const CHUNK_SIZE = 300;
 const BATCH_CREATE_SIZE = 200;
 const MAX_ROWS_PER_IMPORT = 10000;
 const YIELD_EVERY = 10;
 
+/** Status de cada linha no relatório de importação */
+export const IMPORT_ROW_STATUS = {
+  CREATED: 'CREATED',
+  UPDATED: 'UPDATED',
+  MERGED: 'MERGED',
+  DUPLICATE_SKIPPED: 'DUPLICATE_SKIPPED',
+  IGNORED: 'IGNORED',
+  ERROR: 'ERROR',
+};
+
 function yieldToMain() {
   return new Promise((r) => setTimeout(r, 0));
+}
+
+/** Gera CSV do relatório de importação para download. */
+export function buildImportReportCsv(reportRows) {
+  if (!Array.isArray(reportRows) || reportRows.length === 0) {
+    return 'linha,nome,cpf,status,motivo\n';
+  }
+  const header = 'linha,nome,cpf,status,motivo\n';
+  const escape = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = reportRows.map((r) =>
+    [r.linha, escape(r.nome), r.cpf || '', r.status || '', escape(r.motivo)].join(',')
+  );
+  return header + rows.join('\n');
 }
 
 /** Importa CSV ou XLSX em chunks: parse → validar em chunks → salvar em batch/updates com progresso e cancelamento. */
@@ -288,9 +422,12 @@ export async function importFromCsvOrXlsx(file, user, conflictMode = 'create', o
 
   let created = 0;
   let updated = 0;
-  let withPending = 0;
+  let merged = 0;
+  let duplicateSkipped = 0;
   let ignored = 0;
+  let technicalErrors = 0;
   const importErrors = [];
+  const reportRows = [];
   const createBatch = [];
 
   for (let chunkStart = 0; chunkStart < toProcessTotal; chunkStart += CHUNK_SIZE) {
@@ -332,10 +469,15 @@ export async function importFromCsvOrXlsx(file, user, conflictMode = 'create', o
 
       const item = validatedChunk[i];
       const { row, index, pendingFields = [], pendingCriticalFields = [] } = item;
+      const lineNum = index;
+      const rowName = (getRowKey(row, 'nome_completo') || '').trim() || '';
+      const rowCpf = normCpf(getRowKey(row, 'cpf')) || '';
+
       try {
         if (!isRowValidForImport(row)) {
           ignored++;
-          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'ignored', line: index, message: `Linha ${index} (sem dados mínimos)` } });
+          reportRows.push({ linha: lineNum, nome: rowName, cpf: rowCpf || '', status: IMPORT_ROW_STATUS.IGNORED, motivo: 'Linha sem dados mínimos' });
+          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'ignored', line: lineNum, message: `Linha ${lineNum} (sem dados mínimos)` } });
           continue;
         }
 
@@ -344,88 +486,155 @@ export async function importFromCsvOrXlsx(file, user, conflictMode = 'create', o
 
         if (existing && (conflictMode === 'update_cpf' || conflictMode === 'update_record' || conflictMode === 'merge')) {
           const payload = rowToPayload(row, conflictMode);
-          updatePatientProfile(user, existing.id, {
-            full_name: payload.full_name,
-            nickname: payload.nickname,
-            social_name: payload.social_name,
-            sex: payload.sex,
-            birth_date: payload.birth_date,
-            cpf: payload.cpf,
-            lead_source: payload.lead_source,
-            tags: payload.tags,
-          });
-          updatePatientDocuments(user, existing.id, payload.documents);
-          updatePatientBirth(user, existing.id, payload.birth);
-          updatePatientEducation(user, existing.id, payload.education);
-          updatePatientRecord(existing.id, { record_number: payload.record_number, preferred_dentist: payload.preferred_dentist });
-          if (payload.phone) {
-            const digits = onlyDigits(payload.phone);
-            if (digits.length >= 10) {
-              try {
-                addPatientPhone(user, existing.id, { ddd: digits.slice(0, 2), number: digits.slice(2, 11), is_primary: true, is_whatsapp: true });
-              } catch (_) {}
+          if (conflictMode === 'merge') {
+            mergePatientFromRow(user, existing.id, payload, row);
+          } else {
+            updatePatientProfile(user, existing.id, {
+              full_name: payload.full_name,
+              nickname: payload.nickname,
+              social_name: payload.social_name,
+              sex: payload.sex,
+              birth_date: payload.birth_date,
+              cpf: payload.cpf,
+              lead_source: payload.lead_source,
+              tags: payload.tags,
+            });
+            updatePatientDocuments(user, existing.id, payload.documents);
+            updatePatientBirth(user, existing.id, payload.birth);
+            updatePatientEducation(user, existing.id, payload.education);
+            updatePatientRecord(existing.id, { record_number: payload.record_number, preferred_dentist: payload.preferred_dentist });
+            if (payload.phone) {
+              const digits = onlyDigits(payload.phone);
+              if (digits.length >= 10) {
+                try {
+                  addPatientPhone(user, existing.id, { ddd: digits.slice(0, 2), number: digits.slice(2, 11), is_primary: true, is_whatsapp: true });
+                } catch (_) {}
+              }
             }
-          }
-          if (payload.address?.street || payload.address?.city) {
-            try { addPatientAddress(user, existing.id, payload.address); } catch (_) {}
-          }
-          if (payload.insurance?.insurance_name) {
-            try { addPatientInsurance(user, existing.id, payload.insurance); } catch (_) {}
+            if (payload.address?.street || payload.address?.city) {
+              try { addPatientAddress(user, existing.id, payload.address); } catch (_) {}
+            }
+            if (payload.insurance?.insurance_name) {
+              try { addPatientInsurance(user, existing.id, payload.insurance); } catch (_) {}
+            }
           }
           if (pendingFields.length > 0) {
             updatePatientPendingData(user, existing.id, true, pendingFields, pendingCriticalFields);
-            withPending++;
           }
-          updated++;
-          const name = (payload.full_name || '').trim() || 'Sem nome';
-          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: pendingFields.length ? 'imported_pending' : 'imported', line: index, name, message: pendingFields.length ? `faltando: ${pendingFields.slice(0, 3).join(', ')}` : null } });
-        } else {
-          const payload = rowToPayload(row, conflictMode);
-          createBatch.push({ payload, pendingFields, index });
-          if (createBatch.length >= BATCH_CREATE_SIZE) {
-            const { patientIds } = createPatientsFromImportBatch(user, createBatch.map((x) => ({ payload: x.payload, pendingFields: x.pendingFields })));
-            created += patientIds.length;
-            if (createBatch.some((x) => x.pendingFields.length > 0)) withPending += createBatch.filter((x) => x.pendingFields.length > 0).length;
-            createBatch.forEach((x) => {
-              const name = (x.payload.full_name || '').trim() || 'Sem nome';
-              onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: x.pendingFields.length ? 'imported_pending' : 'imported', line: x.index, name, message: x.pendingFields.length ? `faltando: ${x.pendingFields.slice(0, 3).join(', ')}` : null } });
-            });
-            createBatch.length = 0;
-            await yieldToMain();
-            onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…` });
+          if (conflictMode === 'merge') {
+            merged++;
+            reportRows.push({ linha: lineNum, nome: rowName, cpf: rowCpf || '', status: IMPORT_ROW_STATUS.MERGED, motivo: 'Dados mesclados ao cadastro existente' });
+            onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'merged', line: lineNum, name: rowName || 'Sem nome', message: null } });
+          } else {
+            updated++;
+            reportRows.push({ linha: lineNum, nome: rowName, cpf: rowCpf || '', status: IMPORT_ROW_STATUS.UPDATED, motivo: conflictMode === 'update_cpf' ? 'CPF já existia — cadastro atualizado' : 'Prontuário já existia — cadastro atualizado' });
+            onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: pendingFields.length ? 'imported_pending' : 'imported', line: lineNum, name: rowName || 'Sem nome', message: pendingFields.length ? `faltando: ${pendingFields.slice(0, 3).join(', ')}` : null } });
           }
+          continue;
+        }
+
+        if (existing && conflictMode === 'create') {
+          duplicateSkipped++;
+          reportRows.push({ linha: lineNum, nome: rowName, cpf: rowCpf || '', status: IMPORT_ROW_STATUS.DUPLICATE_SKIPPED, motivo: 'CPF já cadastrado (modo criar novo)' });
+          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'duplicate_skipped', line: lineNum, name: rowName || 'Sem nome', message: 'CPF já cadastrado' } });
+          continue;
+        }
+
+        const payload = rowToPayload(row, conflictMode);
+        createBatch.push({ payload, pendingFields, index: lineNum, rowName, rowCpf });
+        if (createBatch.length >= BATCH_CREATE_SIZE) {
+          const batchCopy = [...createBatch];
+          const { patientIds, reportItems } = await flushCreateBatch(user, createBatch);
+          created += patientIds.length;
+          duplicateSkipped += reportItems.filter((r) => r.status === IMPORT_ROW_STATUS.DUPLICATE_SKIPPED).length;
+          technicalErrors += reportItems.filter((r) => r.status === IMPORT_ROW_STATUS.ERROR).length;
+          reportItems.forEach((r) => reportRows.push(r));
+          createBatch.length = 0;
+          batchCopy.forEach((x) => {
+            const name = (x.rowName || x.payload?.full_name || '').trim() || 'Sem nome';
+            onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: (x.pendingFields?.length) ? 'imported_pending' : 'imported', line: x.index, name, message: (x.pendingFields?.length) ? `faltando: ${(x.pendingFields || []).slice(0, 3).join(', ')}` : null } });
+          });
+          await yieldToMain();
+          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…` });
         }
       } catch (err) {
-        importErrors.push({ row: index, errors: [err?.message || 'Erro ao processar linha'] });
-        onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'error', line: index, message: err?.message || 'Erro ao processar linha' } });
+        const msg = err?.message || 'Erro ao processar linha';
+        const isCpfDuplicate = String(msg).includes('CPF já cadastrado');
+        if (isCpfDuplicate) {
+          duplicateSkipped++;
+          reportRows.push({ linha: lineNum, nome: rowName, cpf: rowCpf || '', status: IMPORT_ROW_STATUS.DUPLICATE_SKIPPED, motivo: 'CPF já cadastrado' });
+          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'duplicate_skipped', line: lineNum, name: rowName || 'Sem nome', message: 'CPF já cadastrado' } });
+        } else {
+          technicalErrors++;
+          importErrors.push({ row: lineNum, errors: [msg] });
+          reportRows.push({ linha: lineNum, nome: rowName, cpf: rowCpf || '', status: IMPORT_ROW_STATUS.ERROR, motivo: msg });
+          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'error', line: lineNum, message: msg } });
+        }
       }
     }
   }
 
   if (createBatch.length > 0 && !getCancelRequested()) {
-    try {
-      const { patientIds } = createPatientsFromImportBatch(user, createBatch.map((x) => ({ payload: x.payload, pendingFields: x.pendingFields })));
-      created += patientIds.length;
-      if (createBatch.some((x) => x.pendingFields.length > 0)) withPending += createBatch.filter((x) => x.pendingFields.length > 0).length;
-      createBatch.forEach((x) => {
-        const name = (x.payload.full_name || '').trim() || 'Sem nome';
-        onProgress({ phase: 'saving', current: toProcessTotal, total: toProcessTotal, message: 'Finalizando…', liveItem: { type: x.pendingFields.length ? 'imported_pending' : 'imported', line: x.index, name, message: x.pendingFields.length ? `faltando: ${x.pendingFields.slice(0, 3).join(', ')}` : null } });
+    const { patientIds, reportItems } = await flushCreateBatch(user, createBatch);
+    created += patientIds.length;
+    duplicateSkipped += reportItems.filter((r) => r.status === IMPORT_ROW_STATUS.DUPLICATE_SKIPPED).length;
+    technicalErrors += reportItems.filter((r) => r.status === IMPORT_ROW_STATUS.ERROR).length;
+    reportItems.forEach((r) => reportRows.push(r));
+    createBatch.forEach((x) => {
+      const name = (x.rowName || x.payload?.full_name || '').trim() || 'Sem nome';
+      onProgress({ phase: 'saving', current: toProcessTotal, total: toProcessTotal, message: 'Finalizando…', liveItem: { type: (x.pendingFields?.length) ? 'imported_pending' : 'imported', line: x.index, name, message: (x.pendingFields?.length) ? `faltando: ${(x.pendingFields || []).slice(0, 3).join(', ')}` : null } });
+    });
+  }
+
+  const withPending = 0;
+
+  const sumCounts = created + updated + merged + duplicateSkipped + ignored + technicalErrors;
+  if (sumCounts !== toProcessTotal) {
+    const reportedLines = new Set(reportRows.map((r) => r.linha));
+    for (let L = 1; L <= toProcessTotal; L++) {
+      if (!reportedLines.has(L)) {
+        reportRows.push({ linha: L, nome: '', cpf: '', status: IMPORT_ROW_STATUS.ERROR, motivo: 'Linha não contabilizada (bug)' });
+        technicalErrors++;
+        importErrors.push({ row: L, errors: ['Linha não contabilizada (bug)'] });
+      }
+    }
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('[Import] Contabilidade falhou:', {
+        created,
+        updated,
+        merged,
+        duplicateSkipped,
+        ignored,
+        technicalErrors,
+        toProcessTotal,
+        reportRowsLength: reportRows.length,
       });
-    } catch (err) {
-      importErrors.push({ row: 'batch', errors: [err?.message || 'Erro ao salvar lote'] });
     }
   }
 
   logImportExport({
     type: 'IMPORT',
     format: ext.endsWith('.csv') ? 'csv' : 'xlsx',
-    count: created + updated,
+    count: created + updated + merged,
     success: true,
     userId: user?.id,
     errors: importErrors.length > 0 ? importErrors.map((e) => `Linha ${e.row}: ${e.errors.join(', ')}`) : null,
   });
 
-  return { created, updated, ignored, errors: importErrors, withPending, truncated, totalRowsInFile, headerMap };
+  return {
+    created,
+    updated,
+    merged,
+    duplicateSkipped,
+    ignored,
+    technicalErrors,
+    errors: importErrors,
+    reportRows,
+    withPending,
+    truncated,
+    totalRowsInFile,
+    headerMap,
+  };
 }
 
 /** Importa JSON completo */

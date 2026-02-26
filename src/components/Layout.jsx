@@ -104,15 +104,18 @@ export default function Layout({ children }) {
   return (
     <div className={`layout ${isCollapsed ? 'layout-collapsed' : ''}`}>
       <aside className={`sidebar ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
-        {/* Brand/Logo */}
+        {/* Brand/Logo - container com fundo claro para destaque na sidebar escura */}
         <div className="brand">
-          <img
-            src={clinicSummary?.logoUrl || appLogo}
-            alt={clinicSummary?.logoUrl ? 'Logo da clínica' : 'Logo do app LOVE ODONTO'}
-            className="brand-logo"
-          />
-          <strong>{clinicSummary?.nomeClinica || 'LOVE ODONTO'}</strong>
-          <span>{clinicSummary?.nomeFantasia || 'Sistema de gestão'}</span>
+          <div className="brand-logo-wrap">
+            <img
+              src={clinicSummary?.logoUrl || appLogo}
+              alt={clinicSummary?.logoUrl ? 'Logo da clínica' : 'Logo do app LOVE ODONTO'}
+              className="brand-logo"
+            />
+          </div>
+          <div className="brand-text">
+            <strong>{clinicSummary?.nomeClinica || 'LOVE ODONTO'}</strong>
+          </div>
         </div>
 
         {/* BASES PRINCIPAIS - ÍCONES HORIZONTAIS NO TOPO */}
@@ -213,27 +216,47 @@ export default function Layout({ children }) {
       </aside>
 
       <div className="content">
-        <header className="topbar">
-          <div>
-            <div className="topbar-title">
-              <button className="button secondary back-button" type="button" onClick={() => navigate(-1)}>
-                <ArrowLeft size={16} /> Voltar
-              </button>
-            </div>
-            <div className="topbar-subtitle">{user?.name} · {user?.role}</div>
+        <header className="header">
+          <div className="header-left">
+            <button className="button secondary back-button" type="button" onClick={() => navigate(-1)}>
+              <ArrowLeft size={16} /> Voltar
+            </button>
+            <button
+              type="button"
+              className="topbar-quick-create-button"
+              onClick={() => setIsQuickCreateOpen(true)}
+              title="Cadastrar/Pesquisar Paciente"
+              aria-label="Cadastrar/Pesquisar Paciente"
+            >
+              <UserPlus size={20} />
+              <span>Paciente +</span>
+            </button>
           </div>
-          <button
-            type="button"
-            className="topbar-quick-create-button"
-            onClick={() => setIsQuickCreateOpen(true)}
-            title="Cadastrar/Pesquisar Paciente"
-            aria-label="Cadastrar/Pesquisar Paciente"
-          >
-            <UserPlus size={20} />
-            <span>Paciente +</span>
-          </button>
+          <div className="header-center">
+            {/* Campo de pesquisa global pode ser inserido aqui */}
+          </div>
+          <div className="header-right">
+            <div className="brand-container">
+              <img
+                src="/love-odonto-official.png"
+                alt="Love Odonto"
+                className="header-logo"
+                onError={(e) => { e.target.onerror = null; e.target.src = appLogo; }}
+              />
+            </div>
+          </div>
         </header>
         <main className="page">{children}</main>
+        <footer className="app-footer">
+          <div className="app-footer-right">
+            <img
+              src="/love-odonto-official.png"
+              alt="Love Odonto"
+              className="app-footer-logo"
+              onError={(e) => { e.target.onerror = null; e.target.src = appLogo; }}
+            />
+          </div>
+        </footer>
       </div>
 
       {/* Modal de Pesquisa Rápida */}

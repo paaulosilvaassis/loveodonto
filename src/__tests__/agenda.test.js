@@ -1,14 +1,15 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { loadDb } from '../db/index.js';
+import { loadDb, initDb, resetDb } from '../db/index.js';
 import { createAppointment, createBlock, hasConflict } from '../services/appointmentService.js';
 import { resolveWorkSchedule } from '../utils/agendaUtils.js';
 
 const admin = { id: 'user-admin', role: 'admin' };
 
 describe('Agenda - conflitos', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
-    loadDb();
+    await resetDb();
+    await initDb();
   });
 
   it('bloqueia conflito de horário para o mesmo profissional', () => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { loadDb } from '../db/index.js';
+import { loadDb, initDb, resetDb } from '../db/index.js';
 import {
   addClinicAddress,
   addClinicPhone,
@@ -12,9 +12,10 @@ const admin = { id: 'user-admin', role: 'admin' };
 const recepcao = { id: 'user-2', role: 'recepcao' };
 
 describe('ClinicProfile - permissões e validações', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
-    loadDb();
+    await resetDb();
+    await initDb();
   });
 
   it('bloqueia edição para usuário sem permissão', () => {

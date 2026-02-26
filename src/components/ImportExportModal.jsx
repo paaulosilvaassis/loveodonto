@@ -13,6 +13,7 @@ import {
   importFromCsvOrXlsx,
   importFromJson,
   validateRow,
+  buildImportReportCsv,
 } from '../services/importPatientService.js';
 import { parseCsvTextFirstLines, parseXlsxFileFirstRows, getCanonicalHeaderMap, normalizeParsedRows } from '../services/csvXlsxUtils.js';
 import { listImportExportLogs } from '../services/importExportLogService.js';
@@ -59,7 +60,8 @@ export default function ImportExportModal({
   const [conflictMode, setConflictMode] = useState('create');
   const [importProgress, setImportProgress] = useState(null);
   const [importLiveItems, setImportLiveItems] = useState([]);
-  const [importCounters, setImportCounters] = useState({ created: 0, updated: 0, withPending: 0, ignored: 0, errors: 0 });
+  const [importCounters, setImportCounters] = useState({ created: 0, updated: 0, merged: 0, duplicateSkipped: 0, withPending: 0, ignored: 0, technicalErrors: 0, errors: 0 });
+  const [lastImportResult, setLastImportResult] = useState(null);
   const [importNomeColumn, setImportNomeColumn] = useState('');
   const [importNomeWarning, setImportNomeWarning] = useState(false);
   const importCancelRef = useRef(false);
@@ -261,8 +263,9 @@ export default function ImportExportModal({
     importCancelRef.current = false;
     setLoading(true);
     setImportLiveItems([]);
-    setImportCounters({ created: 0, updated: 0, withPending: 0, ignored: 0, errors: 0 });
+    setImportCounters({ created: 0, updated: 0, merged: 0, duplicateSkipped: 0, withPending: 0, ignored: 0, technicalErrors: 0, errors: 0 });
     setImportProgress({ phase: 'starting', current: 0, total: 1, message: 'Iniciando…' });
+    setLastImportResult(null);
     try {
       const ext = (importFile.name || '').toLowerCase();
       if (ext.endsWith('.json')) {
@@ -290,9 +293,22 @@ export default function ImportExportModal({
         setImportCounters({
           created: result.created ?? 0,
           updated: result.updated ?? 0,
+          merged: result.merged ?? 0,
+          duplicateSkipped: result.duplicateSkipped ?? 0,
           withPending: result.withPending ?? 0,
           ignored: result.ignored ?? 0,
+          technicalErrors: result.technicalErrors ?? 0,
           errors: (result.errors?.length) ?? 0,
+        });
+        setLastImportResult({
+          totalRowsInFile: result.totalRowsInFile,
+          created: result.created ?? 0,
+          updated: result.updated ?? 0,
+          merged: result.merged ?? 0,
+          duplicateSkipped: result.duplicateSkipped ?? 0,
+          ignored: result.ignored ?? 0,
+          technicalErrors: result.technicalErrors ?? 0,
+          reportRows: result.reportRows ?? [],
         });
         setImportFile(null);
         setImportPreview([]);
@@ -302,8 +318,8 @@ export default function ImportExportModal({
           onImportComplete(result);
           onClose();
         } else {
-          const total = (result.created ?? 0) + (result.updated ?? 0);
-          showSuccess(`Importados: ${total} | Com pendências: ${result.withPending ?? 0} | Ignorados: ${result.ignored ?? 0} | Erros: ${result.errors?.length ?? 0}`);
+          const total = (result.created ?? 0) + (result.updated ?? 0) + (result.merged ?? 0);
+          showSuccess(`Importação concluída: ${total} processados. Criados: ${result.created ?? 0} | Atualizados: ${result.updated ?? 0} | Mesclados: ${result.merged ?? 0} | Duplicados ignorados: ${result.duplicateSkipped ?? 0} | Ignorados: ${result.ignored ?? 0} | Erros técnicos: ${result.technicalErrors ?? 0}`);
           setImportProgress({ phase: 'done', current: result.totalRowsInFile ?? 0, total: result.totalRowsInFile ?? 1, message: 'Importação concluída.' });
         }
       }
@@ -611,10 +627,30 @@ export default function ImportExportModal({
                       }}
                     />
                   </div>
-                  {(importCounters.created > 0 || importCounters.updated > 0 || importCounters.ignored > 0 || importCounters.errors > 0) && (
+                  {(importCounters.created > 0 || importCounters.updated > 0 || importCounters.merged > 0 || importCounters.duplicateSkipped > 0 || importCounters.ignored > 0 || importCounters.technicalErrors > 0) && (
                     <p style={{ fontSize: '0.875rem', marginTop: '0.5rem', color: 'var(--text-secondary, #64748b)' }}>
-                      Importados: {importCounters.created + importCounters.updated} | Com pendências: {importCounters.withPending} | Ignorados: {importCounters.ignored} | Erros: {importCounters.errors}
+                      Total: {importCounters.created + importCounters.updated + importCounters.merged + importCounters.duplicateSkipped + importCounters.ignored + importCounters.technicalErrors} linhas — Criados: {importCounters.created} | Atualizados: {importCounters.updated} | Mesclados: {importCounters.merged} | Duplicados ignorados: {importCounters.duplicateSkipped} | Ignorados: {importCounters.ignored} | Erros técnicos: {importCounters.technicalErrors}
                     </p>
+                  )}
+                  {lastImportResult && (
+                    <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8 }}>
+                      <p style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Resumo da importação</p>
+                      <p style={{ fontSize: '0.8125rem', marginBottom: '0.25rem' }}>Total de linhas no arquivo: <strong>{lastImportResult.totalRowsInFile ?? 0}</strong></p>
+                      <p style={{ fontSize: '0.8125rem', marginBottom: '0.25rem' }}>Criados: <strong>{lastImportResult.created}</strong> | Atualizados: <strong>{lastImportResult.updated}</strong> | Mesclados: <strong>{lastImportResult.merged}</strong></p>
+                      <p style={{ fontSize: '0.8125rem', marginBottom: '0.25rem' }}>Duplicados ignorados: <strong>{lastImportResult.duplicateSkipped}</strong> | Ignorados (sem dados mínimos): <strong>{lastImportResult.ignored}</strong> | Erros técnicos: <strong>{lastImportResult.technicalErrors}</strong></p>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        icon={Download}
+                        onClick={() => {
+                          const csv = buildImportReportCsv(lastImportResult.reportRows);
+                          downloadBlob(csv, `relatorio-importacao-${Date.now()}.csv`, 'text/csv;charset=utf-8');
+                        }}
+                        style={{ marginTop: '0.5rem' }}
+                      >
+                        Baixar relatório (.csv)
+                      </Button>
+                    </div>
                   )}
                   {importLiveItems.length > 0 && (
                     <div style={{ maxHeight: 220, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: '0.5rem', marginTop: '0.5rem', background: '#f8fafc' }}>
@@ -623,10 +659,14 @@ export default function ImportExportModal({
                         <div key={idx} style={{ fontSize: '0.8rem', padding: '2px 0', display: 'flex', alignItems: 'center', gap: 6 }}>
                           {item.type === 'imported' && <span title="Importado">✅</span>}
                           {item.type === 'imported_pending' && <span title="Com pendências">⚠️</span>}
+                          {item.type === 'merged' && <span title="Mesclado">🔀</span>}
+                          {item.type === 'duplicate_skipped' && <span title="Duplicado ignorado">⏭️</span>}
                           {item.type === 'ignored' && <span title="Ignorado">⏭️</span>}
                           {item.type === 'error' && <span title="Erro">❌</span>}
                           {item.type === 'imported' && <span>Importado: {item.name || `Linha ${item.line}`}</span>}
                           {item.type === 'imported_pending' && <span>Importado com pendências: {item.name || `Linha ${item.line}`}{item.message ? ` (${item.message})` : ''}</span>}
+                          {item.type === 'merged' && <span>Mesclado: {item.name || `Linha ${item.line}`}</span>}
+                          {item.type === 'duplicate_skipped' && <span>Duplicado ignorado: {item.name || `Linha ${item.line}`} — {item.message || 'CPF já cadastrado'}</span>}
                           {item.type === 'ignored' && <span>Ignorado: {item.message || `Linha ${item.line}`}</span>}
                           {item.type === 'error' && <span>Erro: Linha {item.line} — {item.message}</span>}
                         </div>

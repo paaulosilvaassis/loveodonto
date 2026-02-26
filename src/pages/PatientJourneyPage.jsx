@@ -7,6 +7,7 @@ import {
   callPatient,
   finishAppointment,
   returnToWaiting,
+  checkInAppointment,
 } from '../services/appointmentService.js';
 import { JOURNEY_STAGE, listJourneyEntriesByDate } from '../services/journeyEntryService.js';
 import { listRooms } from '../services/teamService.js';
@@ -83,7 +84,54 @@ export default function PatientJourneyPage() {
     setRooms(listRooms());
   }, [selectedDate]);
 
-  const getJourneyStage = (appointment) => appointment?.journeyStage || JOURNEY_STAGE.AGENDADOS;
+  const getJourneyStage = (appointment) => {
+    const raw = appointment?.journeyStage ?? appointment?.status;
+    if (!raw) return JOURNEY_STAGE.AGENDADOS;
+    const s = String(raw).toLowerCase().replace(/\s+/g, '_');
+    if (s === 'sala_espera' || s === 'em_espera' || s === 'chegou') return JOURNEY_STAGE.SALA_ESPERA;
+    if (s === 'consultorio' || s === 'em_atendimento') return JOURNEY_STAGE.CONSULTORIO;
+    if (s === 'finalizado' || s === 'atendido') return JOURNEY_STAGE.FINALIZADO;
+    return JOURNEY_STAGE.AGENDADOS;
+  };
+
+  /** Atualiza o status da jornada no banco e refaz a lista. */
+  const updateJourneyStatus = useCallback(async (appointmentId, newStatus, options = {}) => {
+    const appointment = appointments.find((a) => a.id === appointmentId);
+    if (!appointment) {
+      showToast('Agendamento não encontrado.', 'error');
+      return;
+    }
+    const effectiveStage = getJourneyStage(appointment);
+    try {
+      if (newStatus === 'EM_ESPERA') {
+        if (![APPOINTMENT_STATUS.AGENDADO, APPOINTMENT_STATUS.CONFIRMADO, APPOINTMENT_STATUS.EM_CONFIRMACAO, APPOINTMENT_STATUS.ATRASADO].includes(appointment.status)) {
+          showToast('Paciente já está na sala de espera ou em outro estágio.', 'error');
+          return;
+        }
+        checkInAppointment(user, appointmentId);
+        showToast('Paciente enviado para a sala de espera.');
+      } else if (newStatus === 'EM_ATENDIMENTO') {
+        const roomId = options.consultorioId ?? appointment.consultorioId ?? appointment.roomId;
+        if (!roomId) {
+          setCallRoomModal({ open: true, appointmentId });
+          return;
+        }
+        callPatient(user, appointmentId, roomId);
+        showToast('Paciente chamado para o consultório.');
+      } else if (newStatus === 'FINALIZADO') {
+        finishAppointment(user, appointmentId);
+        showToast('Atendimento finalizado.');
+      } else {
+        showToast('Status inválido.', 'error');
+        return;
+      }
+      refreshData();
+      setTimeout(() => refreshData(), 200);
+    } catch (err) {
+      console.error('Erro ao atualizar status:', err);
+      showToast(err.message || 'Erro ao atualizar status.', 'error');
+    }
+  }, [appointments, user, refreshData, showToast]);
 
   const showToast = (message, type = 'success') => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
@@ -476,6 +524,8 @@ export default function PatientJourneyPage() {
               appointment={apt}
               now={now}
               activeTab={activeTab}
+              getJourneyStage={getJourneyStage}
+              updateJourneyStatus={updateJourneyStatus}
               canCall={canCallPatient}
               canFinish={canFinishPatient}
               canReturnToWaiting={canReturnToWaiting}
@@ -551,6 +601,8 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
   appointment,
   now,
   activeTab,
+  getJourneyStage,
+  updateJourneyStatus,
   canCall,
   canFinish,
   canReturnToWaiting,
@@ -559,6 +611,7 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
   onReturnToWaiting,
 }) {
   const navigate = useNavigate();
+  const stage = getJourneyStage(appointment);
   const checkInAt = appointment.journeyCheckedInAt || appointment.checkInAt;
   const waitSeconds = getWaitTimeSeconds(checkInAt, now);
   const waitColor = getWaitTimeColor(waitSeconds);
@@ -566,7 +619,6 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
   const startedAt = appointment.journeyStartedAt || appointment.startedAt || appointment.journeyCalledAt || appointment.calledAt;
   const careSeconds = getWaitTimeSeconds(startedAt, now);
   const careTimeFormatted = startedAt ? formatWaitTime(careSeconds) : '—';
-  const stage = appointment.journeyStage || JOURNEY_STAGE.AGENDADOS;
 
   const getStatusConfig = () => {
     if (stage === JOURNEY_STAGE.SALA_ESPERA) {
@@ -647,67 +699,80 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
         </div>
       </div>
 
-      {/* Timer + Action */}
-      <div className="patient-journey-card-right">
+      {/* Timer + Ações sempre visíveis (lado direito) */}
+      <div className="patient-journey-card-right patient-journey-card-actions-zone">
         {activeTab === 'waiting' && (
-          <div className="patient-journey-card-timer-wrapper">
-            <div className={`patient-journey-card-timer patient-journey-card-timer--${waitColor}`}>
-              {waitTimeFormatted}
+          <>
+            <div className="patient-journey-card-timer-wrapper">
+              <div className={`patient-journey-card-timer patient-journey-card-timer--${waitColor}`}>
+                {waitTimeFormatted}
+              </div>
             </div>
-            {canCall && (
-              <button 
-                type="button" 
-                className="patient-journey-card-action-btn patient-journey-card-action-btn--call" 
-                onClick={(e) => {
-                  // #region agent log
-                  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PatientJourneyCard:onClick',message:'Button clicked',data:{appointmentId:appointment.id,hasOnCall:!!onCall},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-                  // #endregion
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (onCall) onCall();
-                }}
-              >
-                <Bell size={18} />
-                Chamar
-              </button>
-            )}
-          </div>
+            <div className="patient-journey-card-actions">
+              {stage === JOURNEY_STAGE.AGENDADOS && canCall && (
+                <button
+                  type="button"
+                  className="patient-journey-card-action-btn patient-journey-card-action-btn--call"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateJourneyStatus(appointment.id, 'EM_ESPERA'); }}
+                >
+                  <Users size={18} />
+                  Chamar p/ Sala de Espera
+                </button>
+              )}
+              {stage === JOURNEY_STAGE.SALA_ESPERA && canCall && (
+                <button
+                  type="button"
+                  className="patient-journey-card-action-btn patient-journey-card-action-btn--call"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCall?.(); }}
+                >
+                  <Bell size={18} />
+                  Chamar p/ Consultório
+                </button>
+              )}
+            </div>
+          </>
         )}
         {activeTab === 'in_progress' && (
-          <div className="patient-journey-card-timer-wrapper">
-            <div className="patient-journey-card-timer patient-journey-card-timer--info">
-              {careTimeFormatted}
+          <>
+            <div className="patient-journey-card-timer-wrapper">
+              <div className="patient-journey-card-timer patient-journey-card-timer--info">
+                {careTimeFormatted}
+              </div>
             </div>
-            <div className="patient-journey-card-actions-group">
-              <button 
-                type="button" 
-                className="patient-journey-card-action-btn patient-journey-card-action-btn--primary" 
+            <div className="patient-journey-card-actions">
+              <button
+                type="button"
+                className="patient-journey-card-action-btn patient-journey-card-action-btn--primary"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (appointment?.id) {
-                    navigate(`/atendimento-clinico/${appointment.id}`);
-                  } else {
-                    console.error('Appointment ID não encontrado:', appointment);
-                  }
+                  if (appointment?.id) navigate(`/atendimento-clinico/${appointment.id}`);
                 }}
               >
                 <Clipboard size={18} />
                 Atender Paciente
               </button>
               {canFinish && (
-                <button type="button" className="patient-journey-card-action-btn patient-journey-card-action-btn--finish" onClick={onFinish}>
+                <button
+                  type="button"
+                  className="patient-journey-card-action-btn patient-journey-card-action-btn--finish"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFinish?.(); }}
+                >
                   <CheckCircle2 size={18} />
                   Finalizar
                 </button>
               )}
+              {canReturnToWaiting && (
+                <button
+                  type="button"
+                  className="patient-journey-card-action-btn patient-journey-card-action-btn--return"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReturnToWaiting?.(); }}
+                >
+                  Voltar para espera
+                </button>
+              )}
             </div>
-            {canReturnToWaiting && (
-              <button type="button" className="patient-journey-card-action-btn patient-journey-card-action-btn--return" onClick={onReturnToWaiting}>
-                Voltar para espera
-              </button>
-            )}
-          </div>
+          </>
         )}
         {activeTab === 'finished' && (
           <div className="patient-journey-card-timer-wrapper">
@@ -722,6 +787,8 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
   );
 }, function areEqual(prevProps, nextProps) {
   if (prevProps.activeTab !== nextProps.activeTab) return false;
+  if (prevProps.getJourneyStage !== nextProps.getJourneyStage) return false;
+  if (prevProps.updateJourneyStatus !== nextProps.updateJourneyStatus) return false;
   if (prevProps.canCall !== nextProps.canCall) return false;
   if (prevProps.canFinish !== nextProps.canFinish) return false;
   if (prevProps.canReturnToWaiting !== nextProps.canReturnToWaiting) return false;

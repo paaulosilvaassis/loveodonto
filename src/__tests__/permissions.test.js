@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { loadDb, withDb } from '../db/index.js';
+import { loadDb, withDb, initDb, resetDb } from '../db/index.js';
 import { can } from '../permissions/permissions.js';
 import { can as canAccess } from '../services/accessService.js';
 
 describe('Permissões', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
-    loadDb();
+    await resetDb();
+    await initDb();
   });
 
   it('admin pode tudo', () => {

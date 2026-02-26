@@ -1,6 +1,11 @@
+/**
+ * Persistência principal em IndexedDB (não localStorage) para evitar quota.
+ * localStorage continua apenas para sessão e preferências.
+ */
 import { defaultDbState, DB_VERSION } from './schema.js';
 import { migrateDb, getSeedCrmTags } from './migrations.js';
 import { createId } from '../services/helpers.js';
+import * as idb from './idbStorage.js';
 
 const resolveStorageKey = () => {
   const dbUrl = import.meta?.env?.VITE_DATABASE_URL || '';
@@ -16,12 +21,10 @@ const resolveStorageKey = () => {
 };
 
 const STORAGE_KEY = resolveStorageKey();
-
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 let cachedDb = null;
-let cachedRaw = null;
-
+let initDbPromise = null;
 let loadDbWorker = null;
 const getLoadDbWorker = () => {
   if (!loadDbWorker) {
@@ -79,227 +82,136 @@ function applyPostMigrationFixes(migrated) {
 }
 
 /**
- * Carrega o DB de forma assíncrona no Worker (parse + migrate no thread secundário).
- * Evita "Página sem resposta" com bancos grandes. Use para bootstrap e dashboard.
+ * Inicializa o banco: migra do localStorage (se existir) para IndexedDB e carrega em cache.
+ * Deve ser await antes de qualquer loadDb() no app.
  */
-export function loadDbAsync() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    const fresh = loadDb();
-    return Promise.resolve(clone(fresh));
-  }
-  if (cachedDb !== null && cachedRaw === raw) {
-    return Promise.resolve(clone(cachedDb));
-  }
-  return new Promise((resolve, reject) => {
-    const worker = getLoadDbWorker();
-    const onMessage = (e) => {
-      worker.removeEventListener('message', onMessage);
-      worker.removeEventListener('error', onError);
-      const { ok, db: dbFromWorker, error } = e.data || {};
-      if (ok && dbFromWorker) {
-        const migrated = applyPostMigrationFixes(dbFromWorker);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-        cachedDb = migrated;
-        cachedRaw = raw;
-        resolve(clone(migrated));
-      } else {
-        setTimeout(() => {
+export async function initDb() {
+  if (initDbPromise) return initDbPromise;
+  const defaultState = defaultDbState();
+
+  initDbPromise = (async () => {
+    if (typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEY)) {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return new Promise((resolve, reject) => {
+        const worker = getLoadDbWorker();
+        const onMessage = (e) => {
+          worker.removeEventListener('message', onMessage);
+          worker.removeEventListener('error', onError);
+          const { ok, db: dbFromWorker } = e.data || {};
+          if (ok && dbFromWorker) {
+            idb.saveFullDb(dbFromWorker, defaultState).then(() => {
+              try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+              cachedDb = applyPostMigrationFixes(dbFromWorker);
+              resolve();
+            }).catch(reject);
+          } else {
+            try {
+              const parsed = JSON.parse(raw);
+              const migrated = migrateDb(parsed);
+              idb.saveFullDb(migrated, defaultState).then(() => {
+                try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+                cachedDb = applyPostMigrationFixes(migrated);
+                resolve();
+              }).catch(reject);
+            } catch (err) {
+              reject(err);
+            }
+          }
+        };
+        const onError = () => {
+          worker.removeEventListener('message', onMessage);
+          worker.removeEventListener('error', onError);
           try {
-            resolve(clone(loadDb()));
+            const parsed = JSON.parse(raw);
+            const migrated = migrateDb(parsed);
+            idb.saveFullDb(migrated, defaultState).then(() => {
+              try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+              cachedDb = applyPostMigrationFixes(migrated);
+              resolve();
+            }).catch(reject);
           } catch (err) {
             reject(err);
           }
-        }, 0);
-      }
-    };
-    const onError = () => {
-      worker.removeEventListener('message', onMessage);
-      worker.removeEventListener('error', onError);
-      setTimeout(() => {
-        try {
-          resolve(clone(loadDb()));
-        } catch (err) {
-          reject(err);
-        }
-      }, 0);
-    };
-    worker.addEventListener('message', onMessage);
-    worker.addEventListener('error', onError);
-    worker.postMessage({ raw });
-  });
+        };
+        worker.addEventListener('message', onMessage);
+        worker.addEventListener('error', onError);
+        worker.postMessage({ raw });
+      });
+    } else {
+      const db = await idb.getFullDb(defaultState);
+      cachedDb = applyPostMigrationFixes(db);
+    }
+  })();
+
+  return initDbPromise;
+}
+
+/**
+ * Carrega o DB de forma assíncrona (garante init e retorna clone do cache).
+ */
+export function loadDbAsync() {
+  return initDb().then(() => clone(cachedDb));
 }
 
 export const loadDb = () => {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (cachedDb !== null && cachedRaw === raw) {
-    return clone(cachedDb);
+  if (cachedDb !== null) return clone(cachedDb);
+  const defaultState = defaultDbState();
+  if (!defaultState.crmTags || defaultState.crmTags.length === 0) {
+    defaultState.crmTags = getSeedCrmTags(createId, defaultState.clinicProfile?.id || 'clinic-1', new Date().toISOString());
   }
-  if (!raw) {
-    const fresh = defaultDbState();
-    if (!fresh.crmTags || fresh.crmTags.length === 0) {
-      fresh.crmTags = getSeedCrmTags(createId, fresh.clinicProfile?.id || 'clinic-1', new Date().toISOString());
-    }
-    if (!fresh.leadTags) fresh.leadTags = [];
-    if (!Array.isArray(fresh.tenants) || fresh.tenants.length === 0) {
-      const now = new Date().toISOString();
-      fresh.tenants = [{
-        id: 'tenant-1',
-        name: (fresh.clinicProfile?.nomeClinica || fresh.clinicProfile?.nomeFantasia || 'Minha Clínica').trim() || 'Minha Clínica',
-        logo_url: fresh.clinicProfile?.logoUrl || null,
+  if (!defaultState.leadTags) defaultState.leadTags = [];
+  if (!Array.isArray(defaultState.tenants) || defaultState.tenants.length === 0) {
+    const now = new Date().toISOString();
+    defaultState.tenants = [{
+      id: 'tenant-1',
+      name: (defaultState.clinicProfile?.nomeClinica || defaultState.clinicProfile?.nomeFantasia || 'Minha Clínica').trim() || 'Minha Clínica',
+      logo_url: defaultState.clinicProfile?.logoUrl || null,
+      status: 'active',
+      plan_id: null,
+      created_at: now,
+      updated_at: now,
+    }];
+    defaultState.memberships = Array.isArray(defaultState.memberships) ? defaultState.memberships : [];
+    const membKey = new Set(defaultState.memberships.map((m) => `${m.tenant_id}:${m.user_id}`));
+    for (const u of defaultState.users || []) {
+      if (!u?.id) continue;
+      const key = 'tenant-1:' + u.id;
+      if (membKey.has(key)) continue;
+      defaultState.memberships.push({
+        id: 'memb-' + crypto.randomUUID(),
+        tenant_id: 'tenant-1',
+        user_id: u.id,
+        role: u.role === 'admin' ? 'master' : (u.role || 'atendimento'),
+        has_system_access: u.has_system_access !== false,
         status: 'active',
-        plan_id: null,
         created_at: now,
         updated_at: now,
-      }];
-      fresh.memberships = Array.isArray(fresh.memberships) ? fresh.memberships : [];
-      const membKey = new Set(fresh.memberships.map((m) => `${m.tenant_id}:${m.user_id}`));
-      for (const u of fresh.users || []) {
-        if (!u?.id) continue;
-        const key = `tenant-1:${u.id}`;
-        if (membKey.has(key)) continue;
-        fresh.memberships.push({
-          id: `memb-${crypto.randomUUID()}`,
-          tenant_id: 'tenant-1',
-          user_id: u.id,
-          role: u.role === 'admin' ? 'master' : (u.role || 'atendimento'),
-          has_system_access: u.has_system_access !== false,
-          status: 'active',
-          created_at: now,
-          updated_at: now,
-        });
-        membKey.add(key);
-      }
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
-    cachedDb = fresh;
-    cachedRaw = raw;
-    return clone(fresh);
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    let migrated;
-    try {
-      migrated = migrateDb(parsed);
-      // Garantir que os novos campos existam mesmo se a migration falhar silenciosamente
-      if (!migrated.clinicalAppointments) {
-        migrated.clinicalAppointments = [];
-      }
-      if (!migrated.clinicalEvents) {
-        migrated.clinicalEvents = [];
-      }
-      if (!migrated.patientJourneyEntries) {
-        migrated.patientJourneyEntries = [];
-      }
-    } catch (migrateErr) {
-      // Em caso de erro na migration, adicionar os campos manualmente e continuar
-      console.error('Erro na migration, adicionando campos manualmente:', migrateErr);
-      migrated = {
-        ...parsed,
-        clinicalAppointments: parsed.clinicalAppointments || [],
-        clinicalEvents: parsed.clinicalEvents || [],
-        patientJourneyEntries: parsed.patientJourneyEntries || [],
-        version: DB_VERSION,
-      };
-    }
-    // Garantir que os campos existam antes de salvar
-    if (!migrated.clinicalAppointments) {
-      migrated.clinicalAppointments = [];
-    }
-    if (!migrated.clinicalEvents) {
-      migrated.clinicalEvents = [];
-    }
-    if (!migrated.patientJourneyEntries) {
-      migrated.patientJourneyEntries = [];
-    }
-    if (migrated.version >= 21) {
-      if (!migrated.crmTags || migrated.crmTags.length === 0) {
-        migrated.crmTags = getSeedCrmTags(createId, migrated.clinicProfile?.id || 'clinic-1', new Date().toISOString());
-      }
-      if (!migrated.leadTags) migrated.leadTags = [];
-    }
-    if (migrated.version >= 22 && !Array.isArray(migrated.crmTasks)) {
-      migrated.crmTasks = [];
-    }
-    // Reparo: DB em v26 com tenants vazio nunca passou pela migration 26 (startVersion===targetVersion).
-    // Garantir tenant default e memberships para permitir login.
-    const tenants = Array.isArray(migrated.tenants) ? migrated.tenants : [];
-    if (tenants.length === 0 && migrated.clinicProfile) {
-      const now = new Date().toISOString();
-      migrated.tenants = [{
-        id: 'tenant-1',
-        name: (migrated.clinicProfile.nomeClinica || migrated.clinicProfile.nomeFantasia || 'Minha Clínica').trim() || 'Minha Clínica',
-        logo_url: migrated.clinicProfile.logoUrl || null,
-        status: 'active',
-        plan_id: null,
-        created_at: now,
-        updated_at: now,
-      }];
-      const defaultTenantId = 'tenant-1';
-      migrated.memberships = Array.isArray(migrated.memberships) ? migrated.memberships : [];
-      const membershipByKey = new Set(migrated.memberships.map((m) => `${m.tenant_id}:${m.user_id}`));
-      if (Array.isArray(migrated.users)) {
-        for (const u of migrated.users) {
-          if (!u.id) continue;
-          const key = `${defaultTenantId}:${u.id}`;
-          if (membershipByKey.has(key)) continue;
-          const role = u.role === 'admin' ? 'master' : (u.role || 'atendimento');
-          migrated.memberships.push({
-            id: `memb-${crypto.randomUUID()}`,
-            tenant_id: defaultTenantId,
-            user_id: u.id,
-            role,
-            has_system_access: u.has_system_access !== false,
-            status: 'active',
-            created_at: now,
-            updated_at: now,
-          });
-          membershipByKey.add(key);
-        }
-      }
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
-    cachedDb = migrated;
-    cachedRaw = raw;
-    return clone(migrated);
-  } catch (err) {
-    console.error('Erro ao carregar banco de dados:', err);
-    try {
-      const fresh = defaultDbState();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
-      return clone(fresh);
-    } catch (freshErr) {
-      console.error('Erro crítico ao criar banco de dados fresh:', freshErr);
-      // Retornar um objeto mínimo para evitar crash total
-      const minimal = {
-        version: DB_VERSION,
-        patients: [],
-        appointments: [],
-        clinicalAppointments: [],
-        clinicalEvents: [],
-        patientJourneyEntries: [],
-      };
-      cachedDb = minimal;
-      cachedRaw = raw;
-      return clone(minimal);
+      });
+      membKey.add(key);
     }
   }
+  return clone(defaultState);
 };
 
 export const saveDb = (db) => {
   if (!db || typeof db !== 'object') {
     throw new Error('Tentativa de salvar banco de dados inválido');
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
-  cachedDb = null;
-  cachedRaw = null;
+  const defaultState = defaultDbState();
+  idb.saveFullDb(db, defaultState).catch((err) => {
+    console.error('Erro ao persistir no IndexedDB:', err);
+  });
+  cachedDb = db;
   return db;
 };
 
 export const resetDb = () => {
-  localStorage.removeItem(STORAGE_KEY);
+  idb.clearIdb().catch(() => {});
+  if (typeof localStorage !== 'undefined') {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
+  }
   cachedDb = null;
-  cachedRaw = null;
+  initDbPromise = null;
 };
 
 const ADMIN_SEED_EMAIL = 'admin@loveodonto.com';

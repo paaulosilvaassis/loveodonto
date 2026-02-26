@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { loadDb } from '../db/index.js';
+import { loadDb, initDb, resetDb } from '../db/index.js';
 import {
   createCollaborator,
   getProfessionalOptions,
@@ -13,9 +13,10 @@ const admin = { id: 'user-admin', role: 'admin' };
 const recepcao = { id: 'user-2', role: 'recepcao' };
 
 describe('Colaboradores', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
-    loadDb();
+    await resetDb();
+    await initDb();
   });
 
   it('cria e atualiza colaborador', () => {

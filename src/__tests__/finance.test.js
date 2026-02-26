@@ -1,13 +1,14 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { loadDb } from '../db/index.js';
+import { loadDb, initDb, resetDb } from '../db/index.js';
 import { createInstallmentPlan, listTransactions } from '../services/financeService.js';
 
 const admin = { id: 'user-admin', role: 'admin' };
 
 describe('Financeiro - parcelas', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
-    loadDb();
+    await resetDb();
+    await initDb();
   });
 
   it('gera parcelas para plano de tratamento', () => {

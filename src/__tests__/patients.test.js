@@ -1,13 +1,14 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { loadDb } from '../db/index.js';
+import { loadDb, initDb, resetDb } from '../db/index.js';
 import { createPatientQuick, getPatient, updatePatientProfile } from '../services/patientService.js';
 
 const admin = { id: 'user-admin', role: 'admin' };
 
 describe('Pacientes', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
-    loadDb();
+    await resetDb();
+    await initDb();
   });
 
   it('carrega dados do cadastro rápido no cadastro completo', () => {
