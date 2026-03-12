@@ -1,4 +1,4 @@
-export const DB_VERSION = 29;
+export const DB_VERSION = 32;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -167,6 +167,16 @@ export const defaultDbState = () => ({
   appointmentBlocks: [],
   transactions: [],
   installmentPlans: [],
+  /** Registros de caixa diário */
+  cashRegisters: [],
+  /** Categorias de despesas (contas a pagar) */
+  expenseCategories: [],
+  /** Fornecedores para contas a pagar */
+  expenseSuppliers: [],
+  /** Contas a pagar */
+  payables: [],
+  /** Movimentações de caixa (entradas/saídas) */
+  cashTransactions: [],
   messageTemplates: [],
   messageQueue: [],
   messageLogs: [],
@@ -241,6 +251,8 @@ export const defaultDbState = () => ({
   userInvites: [],
   /** Log de importações/exportações de pacientes */
   importExportLogs: [],
+  /** Chamados de suporte Love Odonto */
+  supportTickets: [],
   // version inicial 23 para que a migration 24 (RBAC) rode na primeira carga
   version: 23,
 });

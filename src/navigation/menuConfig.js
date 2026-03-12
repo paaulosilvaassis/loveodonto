@@ -38,6 +38,7 @@ export const menuSections = [
     label: 'Processos de Gestão',
     items: [
       { id: 'dashboard', label: 'Dashboard', route: '/gestao/dashboard', icon: LayoutDashboard, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional', 'financeiro', 'comercial'], description: 'Visão geral da clínica em tempo real.' },
+      { id: 'suporte', label: 'Suporte', route: '/suporte', icon: Headset, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional', 'financeiro', 'comercial'], description: 'Chamados e avaliação de atendimento.' },
       { id: 'cadastro-paciente', label: 'Cadastrar Paciente', route: '/pacientes/busca', icon: UserPlus, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'], description: 'Busca paciente e cria cadastro rápido.' },
       { id: 'cadastro-paciente-form', label: 'Pacientes > Cadastro', route: '/pacientes/cadastro', icon: ClipboardList, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'], description: 'Cadastro completo do paciente.' },
       { id: 'agenda', label: 'Agenda da Clínica', route: '/gestao/agenda', icon: Calendar, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'], description: 'Calendário e gestão de consultas.' },

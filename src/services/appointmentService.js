@@ -73,7 +73,13 @@ const normalizeWorkflow = (appointment) => {
 };
 
 const requireRole = (user, allowedRoles) => {
-  if (!user || !allowedRoles.includes(user.role)) {
+  if (!user) {
+    const error = new Error('Permissão insuficiente.');
+    error.code = 'PERMISSION_DENIED';
+    throw error;
+  }
+  if (user.role === 'admin' || user.isMaster === true) return;
+  if (!allowedRoles.includes(user.role)) {
     const error = new Error('Permissão insuficiente.');
     error.code = 'PERMISSION_DENIED';
     throw error;
@@ -579,7 +585,7 @@ export const undoCheckIn = (user, appointmentId) => {
  */
 export const callPatient = (user, appointmentId, consultorioId) => {
   requirePermission(user, 'agenda:write');
-  requireRole(user, ['admin', 'gerente', 'profissional']);
+  requireRole(user, ['admin', 'gerente', 'profissional', 'recepcao']);
   return withDb((db) => {
     const index = db.appointments.findIndex((item) => item.id === appointmentId);
     if (index < 0) {
@@ -632,7 +638,7 @@ export const callPatient = (user, appointmentId, consultorioId) => {
  */
 export const finishAppointment = (user, appointmentId) => {
   requirePermission(user, 'agenda:write');
-  requireRole(user, ['admin', 'gerente', 'profissional']);
+  requireRole(user, ['admin', 'gerente', 'profissional', 'recepcao']);
   return withDb((db) => {
     const index = db.appointments.findIndex((item) => item.id === appointmentId);
     if (index < 0) {
@@ -663,7 +669,7 @@ export const finishAppointment = (user, appointmentId) => {
  */
 export const returnToWaiting = (user, appointmentId) => {
   requirePermission(user, 'agenda:write');
-  requireRole(user, ['admin', 'gerente']);
+  requireRole(user, ['admin', 'gerente', 'profissional', 'recepcao']);
   return withDb((db) => {
     const index = db.appointments.findIndex((item) => item.id === appointmentId);
     if (index < 0) {

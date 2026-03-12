@@ -58,6 +58,13 @@ export const navCategories = [
         route: '/gestao/dashboard',
         rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional', 'financeiro', 'comercial'],
       },
+      {
+        id: 'suporte',
+        label: 'Suporte',
+        icon: Headset,
+        route: '/suporte',
+        rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional', 'financeiro', 'comercial'],
+      },
     ],
   },
   {

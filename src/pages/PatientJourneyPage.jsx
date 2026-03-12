@@ -94,6 +94,12 @@ export default function PatientJourneyPage() {
     return JOURNEY_STAGE.AGENDADOS;
   };
 
+  const showToast = useCallback((message, type = 'success') => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    setToast({ message, type });
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 3200);
+  }, []);
+
   /** Atualiza o status da jornada no banco e refaz a lista. */
   const updateJourneyStatus = useCallback(async (appointmentId, newStatus, options = {}) => {
     const appointment = appointments.find((a) => a.id === appointmentId);
@@ -132,12 +138,6 @@ export default function PatientJourneyPage() {
       showToast(err.message || 'Erro ao atualizar status.', 'error');
     }
   }, [appointments, user, refreshData, showToast]);
-
-  const showToast = (message, type = 'success') => {
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    setToast({ message, type });
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 3200);
-  };
 
   // Filtrar e ordenar agendamentos
   const filteredAppointments = useMemo(() => {
@@ -322,9 +322,9 @@ export default function PatientJourneyPage() {
     }
   };
 
-  const canCallPatient = user?.role === 'admin' || user?.role === 'gerente' || user?.role === 'profissional';
+  const canCallPatient = ['admin', 'gerente', 'profissional', 'recepcao'].includes(user?.role);
   const canFinishPatient = canCallPatient;
-  const canReturnToWaiting = user?.role === 'admin' || user?.role === 'gerente';
+  const canReturnToWaiting = ['admin', 'gerente', 'profissional', 'recepcao'].includes(user?.role);
 
   const dentists = useMemo(() => {
     const dentistIds = new Set(appointments.map((apt) => apt.professionalId).filter(Boolean));
@@ -709,20 +709,22 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
               </div>
             </div>
             <div className="patient-journey-card-actions">
-              {stage === JOURNEY_STAGE.AGENDADOS && canCall && (
+              {stage === JOURNEY_STAGE.AGENDADOS && (
                 <button
                   type="button"
                   className="patient-journey-card-action-btn patient-journey-card-action-btn--call"
+                  data-testid="btn-chamar-sala"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateJourneyStatus(appointment.id, 'EM_ESPERA'); }}
                 >
                   <Users size={18} />
                   Chamar p/ Sala de Espera
                 </button>
               )}
-              {stage === JOURNEY_STAGE.SALA_ESPERA && canCall && (
+              {stage === JOURNEY_STAGE.SALA_ESPERA && (
                 <button
                   type="button"
                   className="patient-journey-card-action-btn patient-journey-card-action-btn--call"
+                  data-testid="btn-chamar-consultorio"
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); onCall?.(); }}
                 >
                   <Bell size={18} />
@@ -752,25 +754,22 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
                 <Clipboard size={18} />
                 Atender Paciente
               </button>
-              {canFinish && (
-                <button
-                  type="button"
-                  className="patient-journey-card-action-btn patient-journey-card-action-btn--finish"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFinish?.(); }}
-                >
-                  <CheckCircle2 size={18} />
-                  Finalizar
-                </button>
-              )}
-              {canReturnToWaiting && (
-                <button
-                  type="button"
-                  className="patient-journey-card-action-btn patient-journey-card-action-btn--return"
-                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReturnToWaiting?.(); }}
-                >
-                  Voltar para espera
-                </button>
-              )}
+              <button
+                type="button"
+                className="patient-journey-card-action-btn patient-journey-card-action-btn--finish"
+                data-testid="btn-finalizar"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onFinish?.(); }}
+              >
+                <CheckCircle2 size={18} />
+                Finalizar
+              </button>
+              <button
+                type="button"
+                className="patient-journey-card-action-btn patient-journey-card-action-btn--return"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReturnToWaiting?.(); }}
+              >
+                Voltar para espera
+              </button>
             </div>
           </>
         )}

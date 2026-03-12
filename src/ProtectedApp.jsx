@@ -15,6 +15,8 @@ import ClinicSettingsPage from './pages/ClinicSettingsPage.jsx';
 import CommunicationPage from './pages/CommunicationPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import FinancePage from './pages/FinancePage.jsx';
+import FinancePayablesPage from './pages/FinancePayablesPage.jsx';
+import FinanceCashRegisterPage from './pages/FinanceCashRegisterPage.jsx';
 import InventoryPage from './pages/InventoryPage.jsx';
 import AdminUsuariosPage from './pages/AdminUsuariosPage.jsx';
 import PatientsPage from './pages/PatientsPage.jsx';
@@ -42,6 +44,7 @@ import CrmRelatoriosPage from './pages/crm/CrmRelatoriosPage.jsx';
 import CrmAutomacoesPage from './pages/crm/CrmAutomacoesPage.jsx';
 import CrmConfiguracoesPage from './pages/crm/CrmConfiguracoesPage.jsx';
 import ComercialFollowUpPage from './pages/comercial/ComercialFollowUpPage.jsx';
+import SupportPage from './pages/suporte/SupportPage.jsx';
 import { routeAccessMap } from './navigation/menuConfig.js';
 
 const routeRoles = routeAccessMap();
@@ -70,6 +73,7 @@ export default function ProtectedApp() {
         <Route path="/prontuario/:patientId" element={<RequireRole allowedRoles={['admin', 'master', 'gerente', 'recepcao', 'profissional']}><PatientChartPage /></RequireRole>} />
         <Route path="/prontuario/:patientId/odontograma-v2" element={<RequireRole allowedRoles={['admin', 'master', 'gerente', 'recepcao', 'profissional']}><OdontogramV2Page /></RequireRole>} />
         <Route path="/gestao/dashboard" element={withRole('/gestao/dashboard', <DashboardPage />)} />
+        <Route path="/suporte" element={withRole('/suporte', <SupportPage />)} />
         <Route path="/gestao/agenda" element={withRole('/gestao/agenda', <AgendaPage />)} />
         <Route path="/gestao-atendimento" element={withRole('/gestao-atendimento', <GestaoAtendimentoPage />)} />
         <Route path="/gestao/crm" element={withRole('/gestao/crm', <PlaceholderPage title="CRM (Kanban)" description="Pipeline comercial com etapas e oportunidades." />)} />
@@ -104,9 +108,9 @@ export default function ProtectedApp() {
         <Route path="/admin/procedimentos" element={withAdminGate(withRole('/admin/procedimentos', <PlaceholderPage title="Cadastro de Procedimentos" description="Cadastro e categorização de procedimentos." />))} />
         <Route path="/admin/contratos" element={withAdminGate(withRole('/admin/contratos', <PlaceholderPage title="Contratos" description="Modelos e contratos com pacientes." />))} />
         <Route path="/admin/consentimentos" element={withAdminGate(withRole('/admin/consentimentos', <PlaceholderPage title="Consentimentos" description="Termos e autorizações digitais." />))} />
-        <Route path="/financeiro/contas-pagar" element={withRole('/financeiro/contas-pagar', <FinancePage />)} />
+        <Route path="/financeiro/contas-pagar" element={withRole('/financeiro/contas-pagar', <FinancePayablesPage />)} />
         <Route path="/financeiro/contas-receber" element={withRole('/financeiro/contas-receber', <FinancePage />)} />
-        <Route path="/financeiro/caixa" element={withRole('/financeiro/caixa', <PlaceholderPage title="Caixa" description="Fluxo diário de caixa e conferências." />)} />
+        <Route path="/financeiro/caixa" element={withRole('/financeiro/caixa', <FinanceCashRegisterPage />)} />
         <Route path="/financeiro/boletos" element={withRole('/financeiro/boletos', <PlaceholderPage title="Boletos" description="Emissão e acompanhamento de boletos." />)} />
         <Route path="/financeiro/financiamento" element={withRole('/financeiro/financiamento', <PlaceholderPage title="Financiamento" description="Simulações e condições de pagamento." />)} />
         <Route path="/financeiro/faturamento" element={withRole('/financeiro/faturamento', <PlaceholderPage title="Faturamento" description="Receita e metas de faturamento." />)} />

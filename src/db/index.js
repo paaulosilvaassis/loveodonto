@@ -37,6 +37,11 @@ function applyPostMigrationFixes(migrated) {
   if (!migrated.clinicalAppointments) migrated.clinicalAppointments = [];
   if (!migrated.clinicalEvents) migrated.clinicalEvents = [];
   if (!migrated.patientJourneyEntries) migrated.patientJourneyEntries = [];
+  if (!Array.isArray(migrated.cashRegisters)) migrated.cashRegisters = [];
+  if (!Array.isArray(migrated.expenseCategories)) migrated.expenseCategories = [];
+  if (!Array.isArray(migrated.expenseSuppliers)) migrated.expenseSuppliers = [];
+  if (!Array.isArray(migrated.payables)) migrated.payables = [];
+  if (!Array.isArray(migrated.cashTransactions)) migrated.cashTransactions = [];
   if (migrated.version >= 21) {
     if (!migrated.crmTags || migrated.crmTags.length === 0) {
       migrated.crmTags = getSeedCrmTags(createId, migrated.clinicProfile?.id || 'clinic-1', new Date().toISOString());
@@ -44,6 +49,7 @@ function applyPostMigrationFixes(migrated) {
     if (!migrated.leadTags) migrated.leadTags = [];
   }
   if (migrated.version >= 22 && !Array.isArray(migrated.crmTasks)) migrated.crmTasks = [];
+  if (migrated.version >= 30 && !Array.isArray(migrated.supportTickets)) migrated.supportTickets = [];
   const tenants = Array.isArray(migrated.tenants) ? migrated.tenants : [];
   if (tenants.length === 0 && migrated.clinicProfile) {
     const now = new Date().toISOString();

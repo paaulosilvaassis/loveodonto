@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext.jsx';
@@ -8,6 +8,8 @@ import { navCategories, getActiveCategory, getActiveItem } from '../navigation/n
 import { logAction } from '../services/logService.js';
 import PatientQuickCreateModal from './PatientQuickCreateModal.jsx';
 import OpeningScreen, { shouldShowOpening } from './OpeningScreen.jsx';
+import { ImportJobProvider } from '../context/ImportJobContext.jsx';
+import ImportProgressFooter from './ImportProgressFooter.jsx';
 import appLogo from '../assets/love-odonto-logo.png';
 
 const ACTIVE_CATEGORY_KEY = 'appgestaoodonto.nav.activeCategory';
@@ -56,6 +58,15 @@ export default function Layout({ children }) {
   // Tela de abertura do app (uma vez por sessão, 30 variações por dia do mês)
   const [showOpening, setShowOpening] = useState(() => shouldShowOpening());
 
+  // Toast global (usado pelo rodapé de importação)
+  const [globalToast, setGlobalToast] = useState(null);
+  const globalToastRef = useRef(null);
+  const onImportToast = useCallback((message, type = 'success') => {
+    if (globalToastRef.current) clearTimeout(globalToastRef.current);
+    setGlobalToast({ message, type });
+    globalToastRef.current = setTimeout(() => setGlobalToast(null), 4000);
+  }, []);
+
   // Atualiza categoria ativa quando a rota muda
   useEffect(() => {
     const detectedCategory = getActiveCategory(location.pathname);
@@ -64,7 +75,6 @@ export default function Layout({ children }) {
       writeLocal(ACTIVE_CATEGORY_KEY, detectedCategory);
     }
   }, [location.pathname, activeCategoryId]);
-
 
   const handleLogout = () => {
     logout();
@@ -102,8 +112,9 @@ export default function Layout({ children }) {
   }, [activeCategory, user]);
 
   return (
-    <div className={`layout ${isCollapsed ? 'layout-collapsed' : ''}`}>
-      <aside className={`sidebar ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
+    <ImportJobProvider onToast={onImportToast}>
+      <div className={`layout ${isCollapsed ? 'layout-collapsed' : ''}`}>
+        <aside className={`sidebar ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
         {/* Brand/Logo - container com fundo claro para destaque na sidebar escura */}
         <div className="brand">
           <div className="brand-logo-wrap">
@@ -237,26 +248,18 @@ export default function Layout({ children }) {
           </div>
           <div className="header-right">
             <div className="brand-container">
-              <img
-                src="/love-odonto-official.png"
-                alt="Love Odonto"
-                className="header-logo"
-                onError={(e) => { e.target.onerror = null; e.target.src = appLogo; }}
-              />
+              <div className="logo-wrapper">
+                <img
+                  src="/logo-header.png"
+                  alt="Logo"
+                  className="header-logo"
+                  onError={(e) => { e.target.onerror = null; e.target.src = appLogo; }}
+                />
+              </div>
             </div>
           </div>
         </header>
         <main className="page">{children}</main>
-        <footer className="app-footer">
-          <div className="app-footer-right">
-            <img
-              src="/love-odonto-official.png"
-              alt="Love Odonto"
-              className="app-footer-logo"
-              onError={(e) => { e.target.onerror = null; e.target.src = appLogo; }}
-            />
-          </div>
-        </footer>
       </div>
 
       {/* Modal de Pesquisa Rápida */}
@@ -265,10 +268,21 @@ export default function Layout({ children }) {
         onClose={() => setIsQuickCreateOpen(false)}
       />
 
-      {/* Tela de abertura (uma vez por sessão) */}
-      {showOpening && (
-        <OpeningScreen onDismiss={() => setShowOpening(false)} />
-      )}
-    </div>
+        {/* Rodapé fixo de progresso da importação */}
+        <ImportProgressFooter />
+
+        {/* Toast global (importação concluída etc.) */}
+        {globalToast && (
+          <div className={`toast toast-global ${globalToast.type}`} role="status">
+            {globalToast.message}
+          </div>
+        )}
+
+        {/* Tela de abertura (uma vez por sessão) */}
+        {showOpening && (
+          <OpeningScreen onDismiss={() => setShowOpening(false)} />
+        )}
+      </div>
+    </ImportJobProvider>
   );
 }

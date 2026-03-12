@@ -995,6 +995,49 @@ const migrations = {
       version: 29,
     };
   },
+  30: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 30 };
+    return {
+      ...db,
+      supportTickets: Array.isArray(db.supportTickets) ? db.supportTickets : [],
+      version: 30,
+    };
+  },
+  31: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 31 };
+    return {
+      ...db,
+      transactions: Array.isArray(db.transactions) ? db.transactions : [],
+      installmentPlans: Array.isArray(db.installmentPlans) ? db.installmentPlans : [],
+      cashRegisters: Array.isArray(db.cashRegisters) ? db.cashRegisters : [],
+      supportTickets: Array.isArray(db.supportTickets) ? db.supportTickets : [],
+      version: 31,
+    };
+  },
+  32: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 32 };
+    const DEFAULT_EXPENSE_CATEGORIES = [
+      'Aluguel', 'Energia', 'Internet', 'Sistema', 'Marketing', 'Material odontológico',
+      'Laboratório', 'Salários', 'Comissões', 'Manutenção', 'Outros',
+    ];
+    const now = new Date().toISOString();
+    let expenseCategories = Array.isArray(db.expenseCategories) ? db.expenseCategories : [];
+    if (expenseCategories.length === 0) {
+      expenseCategories = DEFAULT_EXPENSE_CATEGORIES.map((name, i) => ({
+        id: `exp-cat-${i + 1}`,
+        name,
+        created_at: now,
+      }));
+    }
+    return {
+      ...db,
+      expenseCategories,
+      expenseSuppliers: Array.isArray(db.expenseSuppliers) ? db.expenseSuppliers : [],
+      payables: Array.isArray(db.payables) ? db.payables : [],
+      cashTransactions: Array.isArray(db.cashTransactions) ? db.cashTransactions : [],
+      version: 32,
+    };
+  },
 };
 
 const SEED_TAGS_DATA = [

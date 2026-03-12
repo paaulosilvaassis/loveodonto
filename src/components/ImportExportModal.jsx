@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useContext } from 'react';
 import { X, Download, Upload, History, FileText, FileJson, FileSpreadsheet } from 'lucide-react';
 import Button from './Button.jsx';
 import {
@@ -17,6 +17,7 @@ import {
 } from '../services/importPatientService.js';
 import { parseCsvTextFirstLines, parseXlsxFileFirstRows, getCanonicalHeaderMap, normalizeParsedRows } from '../services/csvXlsxUtils.js';
 import { listImportExportLogs } from '../services/importExportLogService.js';
+import { ImportJobContext } from '../context/ImportJobContext.jsx';
 
 const PREVIEW_MAX_ROWS = 20;
 const PENDENCIAS_DISPLAY_MAX = 50;
@@ -72,6 +73,8 @@ export default function ImportExportModal({
 
   // Histórico
   const [logs, setLogs] = useState([]);
+
+  const importJobContext = useContext(ImportJobContext);
 
   const clearMessage = useCallback(() => {
     setMessage({ type: '', text: '' });
@@ -260,6 +263,17 @@ export default function ImportExportModal({
       showError('Usuário não identificado. Faça login novamente.');
       return;
     }
+    // Fluxo com rodapé: fechar modal e iniciar importação no contexto (progresso no rodapé + auto-scroll)
+    if (importJobContext?.startImport) {
+      onClose();
+      importJobContext.startImport(importFile, user, conflictMode);
+      setImportFile(null);
+      setImportPreview([]);
+      setImportPendencias([]);
+      setImportFalhas([]);
+      return;
+    }
+    // Fallback: importação dentro do modal (comportamento anterior)
     importCancelRef.current = false;
     setLoading(true);
     setImportLiveItems([]);

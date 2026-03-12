@@ -809,3 +809,172 @@
 {"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772133562085,"hypothesisId":"H4"}
 {"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772133562086,"hypothesisId":"H6"}
 {"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772133562090,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772133655887,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1772133655888,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772133655889,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1772133656351,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772133656449,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772133656450,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772133656453,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772133669176,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:async start","message":"main async IIFE started","data":{"hasRoot":true},"timestamp":1772133669178,"hypothesisId":"H5"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772133669179,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after db","message":"db module loaded","data":{},"timestamp":1772133669299,"hypothesisId":"H3"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772133669493,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772133669495,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772133669494,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772142754756,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772142754758,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772142755066,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772142755067,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772142755069,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772142993719,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772142993721,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772142993990,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772142993990,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772142993994,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772143442048,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772143442059,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772143442350,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772143442351,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772143442355,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772143583638,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772143583640,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772143583871,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772143583871,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772143583874,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772144069837,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772144069839,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772144070597,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772144070597,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772144070602,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772144070339,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772144070352,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772144073662,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772144073667,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772144073676,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772144079567,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772144079568,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772144079884,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772144079885,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772144079887,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772144079866,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772144079868,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772144082129,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772144082130,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772144082133,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772144082932,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772144082933,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772144083240,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772144083240,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772144083242,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772144086743,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772144086746,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772144087190,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772144087191,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772144087204,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772144555735,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772144555737,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772144555974,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772144555974,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772144555978,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772144568880,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772144568874,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772144569349,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772144569349,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772144569359,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772144846031,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772144846032,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772144846249,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772144846251,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772144846253,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772145172005,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772145172008,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772145172286,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772145172286,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772145172293,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772145666764,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772145666797,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772145667468,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772145667469,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772145667473,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772148860917,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772148860919,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772148861162,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772148861163,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772148861168,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772148897070,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772148897071,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772148897096,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772148897099,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772148898098,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772148898098,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772148898105,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772148898235,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772148898235,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772148898237,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772148975245,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772148975243,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772148975359,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772148975361,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772148975521,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772148975522,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772148975524,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772148976330,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772148976331,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772148976334,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772149000251,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772149000252,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772149000537,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772149000537,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772149000542,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772149000537,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772149000540,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772149001558,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772149001559,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772149001561,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772149001970,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772149001971,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772149001995,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772149002001,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772149002145,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772149002149,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772149002146,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772149002808,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772149002808,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772149002810,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772149122116,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772149122117,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772149122304,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772149122305,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772149122306,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772149266098,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772149266101,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772149266319,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772149266319,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772149266322,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772149536809,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772149536811,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772149537125,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772149537125,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772149537129,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772149988677,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772149988679,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772149988949,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772149988949,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772149988952,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772150008994,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772150008995,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772150009157,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772150009157,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772150009159,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772150121485,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772150121486,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772150121746,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772150121747,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772150121751,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after imports","message":"main.jsx module evaluated","data":{},"timestamp":1772704346284,"hypothesisId":"H2"}
+{"sessionId":"ea6ead","location":"bootstrap.jsx:1","message":"bootstrap.jsx executing","data":{},"timestamp":1772704346289,"hypothesisId":"H1"}
+{"sessionId":"ea6ead","location":"main.jsx:after App import","message":"App and ErrorBoundary loaded","data":{},"timestamp":1772704347917,"hypothesisId":"H4"}
+{"sessionId":"ea6ead","location":"main.jsx:before createRoot","message":"about to createRoot","data":{},"timestamp":1772704347917,"hypothesisId":"H6"}
+{"sessionId":"ea6ead","location":"main.jsx:after render","message":"React render called","data":{},"timestamp":1772704347924,"hypothesisId":"H6"}
