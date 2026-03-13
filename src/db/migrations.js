@@ -1016,17 +1016,15 @@ const migrations = {
   },
   32: (db) => {
     if (!db || typeof db !== 'object') return { ...db, version: 32 };
-    const DEFAULT_EXPENSE_CATEGORIES = [
-      'Aluguel', 'Energia', 'Internet', 'Sistema', 'Marketing', 'Material odontológico',
-      'Laboratório', 'Salários', 'Comissões', 'Manutenção', 'Outros',
-    ];
     const now = new Date().toISOString();
     let expenseCategories = Array.isArray(db.expenseCategories) ? db.expenseCategories : [];
     if (expenseCategories.length === 0) {
       expenseCategories = DEFAULT_EXPENSE_CATEGORIES.map((name, i) => ({
         id: `exp-cat-${i + 1}`,
         name,
+        status: 'active',
         created_at: now,
+        updated_at: now,
       }));
     }
     return {
@@ -1039,6 +1037,13 @@ const migrations = {
     };
   },
 };
+
+/** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */
+export const DEFAULT_EXPENSE_CATEGORIES = [
+  'Aluguel', 'Energia', 'Internet', 'Sistema', 'Marketing', 'Material odontológico',
+  'Laboratório', 'Salários', 'Comissões', 'Manutenção', 'Impostos', 'Limpeza',
+  'Equipamentos', 'Administrativo', 'Outros',
+];
 
 const SEED_TAGS_DATA = [
   { category: 'Origem', name: 'Instagram Orgânico', color: '#E1306C' },

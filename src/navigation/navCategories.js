@@ -229,6 +229,13 @@ export const navCategories = [
         route: '/admin/consentimentos',
         rolesAllowed: ['admin', 'gerente'],
       },
+      {
+        id: 'fornecedores',
+        label: 'Fornecedores',
+        icon: Landmark,
+        route: '/admin/fornecedores',
+        rolesAllowed: ['admin', 'gerente'],
+      },
     ],
   },
   {

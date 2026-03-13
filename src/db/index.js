@@ -3,7 +3,7 @@
  * localStorage continua apenas para sessão e preferências.
  */
 import { defaultDbState, DB_VERSION } from './schema.js';
-import { migrateDb, getSeedCrmTags } from './migrations.js';
+import { migrateDb, getSeedCrmTags, DEFAULT_EXPENSE_CATEGORIES } from './migrations.js';
 import { createId } from '../services/helpers.js';
 import * as idb from './idbStorage.js';
 
@@ -39,6 +39,16 @@ function applyPostMigrationFixes(migrated) {
   if (!migrated.patientJourneyEntries) migrated.patientJourneyEntries = [];
   if (!Array.isArray(migrated.cashRegisters)) migrated.cashRegisters = [];
   if (!Array.isArray(migrated.expenseCategories)) migrated.expenseCategories = [];
+  if (migrated.expenseCategories.length === 0) {
+    const now = new Date().toISOString();
+    migrated.expenseCategories = DEFAULT_EXPENSE_CATEGORIES.map((name, i) => ({
+      id: `exp-cat-${i + 1}`,
+      name,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    }));
+  }
   if (!Array.isArray(migrated.expenseSuppliers)) migrated.expenseSuppliers = [];
   if (!Array.isArray(migrated.payables)) migrated.payables = [];
   if (!Array.isArray(migrated.cashTransactions)) migrated.cashTransactions = [];
@@ -145,7 +155,9 @@ export async function initDb() {
       });
     } else {
       const db = await idb.getFullDb(defaultState);
+      const hadEmptyCategories = !Array.isArray(db.expenseCategories) || db.expenseCategories.length === 0;
       cachedDb = applyPostMigrationFixes(db);
+      if (hadEmptyCategories) saveDb(cachedDb);
     }
   })();
 

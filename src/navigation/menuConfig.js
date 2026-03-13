@@ -58,6 +58,7 @@ export const menuSections = [
       { id: 'procedimentos', label: 'Cadastro de Procedimentos', route: '/admin/procedimentos', icon: ClipboardList, rolesAllowed: ['admin', 'gerente'], description: 'Procedimentos e categorias.' },
       { id: 'contratos', label: 'Contratos', route: '/admin/contratos', icon: FileSignature, rolesAllowed: ['admin', 'gerente'], description: 'Contratos de serviço e termos.' },
       { id: 'consentimentos', label: 'Consentimentos', route: '/admin/consentimentos', icon: UserCog, rolesAllowed: ['admin', 'gerente'], description: 'Termos e autorizações dos pacientes.' },
+      { id: 'fornecedores', label: 'Fornecedores', route: '/admin/fornecedores', icon: Landmark, rolesAllowed: ['admin', 'gerente'], description: 'Cadastro mestre de fornecedores da clínica.' },
     ],
   },
   {

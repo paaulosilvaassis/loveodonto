@@ -1,4 +1,6 @@
 import { loadDb, withDb } from '../db/index.js';
+import { DEFAULT_EXPENSE_CATEGORIES } from '../db/migrations.js';
+import { listSuppliers } from './suppliersService.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { createId } from './helpers.js';
 import { getTodayCashRegister } from './cashRegisterService.js';
@@ -38,7 +40,18 @@ const computeStatus = (dueDate, paidDate) => {
 
 export const listExpenseCategories = () => {
   const db = loadDb();
-  return Array.isArray(db.expenseCategories) ? db.expenseCategories : [];
+  let categories = Array.isArray(db.expenseCategories) ? db.expenseCategories : [];
+  if (categories.length === 0) {
+    const now = new Date().toISOString();
+    categories = DEFAULT_EXPENSE_CATEGORIES.map((name, i) => ({
+      id: `exp-cat-${i + 1}`,
+      name,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    }));
+  }
+  return categories.filter((c) => (c.status || 'active') === 'active');
 };
 
 export const listExpenseSuppliers = () => {
@@ -164,6 +177,43 @@ export const createPayable = (user, payload) => {
   withDb((db) => {
     if (!Array.isArray(db.payables)) db.payables = [];
     db.payables.push(record);
+
+    // Geração automática de próximas parcelas para contas recorrentes (12 ocorrências totais)
+    if (isRecurring && !payload.parentId) {
+      const occurrences = 12;
+      const baseDate = new Date(dueDate + 'T12:00:00');
+      const addNextDate = (date, step) => {
+        const d = new Date(date.getTime());
+        if (recurrenceFrequency === 'semanal') {
+          d.setDate(d.getDate() + 7 * step);
+        } else if (recurrenceFrequency === 'anual') {
+          d.setFullYear(d.getFullYear() + step);
+        } else {
+          // mensal (default)
+          d.setMonth(d.getMonth() + step);
+        }
+        return d.toISOString().slice(0, 10);
+      };
+
+      for (let i = 1; i < occurrences; i += 1) {
+        const nextDue = addNextDate(baseDate, i);
+        const nextId = createId('payable');
+        const nextStatus = computeStatus(nextDue, null);
+        db.payables.push({
+          ...record,
+          id: nextId,
+          dueDate: nextDue,
+          status: nextStatus,
+          parentId: id,
+          paidDate: null,
+          amountPaid: null,
+          paidNote: '',
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    }
+
     return db;
   });
 
@@ -299,7 +349,11 @@ export const getCategoryName = (categoryId) => {
 };
 
 export const getSupplierName = (supplierId) => {
-  const supps = listExpenseSuppliers();
-  const s = supps.find((x) => x.id === supplierId);
-  return s ? s.name : (supplierId || '—');
+  if (!supplierId) return '—';
+  const fullSuppliers = listSuppliers();
+  const s = fullSuppliers.find((x) => x.id === supplierId);
+  if (s) return s.trade_name || s.name || s.legal_name || '—';
+  const expenseSupps = listExpenseSuppliers();
+  const es = expenseSupps.find((x) => x.id === supplierId);
+  return es ? es.name : '—';
 };

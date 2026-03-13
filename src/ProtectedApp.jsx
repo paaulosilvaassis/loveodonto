@@ -17,6 +17,7 @@ import DashboardPage from './pages/DashboardPage.jsx';
 import FinancePage from './pages/FinancePage.jsx';
 import FinancePayablesPage from './pages/FinancePayablesPage.jsx';
 import FinanceCashRegisterPage from './pages/FinanceCashRegisterPage.jsx';
+import FornecedoresPage from './pages/administrativo/FornecedoresPage.jsx';
 import InventoryPage from './pages/InventoryPage.jsx';
 import AdminUsuariosPage from './pages/AdminUsuariosPage.jsx';
 import PatientsPage from './pages/PatientsPage.jsx';
@@ -108,6 +109,8 @@ export default function ProtectedApp() {
         <Route path="/admin/procedimentos" element={withAdminGate(withRole('/admin/procedimentos', <PlaceholderPage title="Cadastro de Procedimentos" description="Cadastro e categorização de procedimentos." />))} />
         <Route path="/admin/contratos" element={withAdminGate(withRole('/admin/contratos', <PlaceholderPage title="Contratos" description="Modelos e contratos com pacientes." />))} />
         <Route path="/admin/consentimentos" element={withAdminGate(withRole('/admin/consentimentos', <PlaceholderPage title="Consentimentos" description="Termos e autorizações digitais." />))} />
+        <Route path="/admin/fornecedores" element={withAdminGate(withRole('/admin/fornecedores', <FornecedoresPage />))} />
+        <Route path="/administrativo/fornecedores" element={<Navigate to="/admin/fornecedores" replace />} />
         <Route path="/financeiro/contas-pagar" element={withRole('/financeiro/contas-pagar', <FinancePayablesPage />)} />
         <Route path="/financeiro/contas-receber" element={withRole('/financeiro/contas-receber', <FinancePage />)} />
         <Route path="/financeiro/caixa" element={withRole('/financeiro/caixa', <FinanceCashRegisterPage />)} />
