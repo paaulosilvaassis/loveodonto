@@ -1036,6 +1036,20 @@ const migrations = {
       version: 32,
     };
   },
+  33: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 33 };
+    const payables = Array.isArray(db.payables) ? db.payables : [];
+    const migrated = payables.map((p) => {
+      if (p.expenseType) return p;
+      const expenseType = p.expenseType || (p.isRecurring || p.parentId ? 'fixed' : 'variable');
+      return { ...p, expenseType };
+    });
+    return {
+      ...db,
+      payables: migrated,
+      version: 33,
+    };
+  },
 };
 
 /** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */

@@ -5,6 +5,23 @@ import { requirePermission } from '../permissions/permissions.js';
 import { createId } from './helpers.js';
 import { getTodayCashRegister } from './cashRegisterService.js';
 
+/** Tipos de aba da régua de navegação financeira */
+export const PAYABLES_TABS = {
+  CONTAS_A_PAGAR: 'contas_a_pagar',
+  CONTAS_PAGADAS: 'contas_pagadas',
+  DESPESAS_FIXAS: 'despesas_fixas',
+  DESPESAS_VARIAVEIS: 'despesas_variaveis',
+  TITULOS_AVULSOS: 'titulos_avulsos',
+  PAGAMENTOS_AVULSOS: 'pagamentos_avulsos',
+};
+
+/** Tipo de despesa para classificação */
+export const EXPENSE_TYPE = {
+  FIXED: 'fixed',
+  VARIABLE: 'variable',
+  ONE_TIME_TITLE: 'one_time_title',
+};
+
 export const PAYABLE_STATUS = {
   PENDING: 'pending',
   SCHEDULED: 'scheduled',
@@ -72,6 +89,34 @@ export const createExpenseSupplier = (user, { name, phone = '', email = '' }) =>
   return record;
 };
 
+const resolveExpenseType = (p) => {
+  if (p.expenseType === EXPENSE_TYPE.ONE_TIME_TITLE) return EXPENSE_TYPE.ONE_TIME_TITLE;
+  return p.isRecurring || p.parentId ? EXPENSE_TYPE.FIXED : EXPENSE_TYPE.VARIABLE;
+};
+
+const applyTabFilter = (items, tabFilter, today) => {
+  if (!tabFilter) return items;
+  const pending = [PAYABLE_STATUS.PENDING, PAYABLE_STATUS.SCHEDULED, PAYABLE_STATUS.OVERDUE];
+  const withExpenseType = items.map((p) => ({ ...p, expenseType: resolveExpenseType(p) }));
+
+  switch (tabFilter) {
+    case PAYABLES_TABS.CONTAS_A_PAGAR:
+      return withExpenseType.filter((p) => pending.includes(p.status));
+    case PAYABLES_TABS.CONTAS_PAGADAS:
+      return withExpenseType.filter((p) => p.status === PAYABLE_STATUS.PAID);
+    case PAYABLES_TABS.DESPESAS_FIXAS:
+      return withExpenseType.filter((p) => p.expenseType === EXPENSE_TYPE.FIXED);
+    case PAYABLES_TABS.DESPESAS_VARIAVEIS:
+      return withExpenseType.filter((p) => p.expenseType === EXPENSE_TYPE.VARIABLE);
+    case PAYABLES_TABS.TITULOS_AVULSOS:
+      return withExpenseType.filter((p) => p.expenseType === EXPENSE_TYPE.ONE_TIME_TITLE);
+    case PAYABLES_TABS.PAGAMENTOS_AVULSOS:
+      return [];
+    default:
+      return withExpenseType;
+  }
+};
+
 export const listPayables = (filters = {}) => {
   const db = loadDb();
   let items = Array.isArray(db.payables) ? [...db.payables] : [];
@@ -82,7 +127,9 @@ export const listPayables = (filters = {}) => {
     return { ...p, status };
   });
 
-  const { startDate, endDate, status, categoryId, supplierId } = filters;
+  const { startDate, endDate, status, categoryId, supplierId, tabFilter } = filters;
+
+  items = applyTabFilter(items, tabFilter, today);
 
   if (startDate) items = items.filter((p) => p.dueDate >= startDate);
   if (endDate) items = items.filter((p) => p.dueDate <= endDate);
@@ -92,6 +139,52 @@ export const listPayables = (filters = {}) => {
 
   items.sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''));
 
+  return items;
+};
+
+/** Retorna contagem por aba (para contadores na régua) */
+export const getPayablesCountsByTab = (filters = {}) => {
+  const db = loadDb();
+  let items = Array.isArray(db.payables) ? [...db.payables] : [];
+  const today = TODAY();
+
+  items = items.map((p) => {
+    const status = p.paidDate ? PAYABLE_STATUS.PAID : (p.dueDate && p.dueDate < today ? PAYABLE_STATUS.OVERDUE : (p.status || PAYABLE_STATUS.PENDING));
+    const expenseType = resolveExpenseType(p);
+    return { ...p, status, expenseType };
+  });
+
+  const { startDate, endDate, categoryId, supplierId } = filters;
+  if (startDate) items = items.filter((p) => p.dueDate >= startDate);
+  if (endDate) items = items.filter((p) => p.dueDate <= endDate);
+  if (categoryId) items = items.filter((p) => p.categoryId === categoryId);
+  if (supplierId) items = items.filter((p) => p.supplierId === supplierId);
+
+  const avulsos = Array.isArray(db.cashTransactions) ? db.cashTransactions : [];
+  let avulsoItems = avulsos.filter((t) => (t.type === 'expense' || t.type === 'saida') && !t.payable_id);
+  if (startDate) avulsoItems = avulsoItems.filter((t) => t.date >= startDate);
+  if (endDate) avulsoItems = avulsoItems.filter((t) => t.date <= endDate);
+
+  return {
+    [PAYABLES_TABS.CONTAS_A_PAGAR]: applyTabFilter([...items], PAYABLES_TABS.CONTAS_A_PAGAR, today).length,
+    [PAYABLES_TABS.CONTAS_PAGADAS]: applyTabFilter([...items], PAYABLES_TABS.CONTAS_PAGADAS, today).length,
+    [PAYABLES_TABS.DESPESAS_FIXAS]: applyTabFilter([...items], PAYABLES_TABS.DESPESAS_FIXAS, today).length,
+    [PAYABLES_TABS.DESPESAS_VARIAVEIS]: applyTabFilter([...items], PAYABLES_TABS.DESPESAS_VARIAVEIS, today).length,
+    [PAYABLES_TABS.TITULOS_AVULSOS]: applyTabFilter([...items], PAYABLES_TABS.TITULOS_AVULSOS, today).length,
+    [PAYABLES_TABS.PAGAMENTOS_AVULSOS]: avulsoItems.length,
+  };
+};
+
+export const listStandaloneCashTransactions = (filters = {}) => {
+  const db = loadDb();
+  let items = Array.isArray(db.cashTransactions) ? [...db.cashTransactions] : [];
+  items = items.filter((t) => (t.type === 'expense' || t.type === 'saida') && !t.payable_id);
+
+  const { startDate, endDate } = filters;
+  if (startDate) items = items.filter((t) => t.date >= startDate);
+  if (endDate) items = items.filter((t) => t.date <= endDate);
+
+  items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return items;
 };
 
@@ -145,6 +238,9 @@ export const createPayable = (user, payload) => {
   const note = payload.note || '';
   const isRecurring = Boolean(payload.isRecurring);
   const recurrenceFrequency = payload.recurrenceFrequency || 'mensal';
+  const expenseType = payload.expenseType === EXPENSE_TYPE.ONE_TIME_TITLE
+    ? EXPENSE_TYPE.ONE_TIME_TITLE
+    : (isRecurring ? EXPENSE_TYPE.FIXED : EXPENSE_TYPE.VARIABLE);
 
   if (!description) throw new Error('Descrição é obrigatória.');
   if (!amount || amount <= 0) throw new Error('Valor deve ser maior que zero.');
@@ -169,6 +265,7 @@ export const createPayable = (user, payload) => {
     note,
     isRecurring,
     recurrenceFrequency,
+    expenseType,
     parentId: payload.parentId || null,
     created_at: now,
     updated_at: now,
@@ -179,7 +276,8 @@ export const createPayable = (user, payload) => {
     db.payables.push(record);
 
     // Geração automática de próximas parcelas para contas recorrentes (12 ocorrências totais)
-    if (isRecurring && !payload.parentId) {
+    // Títulos avulsos não geram parcelas mesmo se isRecurring for true
+    if (isRecurring && !payload.parentId && expenseType !== EXPENSE_TYPE.ONE_TIME_TITLE) {
       const occurrences = 12;
       const baseDate = new Date(dueDate + 'T12:00:00');
       const addNextDate = (date, step) => {
@@ -240,6 +338,9 @@ export const updatePayable = (user, id, payload) => {
   const note = payload.note !== undefined ? payload.note : current.note;
   const isRecurring = payload.isRecurring !== undefined ? Boolean(payload.isRecurring) : current.isRecurring;
   const recurrenceFrequency = payload.recurrenceFrequency !== undefined ? payload.recurrenceFrequency : current.recurrenceFrequency;
+  const expenseType = payload.expenseType !== undefined
+    ? payload.expenseType
+    : (current.expenseType || (isRecurring ? EXPENSE_TYPE.FIXED : EXPENSE_TYPE.VARIABLE));
 
   if (!description) throw new Error('Descrição é obrigatória.');
   if (!amount || amount <= 0) throw new Error('Valor deve ser maior que zero.');
@@ -261,6 +362,7 @@ export const updatePayable = (user, id, payload) => {
     note,
     isRecurring,
     recurrenceFrequency,
+    expenseType,
     status,
     updated_at: now,
   };
@@ -271,6 +373,40 @@ export const updatePayable = (user, id, payload) => {
   });
 
   return updated;
+};
+
+/** Cria pagamento avulso (saída de caixa sem título vinculado) */
+export const createAvulsoPayment = (user, payload) => {
+  requirePermission(user, 'finance:write');
+
+  const description = String(payload.description || '').trim();
+  const amount = Number(payload.amount || 0);
+  const date = payload.date || TODAY();
+
+  if (!description) throw new Error('Descrição é obrigatória.');
+  if (!amount || amount <= 0) throw new Error('Valor deve ser maior que zero.');
+
+  const now = new Date().toISOString();
+  const id = createId('cashtxn');
+
+  const record = {
+    id,
+    type: 'expense',
+    amount,
+    description,
+    date,
+    payable_id: null,
+    is_avulso: true,
+    created_at: now,
+  };
+
+  withDb((db) => {
+    if (!Array.isArray(db.cashTransactions)) db.cashTransactions = [];
+    db.cashTransactions.push(record);
+    return db;
+  });
+
+  return record;
 };
 
 export const deletePayable = (user, id) => {

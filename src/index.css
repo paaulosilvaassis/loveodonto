@@ -13198,6 +13198,58 @@ textarea:focus {
   gap: var(--spacing-sm);
 }
 
+/* Régua de navegação financeira */
+.finance-payables-nav {
+  background: var(--color-bg-card);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-sm);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.finance-payables-nav-inner {
+  display: flex;
+  gap: var(--spacing-xs);
+  min-width: min-content;
+  padding: 2px;
+}
+
+.finance-payables-nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.finance-payables-nav-tab:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.finance-payables-nav-tab.active {
+  background: var(--color-primary, #6366f1);
+  color: #fff;
+}
+
+.finance-payables-nav-tab-count {
+  font-size: 0.8em;
+  opacity: 0.9;
+}
+
+.finance-payables-nav-tab.active .finance-payables-nav-tab-count {
+  opacity: 0.95;
+}
+
 .finance-payables-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

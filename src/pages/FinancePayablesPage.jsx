@@ -8,11 +8,16 @@ import {
   deletePayable,
   payPayable,
   getPayablesKPIs,
+  getPayablesCountsByTab,
+  createAvulsoPayment,
+  listStandaloneCashTransactions,
   getCategoryName,
   getSupplierName,
   PAYABLE_STATUS,
   PAYMENT_METHODS,
   RECURRENCE_FREQUENCY,
+  PAYABLES_TABS,
+  EXPENSE_TYPE,
 } from '../services/payablesService.js';
 import { listSuppliers } from '../services/suppliersService.js';
 import SupplierFormModal from '../components/SupplierFormModal.jsx';
@@ -23,6 +28,24 @@ const STATUS_LABELS = {
   [PAYABLE_STATUS.SCHEDULED]: 'Agendada',
   [PAYABLE_STATUS.PAID]: 'Paga',
   [PAYABLE_STATUS.OVERDUE]: 'Atrasada',
+};
+
+const TAB_NAV_CONFIG = [
+  { key: PAYABLES_TABS.CONTAS_A_PAGAR, label: 'Contas a pagar' },
+  { key: PAYABLES_TABS.CONTAS_PAGADAS, label: 'Contas pagas' },
+  { key: PAYABLES_TABS.DESPESAS_FIXAS, label: 'Despesas fixas' },
+  { key: PAYABLES_TABS.DESPESAS_VARIAVEIS, label: 'Despesas variáveis' },
+  { key: PAYABLES_TABS.TITULOS_AVULSOS, label: 'Títulos avulsos' },
+  { key: PAYABLES_TABS.PAGAMENTOS_AVULSOS, label: 'Pagamentos avulsos' },
+];
+
+const TAB_BUTTON_LABELS = {
+  [PAYABLES_TABS.CONTAS_A_PAGAR]: 'Nova despesa',
+  [PAYABLES_TABS.CONTAS_PAGADAS]: 'Nova despesa',
+  [PAYABLES_TABS.DESPESAS_FIXAS]: 'Nova despesa fixa',
+  [PAYABLES_TABS.DESPESAS_VARIAVEIS]: 'Nova despesa variável',
+  [PAYABLES_TABS.TITULOS_AVULSOS]: 'Novo título avulso',
+  [PAYABLES_TABS.PAGAMENTOS_AVULSOS]: 'Novo pagamento avulso',
 };
 
 const formatCurrency = (value) =>
@@ -52,6 +75,7 @@ const lastDayOfMonth = () => {
 export default function FinancePayablesPage() {
   const { user } = useAuth();
   const [refreshKey, setRefresh] = useState(0);
+  const [activeTab, setActiveTab] = useState(PAYABLES_TABS.CONTAS_A_PAGAR);
   const [filters, setFilters] = useState({
     startDate: firstDayOfMonth(),
     endDate: lastDayOfMonth(),
@@ -69,7 +93,22 @@ export default function FinancePayablesPage() {
     () => listSuppliers().filter((s) => (s.status || 'ativo') === 'ativo'),
     [refreshKey]
   );
-  const payables = useMemo(() => listPayables(filters), [filters, refreshKey]);
+  const filtersWithTab = useMemo(
+    () => ({ ...filters, tabFilter: activeTab === PAYABLES_TABS.PAGAMENTOS_AVULSOS ? null : activeTab }),
+    [filters, activeTab]
+  );
+  const payables = useMemo(
+    () => (activeTab === PAYABLES_TABS.PAGAMENTOS_AVULSOS ? [] : listPayables(filtersWithTab)),
+    [filtersWithTab, activeTab, refreshKey]
+  );
+  const standalonePayments = useMemo(
+    () => (activeTab === PAYABLES_TABS.PAGAMENTOS_AVULSOS ? listStandaloneCashTransactions(filters) : []),
+    [activeTab, filters, refreshKey]
+  );
+  const tabCounts = useMemo(
+    () => getPayablesCountsByTab({ startDate: filters.startDate, endDate: filters.endDate, categoryId: filters.categoryId, supplierId: filters.supplierId }),
+    [filters.startDate, filters.endDate, filters.categoryId, filters.supplierId, refreshKey]
+  );
   const kpis = useMemo(() => {
     const d = new Date();
     return getPayablesKPIs(d.getMonth() + 1, d.getFullYear());
@@ -83,6 +122,8 @@ export default function FinancePayablesPage() {
   const handleCreate = (e) => {
     e.preventDefault();
     const form = e.target;
+    const isRecurring = form.isRecurring?.checked || false;
+    const isOneTimeTitle = form.isOneTimeTitle?.checked || false;
     try {
       createPayable(user, {
         description: form.description?.value?.trim(),
@@ -93,14 +134,32 @@ export default function FinancePayablesPage() {
         paymentMethod: form.paymentMethod?.value,
         originAccount: form.originAccount?.value?.trim() || '',
         note: form.note?.value?.trim() || '',
-        isRecurring: form.isRecurring?.checked || false,
+        isRecurring,
         recurrenceFrequency: form.recurrenceFrequency?.value || 'mensal',
+        expenseType: isOneTimeTitle ? EXPENSE_TYPE.ONE_TIME_TITLE : undefined,
       });
       showToast('Despesa criada.');
       setModal(null);
       setRefresh((k) => k + 1);
     } catch (err) {
       showToast(err.message || 'Erro ao criar.', 'error');
+    }
+  };
+
+  const handleCreateAvulso = (e) => {
+    e.preventDefault();
+    const form = e.target;
+    try {
+      createAvulsoPayment(user, {
+        description: form.description?.value?.trim(),
+        amount: Number(form.amount?.value || 0),
+        date: form.date?.value || todayIso(),
+      });
+      showToast('Pagamento avulso registrado.');
+      setModal(null);
+      setRefresh((k) => k + 1);
+    } catch (err) {
+      showToast(err.message || 'Erro ao registrar.', 'error');
     }
   };
 
@@ -119,6 +178,7 @@ export default function FinancePayablesPage() {
         note: form.note?.value?.trim() || '',
         isRecurring: form.isRecurring?.checked || false,
         recurrenceFrequency: form.recurrenceFrequency?.value || 'mensal',
+        expenseType: form.isOneTimeTitle?.checked ? EXPENSE_TYPE.ONE_TIME_TITLE : (form.isRecurring?.checked ? EXPENSE_TYPE.FIXED : EXPENSE_TYPE.VARIABLE),
       });
       showToast('Despesa atualizada.');
       setModal(null);
@@ -200,12 +260,40 @@ export default function FinancePayablesPage() {
         <button
           type="button"
           className="button primary finance-payables-new-btn"
-          onClick={() => { setModal({ type: 'create' }); setSelectedSupplierId(''); }}
+          onClick={() => {
+            if (activeTab === PAYABLES_TABS.PAGAMENTOS_AVULSOS) {
+              setModal({ type: 'create_avulso' });
+            } else {
+              setModal({ type: 'create' });
+              setSelectedSupplierId('');
+            }
+          }}
         >
           <Plus size={20} />
-          Nova despesa
+          {TAB_BUTTON_LABELS[activeTab] || 'Nova despesa'}
         </button>
       </div>
+
+      <nav className="finance-payables-nav" role="tablist" aria-label="Navegação financeira">
+        <div className="finance-payables-nav-inner">
+          {TAB_NAV_CONFIG.map((tab) => {
+            const n = tabCounts[tab.key] ?? 0;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.key}
+                className={`finance-payables-nav-tab ${activeTab === tab.key ? 'active' : ''}`}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                <span className="finance-payables-nav-tab-label">{tab.label}</span>
+                <span className="finance-payables-nav-tab-count">({n})</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       <div className="finance-payables-kpis">
         <div className="finance-payables-kpi-card">
@@ -243,67 +331,97 @@ export default function FinancePayablesPage() {
             onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
           />
         </label>
-        <label>
-          Status
-          <select
-            value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-          >
-            <option value="">Todos</option>
-            {Object.entries(STATUS_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Categoria
-          <select
-            value={filters.categoryId}
-            onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
-          >
-            <option value="">Todas</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Fornecedor
-          <select
-            value={filters.supplierId}
-            onChange={(e) => setFilters({ ...filters, supplierId: e.target.value })}
-          >
-            <option value="">Todos</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>{s.trade_name || s.name || '—'}</option>
-            ))}
-          </select>
-          <button type="button" className="button link small" onClick={handleAddSupplier}>
-            + Novo
-          </button>
-        </label>
+        {activeTab !== PAYABLES_TABS.PAGAMENTOS_AVULSOS && (
+          <>
+            <label>
+              Status
+              <select
+                value={filters.status}
+                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              >
+                <option value="">Todos</option>
+                {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Categoria
+              <select
+                value={filters.categoryId}
+                onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
+              >
+                <option value="">Todas</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Fornecedor
+              <select
+                value={filters.supplierId}
+                onChange={(e) => setFilters({ ...filters, supplierId: e.target.value })}
+              >
+                <option value="">Todos</option>
+                {suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>{s.trade_name || s.name || '—'}</option>
+                ))}
+              </select>
+              <button type="button" className="button link small" onClick={handleAddSupplier}>
+                + Novo
+              </button>
+            </label>
+          </>
+        )}
       </div>
 
       <div className="finance-payables-table-wrap">
-        <table className="finance-payables-table">
-          <thead>
-            <tr>
-              <th>Descrição</th>
-              <th>Categoria</th>
-              <th>Fornecedor</th>
-              <th>Vencimento</th>
-              <th>Valor</th>
-              <th>Status</th>
-              <th>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payables.length === 0 ? (
+        {activeTab === PAYABLES_TABS.PAGAMENTOS_AVULSOS ? (
+          <table className="finance-payables-table">
+            <thead>
               <tr>
-                <td colSpan={7}>Nenhuma despesa encontrada.</td>
+                <th>Data</th>
+                <th>Descrição</th>
+                <th>Valor</th>
               </tr>
-            ) : (
-              payables.map((p) => (
+            </thead>
+            <tbody>
+              {standalonePayments.length === 0 ? (
+                <tr>
+                  <td colSpan={3}>Nenhum pagamento avulso encontrado.</td>
+                </tr>
+              ) : (
+                standalonePayments.map((t) => (
+                  <tr key={t.id}>
+                    <td>{formatDate(t.date)}</td>
+                    <td>{t.description || '—'}</td>
+                    <td>{formatCurrency(t.amount)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        ) : (
+          <table className="finance-payables-table">
+            <thead>
+              <tr>
+                <th>Descrição</th>
+                <th>Categoria</th>
+                <th>Fornecedor</th>
+                <th>Vencimento</th>
+                <th>Valor</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payables.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>Nenhuma despesa encontrada.</td>
+                </tr>
+              ) : (
+                payables.map((p) => (
                 <tr key={p.id} data-status={p.status}>
                   <td>{p.description}</td>
                   <td>{getCategoryName(p.categoryId)}</td>
@@ -350,13 +468,44 @@ export default function FinancePayablesPage() {
             )}
           </tbody>
         </table>
+        )}
       </div>
+
+      {modal?.type === 'create_avulso' && (
+        <div className="modal-backdrop" onClick={() => setModal(null)}>
+          <div className="modal-content finance-payables-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header finance-payables-modal-header">
+              <h3>Novo pagamento avulso</h3>
+            </div>
+            <form onSubmit={handleCreateAvulso} className="finance-payables-form modal-form">
+              <div className="modal-body finance-payables-modal-body">
+                <label>Descrição *</label>
+                <input type="text" name="description" required placeholder="Ex: Despesa pontual" />
+
+                <label>Valor *</label>
+                <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0,00" />
+
+                <label>Data *</label>
+                <input type="date" name="date" required defaultValue={todayIso()} />
+              </div>
+              <div className="modal-footer finance-payables-modal-footer">
+                <button type="button" className="button secondary" onClick={() => setModal(null)}>
+                  Cancelar
+                </button>
+                <button type="submit" className="button primary">
+                  Registrar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {modal?.type === 'create' && (
         <div className="modal-backdrop" onClick={() => { setModal(null); setSelectedSupplierId(''); }}>
           <div className="modal-content finance-payables-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header finance-payables-modal-header">
-              <h3>Nova despesa</h3>
+              <h3>{activeTab === PAYABLES_TABS.TITULOS_AVULSOS ? 'Novo título avulso' : activeTab === PAYABLES_TABS.DESPESAS_FIXAS ? 'Nova despesa fixa' : activeTab === PAYABLES_TABS.DESPESAS_VARIAVEIS ? 'Nova despesa variável' : 'Nova despesa'}</h3>
             </div>
             <form onSubmit={handleCreate} className="finance-payables-form modal-form">
               <div className="modal-body finance-payables-modal-body">
@@ -411,7 +560,11 @@ export default function FinancePayablesPage() {
               <textarea name="note" rows={3} placeholder="Opcional" className="finance-payables-note" />
 
               <label className="finance-payables-check">
-                <input type="checkbox" name="isRecurring" />
+                <input type="checkbox" name="isOneTimeTitle" defaultChecked={activeTab === PAYABLES_TABS.TITULOS_AVULSOS} />
+                Título avulso (lançamento manual único)
+              </label>
+              <label className="finance-payables-check">
+                <input type="checkbox" name="isRecurring" defaultChecked={activeTab === PAYABLES_TABS.DESPESAS_FIXAS} />
                 Conta recorrente
               </label>
               <div className="finance-payables-recurrence">
@@ -496,6 +649,10 @@ export default function FinancePayablesPage() {
               <label>Observação</label>
               <textarea name="note" rows={3} defaultValue={modal.payable.note || ''} placeholder="Opcional" className="finance-payables-note" />
 
+              <label className="finance-payables-check">
+                <input type="checkbox" name="isOneTimeTitle" defaultChecked={modal.payable.expenseType === EXPENSE_TYPE.ONE_TIME_TITLE} />
+                Título avulso (lançamento manual único)
+              </label>
               <label className="finance-payables-check">
                 <input type="checkbox" name="isRecurring" defaultChecked={!!modal.payable.isRecurring} />
                 Conta recorrente

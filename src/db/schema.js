@@ -1,4 +1,4 @@
-export const DB_VERSION = 32;
+export const DB_VERSION = 33;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
