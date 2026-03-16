@@ -1,4 +1,4 @@
-export const DB_VERSION = 33;
+export const DB_VERSION = 34;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -177,6 +177,12 @@ export const defaultDbState = () => ({
   payables: [],
   /** Movimentações de caixa (entradas/saídas) */
   cashTransactions: [],
+  /** Contas a receber (títulos gerados de contratos, tratamentos ou lançamentos manuais) */
+  accountsReceivable: [],
+  /** Recebimentos/baixas vinculados a contas a receber */
+  receivablePayments: [],
+  /** Registros de cobranças/comunicações de contas a receber */
+  receivableCharges: [],
   messageTemplates: [],
   messageQueue: [],
   messageLogs: [],

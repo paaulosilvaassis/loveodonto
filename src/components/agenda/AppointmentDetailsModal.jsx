@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAppointmentDetails, updateAppointment, checkInAppointment, APPOINTMENT_STATUS } from '../../services/appointmentService.js';
 import { AGENDA_CONFIG } from '../../utils/agendaConfig.js';
 import { useAuth } from '../../auth/AuthContext.jsx';
-import { suggestPatients } from '../../services/patientService.js';
+import { suggestPatients, recalcAndPersistPendingData } from '../../services/patientService.js';
 import { getLeadById } from '../../services/crmService.js';
 import { RegisterPatientFromLeadModal } from './RegisterPatientFromLeadModal.jsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
@@ -220,6 +220,40 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
   const handleOpenChart = () => {
     navigate(`/prontuario/${appointment.patientId}`);
     onClose();
+  };
+
+  const handleCompleteRegistration = () => {
+    if (!appointment.patientId) {
+      setToast({ message: 'Nenhum paciente vinculado para concluir cadastro.', type: 'error' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    try {
+      recalcAndPersistPendingData(appointment.patientId);
+      const db = loadDb();
+      const updatedPatient = db.patients.find((p) => p.id === appointment.patientId);
+
+      if (updatedPatient?.hasPendingData) {
+        setToast({
+          message: 'Cadastro do paciente ainda possui pendências importantes.',
+          type: 'warning',
+        });
+      } else {
+        setToast({
+          message: 'Cadastro do paciente concluído com sucesso.',
+          type: 'success',
+        });
+      }
+      setTimeout(() => setToast(null), 3000);
+    } catch (err) {
+      console.error('Erro ao concluir cadastro do paciente:', err);
+      setToast({
+        message: err.message || 'Erro ao concluir cadastro do paciente.',
+        type: 'error',
+      });
+      setTimeout(() => setToast(null), 3000);
+    }
   };
 
   const handleCheckIn = () => {
@@ -600,6 +634,21 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
                   <span>Chegada registrada às {appointment.checkInAt ? new Date(appointment.checkInAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : ''}</span>
                 </div>
               ) : null}
+              <button
+                type="button"
+                className="button secondary"
+                onClick={handleCompleteRegistration}
+                disabled={!appointment.patientId || isLeadWithoutPatient}
+                title={
+                  !appointment.patientId
+                    ? 'Vincule um paciente ao atendimento para concluir o cadastro.'
+                    : isLeadWithoutPatient
+                    ? 'Cadastre o paciente antes de concluir o cadastro.'
+                    : undefined
+                }
+              >
+                Concluir Cadastro
+              </button>
               <button
                 type="button"
                 className="button secondary"

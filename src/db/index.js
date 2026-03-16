@@ -52,6 +52,9 @@ function applyPostMigrationFixes(migrated) {
   if (!Array.isArray(migrated.expenseSuppliers)) migrated.expenseSuppliers = [];
   if (!Array.isArray(migrated.payables)) migrated.payables = [];
   if (!Array.isArray(migrated.cashTransactions)) migrated.cashTransactions = [];
+  if (!Array.isArray(migrated.accountsReceivable)) migrated.accountsReceivable = [];
+  if (!Array.isArray(migrated.receivablePayments)) migrated.receivablePayments = [];
+  if (!Array.isArray(migrated.receivableCharges)) migrated.receivableCharges = [];
   if (migrated.version >= 21) {
     if (!migrated.crmTags || migrated.crmTags.length === 0) {
       migrated.crmTags = getSeedCrmTags(createId, migrated.clinicProfile?.id || 'clinic-1', new Date().toISOString());

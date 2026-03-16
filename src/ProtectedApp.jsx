@@ -15,6 +15,7 @@ import ClinicSettingsPage from './pages/ClinicSettingsPage.jsx';
 import CommunicationPage from './pages/CommunicationPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import FinancePage from './pages/FinancePage.jsx';
+import FinanceReceivablesPage from './pages/FinanceReceivablesPage.jsx';
 import FinancePayablesPage from './pages/FinancePayablesPage.jsx';
 import FinanceCashRegisterPage from './pages/FinanceCashRegisterPage.jsx';
 import FornecedoresPage from './pages/administrativo/FornecedoresPage.jsx';
@@ -112,7 +113,7 @@ export default function ProtectedApp() {
         <Route path="/admin/fornecedores" element={withAdminGate(withRole('/admin/fornecedores', <FornecedoresPage />))} />
         <Route path="/administrativo/fornecedores" element={<Navigate to="/admin/fornecedores" replace />} />
         <Route path="/financeiro/contas-pagar" element={withRole('/financeiro/contas-pagar', <FinancePayablesPage />)} />
-        <Route path="/financeiro/contas-receber" element={withRole('/financeiro/contas-receber', <FinancePage />)} />
+        <Route path="/financeiro/contas-receber" element={withRole('/financeiro/contas-receber', <FinanceReceivablesPage />)} />
         <Route path="/financeiro/caixa" element={withRole('/financeiro/caixa', <FinanceCashRegisterPage />)} />
         <Route path="/financeiro/boletos" element={withRole('/financeiro/boletos', <PlaceholderPage title="Boletos" description="Emissão e acompanhamento de boletos." />)} />
         <Route path="/financeiro/financiamento" element={withRole('/financeiro/financiamento', <PlaceholderPage title="Financiamento" description="Simulações e condições de pagamento." />)} />

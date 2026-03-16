@@ -1050,6 +1050,16 @@ const migrations = {
       version: 33,
     };
   },
+  34: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 34 };
+    return {
+      ...db,
+      accountsReceivable: Array.isArray(db.accountsReceivable) ? db.accountsReceivable : [],
+      receivablePayments: Array.isArray(db.receivablePayments) ? db.receivablePayments : [],
+      receivableCharges: Array.isArray(db.receivableCharges) ? db.receivableCharges : [],
+      version: 34,
+    };
+  },
 };
 
 /** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */
