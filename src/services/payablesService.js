@@ -42,7 +42,11 @@ export const PAYMENT_METHODS = [
 
 export const RECURRENCE_FREQUENCY = [
   { value: 'semanal', label: 'Semanal' },
+  { value: 'quinzenal', label: 'Quinzenal' },
   { value: 'mensal', label: 'Mensal' },
+  { value: 'bimestral', label: 'Bimestral' },
+  { value: 'trimestral', label: 'Trimestral' },
+  { value: 'semestral', label: 'Semestral' },
   { value: 'anual', label: 'Anual' },
 ];
 
@@ -238,8 +242,8 @@ export const createPayable = (user, payload) => {
   const note = payload.note || '';
   const isRecurring = Boolean(payload.isRecurring);
   const recurrenceFrequency = payload.recurrenceFrequency || 'mensal';
-  const expenseType = payload.expenseType === EXPENSE_TYPE.ONE_TIME_TITLE
-    ? EXPENSE_TYPE.ONE_TIME_TITLE
+  const expenseType = [EXPENSE_TYPE.ONE_TIME_TITLE, EXPENSE_TYPE.FIXED, EXPENSE_TYPE.VARIABLE].includes(payload.expenseType)
+    ? payload.expenseType
     : (isRecurring ? EXPENSE_TYPE.FIXED : EXPENSE_TYPE.VARIABLE);
 
   if (!description) throw new Error('Descrição é obrigatória.');
@@ -284,10 +288,17 @@ export const createPayable = (user, payload) => {
         const d = new Date(date.getTime());
         if (recurrenceFrequency === 'semanal') {
           d.setDate(d.getDate() + 7 * step);
+        } else if (recurrenceFrequency === 'quinzenal') {
+          d.setDate(d.getDate() + 14 * step);
+        } else if (recurrenceFrequency === 'bimestral') {
+          d.setMonth(d.getMonth() + 2 * step);
+        } else if (recurrenceFrequency === 'trimestral') {
+          d.setMonth(d.getMonth() + 3 * step);
+        } else if (recurrenceFrequency === 'semestral') {
+          d.setMonth(d.getMonth() + 6 * step);
         } else if (recurrenceFrequency === 'anual') {
           d.setFullYear(d.getFullYear() + step);
         } else {
-          // mensal (default)
           d.setMonth(d.getMonth() + step);
         }
         return d.toISOString().slice(0, 10);

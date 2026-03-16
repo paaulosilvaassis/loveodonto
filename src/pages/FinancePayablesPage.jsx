@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import {
   listPayables,
@@ -87,6 +87,31 @@ export default function FinancePayablesPage() {
   const [toast, setToast] = useState(null);
   const [supplierModalOpen, setSupplierModalOpen] = useState(false);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
+  const [expenseType, setExpenseType] = useState(EXPENSE_TYPE.VARIABLE);
+  const [isRecurring, setIsRecurring] = useState(false);
+
+  useEffect(() => {
+    if (modal?.type === 'create') {
+      if (activeTab === PAYABLES_TABS.DESPESAS_FIXAS) {
+        setExpenseType(EXPENSE_TYPE.FIXED);
+        setIsRecurring(true);
+      } else if (activeTab === PAYABLES_TABS.DESPESAS_VARIAVEIS) {
+        setExpenseType(EXPENSE_TYPE.VARIABLE);
+        setIsRecurring(false);
+      } else if (activeTab === PAYABLES_TABS.TITULOS_AVULSOS) {
+        setExpenseType(EXPENSE_TYPE.ONE_TIME_TITLE);
+        setIsRecurring(false);
+      } else {
+        setExpenseType(EXPENSE_TYPE.VARIABLE);
+        setIsRecurring(false);
+      }
+    } else if (modal?.type === 'edit' && modal.payable) {
+      const p = modal.payable;
+      const resolved = p.expenseType || (p.isRecurring ? EXPENSE_TYPE.FIXED : EXPENSE_TYPE.VARIABLE);
+      setExpenseType(resolved);
+      setIsRecurring(resolved !== EXPENSE_TYPE.ONE_TIME_TITLE && !!p.isRecurring);
+    }
+  }, [modal?.type, modal?.payable, activeTab]);
 
   const categories = useMemo(() => listExpenseCategories(), [refreshKey]);
   const suppliers = useMemo(
@@ -122,8 +147,8 @@ export default function FinancePayablesPage() {
   const handleCreate = (e) => {
     e.preventDefault();
     const form = e.target;
-    const isRecurring = form.isRecurring?.checked || false;
-    const isOneTimeTitle = form.isOneTimeTitle?.checked || false;
+    const finalExpenseType = expenseType;
+    const finalIsRecurring = finalExpenseType !== EXPENSE_TYPE.ONE_TIME_TITLE && isRecurring;
     try {
       createPayable(user, {
         description: form.description?.value?.trim(),
@@ -134,9 +159,9 @@ export default function FinancePayablesPage() {
         paymentMethod: form.paymentMethod?.value,
         originAccount: form.originAccount?.value?.trim() || '',
         note: form.note?.value?.trim() || '',
-        isRecurring,
+        isRecurring: finalIsRecurring,
         recurrenceFrequency: form.recurrenceFrequency?.value || 'mensal',
-        expenseType: isOneTimeTitle ? EXPENSE_TYPE.ONE_TIME_TITLE : undefined,
+        expenseType: finalExpenseType,
       });
       showToast('Despesa criada.');
       setModal(null);
@@ -166,6 +191,8 @@ export default function FinancePayablesPage() {
   const handleUpdate = (id) => (e) => {
     e.preventDefault();
     const form = e.target;
+    const finalExpenseType = expenseType;
+    const finalIsRecurring = finalExpenseType !== EXPENSE_TYPE.ONE_TIME_TITLE && isRecurring;
     try {
       updatePayable(user, id, {
         description: form.description?.value?.trim(),
@@ -176,15 +203,33 @@ export default function FinancePayablesPage() {
         paymentMethod: form.paymentMethod?.value,
         originAccount: form.originAccount?.value?.trim() || '',
         note: form.note?.value?.trim() || '',
-        isRecurring: form.isRecurring?.checked || false,
+        isRecurring: finalIsRecurring,
         recurrenceFrequency: form.recurrenceFrequency?.value || 'mensal',
-        expenseType: form.isOneTimeTitle?.checked ? EXPENSE_TYPE.ONE_TIME_TITLE : (form.isRecurring?.checked ? EXPENSE_TYPE.FIXED : EXPENSE_TYPE.VARIABLE),
+        expenseType: finalExpenseType,
       });
       showToast('Despesa atualizada.');
       setModal(null);
       setRefresh((k) => k + 1);
     } catch (err) {
       showToast(err.message || 'Erro ao atualizar.', 'error');
+    }
+  };
+
+  const handleExpenseTypeChange = (type) => {
+    setExpenseType(type);
+    if (type === EXPENSE_TYPE.ONE_TIME_TITLE) {
+      setIsRecurring(false);
+    } else if (type === EXPENSE_TYPE.FIXED) {
+      setIsRecurring(true);
+    } else {
+      setIsRecurring(false);
+    }
+  };
+
+  const handleRecurringChange = (checked) => {
+    setIsRecurring(checked);
+    if (checked && expenseType === EXPENSE_TYPE.ONE_TIME_TITLE) {
+      setExpenseType(EXPENSE_TYPE.FIXED);
     }
   };
 
@@ -509,73 +554,114 @@ export default function FinancePayablesPage() {
             </div>
             <form onSubmit={handleCreate} className="finance-payables-form modal-form">
               <div className="modal-body finance-payables-modal-body">
-              <label>Descrição *</label>
-              <input type="text" name="description" required placeholder="Ex: Aluguel mensal" />
+                <div className="finance-payables-form-block">
+                  <label>Descrição *</label>
+                  <input type="text" name="description" required placeholder="Ex: Aluguel mensal" />
 
-              <label>Categoria *</label>
-              <select name="categoryId" required>
-                <option value="">Selecione</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              {categories.length === 0 && (
-                <small className="finance-payables-category-empty">Não há categorias cadastradas.</small>
-              )}
+                  <label>Categoria *</label>
+                  <select name="categoryId" required>
+                    <option value="">Selecione</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {categories.length === 0 && (
+                    <small className="finance-payables-category-empty">Não há categorias cadastradas.</small>
+                  )}
 
-              <label>Fornecedor</label>
-              <div className="finance-payables-form-row">
-                <select
-                  name="supplierId"
-                  value={selectedSupplierId}
-                  onChange={(e) => setSelectedSupplierId(e.target.value)}
-                >
-                  <option value="">Selecione (opcional)</option>
-                  {suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>{s.trade_name || s.name || '—'}</option>
-                  ))}
-                </select>
-                <button type="button" className="button secondary small" onClick={handleAddSupplier}>
-                  + Novo
-                </button>
-              </div>
+                  <label>Fornecedor</label>
+                  <div className="finance-payables-form-row">
+                    <select
+                      name="supplierId"
+                      value={selectedSupplierId}
+                      onChange={(e) => setSelectedSupplierId(e.target.value)}
+                    >
+                      <option value="">Selecione (opcional)</option>
+                      {suppliers.map((s) => (
+                        <option key={s.id} value={s.id}>{s.trade_name || s.name || '—'}</option>
+                      ))}
+                    </select>
+                    <button type="button" className="button secondary small" onClick={handleAddSupplier}>
+                      + Novo
+                    </button>
+                  </div>
 
-              <label>Valor *</label>
-              <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0,00" />
+                  <label>Valor *</label>
+                  <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0,00" />
 
-              <label>Data de vencimento *</label>
-              <input type="date" name="dueDate" required defaultValue={todayIso()} />
+                  <label>Data de vencimento *</label>
+                  <input type="date" name="dueDate" required defaultValue={todayIso()} />
 
-              <label>Forma de pagamento *</label>
-              <select name="paymentMethod" required>
-                {PAYMENT_METHODS.map((pm) => (
-                  <option key={pm.value} value={pm.value}>{pm.label}</option>
-                ))}
-              </select>
+                  <label>Forma de pagamento *</label>
+                  <select name="paymentMethod" required>
+                    {PAYMENT_METHODS.map((pm) => (
+                      <option key={pm.value} value={pm.value}>{pm.label}</option>
+                    ))}
+                  </select>
 
-              <label>Conta de origem</label>
-              <input type="text" name="originAccount" placeholder="Opcional" />
+                  <label>Conta de origem</label>
+                  <input type="text" name="originAccount" placeholder="Opcional" />
+                </div>
 
-              <label>Observação</label>
-              <textarea name="note" rows={3} placeholder="Opcional" className="finance-payables-note" />
+                <div className="finance-payables-form-block finance-payables-form-block--final">
+                  <label>Observação</label>
+                  <textarea name="note" rows={4} placeholder="Opcional" className="finance-payables-note" />
+                </div>
 
-              <label className="finance-payables-check">
-                <input type="checkbox" name="isOneTimeTitle" defaultChecked={activeTab === PAYABLES_TABS.TITULOS_AVULSOS} />
-                Título avulso (lançamento manual único)
-              </label>
-              <label className="finance-payables-check">
-                <input type="checkbox" name="isRecurring" defaultChecked={activeTab === PAYABLES_TABS.DESPESAS_FIXAS} />
-                Conta recorrente
-              </label>
-              <div className="finance-payables-recurrence">
-                <label>Frequência</label>
-                <select name="recurrenceFrequency">
-                  {RECURRENCE_FREQUENCY.map((r) => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
-                  ))}
-                </select>
-              </div>
+                <div className="finance-payables-form-block finance-payables-form-block--classification">
+                  <h4 className="finance-payables-classification-title">Classificação da despesa</h4>
 
+                  <div className="finance-payables-type-group">
+                    <label className="finance-payables-type-label">Tipo da despesa</label>
+                    <div className="finance-payables-type-options">
+                      <button
+                        type="button"
+                        className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.FIXED ? 'active' : ''}`}
+                        onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.FIXED)}
+                      >
+                        <span className="finance-payables-type-radio" />
+                        Despesa fixa
+                      </button>
+                      <button
+                        type="button"
+                        className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.VARIABLE ? 'active' : ''}`}
+                        onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.VARIABLE)}
+                      >
+                        <span className="finance-payables-type-radio" />
+                        Despesa variável
+                      </button>
+                      <button
+                        type="button"
+                        className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.ONE_TIME_TITLE ? 'active' : ''}`}
+                        onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.ONE_TIME_TITLE)}
+                      >
+                        <span className="finance-payables-type-radio" />
+                        Título avulso
+                      </button>
+                    </div>
+                  </div>
+
+                  <label className="finance-payables-check">
+                    <input
+                      type="checkbox"
+                      checked={isRecurring}
+                      onChange={(e) => handleRecurringChange(e.target.checked)}
+                      disabled={expenseType === EXPENSE_TYPE.ONE_TIME_TITLE}
+                    />
+                    <span>Conta recorrente</span>
+                  </label>
+
+                  {isRecurring && expenseType !== EXPENSE_TYPE.ONE_TIME_TITLE && (
+                    <div className="finance-payables-recurrence">
+                      <label>Frequência</label>
+                      <select name="recurrenceFrequency" defaultValue="mensal">
+                        {RECURRENCE_FREQUENCY.map((r) => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="modal-footer finance-payables-modal-footer">
                 <button type="button" className="button secondary" onClick={() => { setModal(null); setSelectedSupplierId(''); }}>
@@ -608,64 +694,105 @@ export default function FinancePayablesPage() {
             </div>
             <form onSubmit={handleUpdate(modal.payable.id)} className="finance-payables-form modal-form">
               <div className="modal-body finance-payables-modal-body">
-              <label>Descrição *</label>
-              <input type="text" name="description" defaultValue={modal.payable.description} required />
+                <div className="finance-payables-form-block">
+                  <label>Descrição *</label>
+                  <input type="text" name="description" defaultValue={modal.payable.description} required />
 
-              <label>Categoria *</label>
-              <select name="categoryId" required defaultValue={modal.payable.categoryId || ''}>
-                <option value="">Selecione</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              {categories.length === 0 && (
-                <small className="finance-payables-category-empty">Não há categorias cadastradas.</small>
-              )}
+                  <label>Categoria *</label>
+                  <select name="categoryId" required defaultValue={modal.payable.categoryId || ''}>
+                    <option value="">Selecione</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {categories.length === 0 && (
+                    <small className="finance-payables-category-empty">Não há categorias cadastradas.</small>
+                  )}
 
-              <label>Fornecedor</label>
-              <select name="supplierId" defaultValue={modal.payable.supplierId || ''}>
-                <option value="">Selecione</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.trade_name || s.name || '—'}</option>
-                ))}
-              </select>
+                  <label>Fornecedor</label>
+                  <select name="supplierId" defaultValue={modal.payable.supplierId || ''}>
+                    <option value="">Selecione</option>
+                    {suppliers.map((s) => (
+                      <option key={s.id} value={s.id}>{s.trade_name || s.name || '—'}</option>
+                    ))}
+                  </select>
 
-              <label>Valor *</label>
-              <input type="number" name="amount" step="0.01" min="0.01" required defaultValue={modal.payable.amount} />
+                  <label>Valor *</label>
+                  <input type="number" name="amount" step="0.01" min="0.01" required defaultValue={modal.payable.amount} />
 
-              <label>Data de vencimento *</label>
-              <input type="date" name="dueDate" required defaultValue={modal.payable.dueDate} />
+                  <label>Data de vencimento *</label>
+                  <input type="date" name="dueDate" required defaultValue={modal.payable.dueDate} />
 
-              <label>Forma de pagamento *</label>
-              <select name="paymentMethod" required defaultValue={modal.payable.paymentMethod || 'outros'}>
-                {PAYMENT_METHODS.map((pm) => (
-                  <option key={pm.value} value={pm.value}>{pm.label}</option>
-                ))}
-              </select>
+                  <label>Forma de pagamento *</label>
+                  <select name="paymentMethod" required defaultValue={modal.payable.paymentMethod || 'outros'}>
+                    {PAYMENT_METHODS.map((pm) => (
+                      <option key={pm.value} value={pm.value}>{pm.label}</option>
+                    ))}
+                  </select>
 
-              <label>Conta de origem</label>
-              <input type="text" name="originAccount" defaultValue={modal.payable.originAccount || ''} placeholder="Opcional" />
+                  <label>Conta de origem</label>
+                  <input type="text" name="originAccount" defaultValue={modal.payable.originAccount || ''} placeholder="Opcional" />
+                </div>
 
-              <label>Observação</label>
-              <textarea name="note" rows={3} defaultValue={modal.payable.note || ''} placeholder="Opcional" className="finance-payables-note" />
+                <div className="finance-payables-form-block finance-payables-form-block--final">
+                  <label>Observação</label>
+                  <textarea name="note" rows={4} defaultValue={modal.payable.note || ''} placeholder="Opcional" className="finance-payables-note" />
+                </div>
 
-              <label className="finance-payables-check">
-                <input type="checkbox" name="isOneTimeTitle" defaultChecked={modal.payable.expenseType === EXPENSE_TYPE.ONE_TIME_TITLE} />
-                Título avulso (lançamento manual único)
-              </label>
-              <label className="finance-payables-check">
-                <input type="checkbox" name="isRecurring" defaultChecked={!!modal.payable.isRecurring} />
-                Conta recorrente
-              </label>
-              <div className="finance-payables-recurrence">
-                <label>Frequência</label>
-                <select name="recurrenceFrequency" defaultValue={modal.payable.recurrenceFrequency || 'mensal'}>
-                  {RECURRENCE_FREQUENCY.map((r) => (
-                    <option key={r.value} value={r.value}>{r.label}</option>
-                  ))}
-                </select>
-              </div>
+                <div className="finance-payables-form-block finance-payables-form-block--classification">
+                  <h4 className="finance-payables-classification-title">Classificação da despesa</h4>
 
+                  <div className="finance-payables-type-group">
+                    <label className="finance-payables-type-label">Tipo da despesa</label>
+                    <div className="finance-payables-type-options">
+                      <button
+                        type="button"
+                        className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.FIXED ? 'active' : ''}`}
+                        onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.FIXED)}
+                      >
+                        <span className="finance-payables-type-radio" />
+                        Despesa fixa
+                      </button>
+                      <button
+                        type="button"
+                        className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.VARIABLE ? 'active' : ''}`}
+                        onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.VARIABLE)}
+                      >
+                        <span className="finance-payables-type-radio" />
+                        Despesa variável
+                      </button>
+                      <button
+                        type="button"
+                        className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.ONE_TIME_TITLE ? 'active' : ''}`}
+                        onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.ONE_TIME_TITLE)}
+                      >
+                        <span className="finance-payables-type-radio" />
+                        Título avulso
+                      </button>
+                    </div>
+                  </div>
+
+                  <label className="finance-payables-check">
+                    <input
+                      type="checkbox"
+                      checked={isRecurring}
+                      onChange={(e) => handleRecurringChange(e.target.checked)}
+                      disabled={expenseType === EXPENSE_TYPE.ONE_TIME_TITLE}
+                    />
+                    <span>Conta recorrente</span>
+                  </label>
+
+                  {isRecurring && expenseType !== EXPENSE_TYPE.ONE_TIME_TITLE && (
+                    <div className="finance-payables-recurrence">
+                      <label>Frequência</label>
+                      <select name="recurrenceFrequency" defaultValue={modal.payable.recurrenceFrequency || 'mensal'}>
+                        {RECURRENCE_FREQUENCY.map((r) => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="modal-footer finance-payables-modal-footer">
                 <button type="button" className="button secondary" onClick={() => setModal(null)}>
