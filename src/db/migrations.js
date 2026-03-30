@@ -1,3 +1,4 @@
+import { migrateLegacyCollaboratorRow } from '../constants/collaboratorRhCatalog.js';
 import { DB_VERSION, defaultDbState } from './schema.js';
 import { buildPermissionsCatalog } from '../permissions/catalog.js';
 import { ROLE_DEFAULT_PERMISSIONS, ROLES_FOR_SEED } from '../permissions/roleDefaults.js';
@@ -536,9 +537,6 @@ const migrations = {
     };
   },
   11: (db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'migrations.js:11',message:'Migration 11 start',data:{hasDb:!!db,version:db?.version,appointmentsCount:Array.isArray(db?.appointments) ? db.appointments.length : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     const base = defaultDbState();
     const {
       appointments,
@@ -551,9 +549,6 @@ const migrations = {
     try {
       migratedAppointments = Array.isArray(appointments)
         ? appointments.map((apt) => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'migrations.js:11',message:'Migrating appointment',data:{aptId:apt?.id,aptStatus:apt?.status,hasCheckInAt:!!apt?.checkInAt},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-            // #endregion
             return {
               ...apt,
               checkInAt: apt.checkInAt || null,
@@ -573,13 +568,7 @@ const migrations = {
             };
           })
         : [];
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'migrations.js:11',message:'Migration 11 appointments migrated',data:{migratedCount:migratedAppointments.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'migrations.js:11',message:'Migration 11 error',data:{error:err?.message,stack:err?.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       throw err;
     }
     const result = {
@@ -588,9 +577,6 @@ const migrations = {
       appointments: migratedAppointments,
       version: 11,
     };
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'migrations.js:11',message:'Migration 11 complete',data:{resultVersion:result.version,resultAppointmentsCount:result.appointments.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     return result;
   },
   12: (db) => {
@@ -1060,6 +1046,195 @@ const migrations = {
       version: 34,
     };
   },
+  35: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 35 };
+    return {
+      ...db,
+      financings: Array.isArray(db.financings) ? db.financings : [],
+      financingInstallments: Array.isArray(db.financingInstallments) ? db.financingInstallments : [],
+      boletoCharges: Array.isArray(db.boletoCharges) ? db.boletoCharges : [],
+      financingEvents: Array.isArray(db.financingEvents) ? db.financingEvents : [],
+      boletoReminderEvents: Array.isArray(db.boletoReminderEvents) ? db.boletoReminderEvents : [],
+      financingRenegotiations: Array.isArray(db.financingRenegotiations) ? db.financingRenegotiations : [],
+      version: 35,
+    };
+  },
+  36: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 36 };
+    const now = new Date().toISOString();
+    const financings = (Array.isArray(db.financings) ? db.financings : []).map((item) => ({
+      ...item,
+      status: item.status || 'draft',
+      approval_status: item.approval_status || 'pending',
+      credit_analysis_status: item.credit_analysis_status || 'not_required',
+      updated_at: item.updated_at || item.created_at || now,
+    }));
+    const financingInstallments = (Array.isArray(db.financingInstallments) ? db.financingInstallments : []).map((item) => {
+      const net = Number(item.net_amount ?? item.original_amount ?? 0);
+      const paid = Number(item.paid_amount || 0);
+      return {
+        ...item,
+        status: item.status || 'pending',
+        net_amount: net,
+        paid_amount: paid,
+        remaining_amount: item.remaining_amount !== undefined ? Number(item.remaining_amount || 0) : Math.max(net - paid, 0),
+        updated_at: item.updated_at || item.created_at || now,
+      };
+    });
+    const boletoCharges = (Array.isArray(db.boletoCharges) ? db.boletoCharges : []).map((item) => ({
+      ...item,
+      status: item.status || 'draft',
+      updated_at: item.updated_at || item.created_at || now,
+    }));
+    const financingEvents = (Array.isArray(db.financingEvents) ? db.financingEvents : []).map((item) => ({
+      ...item,
+      financing_id: item.financing_id || null,
+      installment_id: item.installment_id || null,
+      receivable_id: item.receivable_id || null,
+      boleto_charge_id: item.boleto_charge_id || null,
+      event_type: item.event_type || 'financing_event',
+      created_at: item.created_at || now,
+    }));
+    return {
+      ...db,
+      financings,
+      financingInstallments,
+      boletoCharges,
+      financingEvents,
+      financingPaymentAllocations: Array.isArray(db.financingPaymentAllocations) ? db.financingPaymentAllocations : [],
+      boletoChargeStatusHistory: Array.isArray(db.boletoChargeStatusHistory) ? db.boletoChargeStatusHistory : [],
+      version: 36,
+    };
+  },
+  /**
+   * Remove colaboradores placeholder criados pelo botão "Novo Colaborador" (fluxo antigo:
+   * create imediato com apelido/nome "Novo colaborador" e cargo Recepção), sem e-mail nem registro.
+   */
+  37: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 37 };
+    const collaborators = Array.isArray(db.collaborators) ? db.collaborators : [];
+    const toRemove = new Set();
+    collaborators.forEach((c) => {
+      if (!c || typeof c !== 'object') return;
+      const ap = String(c.apelido || '').trim();
+      const nc = String(c.nomeCompleto || '').trim();
+      const cargo = String(c.cargo || '').trim();
+      if (ap !== 'Novo colaborador' || nc !== 'Novo colaborador' || cargo !== 'Recepção') return;
+      if (String(c.email || '').trim()) return;
+      if (String(c.registroProfissional || '').trim()) return;
+      toRemove.add(c.id);
+    });
+    if (toRemove.size === 0) {
+      return { ...db, version: 37 };
+    }
+    const keepCollab = (id) => !toRemove.has(id);
+    const filterByCollab = (arr) => (Array.isArray(arr) ? arr : []).filter((item) => item && !toRemove.has(item.collaboratorId));
+    return {
+      ...db,
+      collaborators: collaborators.filter((c) => keepCollab(c.id)),
+      collaboratorDocuments: filterByCollab(db.collaboratorDocuments),
+      collaboratorEducation: filterByCollab(db.collaboratorEducation),
+      collaboratorNationality: filterByCollab(db.collaboratorNationality),
+      collaboratorPhones: filterByCollab(db.collaboratorPhones),
+      collaboratorAddresses: filterByCollab(db.collaboratorAddresses),
+      collaboratorRelationships: filterByCollab(db.collaboratorRelationships),
+      collaboratorCharacteristics: filterByCollab(db.collaboratorCharacteristics),
+      collaboratorAdditional: filterByCollab(db.collaboratorAdditional),
+      collaboratorInsurances: filterByCollab(db.collaboratorInsurances),
+      collaboratorAccess: filterByCollab(db.collaboratorAccess),
+      collaboratorWorkHours: filterByCollab(db.collaboratorWorkHours),
+      collaboratorFinance: filterByCollab(db.collaboratorFinance),
+      version: 37,
+    };
+  },
+  38: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 38 };
+    const collaborators = (Array.isArray(db.collaborators) ? db.collaborators : []).map((row) =>
+      migrateLegacyCollaboratorRow(row)
+    );
+    return {
+      ...db,
+      collaborators,
+      version: 38,
+    };
+  },
+  39: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 39 };
+    const now = new Date().toISOString();
+    const commissionRules = (Array.isArray(db.commissionRules) ? db.commissionRules : []).map((r, index) => ({
+      id: r.id || `comrule-${crypto.randomUUID()}`,
+      name: String(r.name || `Regra ${index + 1}`),
+      type: r.type || 'production',
+      percentage: Number(r.percentage || 0),
+      fixed_amount: Number(r.fixed_amount || 0),
+      apply_on: r.apply_on || 'total_value',
+      professional_id: r.professional_id || null,
+      role: r.role || 'dentista',
+      specialty: r.specialty || null,
+      procedure_id: r.procedure_id || null,
+      lead_source: r.lead_source != null && r.lead_source !== '' ? r.lead_source : null,
+      active: r.active !== false,
+      priority: Number(r.priority || 100),
+      created_at: r.created_at || now,
+      updated_at: r.updated_at || r.created_at || now,
+      metadata: r.metadata && typeof r.metadata === 'object' ? r.metadata : {},
+    }));
+    const commissions = (Array.isArray(db.commissions) ? db.commissions : []).map((c) => ({
+      ...c,
+      id: c.id || `comm-${crypto.randomUUID()}`,
+      professional_id: c.professional_id || null,
+      role: c.role || 'dentista',
+      source_type: c.source_type || 'receivable',
+      source_id: c.source_id || '',
+      amount_base: Number(c.amount_base || 0),
+      commission_amount: Number(c.commission_amount || 0),
+      rule_id: c.rule_id || null,
+      status: c.status || 'pending',
+      reference_date: c.reference_date || now.slice(0, 10),
+      payment_date: c.payment_date || null,
+      metadata: c.metadata && typeof c.metadata === 'object' ? c.metadata : {},
+      created_at: c.created_at || now,
+      updated_at: c.updated_at || c.created_at || now,
+    }));
+    return {
+      ...db,
+      commissionRules,
+      commissions,
+      version: 39,
+    };
+  },
+  40: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 40 };
+    const commissionRules = (Array.isArray(db.commissionRules) ? db.commissionRules : []).map((r) => ({
+      ...r,
+      lead_source: r.lead_source != null && r.lead_source !== '' ? String(r.lead_source) : null,
+    }));
+    return {
+      ...db,
+      commissionRules,
+      version: 40,
+    };
+  },
+  41: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 41 };
+    const commissionRules = (Array.isArray(db.commissionRules) ? db.commissionRules : []).map((r) => {
+      const type = r.type === 'patient_conversion' ? 'patient_closing' : r.type;
+      return { ...r, type };
+    });
+    const commissions = (Array.isArray(db.commissions) ? db.commissions : []).map((c) => {
+      const meta = c.metadata && typeof c.metadata === 'object' ? { ...c.metadata } : {};
+      if (meta.commission_basis === 'patient_conversion') {
+        meta.commission_basis = 'patient_closing';
+      }
+      return { ...c, metadata: meta };
+    });
+    return {
+      ...db,
+      commissionRules,
+      commissions,
+      version: 41,
+    };
+  },
 };
 
 /** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */
@@ -1109,225 +1284,41 @@ export const migrateDb = (db) => {
     return defaultDbState();
   }
 
-  let current = db;
-  const targetVersion = DB_VERSION;
-  const startVersion = Number(current.version || 0);
+  const targetVersion = Number(DB_VERSION || 0);
+  const startVersionRaw = Number(db.version || 0);
+  const startVersion = Number.isFinite(startVersionRaw) && startVersionRaw > 0 ? startVersionRaw : 0;
+  let current = { ...db };
 
-  if (!migrations[targetVersion]) {
-    console.warn(`Migration ${targetVersion} não encontrada. Retornando estado atual.`);
+  if (startVersion >= targetVersion) {
     return {
       ...current,
       version: targetVersion,
     };
   }
 
-  if (startVersion === targetVersion) {
-    return current;
+  for (let version = startVersion + 1; version <= targetVersion; version += 1) {
+    const migrate = migrations[version];
+    if (typeof migrate !== 'function') {
+      console.warn(`Migration ${version} não encontrada. Mantendo estado atual e avançando versão.`);
+      current = {
+        ...current,
+        version,
+      };
+      continue;
+    }
+    try {
+      current = migrate(current);
+    } catch (error) {
+      console.error(`Erro ao aplicar migration ${version}:`, error);
+      return {
+        ...current,
+        version: targetVersion,
+      };
+    }
   }
 
-  if (startVersion < 2 && targetVersion === 3) {
-    const v2 = migrations[2](current);
-    return migrations[3](v2);
-  }
-
-  if (startVersion === 2 && targetVersion === 3) return migrations[3](current);
-  if (startVersion === 3 && targetVersion === 4) return migrations[4](current);
-  if (startVersion === 4 && targetVersion === 5) return migrations[5](current);
-  if (startVersion === 5 && targetVersion === 6) return migrations[6](current);
-  if (startVersion === 6 && targetVersion === 7) return migrations[7](current);
-  if (startVersion === 7 && targetVersion === 8) return migrations[8](current);
-  if (startVersion === 8 && targetVersion === 9) return migrations[9](current);
-  if (startVersion === 9 && targetVersion === 10) return migrations[10](current);
-  if (startVersion < 4 && targetVersion === 4) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    return migrations[4](v3);
-  }
-
-  if (startVersion < 5 && targetVersion === 5) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    return migrations[5](v4);
-  }
-
-  if (startVersion < 6 && targetVersion === 6) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    return migrations[6](v5);
-  }
-
-  if (startVersion < 7 && targetVersion === 7) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    return migrations[7](v6);
-  }
-
-  if (startVersion < 8 && targetVersion === 8) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    return migrations[8](v7);
-  }
-
-  if (startVersion < 9 && targetVersion === 9) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    const v8 = (startVersion < 8 ? migrations[8](v7) : v7);
-    return migrations[9](v8);
-  }
-
-  if (startVersion < 10 && targetVersion === 10) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    const v8 = (startVersion < 8 ? migrations[8](v7) : v7);
-    const v9 = (startVersion < 9 ? migrations[9](v8) : v8);
-    return migrations[10](v9);
-  }
-
-  if (startVersion === 10 && targetVersion === 11) return migrations[11](current);
-  if (startVersion === 11 && targetVersion === 12) return migrations[12](current);
-  if (startVersion === 12 && targetVersion === 13) return migrations[13](current);
-  if (startVersion === 13 && targetVersion === 14) return migrations[14](current);
-  if (startVersion === 14 && targetVersion === 15) return migrations[15](current);
-
-  if (startVersion < 11 && targetVersion === 11) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    const v8 = (startVersion < 8 ? migrations[8](v7) : v7);
-    const v9 = (startVersion < 9 ? migrations[9](v8) : v8);
-    const v10 = (startVersion < 10 ? migrations[10](v9) : v9);
-    return migrations[11](v10);
-  }
-
-  if (startVersion < 12 && targetVersion === 12) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    const v8 = (startVersion < 8 ? migrations[8](v7) : v7);
-    const v9 = (startVersion < 9 ? migrations[9](v8) : v8);
-    const v10 = (startVersion < 10 ? migrations[10](v9) : v9);
-    const v11 = (startVersion < 11 ? migrations[11](v10) : v10);
-    return migrations[12](v11);
-  }
-
-  if (startVersion < 13 && targetVersion === 13) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    const v8 = (startVersion < 8 ? migrations[8](v7) : v7);
-    const v9 = (startVersion < 9 ? migrations[9](v8) : v8);
-    const v10 = (startVersion < 10 ? migrations[10](v9) : v9);
-    const v11 = (startVersion < 11 ? migrations[11](v10) : v10);
-    const v12 = (startVersion < 12 ? migrations[12](v11) : v11);
-    return migrations[13](v12);
-  }
-
-  if (startVersion < 14 && targetVersion === 14) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    const v8 = (startVersion < 8 ? migrations[8](v7) : v7);
-    const v9 = (startVersion < 9 ? migrations[9](v8) : v8);
-    const v10 = (startVersion < 10 ? migrations[10](v9) : v9);
-    const v11 = (startVersion < 11 ? migrations[11](v10) : v10);
-    const v12 = (startVersion < 12 ? migrations[12](v11) : v11);
-    const v13 = (startVersion < 13 ? migrations[13](v12) : v12);
-    return migrations[14](v13);
-  }
-
-  if (startVersion < 15 && targetVersion === 15) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    const v8 = (startVersion < 8 ? migrations[8](v7) : v7);
-    const v9 = (startVersion < 9 ? migrations[9](v8) : v8);
-    const v10 = (startVersion < 10 ? migrations[10](v9) : v9);
-    const v11 = (startVersion < 11 ? migrations[11](v10) : v10);
-    const v12 = (startVersion < 12 ? migrations[12](v11) : v11);
-    const v13 = (startVersion < 13 ? migrations[13](v12) : v12);
-    const v14 = (startVersion < 14 ? migrations[14](v13) : v13);
-    return migrations[15](v14);
-  }
-
-  if (startVersion < 16 && targetVersion === 16) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    const v8 = (startVersion < 8 ? migrations[8](v7) : v7);
-    const v9 = (startVersion < 9 ? migrations[9](v8) : v8);
-    const v10 = (startVersion < 10 ? migrations[10](v9) : v9);
-    const v11 = (startVersion < 11 ? migrations[11](v10) : v10);
-    const v12 = (startVersion < 12 ? migrations[12](v11) : v11);
-    const v13 = (startVersion < 13 ? migrations[13](v12) : v12);
-    const v14 = (startVersion < 14 ? migrations[14](v13) : v13);
-    const v15 = (startVersion < 15 ? migrations[15](v14) : v14);
-    return migrations[16](v15);
-  }
-
-  if (startVersion < 17 && targetVersion === 17) {
-    const v2 = startVersion < 2 ? migrations[2](current) : current;
-    const v3 = (startVersion < 3 ? migrations[3](v2) : v2);
-    const v4 = (startVersion < 4 ? migrations[4](v3) : v3);
-    const v5 = (startVersion < 5 ? migrations[5](v4) : v4);
-    const v6 = (startVersion < 6 ? migrations[6](v5) : v5);
-    const v7 = (startVersion < 7 ? migrations[7](v6) : v6);
-    const v8 = (startVersion < 8 ? migrations[8](v7) : v7);
-    const v9 = (startVersion < 9 ? migrations[9](v8) : v8);
-    const v10 = (startVersion < 10 ? migrations[10](v9) : v9);
-    const v11 = (startVersion < 11 ? migrations[11](v10) : v10);
-    const v12 = (startVersion < 12 ? migrations[12](v11) : v11);
-    const v13 = (startVersion < 13 ? migrations[13](v12) : v12);
-    const v14 = (startVersion < 14 ? migrations[14](v13) : v13);
-    const v15 = (startVersion < 15 ? migrations[15](v14) : v14);
-    const v16 = (startVersion < 16 ? migrations[16](v15) : v15);
-    return migrations[17](v16);
-  }
-
-  // Fallback: tentar aplicar a migration diretamente
-  try {
-    return migrations[targetVersion](current);
-  } catch (error) {
-    console.error(`Erro ao aplicar migration ${targetVersion}:`, error);
-    // Retornar o estado atual sem aplicar a migration em caso de erro
-    return {
-      ...current,
-      version: targetVersion,
-    };
-  }
+  return {
+    ...current,
+    version: targetVersion,
+  };
 };

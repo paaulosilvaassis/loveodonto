@@ -39,7 +39,7 @@ export default function CrmLeadProfilePage() {
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
   const [scheduleFromTask, setScheduleFromTask] = useState(null);
 
-  const lead = useMemo(() => (leadId ? getLeadById(leadId) : null), [leadId]);
+  const lead = useMemo(() => (leadId ? getLeadById(leadId) : null), [leadId, refreshKey]);
   const events = useMemo(() => (leadId ? listLeadEvents(leadId) : []), [leadId, refreshKey]);
   const messageLogs = useMemo(() => (leadId ? listMessageLogs(leadId) : []), [leadId]);
   const budgetLinks = useMemo(() => (leadId ? listBudgetLinks(leadId) : []), [leadId]);

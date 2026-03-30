@@ -59,10 +59,13 @@ export const SPECIALTIES = [
  * Validação de código TUSS
  */
 export const validateTussCode = (code) => {
-  if (!code) return { valid: true };
-  const cleaned = code.replace(/\D/g, '');
+  if (code === null || code === undefined || code === '') return { valid: true };
+  if (typeof code === 'number' && (code === 0 || !Number.isFinite(code))) return { valid: true };
+  const s = String(code).trim();
+  if (s === '' || s === '0') return { valid: true };
+  const cleaned = s.replace(/\D/g, '');
   if (cleaned.length === 8) return { valid: true };
-  if (code.match(/^0\.00\.00\.000$/)) return { valid: true };
+  if (s.match(/^0\.00\.00\.000$/)) return { valid: true };
   return { valid: false, error: 'Código TUSS deve ter 8 dígitos ou formato 0.00.00.000' };
 };
 
@@ -207,19 +210,22 @@ export const createProcedure = (user, priceTableId, data) => {
   if (!data.title || !data.title.trim()) {
     throw new Error('Título do procedimento é obrigatório');
   }
-  if (!data.specialty) {
-    throw new Error('Especialidade é obrigatória');
-  }
-  if (!data.price || data.price <= 0) {
-    throw new Error('Preço deve ser maior que zero');
+  const specialtyTrim = data.specialty && String(data.specialty).trim();
+  const specialty = specialtyTrim || SPECIALTIES[0];
+  const priceNum =
+    data.price === null || data.price === undefined || data.price === ''
+      ? 0
+      : Number(data.price);
+  if (!Number.isFinite(priceNum) || priceNum < 0) {
+    throw new Error('Preço inválido');
   }
   if (data.minPrice && data.maxPrice && data.minPrice > data.maxPrice) {
     throw new Error('Preço mínimo não pode ser maior que o máximo');
   }
-  if (data.minPrice && data.price < data.minPrice) {
+  if (data.minPrice != null && priceNum < data.minPrice) {
     throw new Error('Preço não pode ser menor que o mínimo');
   }
-  if (data.maxPrice && data.price > data.maxPrice) {
+  if (data.maxPrice != null && priceNum > data.maxPrice) {
     throw new Error('Preço não pode ser maior que o máximo');
   }
 
@@ -239,18 +245,26 @@ export const createProcedure = (user, priceTableId, data) => {
       db.priceTableProcedures = [];
     }
 
+    const titleNorm = data.title.trim().toLowerCase();
+    const dup = db.priceTableProcedures.find(
+      (p) => p.priceTableId === priceTableId && p.title.trim().toLowerCase() === titleNorm
+    );
+    if (dup) {
+      throw new Error('Já existe um procedimento com este nome nesta tabela.');
+    }
+
     const newProcedure = {
       id: createId('procedure'),
       priceTableId,
       title: data.title.trim(),
       status: data.status || PROCEDURE_STATUS.ATIVO,
       segment: data.segment || PROCEDURE_SEGMENT.ODONTOLOGIA,
-      specialty: data.specialty,
+      specialty,
       tussCode: data.tussCode || null,
       internalCode: data.internalCode || null,
       shortcut: data.shortcut || null,
       costPrice: data.costPrice ?? null,
-      price: data.price,
+      price: priceNum,
       minPrice: data.minPrice ?? null,
       maxPrice: data.maxPrice ?? null,
       priceRestriction: data.priceRestriction || PRICE_RESTRICTION.LIVRE,
@@ -278,19 +292,15 @@ export const updateProcedure = (user, procedureId, data) => {
   if (payload.title !== undefined && !payload.title.trim()) {
     throw new Error('Título do procedimento é obrigatório');
   }
-  if (payload.price !== undefined && payload.price <= 0) {
-    throw new Error('Preço deve ser maior que zero');
+  if (payload.price !== undefined) {
+    const p =
+      payload.price === null || payload.price === ''
+        ? 0
+        : Number(payload.price);
+    if (!Number.isFinite(p) || p < 0) {
+      throw new Error('Preço inválido');
+    }
   }
-  if (payload.minPrice && payload.maxPrice && payload.minPrice > payload.maxPrice) {
-    throw new Error('Preço mínimo não pode ser maior que o máximo');
-  }
-  if (payload.minPrice && payload.price < payload.minPrice) {
-    throw new Error('Preço não pode ser menor que o mínimo');
-  }
-  if (payload.maxPrice && payload.price > payload.maxPrice) {
-    throw new Error('Preço não pode ser maior que o máximo');
-  }
-
   if (payload.tussCode !== undefined) {
     const tussValidation = validateTussCode(payload.tussCode);
     if (!tussValidation.valid) {
@@ -307,9 +317,48 @@ export const updateProcedure = (user, procedureId, data) => {
       throw new Error('Procedimento não encontrado');
     }
 
+    const existing = db.priceTableProcedures[index];
+    const targetTableId =
+      payload.priceTableId !== undefined ? payload.priceTableId : existing.priceTableId;
+    if (payload.priceTableId !== undefined) {
+      const table = db.priceTables?.find((t) => t.id === targetTableId);
+      if (!table) {
+        throw new Error('Tabela de preço não encontrada');
+      }
+    }
+    const mergedTitle = (payload.title !== undefined ? payload.title : existing.title).trim();
+    const dup = db.priceTableProcedures.find(
+      (p) =>
+        p.priceTableId === targetTableId &&
+        p.id !== procedureId &&
+        p.title.trim().toLowerCase() === mergedTitle.toLowerCase()
+    );
+    if (dup) {
+      throw new Error('Já existe um procedimento com este nome nesta tabela.');
+    }
+
+    const { priceTableId: _pt, ...restPayload } = payload;
+
+    const next = {
+      ...existing,
+      ...restPayload,
+      priceTableId: targetTableId,
+      title: payload.title !== undefined ? mergedTitle : existing.title,
+    };
+
+    if (next.minPrice != null && next.maxPrice != null && next.minPrice > next.maxPrice) {
+      throw new Error('Preço mínimo não pode ser maior que o máximo');
+    }
+    const effPrice = next.price;
+    if (next.minPrice != null && effPrice < next.minPrice) {
+      throw new Error('Preço não pode ser menor que o mínimo');
+    }
+    if (next.maxPrice != null && effPrice > next.maxPrice) {
+      throw new Error('Preço não pode ser maior que o máximo');
+    }
+
     db.priceTableProcedures[index] = {
-      ...db.priceTableProcedures[index],
-      ...payload,
+      ...next,
       updatedAt: new Date().toISOString(),
       updatedByUserId: user?.id || null,
     };
@@ -370,6 +419,21 @@ export const listProcedures = (filters = {}) => {
     );
   }
 
+  const priceMin =
+    filters.priceMin !== undefined && filters.priceMin !== '' && filters.priceMin !== null
+      ? Number(filters.priceMin)
+      : null;
+  const priceMax =
+    filters.priceMax !== undefined && filters.priceMax !== '' && filters.priceMax !== null
+      ? Number(filters.priceMax)
+      : null;
+  if (priceMin !== null && Number.isFinite(priceMin)) {
+    procedures = procedures.filter((p) => (p.price || 0) >= priceMin);
+  }
+  if (priceMax !== null && Number.isFinite(priceMax)) {
+    procedures = procedures.filter((p) => (p.price || 0) <= priceMax);
+  }
+
   // Ordenação
   if (filters.sortBy === 'name') {
     procedures.sort((a, b) => a.title.localeCompare(b.title));
@@ -379,6 +443,8 @@ export const listProcedures = (filters = {}) => {
     procedures.sort((a, b) => (a.price || 0) - (b.price || 0));
   } else if (filters.sortBy === 'updated') {
     procedures.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  } else if (filters.sortBy === 'created') {
+    procedures.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   }
 
   return procedures;
@@ -497,6 +563,7 @@ export const importProceduresBatch = ({
   let createdCount = 0;
   let updatedCount = 0;
   let overrideCount = 0;
+  let skippedDuplicateCount = 0;
 
   withDb((db) => {
     // Verificar se a tabela existe
@@ -509,18 +576,35 @@ export const importProceduresBatch = ({
     db.procedurePriceOverrides = db.procedurePriceOverrides || [];
 
     createItems.forEach((item, index) => {
+      const titleNorm = item.title.trim().toLowerCase();
+      const dup = db.priceTableProcedures.some(
+        (p) => p.priceTableId === priceTableId && p.title.trim().toLowerCase() === titleNorm
+      );
+      if (dup) {
+        skippedDuplicateCount += 1;
+        return;
+      }
       const newProcedure = {
         id: createId('procedure'),
         priceTableId, // OBRIGATÓRIO: sempre vinculado à tabela
         title: item.title.trim(),
         status: item.status || PROCEDURE_STATUS.ATIVO,
         segment: item.segment || PROCEDURE_SEGMENT.ODONTOLOGIA,
-        specialty: item.specialty,
+        specialty:
+          (item.specialty && String(item.specialty).trim()) || SPECIALTIES[0],
         tussCode: item.tussCode || null,
         internalCode: item.internalCode || null,
         shortcut: item.shortcut || null,
         costPrice: item.costPrice ?? null,
-        price: item.price || item.defaultPrice || 0, // Corrigido: usar price primeiro, depois defaultPrice como fallback
+        price: (() => {
+          const raw =
+            item.price === null || item.price === undefined || item.price === ''
+              ? item.defaultPrice
+              : item.price;
+          if (raw === null || raw === undefined || raw === '') return 0;
+          const n = Number(raw);
+          return Number.isFinite(n) && n >= 0 ? n : 0;
+        })(),
         minPrice: item.minPrice ?? null,
         maxPrice: item.maxPrice ?? null,
         priceRestriction: item.priceRestriction || PRICE_RESTRICTION.LIVRE,
@@ -609,5 +693,5 @@ export const importProceduresBatch = ({
     userId: user?.id || null,
   });
 
-  return { createdCount, updatedCount, overrideCount };
+  return { createdCount, updatedCount, overrideCount, skippedDuplicateCount };
 };

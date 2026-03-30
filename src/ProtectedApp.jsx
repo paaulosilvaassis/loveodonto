@@ -1,7 +1,6 @@
 /**
  * Shell das rotas protegidas. Carregado via lazy para não bloquear a tela de login.
  */
-import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import RequireRole from './auth/RequireRole.jsx';
 import RequireAdminGate from './auth/RequireAdminGate.jsx';
@@ -14,10 +13,13 @@ import OnboardingClinicaPage from './pages/OnboardingClinicaPage.jsx';
 import ClinicSettingsPage from './pages/ClinicSettingsPage.jsx';
 import CommunicationPage from './pages/CommunicationPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
-import FinancePage from './pages/FinancePage.jsx';
 import FinanceReceivablesPage from './pages/FinanceReceivablesPage.jsx';
 import FinancePayablesPage from './pages/FinancePayablesPage.jsx';
 import FinanceCashRegisterPage from './pages/FinanceCashRegisterPage.jsx';
+import FinanceBoletosPage from './pages/FinanceBoletosPage.jsx';
+import FinanceFinanciamentoPage from './pages/FinanceFinanciamentoPage.jsx';
+import FinanceFaturamentoPage from './pages/FinanceFaturamentoPage.jsx';
+import FinanceComissoesPage from './pages/FinanceComissoesPage.jsx';
 import FornecedoresPage from './pages/administrativo/FornecedoresPage.jsx';
 import InventoryPage from './pages/InventoryPage.jsx';
 import AdminUsuariosPage from './pages/AdminUsuariosPage.jsx';
@@ -102,12 +104,13 @@ export default function ProtectedApp() {
         <Route path="/master" element={<Navigate to="/gestao/dashboard" replace />} />
         <Route path="/admin" element={<Navigate to="/admin/dados-clinica" replace />} />
         <Route path="/admin/dados-clinica" element={withAdminGate(withRole('/admin/dados-clinica', <ClinicSettingsPage />))} />
+        <Route path="/admin/colaboradores/novo" element={withAdminGate(withRole('/admin/colaboradores', <CollaboratorsPage />))} />
         <Route path="/admin/colaboradores" element={withAdminGate(withRole('/admin/colaboradores', <CollaboratorsPage />))} />
         <Route path="/admin/acessos" element={<Navigate to="/admin/colaboradores" replace />} />
         <Route path="/admin/usuarios" element={withAdminGate(withRole('/admin/usuarios', <AdminUsuariosPage />))} />
         <Route path="/admin/base-precos" element={withAdminGate(withRole('/admin/base-precos', <PriceBasePage />))} />
         <Route path="/admin/base-precos/tabelas/:priceTableId" element={withAdminGate(withRole('/admin/base-precos', <PriceBaseTableDetailPage />))} />
-        <Route path="/admin/procedimentos" element={withAdminGate(withRole('/admin/procedimentos', <PlaceholderPage title="Cadastro de Procedimentos" description="Cadastro e categorização de procedimentos." />))} />
+        <Route path="/admin/procedimentos" element={<Navigate to="/admin/base-precos" replace />} />
         <Route path="/admin/contratos" element={withAdminGate(withRole('/admin/contratos', <PlaceholderPage title="Contratos" description="Modelos e contratos com pacientes." />))} />
         <Route path="/admin/consentimentos" element={withAdminGate(withRole('/admin/consentimentos', <PlaceholderPage title="Consentimentos" description="Termos e autorizações digitais." />))} />
         <Route path="/admin/fornecedores" element={withAdminGate(withRole('/admin/fornecedores', <FornecedoresPage />))} />
@@ -115,10 +118,10 @@ export default function ProtectedApp() {
         <Route path="/financeiro/contas-pagar" element={withRole('/financeiro/contas-pagar', <FinancePayablesPage />)} />
         <Route path="/financeiro/contas-receber" element={withRole('/financeiro/contas-receber', <FinanceReceivablesPage />)} />
         <Route path="/financeiro/caixa" element={withRole('/financeiro/caixa', <FinanceCashRegisterPage />)} />
-        <Route path="/financeiro/boletos" element={withRole('/financeiro/boletos', <PlaceholderPage title="Boletos" description="Emissão e acompanhamento de boletos." />)} />
-        <Route path="/financeiro/financiamento" element={withRole('/financeiro/financiamento', <PlaceholderPage title="Financiamento" description="Simulações e condições de pagamento." />)} />
-        <Route path="/financeiro/faturamento" element={withRole('/financeiro/faturamento', <PlaceholderPage title="Faturamento" description="Receita e metas de faturamento." />)} />
-        <Route path="/financeiro/comissoes" element={withRole('/financeiro/comissoes', <PlaceholderPage title="Comissões" description="Comissões e repasses por colaborador." />)} />
+        <Route path="/financeiro/boletos" element={withRole('/financeiro/boletos', <FinanceBoletosPage />)} />
+        <Route path="/financeiro/financiamento" element={withRole('/financeiro/financiamento', <FinanceFinanciamentoPage />)} />
+        <Route path="/financeiro/faturamento" element={withRole('/financeiro/faturamento', <FinanceFaturamentoPage />)} />
+        <Route path="/financeiro/comissoes" element={withRole('/financeiro/comissoes', <FinanceComissoesPage />)} />
         <Route path="/financeiro/relatorios" element={withRole('/financeiro/relatorios', <ReportsPage />)} />
         <Route path="/comercial/chats" element={withRole('/comercial/chats', <PlaceholderPage title="Histórico de Chats" description="Histórico completo de conversas." />)} />
         <Route path="/comercial/follow-up" element={withRole('/comercial/follow-up', <ComercialFollowUpPage />)} />

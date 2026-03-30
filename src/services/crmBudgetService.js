@@ -211,7 +211,7 @@ export function updateCrmBudgetStatus(user, payload) {
     throw new Error('Motivo da negativa é obrigatório quando o orçamento é negado.');
   }
 
-  return withDb((db) => {
+  const result = withDb((db) => {
     const idx = (db.crmBudgets || []).findIndex((b) => b.id === budgetId);
     if (idx < 0) throw new Error('Orçamento não encontrado.');
     const budget = db.crmBudgets[idx];
@@ -295,6 +295,31 @@ export function updateCrmBudgetStatus(user, payload) {
 
     return budget;
   });
+
+  if (result?.status === BUDGET_STATUS.APROVADO && status === BUDGET_STATUS.APROVADO) {
+    import('./commissionCalculationService.js')
+      .then((mod) => {
+        try {
+          mod.syncClosingCommissionsForBudget(user, result.id);
+        } catch {
+          /* best-effort */
+        }
+      })
+      .catch(() => {});
+  }
+  if (result?.status === BUDGET_STATUS.NEGADO && status === BUDGET_STATUS.NEGADO) {
+    import('./commissionCalculationService.js')
+      .then((mod) => {
+        try {
+          mod.reverseClosingCommissionsForBudget(user, budgetId, String(deniedReason || ''));
+        } catch {
+          /* best-effort */
+        }
+      })
+      .catch(() => {});
+  }
+
+  return result;
 }
 
 /**

@@ -2,30 +2,34 @@ import { useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import {
   COMMISSION_TYPE,
-  PRICE_RESTRICTION,
-  PROCEDURE_SEGMENT,
-  PROCEDURE_STATUS,
   SPECIALTIES,
-  validateTussCode,
   importProceduresBatch,
   listProcedures,
 } from '../services/priceBaseService.js';
+import {
+  detectColumnMapping,
+  findBestHeaderRowIndex,
+  normalizeImportRow,
+  sheetRowsToObjects,
+  validateImportRow,
+} from '../services/priceBaseImportParse.js';
 import { Upload, Download, ChevronRight, ChevronLeft, X, AlertTriangle } from 'lucide-react';
 
 const FIELD_OPTIONS = [
   { key: 'ignore', label: 'Ignorar' },
-  { key: 'title', label: 'Título (obrigatório)' },
+  { key: 'title', label: 'Título / nome (obrigatório na importação)' },
   { key: 'status', label: 'Situação' },
   { key: 'segment', label: 'Segmento' },
-  { key: 'specialty', label: 'Especialidade (obrigatório)' },
-  { key: 'tussCode', label: 'Código TUSS' },
+  { key: 'specialty', label: 'Especialidade (opcional)' },
+  { key: 'tussCode', label: 'Código TUSS / TISS' },
   { key: 'internalCode', label: 'Código Interno' },
   { key: 'shortcut', label: 'Atalho' },
   { key: 'costPrice', label: 'Preço de Custo' },
-  { key: 'price', label: 'Preço (obrigatório)' },
+  { key: 'price', label: 'Preço (opcional; padrão 0)' },
   { key: 'minPrice', label: 'Preço Mínimo' },
   { key: 'maxPrice', label: 'Preço Máximo' },
   { key: 'priceRestriction', label: 'Restrição de Preço' },
+  { key: 'notes', label: 'Observações / descrição' },
 ];
 
 const STEP_LABELS = [
@@ -34,263 +38,17 @@ const STEP_LABELS = [
   { id: 3, label: 'Revisão + Importar' },
 ];
 
-const normalizeHeader = (value) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-
-const parseMoney = (value) => {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  const raw = String(value).trim();
-  if (!raw) return null;
-  const cleaned = raw.replace(/[^\d,.-]/g, '');
-  if (!cleaned) return null;
-  if (cleaned.includes(',') && cleaned.includes('.')) {
-    const normalized = cleaned.replace(/\./g, '').replace(',', '.');
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
+function readSheetAsRows(workbook, sheetName) {
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet) {
+    throw new Error(sheetName ? `Planilha "${sheetName}" não encontrada` : 'Planilha não encontrada');
   }
-  const normalized = cleaned.replace(',', '.');
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
-};
-
-const normalizeStatus = (value) => {
-  const raw = normalizeHeader(value);
-  if (!raw) return PROCEDURE_STATUS.ATIVO;
-  if (['ativo', '1', 'sim', 'yes'].includes(raw)) return PROCEDURE_STATUS.ATIVO;
-  if (['inativo', '0', 'nao', 'não', 'no'].includes(raw)) return PROCEDURE_STATUS.INATIVO;
-  return PROCEDURE_STATUS.ATIVO;
-};
-
-const normalizeRestriction = (value) => {
-  const raw = normalizeHeader(value);
-  if (!raw) return PRICE_RESTRICTION.LIVRE;
-  if (raw.includes('avis')) return PRICE_RESTRICTION.AVISAR;
-  if (raw.includes('bloq')) return PRICE_RESTRICTION.BLOQUEAR;
-  if (raw.includes('fix')) return PRICE_RESTRICTION.FIXO;
-  return PRICE_RESTRICTION.LIVRE;
-};
-
-const normalizeSegment = (value) => {
-  const raw = normalizeHeader(value);
-  if (!raw) return PROCEDURE_SEGMENT.ODONTOLOGIA;
-  if (raw.includes('oro') || raw.includes('orofacial')) return PROCEDURE_SEGMENT.OROFACIAL;
-  if (raw.includes('diag') || raw.includes('imagem')) return PROCEDURE_SEGMENT.DIAGNOSTICO_IMAGEM;
-  if (raw.includes('odont')) return PROCEDURE_SEGMENT.ODONTOLOGIA;
-  return PROCEDURE_SEGMENT.ODONTOLOGIA;
-};
-
-const detectMapping = (columns) => {
-  const mapping = {};
-  columns.forEach((col) => {
-    const normalized = normalizeHeader(col);
-    if (!normalized) {
-      mapping[col] = 'ignore';
-      return;
-    }
-    // Detecção de título: priorizar "titulo" e excluir "referencia"
-    // "Procedimento de Referência" não deve ser mapeado para title
-    if (normalized.includes('referencia') || normalized.includes('referência')) {
-      mapping[col] = 'ignore';
-      return;
-    }
-    // Priorizar colunas que contêm "titulo" explicitamente
-    if (normalized.includes('titulo') || normalized.includes('título')) {
-      mapping[col] = 'title';
-      return;
-    }
-    // Se contém "procedimento" mas não é "referência", pode ser título
-    if (normalized.includes('procedimento') && !normalized.includes('referencia') && !normalized.includes('referência')) {
-      // Verificar se já existe um título mapeado
-      const hasTitle = Object.values(mapping).includes('title');
-      if (!hasTitle) {
-        mapping[col] = 'title';
-        return;
-      }
-    }
-    // Fallback para "nome" apenas se não houver título ainda
-    if (normalized.includes('nome')) {
-      const hasTitle = Object.values(mapping).includes('title');
-      if (!hasTitle) {
-        mapping[col] = 'title';
-        return;
-      }
-    }
-    if (normalized.includes('status') || normalized.includes('situacao') || normalized.includes('situação')) {
-      mapping[col] = 'status';
-      return;
-    }
-    if (normalized.includes('tuss')) {
-      mapping[col] = 'tussCode';
-      return;
-    }
-    if (normalized.includes('codigo interno') || normalized.includes('codigo_interno') || normalized.includes('cod interno')) {
-      mapping[col] = 'internalCode';
-      return;
-    }
-    if (normalized.includes('custo')) {
-      mapping[col] = 'costPrice';
-      return;
-    }
-    // Verificar campos específicos ANTES do genérico "preço/valor"
-    // "Valor Mínimo" → "valor minimo" → deve mapear para minPrice
-    if ((normalized.includes('minimo') || normalized.includes('mínimo') || normalized.includes('min')) && 
-        (normalized.includes('valor') || normalized.includes('preco') || normalized.includes('preço'))) {
-      mapping[col] = 'minPrice';
-      return;
-    }
-    // "Valor Máximo" → "valor maximo" → deve mapear para maxPrice
-    if ((normalized.includes('maximo') || normalized.includes('máximo') || normalized.includes('max')) && 
-        (normalized.includes('valor') || normalized.includes('preco') || normalized.includes('preço'))) {
-      mapping[col] = 'maxPrice';
-      return;
-    }
-    // "Restringir Preço" → "restringir preco" → deve mapear para priceRestriction
-    if (normalized.includes('restri') || normalized.includes('restring')) {
-      mapping[col] = 'priceRestriction';
-      return;
-    }
-    // Verificar comissão antes de mapear para defaultPrice
-    if (normalized.includes('comissao') || normalized.includes('comissão')) {
-      mapping[col] = 'ignore';
-      return;
-    }
-    // Mapear "Preço" ou "Valor" (sem qualificadores min/max/comissão) para price
-    // Exemplo: "Preço" → "preco", "Valor" → "valor"
-    if (normalized === 'preco' || normalized === 'preço' || normalized === 'valor') {
-      mapping[col] = 'price';
-      return;
-    }
-    // Se contém "preco" ou "preço" mas não contém min/max/comissão
-    if ((normalized.includes('preco') || normalized.includes('preço')) && 
-        !normalized.includes('min') && !normalized.includes('max') && 
-        !normalized.includes('comissao') && !normalized.includes('comissão')) {
-      mapping[col] = 'price';
-      return;
-    }
-    if (normalized.includes('especial')) {
-      mapping[col] = 'specialty';
-      return;
-    }
-    if (normalized.includes('segment')) {
-      mapping[col] = 'segment';
-      return;
-    }
-    mapping[col] = 'ignore';
-  });
-  return mapping;
-};
-
-const normalizeRow = (row, mapping) => {
-  const result = {};
-  // Encontrar a primeira coluna mapeada para "title" (prioridade)
-  const titleColumns = Object.entries(mapping).filter(([col, field]) => field === 'title');
-  let titleProcessed = false;
-  
-  Object.entries(mapping).forEach(([column, field]) => {
-    if (field === 'ignore') return;
-    
-    // Para "title", processar apenas a primeira coluna encontrada
-    if (field === 'title') {
-      if (titleProcessed) return; // Já processamos um título, ignorar os demais
-      titleProcessed = true;
-    }
-    
-    // Tentar encontrar o valor mesmo se a chave tiver espaços extras ou diferenças de case
-    let value = row[column];
-    if (value === undefined || value === null || value === '') {
-      // Tentar encontrar por chave normalizada
-      const normalizedCol = normalizeHeader(column);
-      for (const [key, val] of Object.entries(row)) {
-        if (normalizeHeader(key) === normalizedCol) {
-          value = val;
-          break;
-        }
-      }
-    }
-    switch (field) {
-      case 'title':
-        result.title = String(value || '').trim();
-        break;
-      case 'status':
-        result.status = normalizeStatus(value);
-        break;
-      case 'segment':
-        result.segment = normalizeSegment(value);
-        break;
-      case 'specialty':
-        result.specialty = String(value || '').trim();
-        break;
-      case 'tussCode':
-        result.tussCode = String(value || '').trim();
-        break;
-      case 'internalCode':
-        result.internalCode = String(value || '').trim();
-        break;
-      case 'shortcut':
-        result.shortcut = String(value || '').trim();
-        break;
-      case 'costPrice':
-        result.costPrice = parseMoney(value);
-        break;
-      case 'price': {
-        const parsed = parseMoney(value);
-        result.price = parsed;
-        break;
-      }
-      case 'minPrice':
-        result.minPrice = parseMoney(value);
-        break;
-      case 'maxPrice':
-        result.maxPrice = parseMoney(value);
-        break;
-      case 'priceRestriction':
-        result.priceRestriction = normalizeRestriction(value);
-        break;
-      default:
-        break;
-    }
-  });
-  if (!result.status) result.status = PROCEDURE_STATUS.ATIVO;
-  if (!result.segment) result.segment = PROCEDURE_SEGMENT.ODONTOLOGIA;
-  if (!result.priceRestriction) result.priceRestriction = PRICE_RESTRICTION.LIVRE;
-  return result;
-};
-
-const validateRow = (row) => {
-  const errors = [];
-  const warnings = [];
-
-  if (!row.title) errors.push('Título obrigatório');
-  if (!row.specialty) errors.push('Especialidade obrigatória');
-  if (!row.price || row.price <= 0) errors.push('Preço inválido');
-
-  if (row.minPrice !== null && row.maxPrice !== null && row.minPrice > row.maxPrice) {
-    errors.push('Preço mínimo maior que máximo');
-  }
-  if (row.minPrice !== null && row.price !== null && row.price < row.minPrice) {
-    errors.push('Preço menor que mínimo');
-  }
-  if (row.maxPrice !== null && row.price !== null && row.price > row.maxPrice) {
-    errors.push('Preço maior que máximo');
-  }
-
-  if (row.tussCode) {
-    const validation = validateTussCode(row.tussCode);
-    if (!validation.valid) errors.push(validation.error);
-  }
-
-
-  if (row.specialty && !SPECIALTIES.includes(row.specialty)) {
-    warnings.push('Especialidade fora da lista padrão');
-  }
-
-  return { errors, warnings };
-};
+  const rawRowsArray = XLSX.utils.sheet_to_json(sheet, { defval: '', header: 1 });
+  const headerRowIndex = findBestHeaderRowIndex(rawRowsArray);
+  const rows = sheetRowsToObjects(rawRowsArray, headerRowIndex);
+  const columns = rows.length > 0 ? Object.keys(rows[0]) : [];
+  return { rows, columns, headerRowIndex };
+}
 
 export default function PriceBaseImportWizard({
   open,
@@ -312,13 +70,14 @@ export default function PriceBaseImportWizard({
   const [error, setError] = useState(null);
 
   const normalizedRows = useMemo(() => {
-    const normalized = rawRows.map((row) => normalizeRow(row, mapping));
-    return normalized;
+    return rawRows.map((row) => normalizeImportRow(row, mapping));
   }, [rawRows, mapping]);
   const validationResults = useMemo(() => {
-    const results = normalizedRows.map((row, index) => ({ index, ...validateRow(row) }));
-    return results;
-  }, [normalizedRows]);
+    return normalizedRows.map((normRow, index) => ({
+      index,
+      ...validateImportRow(rawRows[index] || {}, normRow, mapping),
+    }));
+  }, [normalizedRows, rawRows, mapping]);
 
   const previewRows = useMemo(() => normalizedRows.slice(0, 12), [normalizedRows]);
 
@@ -330,48 +89,16 @@ export default function PriceBaseImportWizard({
       const data = await selectedFile.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
       const names = workbook.SheetNames || [];
+      if (!names.length) {
+        throw new Error('Arquivo sem planilhas');
+      }
       setSheetNames(names);
       const sheetName = names[0];
       setSelectedSheet(sheetName || '');
-      const sheet = workbook.Sheets[sheetName];
-      if (!sheet) {
-        throw new Error('Planilha não encontrada no arquivo');
-      }
-      // Tentar detectar se a primeira linha é cabeçalho ou título
-      const rawRowsArray = XLSX.utils.sheet_to_json(sheet, { defval: '', header: 1 });
-      // Procurar a primeira linha que tenha pelo menos 3 valores não-vazios (provavelmente o cabeçalho)
-      let headerRowIndex = 0;
-      for (let i = 0; i < Math.min(rawRowsArray.length, 10); i++) {
-        const row = rawRowsArray[i];
-        if (Array.isArray(row)) {
-          const nonEmptyCount = row.filter(c => c && String(c).trim()).length;
-          // Se encontramos uma linha com pelo menos 3 valores não-vazios, usar como cabeçalho
-          if (nonEmptyCount >= 3) {
-            headerRowIndex = i;
-            break;
-          }
-        }
-      }
-      // Converter usando o cabeçalho correto
-      let rows;
-      if (headerRowIndex > 0) {
-        // Se precisamos pular linhas antes do cabeçalho, converter manualmente usando a linha correta como cabeçalho
-        const headerRow = rawRowsArray[headerRowIndex];
-        const dataRows = rawRowsArray.slice(headerRowIndex + 1);
-        rows = dataRows.map((row) => {
-          const obj = {};
-          headerRow.forEach((header, idx) => {
-            obj[String(header || '').trim() || `__EMPTY_${idx}`] = row[idx] || '';
-          });
-          return obj;
-        });
-      } else {
-        rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-      }
-      const cols = rows.length > 0 ? Object.keys(rows[0]) : [];
+      const { rows, columns: cols } = readSheetAsRows(workbook, sheetName);
       setRawRows(rows);
       setColumns(cols);
-      setMapping(detectMapping(cols));
+      setMapping(detectColumnMapping(cols));
       setStep(2);
       setError(null);
     } catch (error) {
@@ -392,44 +119,10 @@ export default function PriceBaseImportWizard({
     file.arrayBuffer()
       .then((data) => {
         const workbook = XLSX.read(data, { type: 'array' });
-        const sheet = workbook.Sheets[sheetName];
-        if (!sheet) {
-          throw new Error(`Planilha "${sheetName}" não encontrada`);
-        }
-        // Tentar detectar se a primeira linha é cabeçalho ou título
-        const rawRowsArray = XLSX.utils.sheet_to_json(sheet, { defval: '', header: 1 });
-        // Procurar a primeira linha que tenha pelo menos 3 valores não-vazios (provavelmente o cabeçalho)
-        let headerRowIndex = 0;
-        for (let i = 0; i < Math.min(rawRowsArray.length, 10); i++) {
-          const row = rawRowsArray[i];
-          if (Array.isArray(row)) {
-            const nonEmptyCount = row.filter(c => c && String(c).trim()).length;
-            // Se encontramos uma linha com pelo menos 3 valores não-vazios, usar como cabeçalho
-            if (nonEmptyCount >= 3) {
-              headerRowIndex = i;
-              break;
-            }
-          }
-        }
-        let rows;
-        if (headerRowIndex > 0) {
-          // Se precisamos pular a primeira linha, converter manualmente usando a segunda linha como cabeçalho
-          const headerRow = rawRowsArray[headerRowIndex];
-          const dataRows = rawRowsArray.slice(headerRowIndex + 1);
-          rows = dataRows.map((row) => {
-            const obj = {};
-            headerRow.forEach((header, idx) => {
-              obj[String(header || '').trim() || `__EMPTY_${idx}`] = row[idx] || '';
-            });
-            return obj;
-          });
-        } else {
-          rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-        }
-        const cols = rows.length > 0 ? Object.keys(rows[0]) : [];
+        const { rows, columns: cols } = readSheetAsRows(workbook, sheetName);
         setRawRows(rows);
         setColumns(cols);
-        setMapping(detectMapping(cols));
+        setMapping(detectColumnMapping(cols));
       })
       .catch((err) => {
         console.error('Erro ao trocar planilha:', err);
@@ -493,7 +186,12 @@ export default function PriceBaseImportWizard({
     let errors = 0;
     let warnings = 0;
     let valid = 0;
+    let empty = 0;
     validationResults.forEach((result) => {
+      if (result.emptyRow) {
+        empty += 1;
+        return;
+      }
       if (result.errors.length) {
         errors += 1;
       } else {
@@ -501,21 +199,36 @@ export default function PriceBaseImportWizard({
       }
       if (result.warnings.length) warnings += 1;
     });
-    return { errors, warnings, valid, total: validationResults.length };
+    return { errors, warnings, valid, empty, total: validationResults.length };
+  }, [validationResults]);
+
+  const errorDetailRows = useMemo(() => {
+    return validationResults
+      .filter((r) => !r.emptyRow && r.errors.length > 0)
+      .slice(0, 40);
   }, [validationResults]);
 
   const existingIndex = useMemo(() => {
-    if (!selectedTableId) return { byInternal: new Map(), byTuss: new Map(), byTitleSpecialty: new Map() };
+    if (!selectedTableId)
+      return {
+        byInternal: new Map(),
+        byTuss: new Map(),
+        byTitleSpecialty: new Map(),
+        byTitle: new Map(),
+      };
     const existing = listProcedures({ priceTableId: selectedTableId });
     const byInternal = new Map();
     const byTuss = new Map();
     const byTitleSpecialty = new Map();
+    const byTitle = new Map();
     existing.forEach((proc) => {
       if (proc.internalCode) byInternal.set(proc.internalCode.toLowerCase(), proc);
       if (proc.tussCode) byTuss.set(proc.tussCode.toLowerCase(), proc);
-      byTitleSpecialty.set(`${proc.title.toLowerCase()}::${proc.specialty.toLowerCase()}`, proc);
+      byTitleSpecialty.set(`${proc.title.toLowerCase()}::${(proc.specialty || '').toLowerCase()}`, proc);
+      const tk = proc.title.toLowerCase();
+      if (!byTitle.has(tk)) byTitle.set(tk, proc);
     });
-    return { byInternal, byTuss, byTitleSpecialty };
+    return { byInternal, byTuss, byTitleSpecialty, byTitle };
   }, [selectedTableId]);
 
   const handleImport = () => {
@@ -533,6 +246,9 @@ export default function PriceBaseImportWizard({
 
       normalizedRows.forEach((row, index) => {
         const validation = validationResults[index];
+        if (validation.emptyRow) {
+          return;
+        }
         if (validation.errors.length) {
           skippedByErrors += 1;
           return;
@@ -542,37 +258,46 @@ export default function PriceBaseImportWizard({
         const tussKey = row.tussCode?.toLowerCase();
         const titleKey = row.title?.toLowerCase();
         const specialtyKey = row.specialty?.toLowerCase();
+        const defaultSpecialty = SPECIALTIES[0];
 
         let match = null;
-        let matchType = null;
         if (internalKey && existingIndex.byInternal.has(internalKey)) {
           match = existingIndex.byInternal.get(internalKey);
-          matchType = 'internal';
         } else if (tussKey && existingIndex.byTuss.has(tussKey)) {
           match = existingIndex.byTuss.get(tussKey);
-          matchType = 'tuss';
         } else if (titleKey && specialtyKey) {
           const titleSpecialtyKey = `${titleKey}::${specialtyKey}`;
           match = existingIndex.byTitleSpecialty.get(titleSpecialtyKey) || null;
-          matchType = match ? 'titleSpecialty' : null;
+        } else if (titleKey) {
+          match = existingIndex.byTitle.get(titleKey) || null;
         }
+
+        const specialtyResolved =
+          row.specialty && String(row.specialty).trim()
+            ? row.specialty.trim()
+            : defaultSpecialty;
+
+        const priceResolved =
+          row.price !== null && row.price !== undefined && Number.isFinite(row.price)
+            ? row.price
+            : 0;
 
         const data = {
           title: row.title,
           status: row.status,
           segment: row.segment,
-          specialty: row.specialty,
+          specialty: specialtyResolved,
           tussCode: row.tussCode || null,
           internalCode: row.internalCode || null,
           shortcut: row.shortcut || null,
           costPrice: row.costPrice ?? null,
-          price: row.price,
+          price: priceResolved,
           minPrice: row.minPrice ?? null,
           maxPrice: row.maxPrice ?? null,
           priceRestriction: row.priceRestriction,
           commissionType: COMMISSION_TYPE.NENHUMA,
           commissionValue: null,
-          notes: null,
+          notes: row.notes || null,
         };
 
         if (match && importMode === 'create') {
@@ -630,8 +355,12 @@ export default function PriceBaseImportWizard({
       });
 
       if (result) {
-        onComplete?.(result);
-        alert(`Importação concluída: ${result.createdCount || 0} criados, ${result.updatedCount || 0} atualizados`);
+        onComplete?.({
+          ...result,
+          skippedByErrors,
+          skippedByMatch,
+          skippedByNoMatch,
+        });
       }
       setStep(1);
       setFile(null);
@@ -641,9 +370,6 @@ export default function PriceBaseImportWizard({
       setSelectedSheet('');
       setSheetNames([]);
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PriceBaseImportWizard.jsx:handleImport',message:'Erro capturado',data:{errorMessage:error?.message,errorStack:error?.stack,errorName:error?.name,selectedTableId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       console.error('Erro ao importar:', error);
       alert(`Erro ao importar: ${error?.message || 'Erro desconhecido'}`);
     } finally {
@@ -767,23 +493,49 @@ export default function PriceBaseImportWizard({
                   <table>
                     <thead>
                       <tr>
+                        <th>#</th>
                         <th>Título</th>
                         <th>Especialidade</th>
                         <th>Segmento</th>
                         <th>Preço</th>
                         <th>Restrição</th>
+                        <th>Validação</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {previewRows.map((row, idx) => (
-                        <tr key={`${row.title}-${idx}`}>
-                          <td>{row.title || '—'}</td>
-                          <td>{row.specialty || '—'}</td>
-                          <td>{row.segment || '—'}</td>
-                          <td>{row.price ? `R$ ${(row.price || 0).toFixed(2)}` : '—'}</td>
-                          <td>{row.priceRestriction || '—'}</td>
-                        </tr>
-                      ))}
+                      {previewRows.map((row, idx) => {
+                        const v = validationResults[idx];
+                        const valCell = v?.emptyRow
+                          ? 'Linha em branco (ignorada)'
+                          : v?.errors?.length
+                            ? v.errors
+                                .map(
+                                  (e) =>
+                                    `${e.field}: ${e.message}` +
+                                    (e.columns?.length ? ` [${e.columns.join(', ')}]` : '')
+                                )
+                                .join('; ')
+                            : v?.warnings?.length
+                              ? `Alerta: ${v.warnings.map((w) => w.message).join('; ')}`
+                              : 'OK';
+                        return (
+                          <tr key={`preview-${idx}`}>
+                            <td>{idx + 1}</td>
+                            <td>{row.title || '—'}</td>
+                            <td>{row.specialty || '—'}</td>
+                            <td>{row.segment || '—'}</td>
+                            <td>
+                              {row.price != null && Number.isFinite(row.price)
+                                ? `R$ ${row.price.toFixed(2)}`
+                                : '—'}
+                            </td>
+                            <td>{row.priceRestriction || '—'}</td>
+                            <td className={v?.errors?.length ? 'price-base-import-cell-error' : ''}>
+                              {valCell}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -810,12 +562,46 @@ export default function PriceBaseImportWizard({
                   <strong>Com erros</strong>
                   <span>{rowsSummary.errors}</span>
                 </div>
+                <div>
+                  <strong>Linhas vazias (ignoradas)</strong>
+                  <span>{rowsSummary.empty}</span>
+                </div>
               </div>
 
               {rowsSummary.errors > 0 && (
                 <div className="price-base-import-errors">
                   <AlertTriangle size={18} />
                   Existem linhas com erro. Elas não serão importadas.
+                </div>
+              )}
+
+              {errorDetailRows.length > 0 && (
+                <div className="price-base-import-error-details">
+                  <h4>Detalhe dos erros (primeiras {errorDetailRows.length} linhas)</h4>
+                  <div className="price-base-import-error-details-table-wrap">
+                    <table className="price-base-import-error-details-table">
+                      <thead>
+                        <tr>
+                          <th>Linha</th>
+                          <th>Campo</th>
+                          <th>Motivo</th>
+                          <th>Colunas na planilha</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {errorDetailRows.flatMap((r) =>
+                          r.errors.map((e, i) => (
+                            <tr key={`${r.index}-${e.field}-${i}`}>
+                              <td>{r.index + 1}</td>
+                              <td>{e.field}</td>
+                              <td>{e.message}</td>
+                              <td>{e.columns?.length ? e.columns.join(', ') : '—'}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 

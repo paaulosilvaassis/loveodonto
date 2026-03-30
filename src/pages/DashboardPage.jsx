@@ -27,7 +27,15 @@ import {
 import { loadDbAsync } from '../db/index.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
 import { getTicketsByUser } from '../services/supportTicketService.js';
+import { getNomeUsuario } from '../services/userProfileService.js';
 import SupportIcon from '../components/support/SupportIcon.jsx';
+
+function getSaudacaoAtual() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Bom dia';
+  if (hour < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -35,6 +43,7 @@ export default function DashboardPage() {
   const kpiGridRef = useRef(null);
   const [db, setDb] = useState(null);
   const [ticketRefresh, setTicketRefresh] = useState(0);
+  const [nomeUsuario, setNomeUsuario] = useState('Usuário');
 
   // Limpa preferências de assistente de voz removidas do sistema
   useEffect(() => {
@@ -161,6 +170,30 @@ export default function DashboardPage() {
 
   const currentUser = db ? (db.users.find((item) => item.id === session?.userId) || db.users[0]) : null;
 
+  useEffect(() => {
+    let cancelled = false;
+    const fallbackName = currentUser?.name || '';
+
+    const loadNomeUsuario = async () => {
+      try {
+        const nome = await getNomeUsuario(fallbackName);
+        if (!cancelled) {
+          setNomeUsuario(nome);
+        }
+      } catch {
+        if (!cancelled) {
+          setNomeUsuario(fallbackName || 'Usuário');
+        }
+      }
+    };
+
+    loadNomeUsuario();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.name]);
+
   const hasOpenTickets = useMemo(() => {
     if (!session?.userId) return false;
     const tickets = getTicketsByUser(session.userId);
@@ -178,13 +211,6 @@ export default function DashboardPage() {
   const appointments = db.appointments;
   const transactions = db.transactions;
   const patients = db.patients || [];
-
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Bom dia';
-    if (hour < 18) return 'Boa tarde';
-    return 'Boa noite';
-  };
 
   // 6 botões obrigatórios conforme requisito
   const quickActions = [
@@ -284,7 +310,7 @@ export default function DashboardPage() {
       <header className="app-dashboard-header">
         <div className="app-dashboard-header-main">
           <h1 className="app-dashboard-greeting">
-            Olá, {currentUser?.name?.split(' ')[0] || 'Usuário'} 👋
+            {getSaudacaoAtual()}, {nomeUsuario} 👋
           </h1>
           <p className="app-dashboard-clinic">
             {clinic?.nomeClinica || 'Clínica'}

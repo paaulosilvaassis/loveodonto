@@ -9,6 +9,14 @@ import { listTasks, getTaskSummary, TASK_STATUS } from './crmTaskService.js';
 import { getPipelineStages } from './crmService.js';
 
 const DEFAULT_CLINIC_ID = 'clinic-1';
+const RANGE_CUSTOM = 'custom';
+
+function normalizeRange(range) {
+  if (range === 'personalizado' || range === 'customRange' || range === 'dateRange') {
+    return RANGE_CUSTOM;
+  }
+  return range;
+}
 
 function getClinicId() {
   const db = loadDb();
@@ -19,20 +27,23 @@ function getClinicId() {
  * Resolve range para { startDate, endDate } ISO
  */
 function resolveRange(range, customStart, customEnd) {
+  const normalizedRange = normalizeRange(range);
   const now = new Date();
   now.setHours(23, 59, 59, 999);
   let start = new Date(now);
   start.setHours(0, 0, 0, 0);
 
-  if (range === '7d') {
+  if (normalizedRange === '7d') {
     start.setDate(start.getDate() - 7);
-  } else if (range === '30d') {
+  } else if (normalizedRange === '30d') {
     start.setDate(start.getDate() - 30);
-  } else if (range === 'current_month') {
+  } else if (normalizedRange === 'current_month') {
     start = new Date(now.getFullYear(), now.getMonth(), 1);
-  } else if (range === 'custom' && customStart && customEnd) {
+  } else if (normalizedRange === RANGE_CUSTOM && customStart && customEnd) {
     start = new Date(customStart);
+    start.setHours(0, 0, 0, 0);
     const end = new Date(customEnd);
+    end.setHours(23, 59, 59, 999);
     return { startDate: start.toISOString(), endDate: end.toISOString() };
   } else {
     start.setDate(start.getDate() - 30);

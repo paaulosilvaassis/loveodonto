@@ -81,6 +81,57 @@ export default function ReportsPage() {
     });
   };
 
+  const exportFinancings = () => {
+    downloadCsv({
+      filename: 'financiamentos.csv',
+      rows: (db.financings || []).map((item) => ({
+        clinica: clinic?.nomeClinica || '',
+        id: item.id,
+        paciente_id: item.patient_id,
+        descricao: item.description,
+        valor_total: item.total_amount,
+        valor_financiado: item.net_financed_amount,
+        parcelas: item.installments_count,
+        status: item.status,
+        aprovado_em: item.approved_at || '',
+        criado_em: item.created_at || '',
+      })),
+    });
+  };
+
+  const exportFinancingInstallments = () => {
+    downloadCsv({
+      filename: 'parcelas-financiadas.csv',
+      rows: (db.financingInstallments || []).map((item) => ({
+        financiamento_id: item.financing_id,
+        parcela: `${item.installment_number}/${item.total_installments}`,
+        vencimento: item.due_date,
+        valor: item.net_amount,
+        pago: item.paid_amount,
+        aberto: item.remaining_amount,
+        status: item.status,
+      })),
+    });
+  };
+
+  const exportBoletos = () => {
+    downloadCsv({
+      filename: 'boletos.csv',
+      rows: (db.boletoCharges || []).map((item) => ({
+        id: item.id,
+        financiamento_id: item.financing_id,
+        parcela_id: item.installment_id,
+        paciente_id: item.patient_id,
+        tipo: item.charge_type,
+        status: item.status,
+        valor: item.amount,
+        vencimento: item.due_date,
+        pago_em: item.paid_at || '',
+        linha_digitavel: item.linha_digitavel || '',
+      })),
+    });
+  };
+
   return (
     <div className="stack">
       <div className="card">
@@ -116,6 +167,24 @@ export default function ReportsPage() {
           <div className="card">
             <h3>Produtividade por colaborador</h3>
             <button className="button secondary" type="button" onClick={exportCollaborators}>
+              Exportar CSV
+            </button>
+          </div>
+          <div className="card">
+            <h3>Financiamentos ativos</h3>
+            <button className="button secondary" type="button" onClick={exportFinancings}>
+              Exportar CSV
+            </button>
+          </div>
+          <div className="card">
+            <h3>Parcelas financiadas (aging)</h3>
+            <button className="button secondary" type="button" onClick={exportFinancingInstallments}>
+              Exportar CSV
+            </button>
+          </div>
+          <div className="card">
+            <h3>Boletos pagos x vencidos</h3>
+            <button className="button secondary" type="button" onClick={exportBoletos}>
               Exportar CSV
             </button>
           </div>

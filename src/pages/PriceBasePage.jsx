@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePriceBaseBasePath } from '../hooks/usePriceBaseBasePath.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { SectionCard } from '../components/SectionCard.jsx';
 import {
@@ -16,6 +17,7 @@ import { Plus, Edit, Trash2, Copy, Star, X, Save } from 'lucide-react';
 export default function PriceBasePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const priceBasePath = usePriceBaseBasePath();
   const [priceTables, setPriceTables] = useState([]);
   const [showAddTableModal, setShowAddTableModal] = useState(false);
   const [editingTable, setEditingTable] = useState(null);
@@ -41,7 +43,7 @@ export default function PriceBasePage() {
       const newTable = duplicatePriceTable(user, tableId, newName);
       refreshPriceTables();
       if (newTable?.id) {
-        navigate(`/gestao-comercial/base-de-preco/tabelas/${newTable.id}`);
+        navigate(`${priceBasePath}/tabelas/${newTable.id}`);
       }
     } catch (error) {
       alert(error.message || 'Erro ao duplicar tabela');
@@ -108,10 +110,10 @@ export default function PriceBasePage() {
                 className="price-base-table-item"
                 role="button"
                 tabIndex={0}
-                onClick={() => navigate(`/gestao-comercial/base-de-preco/tabelas/${table.id}`)}
+                onClick={() => navigate(`${priceBasePath}/tabelas/${table.id}`)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') {
-                    navigate(`/gestao-comercial/base-de-preco/tabelas/${table.id}`);
+                    navigate(`${priceBasePath}/tabelas/${table.id}`);
                   }
                 }}
               >

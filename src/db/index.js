@@ -55,6 +55,14 @@ function applyPostMigrationFixes(migrated) {
   if (!Array.isArray(migrated.accountsReceivable)) migrated.accountsReceivable = [];
   if (!Array.isArray(migrated.receivablePayments)) migrated.receivablePayments = [];
   if (!Array.isArray(migrated.receivableCharges)) migrated.receivableCharges = [];
+  if (!Array.isArray(migrated.financings)) migrated.financings = [];
+  if (!Array.isArray(migrated.financingInstallments)) migrated.financingInstallments = [];
+  if (!Array.isArray(migrated.boletoCharges)) migrated.boletoCharges = [];
+  if (!Array.isArray(migrated.financingEvents)) migrated.financingEvents = [];
+  if (!Array.isArray(migrated.boletoReminderEvents)) migrated.boletoReminderEvents = [];
+  if (!Array.isArray(migrated.financingRenegotiations)) migrated.financingRenegotiations = [];
+  if (!Array.isArray(migrated.financingPaymentAllocations)) migrated.financingPaymentAllocations = [];
+  if (!Array.isArray(migrated.boletoChargeStatusHistory)) migrated.boletoChargeStatusHistory = [];
   if (migrated.version >= 21) {
     if (!migrated.crmTags || migrated.crmTags.length === 0) {
       migrated.crmTags = getSeedCrmTags(createId, migrated.clinicProfile?.id || 'clinic-1', new Date().toISOString());
@@ -279,7 +287,13 @@ export async function seedAdminCredentialsIfEmpty() {
       sexo: '',
       dataNascimento: '',
       fotoUrl: '',
-      cargo: 'Administrador',
+      rhCategoria: 'Diretoria e Gestão',
+      cargo: 'Gestor Geral',
+      rhFuncaoDescricao: '',
+      conselhoNome: '',
+      conselhoUf: '',
+      tipoVinculo: 'CLT',
+      setor: 'Gestão',
       especialidades: [],
       registroProfissional: '',
       email: ADMIN_SEED_EMAIL,

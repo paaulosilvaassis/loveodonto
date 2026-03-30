@@ -1,21 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { Section } from '../components/Section.jsx';
 import { Field } from '../components/Field.jsx';
 import Button from '../components/Button.jsx';
+import UsuarioMemberModal from '../components/configuracoes/UsuarioMemberModal.jsx';
 import { getDefaultTenant } from '../services/tenantService.js';
 import {
   listMembers,
-  updateMemberRole,
   setMemberSystemAccess,
   removeMember,
 } from '../services/membershipService.js';
 import {
   createInvitation,
   listInvitations,
+  refreshInvitation,
+  findPendingInvitationByEmail,
 } from '../services/invitationService.js';
 import { MEMBERSHIP_ROLE_LABELS, INVITABLE_ROLES } from '../constants/tenantRoles.js';
-import { UserPlus, Copy, Trash2, UserX } from 'lucide-react';
+import { UserPlus, Copy, Trash2, Pencil, Eye, Power, Mail } from 'lucide-react';
+
+function formatUpdatedAt(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  } catch {
+    return '—';
+  }
+}
+
+function isMemberAccessActive(m) {
+  return m.has_system_access !== false && m.user_active !== false;
+}
 
 export default function ConfiguracoesUsuariosPage() {
   const { user } = useAuth();
@@ -24,17 +39,33 @@ export default function ConfiguracoesUsuariosPage() {
   const [invitations, setInvitations] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [modalInvite, setModalInvite] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('atendimento');
   const [inviteAccess, setInviteAccess] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [editRoleId, setEditRoleId] = useState(null);
-  const [editRoleValue, setEditRoleValue] = useState('');
+  const [toast, setToast] = useState(null);
+  const toastTimerRef = useRef(null);
+  const [memberModal, setMemberModal] = useState({ open: false, member: null, mode: 'view' });
 
   const tenantId = tenant?.id;
   const isMaster = user?.isMaster || user?.role === 'admin';
+
+  const pushToast = (type, message) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ type, message });
+    setError('');
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 3800);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -44,14 +75,13 @@ export default function ConfiguracoesUsuariosPage() {
 
   const refresh = () => setRefreshKey((k) => k + 1);
 
-  const showSuccess = (msg) => {
-    setSuccess(msg);
-    setError('');
-    setTimeout(() => setSuccess(''), 3000);
-  };
   const showError = (msg) => {
     setError(msg);
-    setSuccess('');
+    setToast(null);
+  };
+
+  const openMemberModal = (member, mode) => {
+    setMemberModal({ open: true, member, mode });
   };
 
   const handleInvite = (e) => {
@@ -68,7 +98,7 @@ export default function ConfiguracoesUsuariosPage() {
         role: inviteRole,
         has_system_access: inviteAccess,
       });
-      showSuccess('Convite criado. Link copiado para a área de transferência.');
+      pushToast('success', 'Convite criado. Link copiado.');
       try {
         if (result.invite_url) navigator.clipboard.writeText(result.invite_url);
       } catch (_) {}
@@ -87,33 +117,45 @@ export default function ConfiguracoesUsuariosPage() {
   const handleCopyInviteUrl = (url) => {
     try {
       navigator.clipboard.writeText(url);
-      showSuccess('Link copiado.');
+      pushToast('success', 'Link copiado.');
     } catch {
       showError('Não foi possível copiar.');
     }
   };
 
-  const handleUpdateRole = (memberUserId) => {
-    if (!editRoleValue) return;
+  const handleRefreshInvite = (invitationId) => {
     setSaving(true);
     try {
-      updateMemberRole(user, tenantId, memberUserId, editRoleValue);
-      showSuccess('Perfil atualizado.');
-      setEditRoleId(null);
-      setEditRoleValue('');
+      const result = refreshInvitation(user, tenantId, invitationId);
+      pushToast('success', 'Convite renovado. Novo link copiado.');
+      try {
+        if (result.invite_url) navigator.clipboard.writeText(result.invite_url);
+      } catch (_) {}
       refresh();
     } catch (err) {
-      showError(err?.message || 'Erro ao atualizar.');
+      showError(err?.message || 'Erro ao renovar convite.');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleToggleAccess = (memberUserId, current) => {
+  const handleToggleAccessClick = (m) => {
+    if (m.user_id === user?.id) return;
+    const active = isMemberAccessActive(m);
+    const nextAccess = !active;
+    if (!nextAccess) {
+      if (
+        !window.confirm(
+          'Desativar o acesso deste usuário ao sistema? O login ficará bloqueado até reativar. O cadastro não será apagado.'
+        )
+      ) {
+        return;
+      }
+    }
     setSaving(true);
     try {
-      setMemberSystemAccess(user, tenantId, memberUserId, !current);
-      showSuccess(current ? 'Acesso desativado.' : 'Acesso ativado.');
+      setMemberSystemAccess(user, tenantId, m.user_id, nextAccess);
+      pushToast('success', nextAccess ? 'Acesso ativado.' : 'Acesso desativado.');
       refresh();
     } catch (err) {
       showError(err?.message || 'Erro ao alterar acesso.');
@@ -122,12 +164,21 @@ export default function ConfiguracoesUsuariosPage() {
     }
   };
 
+  const handleResendInviteForMember = (m) => {
+    const pending = findPendingInvitationByEmail(tenantId, m.email);
+    if (!pending?.id) {
+      showError('Não há convite pendente para este e-mail.');
+      return;
+    }
+    handleRefreshInvite(pending.id);
+  };
+
   const handleRemove = (memberUserId, memberName) => {
-    if (!window.confirm(`Remover "${memberName}" do acesso à clínica?`)) return;
+    if (!window.confirm(`Remover o vínculo de "${memberName}" com esta clínica? O usuário perderá o acesso mas o cadastro permanece.`)) return;
     setSaving(true);
     try {
       removeMember(user, tenantId, memberUserId);
-      showSuccess('Usuário removido.');
+      pushToast('success', 'Vínculo removido.');
       refresh();
     } catch (err) {
       showError(err?.message || 'Erro ao remover.');
@@ -156,10 +207,18 @@ export default function ConfiguracoesUsuariosPage() {
     <div className="stack">
       <Section
         title="Usuários e acessos"
-        description="Convide usuários e gerencie perfis e acesso ao sistema. Apenas o administrador (MASTER) pode alterar."
+        description="Gerencie perfis, dados cadastrais e acesso ao sistema. Apenas o administrador (MASTER) pode alterar."
       >
         {error && <div className="error">{error}</div>}
-        {success && <div className="success">{success}</div>}
+        {toast && (
+          <div
+            className={`toast ${toast.type}`}
+            role="status"
+            style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 4000, margin: 0 }}
+          >
+            {toast.message}
+          </div>
+        )}
 
         <div className="list-actions" style={{ marginBottom: '1rem' }}>
           <Button variant="primary" icon={UserPlus} onClick={() => setModalInvite(true)}>
@@ -175,80 +234,101 @@ export default function ConfiguracoesUsuariosPage() {
                   <th>Nome</th>
                   <th>E-mail</th>
                   <th>Perfil</th>
-                  <th>Acesso</th>
-                  <th style={{ width: '140px' }}>Ações</th>
+                  <th>Status</th>
+                  <th>Última atualização</th>
+                  <th style={{ minWidth: '220px' }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {members.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="muted" style={{ padding: '1.5rem', textAlign: 'center' }}>
+                    <td colSpan={6} className="muted" style={{ padding: '1.5rem', textAlign: 'center' }}>
                       Nenhum usuário vinculado. Use &quot;Convidar usuário&quot; para começar.
                     </td>
                   </tr>
                 ) : (
-                  members.map((m) => (
-                    <tr key={m.id}>
-                      <td><strong>{m.name}</strong></td>
-                      <td>{m.email}</td>
-                      <td>
-                        {editRoleId === m.user_id ? (
-                          <span className="flex gap-sm">
-                            <select
-                              value={editRoleValue}
-                              onChange={(e) => setEditRoleValue(e.target.value)}
-                              className="small"
+                  members.map((m) => {
+                    const active = isMemberAccessActive(m);
+                    const canManageRow = m.user_id !== user?.id;
+                    const hasPendingInvite = Boolean(findPendingInvitationByEmail(tenantId, m.email));
+                    return (
+                      <tr key={m.id}>
+                        <td>
+                          <button
+                            type="button"
+                            className="button link"
+                            style={{ fontWeight: 600, padding: 0, textAlign: 'left' }}
+                            onClick={() => openMemberModal(m, 'view')}
+                          >
+                            {m.name}
+                          </button>
+                        </td>
+                        <td>{m.email}</td>
+                        <td>{MEMBERSHIP_ROLE_LABELS[m.role] || m.role}</td>
+                        <td>
+                          <span className={active ? 'access-badge on' : 'access-badge off'}>
+                            {active ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </td>
+                        <td className="muted" style={{ fontSize: '0.9rem' }}>{formatUpdatedAt(m.updated_at)}</td>
+                        <td>
+                          <div className="flex gap-sm" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+                            <button
+                              type="button"
+                              className="button secondary small"
+                              onClick={() => openMemberModal(m, 'view')}
+                              disabled={saving}
+                              title="Ver detalhes"
                             >
-                              {INVITABLE_ROLES.map((r) => (
-                                <option key={r} value={r}>{MEMBERSHIP_ROLE_LABELS[r] || r}</option>
-                              ))}
-                              <option value="master">{MEMBERSHIP_ROLE_LABELS.master}</option>
-                            </select>
-                            <button type="button" className="button secondary small" onClick={() => handleUpdateRole(m.user_id)} disabled={saving}>Ok</button>
-                            <button type="button" className="button secondary small" onClick={() => { setEditRoleId(null); setEditRoleValue(''); }}>Cancelar</button>
-                          </span>
-                        ) : (
-                          <span>
-                            {MEMBERSHIP_ROLE_LABELS[m.role] || m.role}
-                            {m.user_id !== user?.id && (
-                              <button type="button" className="button link small" style={{ marginLeft: '0.5rem' }} onClick={() => { setEditRoleId(m.user_id); setEditRoleValue(m.role); }}>Editar</button>
-                            )}
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <span className={m.has_system_access ? 'access-badge on' : 'access-badge off'}>
-                          {m.has_system_access ? 'Ativo' : 'Desativado'}
-                        </span>
-                        {m.user_id !== user?.id && (
-                          <button
-                            type="button"
-                            className="button link small"
-                            style={{ marginLeft: '0.5rem' }}
-                            onClick={() => handleToggleAccess(m.user_id, m.has_system_access)}
-                            disabled={saving}
-                          >
-                            {m.has_system_access ? 'Desativar' : 'Ativar'}
-                          </button>
-                        )}
-                      </td>
-                      <td>
-                        {m.user_id !== user?.id ? (
-                          <button
-                            type="button"
-                            className="button secondary small"
-                            onClick={() => handleRemove(m.user_id, m.name)}
-                            disabled={saving}
-                            title="Remover usuário"
-                          >
-                            <Trash2 size={14} /> Remover
-                          </button>
-                        ) : (
-                          <span className="muted">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                              <Eye size={14} /> Ver
+                            </button>
+                            <button
+                              type="button"
+                              className="button secondary small"
+                              onClick={() => openMemberModal(m, 'edit')}
+                              disabled={saving}
+                              title="Editar"
+                            >
+                              <Pencil size={14} /> Editar
+                            </button>
+                            {canManageRow ? (
+                              <button
+                                type="button"
+                                className="button secondary small"
+                                onClick={() => handleToggleAccessClick(m)}
+                                disabled={saving}
+                                title={active ? 'Desativar acesso' : 'Ativar acesso'}
+                              >
+                                <Power size={14} /> {active ? 'Desativar' : 'Ativar'}
+                              </button>
+                            ) : null}
+                            {hasPendingInvite ? (
+                              <button
+                                type="button"
+                                className="button secondary small"
+                                onClick={() => handleResendInviteForMember(m)}
+                                disabled={saving}
+                                title="Redefinir e copiar novo link do convite"
+                              >
+                                <Mail size={14} /> Convite
+                              </button>
+                            ) : null}
+                            {canManageRow ? (
+                              <button
+                                type="button"
+                                className="button secondary small"
+                                onClick={() => handleRemove(m.user_id, m.name)}
+                                disabled={saving}
+                                title="Remover vínculo com a clínica"
+                              >
+                                <Trash2 size={14} /> Remover
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -263,6 +343,7 @@ export default function ConfiguracoesUsuariosPage() {
                 <li key={inv.id} className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
                   <span>{inv.email}</span>
                   <span className="muted">({MEMBERSHIP_ROLE_LABELS[inv.role] || inv.role})</span>
+                  <span className="access-badge on">Pendente</span>
                   <button
                     type="button"
                     className="button secondary small"
@@ -270,6 +351,15 @@ export default function ConfiguracoesUsuariosPage() {
                     title="Copiar link"
                   >
                     <Copy size={14} /> Copiar link
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    onClick={() => handleRefreshInvite(inv.id)}
+                    disabled={saving}
+                    title="Gerar novo token e copiar link"
+                  >
+                    <Mail size={14} /> Reenviar / renovar
                   </button>
                 </li>
               ))}
@@ -317,6 +407,20 @@ export default function ConfiguracoesUsuariosPage() {
           </div>
         </div>
       )}
+
+      {memberModal.open && memberModal.member ? (
+        <UsuarioMemberModal
+          open={memberModal.open}
+          member={memberModal.member}
+          mode={memberModal.mode}
+          onClose={() => setMemberModal({ open: false, member: null, mode: 'view' })}
+          onSwitchMode={(next) => setMemberModal((prev) => ({ ...prev, mode: next }))}
+          tenantId={tenantId}
+          actor={user}
+          onAfterSave={refresh}
+          onNotify={pushToast}
+        />
+      ) : null}
     </div>
   );
 }

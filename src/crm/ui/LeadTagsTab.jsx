@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Plus, X } from 'lucide-react';
 import {
   listTags,
@@ -10,6 +11,11 @@ import {
 } from '../../services/crmTagService.js';
 
 const DEFAULT_COLOR = '#6366f1';
+const DROPDOWN_VIEWPORT_MARGIN = 16;
+const DROPDOWN_OFFSET = 10;
+const DROPDOWN_MIN_WIDTH = 280;
+const DROPDOWN_MAX_WIDTH = 380;
+const DROPDOWN_MAX_HEIGHT = 320;
 
 /**
  * Aba Tags do lead: pills, adicionar (autocomplete), criar nova tag, remover com X.
@@ -21,11 +27,29 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [newColor, setNewColor] = useState(DEFAULT_COLOR);
+  const [linkedTags, setLinkedTags] = useState([]);
+  const [allTags, setAllTags] = useState([]);
+  const [dropdownStyle, setDropdownStyle] = useState(null);
+  const [dropdownDirection, setDropdownDirection] = useState('bottom');
   const wrapperRef = useRef(null);
+  const triggerButtonRef = useRef(null);
+  const dropdownRef = useRef(null);
 
-  const linkedTags = useMemo(() => (leadId ? listTagsByLead(leadId) : []), [leadId, lead?.tagList]);
-  const allTags = useMemo(() => listTags(), []);
   const categories = useMemo(() => listTagCategories(), []);
+
+  const syncLeadTagsState = () => {
+    const nextLinkedTags = leadId ? listTagsByLead(leadId) : [];
+    const nextAllTags = listTags();
+    console.debug('[LeadTagsTab] syncLeadTagsState', {
+      leadId,
+      renderedTagsSource: 'linkedTags(localState)',
+      leadTagList: lead?.tagList,
+      nextLinkedTags,
+      nextAllTagsCount: nextAllTags.length,
+    });
+    setLinkedTags(nextLinkedTags);
+    setAllTags(nextAllTags);
+  };
 
   const linkedIds = useMemo(() => new Set(linkedTags.map((t) => t.id)), [linkedTags]);
 
@@ -41,41 +65,141 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
 
   useEffect(() => {
     function handleClickOutside(e) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+      const clickedInsideWrapper = wrapperRef.current?.contains(e.target);
+      const clickedInsideDropdown = dropdownRef.current?.contains(e.target);
+      if (!clickedInsideWrapper && !clickedInsideDropdown) setOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleAdd = (tag) => {
+  useEffect(() => {
+    syncLeadTagsState();
+  }, [leadId, lead?.tagList]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const updateDropdownPosition = () => {
+      const triggerRect = triggerButtonRef.current?.getBoundingClientRect();
+      if (!triggerRect) return;
+
+      const availableBelow = window.innerHeight - triggerRect.bottom - DROPDOWN_VIEWPORT_MARGIN;
+      const availableAbove = triggerRect.top - DROPDOWN_VIEWPORT_MARGIN;
+      const shouldOpenTop = availableBelow < 200 && availableAbove > availableBelow;
+      const nextDirection = shouldOpenTop ? 'top' : 'bottom';
+      const maxHeightBySpace = shouldOpenTop ? availableAbove - DROPDOWN_OFFSET : availableBelow - DROPDOWN_OFFSET;
+      const maxHeight = Math.max(160, Math.min(DROPDOWN_MAX_HEIGHT, maxHeightBySpace));
+      const preferredWidth = Math.max(DROPDOWN_MIN_WIDTH, triggerRect.width);
+      const width = Math.min(DROPDOWN_MAX_WIDTH, preferredWidth);
+      const left = Math.min(
+        Math.max(DROPDOWN_VIEWPORT_MARGIN, triggerRect.left),
+        window.innerWidth - width - DROPDOWN_VIEWPORT_MARGIN
+      );
+
+      const style = {
+        position: 'fixed',
+        width: `${width}px`,
+        left: `${left}px`,
+        zIndex: 1100,
+        '--crm-tag-dropdown-max-height': `${maxHeight}px`,
+      };
+
+      if (shouldOpenTop) {
+        style.bottom = `${window.innerHeight - triggerRect.top + DROPDOWN_OFFSET}px`;
+      } else {
+        style.top = `${triggerRect.bottom + DROPDOWN_OFFSET}px`;
+      }
+
+      setDropdownDirection(nextDirection);
+      setDropdownStyle(style);
+    };
+
+    updateDropdownPosition();
+    window.addEventListener('resize', updateDropdownPosition);
+    window.addEventListener('scroll', updateDropdownPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateDropdownPosition);
+      window.removeEventListener('scroll', updateDropdownPosition, true);
+    };
+  }, [open]);
+
+  const handleAddTag = async (tag) => {
     if (!leadId || linkedIds.has(tag.id)) return;
-    addTagToLead(leadId, tag.id);
+    console.debug('[LeadTagsTab] handleAddTag:start', {
+      leadId,
+      payload: tag,
+      tagsBefore: linkedTags,
+    });
+
+    setLinkedTags((prev) => [...prev, tag]);
     setOpen(false);
     setQuery('');
-    onUpdate?.();
+
+    try {
+      const result = await addTagToLead(leadId, tag.id);
+      console.debug('[LeadTagsTab] handleAddTag:backend-success', { result });
+      syncLeadTagsState();
+      onUpdate?.();
+    } catch (error) {
+      setLinkedTags((prev) => prev.filter((t) => t.id !== tag.id));
+      console.debug('[LeadTagsTab] handleAddTag:rollback', {
+        leadId,
+        payload: tag,
+      });
+      console.error('Erro ao adicionar tag no lead:', error);
+    }
   };
 
-  const handleRemove = (tagId) => {
+  const handleRemoveTag = async (tagId) => {
     if (!leadId) return;
-    removeTagFromLead(leadId, tagId);
-    onUpdate?.();
+    const removedTag = linkedTags.find((t) => t.id === tagId) || null;
+    if (!removedTag) return;
+
+    console.debug('[LeadTagsTab] handleRemoveTag:start', {
+      leadId,
+      payload: removedTag,
+      tagId,
+      tagsBefore: linkedTags,
+    });
+
+    setLinkedTags((prev) => prev.filter((t) => t.id !== tagId));
+
+    try {
+      const result = await removeTagFromLead(leadId, tagId);
+      console.debug('[LeadTagsTab] handleRemoveTag:backend-success', { result });
+      syncLeadTagsState();
+      onUpdate?.();
+    } catch (error) {
+      setLinkedTags((prev) => [...prev, removedTag]);
+      console.debug('[LeadTagsTab] handleRemoveTag:rollback', {
+        leadId,
+        payload: removedTag,
+      });
+      console.error('Erro ao remover tag do lead:', error);
+    }
   };
 
-  const handleCreateTag = () => {
+  const handleCreateTag = async () => {
     const name = (newName || '').trim();
-    if (!name) return;
-    const tag = createTag({
-      name,
-      category: newCategory || 'Outros',
-      color: newColor || DEFAULT_COLOR,
-    });
-    addTagToLead(leadId, tag.id);
-    setNewName('');
-    setNewCategory('');
-    setNewColor(DEFAULT_COLOR);
-    setCreateNew(false);
-    setOpen(false);
-    onUpdate?.();
+    if (!name || !leadId) return;
+    try {
+      const tag = await createTag({
+        name,
+        category: newCategory || 'Outros',
+        color: newColor || DEFAULT_COLOR,
+      });
+      console.debug('[LeadTagsTab] handleCreateTag:created', { payload: tag });
+      await handleAddTag(tag);
+      setNewName('');
+      setNewCategory('');
+      setNewColor(DEFAULT_COLOR);
+      setCreateNew(false);
+      setOpen(false);
+      syncLeadTagsState();
+    } catch (error) {
+      console.error('Erro ao criar tag:', error);
+    }
   };
 
   const byCategory = useMemo(() => {
@@ -102,7 +226,7 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
             <button
               type="button"
               className="crm-tag-pill-remove"
-              onClick={() => handleRemove(t.id)}
+              onClick={() => handleRemoveTag(t.id)}
               aria-label={`Remover tag ${t.name}`}
             >
               <X size={14} />
@@ -119,11 +243,16 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
               className="button secondary"
               onClick={() => setOpen((o) => !o)}
               aria-expanded={open}
+              ref={triggerButtonRef}
             >
               <Plus size={16} /> Adicionar tag
             </button>
-            {open && (
-              <div className="crm-lead-tags-dropdown">
+            {open && dropdownStyle && createPortal(
+              <div
+                className={`crm-lead-tags-dropdown crm-lead-tags-dropdown--${dropdownDirection}`}
+                style={dropdownStyle}
+                ref={dropdownRef}
+              >
                 <input
                   type="text"
                   className="crm-lead-tags-search"
@@ -145,7 +274,7 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
                             type="button"
                             className="crm-lead-tags-option"
                             disabled={linkedIds.has(t.id)}
-                            onClick={() => handleAdd(t)}
+                            onClick={() => handleAddTag(t)}
                           >
                             <span
                               className="crm-lead-tags-option-dot"
@@ -166,7 +295,8 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
                 >
                   + Criar nova tag
                 </button>
-              </div>
+              </div>,
+              document.body
             )}
           </>
         ) : (

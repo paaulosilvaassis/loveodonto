@@ -1,22 +1,231 @@
+import {
+  isAgendaProfessional,
+  isBrUfValid,
+  isCorpoClinicoCategory,
+} from '../constants/collaboratorRhCatalog.js';
 import { loadDb, withDb } from '../db/index.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
 import { isCepValid, isCpfValid, isPhoneValid, onlyDigits, validateFileMeta } from '../utils/validators.js';
 
-const normalizeCargo = (value) => normalizeText(value);
+/** Alterar estatus sozinho não exige revalidar RH completo (evita bloquear registros legados). */
+const RH_PROFILE_KEYS = new Set([
+  'rhCategoria',
+  'cargo',
+  'rhFuncaoDescricao',
+  'conselhoNome',
+  'conselhoUf',
+  'tipoVinculo',
+  'setor',
+  'especialidades',
+  'registroProfissional',
+  'apelido',
+  'nomeCompleto',
+  'nomeSocial',
+  'sexo',
+  'dataNascimento',
+  'email',
+]);
 
-const ensureUnique = (db, { cpf, email, registro }) => {
+function collaboratorPayloadTouchesRhProfile(payload) {
+  if (!payload || typeof payload !== 'object') return false;
+  return Object.keys(payload).some((k) => RH_PROFILE_KEYS.has(k));
+}
+
+function validateCollaboratorRhOrThrow(collab) {
+  assertRequired(collab.rhCategoria, 'Categoria é obrigatória.');
+  assertRequired(collab.cargo, 'Cargo é obrigatório.');
+  assertRequired(collab.tipoVinculo, 'Tipo de vínculo é obrigatório.');
+  assertRequired(collab.setor, 'Setor é obrigatório.');
+  if (isCorpoClinicoCategory(collab.rhCategoria)) {
+    assertRequired(collab.registroProfissional, 'Número do conselho é obrigatório para o corpo clínico.');
+    assertRequired(collab.conselhoUf, 'UF do conselho é obrigatória para o corpo clínico.');
+    const uf = String(collab.conselhoUf || '').trim().toUpperCase();
+    if (!isBrUfValid(uf)) throw new Error('UF do conselho inválida. Use a sigla da UF (ex.: SP).');
+  }
+}
+
+const normalizeCargo = (value) => normalizeText(value);
+const CANCELED_APPOINTMENT_STATUSES = new Set(['cancelado', 'desmarcou']);
+
+const timeToMinutes = (time) => {
+  if (!/^\d{2}:\d{2}$/.test(time || '')) return null;
+  const [hour, minute] = time.split(':').map(Number);
+  return hour * 60 + minute;
+};
+
+const buildDayRanges = (workHour) => {
+  if (!workHour?.ativo) return [];
+  const ranges = [];
+  const firstStart = timeToMinutes(workHour.inicio);
+  const firstEnd = timeToMinutes(workHour.fim);
+  const secondStart = timeToMinutes(workHour.intervaloInicio);
+  const secondEnd = timeToMinutes(workHour.intervaloFim);
+
+  if (firstStart != null && firstEnd != null && firstEnd > firstStart) {
+    ranges.push({ start: firstStart, end: firstEnd });
+  }
+  if (secondStart != null && secondEnd != null && secondEnd > secondStart) {
+    ranges.push({ start: secondStart, end: secondEnd });
+  }
+  return ranges;
+};
+
+/** Junta intervalos [start,end) em minutos, ordenados e sem sobreposição. */
+function mergeRanges(ranges) {
+  if (!Array.isArray(ranges) || ranges.length === 0) return [];
+  const sorted = [...ranges].sort((a, b) => a.start - b.start);
+  const out = [{ start: sorted[0].start, end: sorted[0].end }];
+  for (let i = 1; i < sorted.length; i++) {
+    const cur = sorted[i];
+    const last = out[out.length - 1];
+    if (cur.start <= last.end) {
+      last.end = Math.max(last.end, cur.end);
+    } else {
+      out.push({ start: cur.start, end: cur.end });
+    }
+  }
+  return out;
+}
+
+/** Remove a interseção de [c,d) de [a,b), retorna 0–2 segmentos. */
+function subtractSegment(a, b, c, d) {
+  if (d <= a || c >= b) return [{ start: a, end: b }];
+  if (c <= a && d >= b) return [];
+  if (c <= a && d > a && d < b) return [{ start: d, end: b }];
+  if (c > a && c < b && d >= b) return [{ start: a, end: c }];
+  if (c > a && d < b) return [
+    { start: a, end: c },
+    { start: d, end: b },
+  ];
+  return [];
+}
+
+/** oldMerged − newMerged: partes da disponibilidade antiga que deixam de existir. */
+function removedAvailabilityMinutes(oldMerged, newMerged) {
+  let remaining = oldMerged.map((r) => ({ ...r }));
+  for (const n of newMerged) {
+    const next = [];
+    for (const o of remaining) {
+      next.push(...subtractSegment(o.start, o.end, n.start, n.end));
+    }
+    remaining = mergeRanges(next);
+  }
+  return remaining;
+}
+
+function workHoursByWeekdayMap(rows) {
+  const map = new Map();
+  (rows || []).forEach((item) => {
+    if (item == null || item.diaSemana === '') return;
+    const d = Number(item.diaSemana);
+    if (!Number.isFinite(d) || d < 0 || d > 6) return;
+    map.set(d, item);
+  });
+  return map;
+}
+
+function removedRangesByWeekday(prevWorkHours, nextWorkHours) {
+  const prevMap = workHoursByWeekdayMap(prevWorkHours);
+  const nextMap = workHoursByWeekdayMap(nextWorkHours);
+  const removedByDay = new Map();
+  for (let dia = 0; dia < 7; dia++) {
+    const oldWh = prevMap.get(dia);
+    const newWh = nextMap.get(dia);
+    const oldMerged = mergeRanges(buildDayRanges(oldWh));
+    const newMerged = mergeRanges(buildDayRanges(newWh));
+    const removed = removedAvailabilityMinutes(oldMerged, newMerged);
+    if (removed.length > 0) removedByDay.set(dia, removed);
+  }
+  return removedByDay;
+}
+
+/** true se [aStart,aEnd) cruza [rStart,rEnd) com sobreposição de tempo. */
+function intervalsOverlapMinutes(aStart, aEnd, rStart, rEnd) {
+  return aStart < rEnd && aEnd > rStart;
+}
+
+function resolvePatientDisplayName(patient) {
+  if (!patient) return '';
+  return (
+    patient.full_name ||
+    patient.nickname ||
+    patient.social_name ||
+    patient.name ||
+    ''
+  ).trim();
+}
+
+/**
+ * Conflitos apenas quando a nova grade REMOVE disponibilidade que existia antes
+ * e há agendamento (não cancelado) intersectando o trecho removido.
+ */
+function listWorkHoursRemovalConflicts(db, collaboratorId, prevWorkHours, nextWorkHours) {
+  const today = new Date().toISOString().slice(0, 10);
+  const removedByDay = removedRangesByWeekday(prevWorkHours, nextWorkHours);
+  if (removedByDay.size === 0) return [];
+
+  const patientMap = new Map((db.patients || []).map((patient) => [patient.id, patient]));
+  const professional = (db.collaborators || []).find((item) => item.id === collaboratorId);
+
+  return (db.appointments || [])
+    .filter((appointment) => {
+      if (appointment.professionalId !== collaboratorId) return false;
+      if (CANCELED_APPOINTMENT_STATUSES.has(String(appointment.status || '').toLowerCase())) return false;
+      return String(appointment.date || '') >= today;
+    })
+    .map((appointment) => {
+      const weekDay = new Date(`${appointment.date}T12:00:00`).getDay();
+      const removedRanges = removedByDay.get(weekDay);
+      if (!removedRanges?.length) return null;
+
+      const start = timeToMinutes(appointment.startTime);
+      const end = timeToMinutes(appointment.endTime);
+      if (start == null || end == null || end <= start) return null;
+
+      const hitsRemoved = removedRanges.some((r) => intervalsOverlapMinutes(start, end, r.start, r.end));
+      if (!hitsRemoved) return null;
+
+      const patient = appointment.patientId ? patientMap.get(appointment.patientId) : null;
+      const patientName =
+        resolvePatientDisplayName(patient) ||
+        appointment.leadDisplayName ||
+        'Paciente não identificado';
+
+      return {
+        appointmentId: appointment.id,
+        patientName,
+        date: appointment.date,
+        startTime: appointment.startTime,
+        endTime: appointment.endTime,
+        procedureName: appointment.procedureName || '',
+        professionalName: professional?.nomeCompleto || professional?.apelido || 'Profissional',
+        status: appointment.status || '',
+      };
+    })
+    .filter(Boolean);
+}
+
+const ensureUnique = (db, { cpf, email, registro, excludeCollaboratorId } = {}) => {
   if (cpf) {
-    const exists = db.collaboratorDocuments.some((doc) => onlyDigits(doc.cpf) === onlyDigits(cpf));
+    const exists = db.collaboratorDocuments.some(
+      (doc) =>
+        onlyDigits(doc.cpf) === onlyDigits(cpf) &&
+        (!excludeCollaboratorId || doc.collaboratorId !== excludeCollaboratorId)
+    );
     if (exists) throw new Error('CPF já cadastrado.');
   }
   if (email) {
-    const exists = db.collaborators.some((item) => item.email === email);
+    const exists = db.collaborators.some(
+      (item) => item.email === email && item.id !== excludeCollaboratorId
+    );
     if (exists) throw new Error('E-mail já cadastrado.');
   }
   if (registro) {
-    const exists = db.collaborators.some((item) => item.registroProfissional === registro);
+    const exists = db.collaborators.some(
+      (item) => item.registroProfissional === registro && item.id !== excludeCollaboratorId
+    );
     if (exists) throw new Error('Registro profissional já cadastrado.');
   }
 };
@@ -63,6 +272,10 @@ export const getCollaborator = (collaboratorId) => {
 
 export const createCollaborator = (user, payload) => {
   requirePermission(user, 'collaborators:write');
+  const espec = Array.isArray(payload.especialidades)
+    ? payload.especialidades.map((e) => normalizeText(e)).filter(Boolean)
+    : [];
+  const conselhoUfRaw = String(payload.conselhoUf || '').trim().toUpperCase().slice(0, 2);
   const collaborator = {
     id: createId('col'),
     status: payload.status || 'ativo',
@@ -72,8 +285,14 @@ export const createCollaborator = (user, payload) => {
     sexo: normalizeText(payload.sexo),
     dataNascimento: normalizeText(payload.dataNascimento),
     fotoUrl: payload.fotoUrl || '',
+    rhCategoria: normalizeText(payload.rhCategoria),
     cargo: normalizeCargo(payload.cargo),
-    especialidades: payload.especialidades || [],
+    rhFuncaoDescricao: normalizeText(payload.rhFuncaoDescricao),
+    conselhoNome: normalizeText(payload.conselhoNome),
+    conselhoUf: normalizeText(conselhoUfRaw),
+    tipoVinculo: normalizeText(payload.tipoVinculo),
+    setor: normalizeText(payload.setor),
+    especialidades: espec,
     registroProfissional: normalizeText(payload.registroProfissional),
     email: normalizeText(payload.email),
     createdAt: new Date().toISOString(),
@@ -82,7 +301,7 @@ export const createCollaborator = (user, payload) => {
 
   assertRequired(collaborator.apelido, 'Apelido é obrigatório.');
   assertRequired(collaborator.nomeCompleto, 'Nome completo é obrigatório.');
-  assertRequired(collaborator.cargo, 'Cargo é obrigatório.');
+  validateCollaboratorRhOrThrow(collaborator);
 
   withDb((db) => {
     ensureUnique(db, {
@@ -102,19 +321,46 @@ export const updateCollaborator = (user, collaboratorId, payload) => {
   return withDb((db) => {
     const index = db.collaborators.findIndex((item) => item.id === collaboratorId);
     if (index < 0) throw new Error('Colaborador não encontrado.');
+    const prev = db.collaborators[index];
+    const mergedEspecialidades =
+      payload.especialidades !== undefined
+        ? (Array.isArray(payload.especialidades)
+            ? payload.especialidades.map((e) => normalizeText(e)).filter(Boolean)
+            : prev.especialidades || [])
+        : prev.especialidades || [];
+    const conselhoUfIncoming =
+      payload.conselhoUf !== undefined
+        ? String(payload.conselhoUf || '').trim().toUpperCase().slice(0, 2)
+        : prev.conselhoUf;
     const next = {
-      ...db.collaborators[index],
+      ...prev,
       ...payload,
-      apelido: normalizeText(payload.apelido ?? db.collaborators[index].apelido),
-      nomeCompleto: normalizeText(payload.nomeCompleto ?? db.collaborators[index].nomeCompleto),
-      cargo: normalizeCargo(payload.cargo ?? db.collaborators[index].cargo),
-      registroProfissional: normalizeText(payload.registroProfissional ?? db.collaborators[index].registroProfissional),
-      email: normalizeText(payload.email ?? db.collaborators[index].email),
+      apelido: normalizeText(payload.apelido ?? prev.apelido),
+      nomeCompleto: normalizeText(payload.nomeCompleto ?? prev.nomeCompleto),
+      nomeSocial: normalizeText(payload.nomeSocial ?? prev.nomeSocial),
+      sexo: normalizeText(payload.sexo ?? prev.sexo),
+      dataNascimento: normalizeText(payload.dataNascimento ?? prev.dataNascimento),
+      rhCategoria: normalizeText(payload.rhCategoria ?? prev.rhCategoria),
+      cargo: normalizeCargo(payload.cargo ?? prev.cargo),
+      rhFuncaoDescricao: normalizeText(payload.rhFuncaoDescricao ?? prev.rhFuncaoDescricao),
+      conselhoNome: normalizeText(payload.conselhoNome !== undefined ? payload.conselhoNome : prev.conselhoNome),
+      conselhoUf: normalizeText(conselhoUfIncoming ?? ''),
+      tipoVinculo: normalizeText(payload.tipoVinculo ?? prev.tipoVinculo),
+      setor: normalizeText(payload.setor ?? prev.setor),
+      especialidades: mergedEspecialidades,
+      registroProfissional: normalizeText(payload.registroProfissional ?? prev.registroProfissional),
+      email: normalizeText(payload.email ?? prev.email),
+      fotoUrl: payload.fotoUrl !== undefined ? payload.fotoUrl : prev.fotoUrl,
+      status: payload.status !== undefined ? payload.status : prev.status,
       updatedAt: new Date().toISOString(),
     };
+    if (collaboratorPayloadTouchesRhProfile(payload)) {
+      validateCollaboratorRhOrThrow(next);
+    }
     ensureUnique(db, {
       email: next.email,
       registro: next.registroProfissional,
+      excludeCollaboratorId: collaboratorId,
     });
     db.collaborators[index] = next;
     logAction('collaborator:update', { collaboratorId, userId: user.id });
@@ -135,7 +381,7 @@ export const updateCollaboratorDocuments = (user, collaboratorId, payload) => {
     throw new Error('CPF inválido.');
   }
   return withDb((db) => {
-    ensureUnique(db, { cpf: payload.cpf });
+    ensureUnique(db, { cpf: payload.cpf, excludeCollaboratorId: collaboratorId });
     const next = {
       collaboratorId,
       cpf: normalizeText(payload.cpf),
@@ -358,6 +604,19 @@ export const updateCollaboratorAccess = (user, collaboratorId, payload) => {
 export const updateCollaboratorWorkHours = (user, collaboratorId, payload) => {
   requirePermission(user, 'collaborators:write');
   return withDb((db) => {
+    const prevWorkHours = (db.collaboratorWorkHours || []).filter(
+      (item) => item.collaboratorId === collaboratorId
+    );
+    const conflicts = listWorkHoursRemovalConflicts(db, collaboratorId, prevWorkHours, payload);
+    if (conflicts.length > 0) {
+      const error = new Error(
+        'Esta alteração reduz a disponibilidade e há pacientes agendados no trecho que deixará de estar aberto. Reagende-os antes de salvar a nova grade de horários.'
+      );
+      error.code = 'WORK_HOURS_CONFLICT';
+      error.details = { collaboratorId, conflicts };
+      throw error;
+    }
+
     db.collaboratorWorkHours = db.collaboratorWorkHours.filter((item) => item.collaboratorId !== collaboratorId);
     payload.forEach((item) => {
       db.collaboratorWorkHours.push({
@@ -393,7 +652,7 @@ export const getProfessionalOptions = () => {
   const db = loadDb();
   const collaborators = db.collaborators
     .filter((item) => item.status === 'ativo')
-    .filter((item) => /dentista|ortodontista|profissional/i.test(item.cargo || ''));
+    .filter((item) => isAgendaProfessional(item));
   return collaborators.map((item) => ({
     id: item.id,
     name: item.nomeCompleto,

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { usePriceBaseBasePath } from '../hooks/usePriceBaseBasePath.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { SectionCard } from '../components/SectionCard.jsx';
 import PriceBaseImportWizard from '../components/PriceBaseImportWizard.jsx';
@@ -24,6 +25,7 @@ import { Plus, Edit, Trash2, Copy, Upload, Search, X, Save, ArrowLeft } from 'lu
 export default function PriceBaseTableDetailPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const priceBasePath = usePriceBaseBasePath();
   const { priceTableId } = useParams();
   const [priceTables, setPriceTables] = useState([]);
   const [procedures, setProcedures] = useState([]);
@@ -33,6 +35,8 @@ export default function PriceBaseTableDetailPage() {
     specialty: '',
     status: '',
     hasRestriction: false,
+    priceMin: '',
+    priceMax: '',
     sortBy: 'name',
   });
   const [showAddProcedureModal, setShowAddProcedureModal] = useState(false);
@@ -90,7 +94,7 @@ export default function PriceBaseTableDetailPage() {
       const newTable = duplicatePriceTable(user, selectedTable.id, newName);
       refreshPriceTables();
       if (newTable?.id) {
-        navigate(`/gestao-comercial/base-de-preco/tabelas/${newTable.id}`);
+        navigate(`${priceBasePath}/tabelas/${newTable.id}`);
       }
     } catch (error) {
       alert(error.message || 'Erro ao duplicar tabela');
@@ -163,7 +167,7 @@ export default function PriceBaseTableDetailPage() {
           <button
             type="button"
             className="button secondary"
-            onClick={() => navigate('/gestao-comercial/base-de-preco')}
+            onClick={() => navigate(priceBasePath)}
           >
             <ArrowLeft size={16} />
             Voltar
@@ -188,7 +192,7 @@ export default function PriceBaseTableDetailPage() {
         <button
           type="button"
           className="button secondary"
-          onClick={() => navigate('/gestao-comercial/base-de-preco')}
+          onClick={() => navigate(priceBasePath)}
         >
           <ArrowLeft size={16} />
           Voltar
@@ -287,6 +291,24 @@ export default function PriceBaseTableDetailPage() {
             />
             Somente com restrição
           </label>
+          <div className="price-base-filter-range">
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Preço mín. (R$)"
+              value={filters.priceMin}
+              onChange={(event) => setFilters({ ...filters, priceMin: event.target.value })}
+            />
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="Preço máx. (R$)"
+              value={filters.priceMax}
+              onChange={(event) => setFilters({ ...filters, priceMax: event.target.value })}
+            />
+          </div>
           <select
             value={filters.sortBy}
             onChange={(event) => setFilters({ ...filters, sortBy: event.target.value })}
@@ -294,6 +316,7 @@ export default function PriceBaseTableDetailPage() {
             <option value="name">A-Z</option>
             <option value="price_desc">Maior preço</option>
             <option value="price_asc">Menor preço</option>
+            <option value="created">Data de cadastro</option>
             <option value="updated">Atualizados recentemente</option>
           </select>
         </div>
@@ -443,6 +466,7 @@ export default function PriceBaseTableDetailPage() {
         <AddEditProcedureModal
           procedure={editingProcedure}
           priceTableId={priceTableId}
+          priceTables={priceTables}
           onClose={() => {
             setShowAddProcedureModal(false);
             setEditingProcedure(null);
@@ -475,10 +499,23 @@ export default function PriceBaseTableDetailPage() {
           onComplete={(result) => {
             refreshProcedures();
             setShowImportModal(false);
-            showToast(
-              `${result.createdCount} criados, ${result.updatedCount} atualizados`,
-              'success'
-            );
+            const parts = [
+              `${result.createdCount} criados`,
+              `${result.updatedCount} atualizados`,
+            ];
+            if ((result.skippedByErrors || 0) > 0) {
+              parts.push(`${result.skippedByErrors} ignorados (erros de validação)`);
+            }
+            if ((result.skippedByMatch || 0) > 0) {
+              parts.push(`${result.skippedByMatch} ignorados (já existiam — modo criar)`);
+            }
+            if ((result.skippedByNoMatch || 0) > 0) {
+              parts.push(`${result.skippedByNoMatch} ignorados (não encontrados — modo atualizar)`);
+            }
+            if ((result.skippedDuplicateCount || 0) > 0) {
+              parts.push(`${result.skippedDuplicateCount} ignorados (nome duplicado na tabela)`);
+            }
+            showToast(parts.join(' · '), 'success');
           }}
           selectedTableId={priceTableId}
           user={user}
@@ -498,7 +535,10 @@ export default function PriceBaseTableDetailPage() {
   );
 }
 
-function AddEditProcedureModal({ procedure, priceTableId, onClose, onSave, user }) {
+function AddEditProcedureModal({ procedure, priceTableId, priceTables = [], onClose, onSave, user }) {
+  const navigate = useNavigate();
+  const priceBasePath = usePriceBaseBasePath();
+
   if (!priceTableId) {
     alert('Selecione uma tabela de preço antes de adicionar um procedimento');
     onClose();
@@ -507,6 +547,7 @@ function AddEditProcedureModal({ procedure, priceTableId, onClose, onSave, user 
 
   const [activeTab, setActiveTab] = useState('dados');
   const [formData, setFormData] = useState({
+    targetPriceTableId: procedure?.priceTableId || priceTableId,
     title: procedure?.title || '',
     status: procedure?.status || PROCEDURE_STATUS.ATIVO,
     segment: procedure?.segment || PROCEDURE_SEGMENT.ODONTOLOGIA,
@@ -580,10 +621,15 @@ function AddEditProcedureModal({ procedure, priceTableId, onClose, onSave, user 
         notes: formData.notes || null,
       };
 
+      const targetTable = formData.targetPriceTableId || priceTableId;
+
       if (procedure) {
-        updateProcedure(user, procedure.id, data);
+        updateProcedure(user, procedure.id, { ...data, priceTableId: targetTable });
+        if (targetTable !== priceTableId) {
+          navigate(`${priceBasePath}/tabelas/${targetTable}`);
+        }
       } else {
-        createProcedure(user, priceTableId, data);
+        createProcedure(user, targetTable, data);
       }
 
       onSave();
@@ -634,6 +680,29 @@ function AddEditProcedureModal({ procedure, priceTableId, onClose, onSave, user 
         <div className="modal-body">
           {activeTab === 'dados' && (
             <div className="price-base-modal-form">
+              {priceTables.length > 0 && (
+                <div className="form-field" style={{ gridColumn: '1 / -1' }}>
+                  <label>
+                    Tabela de preço <span className="required">*</span>
+                  </label>
+                  <select
+                    value={formData.targetPriceTableId}
+                    onChange={(event) =>
+                      setFormData({ ...formData, targetPriceTableId: event.target.value })
+                    }
+                  >
+                    {priceTables.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                        {t.active === false ? ' (inativa)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="muted small" style={{ marginTop: 6 }}>
+                    O procedimento fica vinculado à tabela escolhida; use para mover entre tabelas.
+                  </p>
+                </div>
+              )}
               <div className="form-field">
                 <label>
                   Título do Procedimento <span className="required">*</span>
@@ -749,7 +818,7 @@ function AddEditProcedureModal({ procedure, priceTableId, onClose, onSave, user 
 
               <div className="form-field">
                 <label>
-                  Preço <span className="required">*</span>
+                  Preço padrão (venda) <span className="required">*</span>
                 </label>
                 <input
                   type="number"

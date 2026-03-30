@@ -129,6 +129,7 @@ export default function AgendaPage() {
   const timelineStickyRef = useRef(null);
   const timelineRef = useRef(null);
   const prevViewRef = useRef(null);
+  const conflictStateAppliedRef = useRef(false);
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
@@ -166,6 +167,26 @@ export default function AgendaPage() {
       localStorage.removeItem('agenda.selectedProfessionalId');
     }
   }, [selectedProfessionalId]);
+
+  useEffect(() => {
+    if (conflictStateAppliedRef.current) return;
+    const state = location?.state || null;
+    if (!state) return;
+
+    if (state.selectedProfessionalId) {
+      setSelectedProfessionalId(state.selectedProfessionalId);
+    }
+    if (state.highlightDate) {
+      setSelectedDate(state.highlightDate);
+    }
+    if (Array.isArray(state.conflictAppointmentIds) && state.conflictAppointmentIds.length > 0) {
+      setWarning(
+        `Existem ${state.conflictAppointmentIds.length} agendamento(s) em conflito. Abra os detalhes e use "Reagendar".`
+      );
+    }
+
+    conflictStateAppliedRef.current = true;
+  }, [location?.state]);
   const rooms = dbSnapshot.rooms;
 
   const patientPhonesMap = useMemo(() => {

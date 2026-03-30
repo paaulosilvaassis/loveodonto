@@ -1,4 +1,4 @@
-export const DB_VERSION = 34;
+export const DB_VERSION = 41;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -183,6 +183,32 @@ export const defaultDbState = () => ({
   receivablePayments: [],
   /** Registros de cobranças/comunicações de contas a receber */
   receivableCharges: [],
+  /** Financiamentos próprios da clínica */
+  financings: [],
+  /** Parcelas vinculadas aos financiamentos */
+  financingInstallments: [],
+  /** Cobranças de boleto/carnê vinculadas a financiamento/parcela */
+  boletoCharges: [],
+  /** Timeline e auditoria de eventos do financiamento */
+  financingEvents: [],
+  /** Histórico da régua de cobrança por boleto */
+  boletoReminderEvents: [],
+  /** Vínculo entre plano anterior e novo plano em renegociação */
+  financingRenegotiations: [],
+  /**
+   * Alocações de pagamentos no contexto de financiamento.
+   * Mantém vínculo explícito entre receivable payment e entidades financeiras.
+   */
+  financingPaymentAllocations: [],
+  /**
+   * Auditoria de transições de status da cobrança (manual/provider externo).
+   * Mantém trilha para integração futura (ex.: Asaas) sem quebrar histórico.
+   */
+  boletoChargeStatusHistory: [],
+  /** Regras configuráveis de comissão */
+  commissionRules: [],
+  /** Comissões calculadas (auditáveis) */
+  commissions: [],
   messageTemplates: [],
   messageQueue: [],
   messageLogs: [],
@@ -259,6 +285,9 @@ export const defaultDbState = () => ({
   importExportLogs: [],
   /** Chamados de suporte Love Odonto */
   supportTickets: [],
-  // version inicial 23 para que a migration 24 (RBAC) rode na primeira carga
-  version: 23,
+  /**
+   * Sempre refletir a versão corrente do schema para novas bases.
+   * Migrações seguem necessárias apenas para bases legadas.
+   */
+  version: DB_VERSION,
 });

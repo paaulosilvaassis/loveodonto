@@ -37,6 +37,7 @@ const RANGE_OPTIONS = [
   { value: 'current_month', label: 'Mês atual' },
   { value: 'custom', label: 'Personalizado' },
 ];
+const RANGE_CUSTOM = 'custom';
 
 function getAssignableOptions() {
   const users = listUsers().filter((u) => u.active !== false);
@@ -90,17 +91,74 @@ export default function CrmRelatoriosPage() {
   const [customEnd, setCustomEnd] = useState('');
   const [channel, setChannel] = useState('');
   const [ownerId, setOwnerId] = useState('');
+  const [appliedFilters, setAppliedFilters] = useState({
+    range: '30d',
+    customStart: '',
+    customEnd: '',
+    channel: '',
+    ownerId: '',
+  });
+  const [filterError, setFilterError] = useState('');
+
+  const validateCustomRange = useCallback(() => {
+    if (!customStart || !customEnd) {
+      return 'Selecione Data Inicial e Data Final para o período personalizado.';
+    }
+    if (new Date(customEnd).getTime() < new Date(customStart).getTime()) {
+      return 'Data Final não pode ser menor que a Data Inicial.';
+    }
+    return '';
+  }, [customStart, customEnd]);
+
+  const applyFilters = useCallback(() => {
+    if (range === RANGE_CUSTOM) {
+      const error = validateCustomRange();
+      if (error) {
+        setFilterError(error);
+        return;
+      }
+    }
+
+    setFilterError('');
+    setAppliedFilters({
+      range,
+      customStart,
+      customEnd,
+      channel,
+      ownerId,
+    });
+  }, [range, customStart, customEnd, channel, ownerId, validateCustomRange]);
+
+  const handleRangeChange = useCallback((value) => {
+    setRange(value);
+    setFilterError('');
+  }, []);
 
   const opts = useMemo(
     () => ({
-      range,
-      customStart: range === 'custom' ? customStart : undefined,
-      customEnd: range === 'custom' ? customEnd : undefined,
-      channel: channel || undefined,
-      ownerId: ownerId || undefined,
+      range: appliedFilters.range,
+      customStart: appliedFilters.range === RANGE_CUSTOM ? appliedFilters.customStart : undefined,
+      customEnd: appliedFilters.range === RANGE_CUSTOM ? appliedFilters.customEnd : undefined,
+      channel: appliedFilters.channel || undefined,
+      ownerId: appliedFilters.ownerId || undefined,
     }),
-    [range, customStart, customEnd, channel, ownerId]
+    [appliedFilters]
   );
+
+  const hasPendingChanges = useMemo(
+    () =>
+      appliedFilters.range !== range ||
+      appliedFilters.customStart !== customStart ||
+      appliedFilters.customEnd !== customEnd ||
+      appliedFilters.channel !== channel ||
+      appliedFilters.ownerId !== ownerId,
+    [appliedFilters, range, customStart, customEnd, channel, ownerId]
+  );
+
+  const customRangeInvalid = useMemo(() => {
+    if (range !== RANGE_CUSTOM) return false;
+    return Boolean(validateCustomRange());
+  }, [range, validateCustomRange]);
 
   const kpis = useMemo(() => getCrmKpis(opts), [opts]);
   const funnel = useMemo(() => getCrmFunnel(opts), [opts]);
@@ -142,7 +200,7 @@ export default function CrmRelatoriosPage() {
       <div className="crm-report-filters">
         <div className="crm-report-filter-group">
           <label>Período</label>
-          <select value={range} onChange={(e) => setRange(e.target.value)}>
+          <select value={range} onChange={(e) => handleRangeChange(e.target.value)}>
             {RANGE_OPTIONS.map((r) => (
               <option key={r.value} value={r.value}>
                 {r.label}
@@ -150,14 +208,17 @@ export default function CrmRelatoriosPage() {
             ))}
           </select>
         </div>
-        {range === 'custom' && (
+        {range === RANGE_CUSTOM && (
           <>
             <div className="crm-report-filter-group">
               <label>Início</label>
               <input
                 type="date"
                 value={customStart}
-                onChange={(e) => setCustomStart(e.target.value)}
+                onChange={(e) => {
+                  setCustomStart(e.target.value);
+                  setFilterError('');
+                }}
               />
             </div>
             <div className="crm-report-filter-group">
@@ -165,14 +226,17 @@ export default function CrmRelatoriosPage() {
               <input
                 type="date"
                 value={customEnd}
-                onChange={(e) => setCustomEnd(e.target.value)}
+                onChange={(e) => {
+                  setCustomEnd(e.target.value);
+                  setFilterError('');
+                }}
               />
             </div>
           </>
         )}
         <div className="crm-report-filter-group">
           <label>Canal</label>
-          <select value={channel} onChange={(e) => setChannel(e.target.value)}>
+          <select value={channel} onChange={(e) => { setChannel(e.target.value); setFilterError(''); }}>
             {CHANNEL_OPTIONS.map((c) => (
               <option key={c.value} value={c.value}>
                 {c.label}
@@ -182,7 +246,7 @@ export default function CrmRelatoriosPage() {
         </div>
         <div className="crm-report-filter-group">
           <label>Responsável</label>
-          <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+          <select value={ownerId} onChange={(e) => { setOwnerId(e.target.value); setFilterError(''); }}>
             {assignableOptions.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.name}
@@ -190,7 +254,24 @@ export default function CrmRelatoriosPage() {
             ))}
           </select>
         </div>
+        <div className="crm-report-filter-group">
+          <label>&nbsp;</label>
+          <button
+            type="button"
+            className="button primary"
+            onClick={applyFilters}
+            disabled={!hasPendingChanges}
+            title={customRangeInvalid ? 'Preencha um intervalo de datas válido para aplicar.' : 'Aplicar filtros'}
+          >
+            Aplicar
+          </button>
+        </div>
       </div>
+      {filterError && (
+        <p className="muted" style={{ marginTop: '-0.5rem', marginBottom: '1rem', color: '#b91c1c' }}>
+          {filterError}
+        </p>
+      )}
 
       <section className="crm-report-section">
         <h3 className="crm-report-section-title">KPIs</h3>

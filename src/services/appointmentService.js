@@ -5,6 +5,10 @@ import { logAction } from './logService.js';
 import { canPlaceEvent } from '../utils/calendar/overlap.js';
 import { upsertJourneyEntryForAppointment } from './journeyEntryService.js';
 import { addLeadEvent, moveLeadToStage } from './crmService.js';
+import {
+  syncCheckinCommissionsForAppointment,
+  reverseCheckinCommissionsForAppointment,
+} from './commissionCalculationService.js';
 import { addMinutesToTime, toMinutes as agendaToMinutes, minutesToTime } from '../utils/agendaUtils.js';
 
 export const APPOINTMENT_STATUS = {
@@ -537,7 +541,13 @@ export const checkInAppointment = (user, appointmentId) => {
     db.appointments[index] = next;
     upsertJourneyEntryForAppointment(db, next, { checkedInAt: now });
     logAction('journey:checkin', { appointmentId, userId: user.id, checkInAt: now });
-    return db.appointments[index];
+    const saved = db.appointments[index];
+    try {
+      syncCheckinCommissionsForAppointment(user, saved.id);
+    } catch {
+      /* best-effort */
+    }
+    return saved;
   });
 };
 
@@ -575,7 +585,13 @@ export const undoCheckIn = (user, appointmentId) => {
 
     db.appointments[index] = next;
     logAction('journey:undo_checkin', { appointmentId, userId: user.id });
-    return db.appointments[index];
+    const saved = db.appointments[index];
+    try {
+      reverseCheckinCommissionsForAppointment(user, appointmentId, 'Chegada desfeita na recepção');
+    } catch {
+      /* best-effort */
+    }
+    return saved;
   });
 };
 

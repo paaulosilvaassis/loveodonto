@@ -41,6 +41,8 @@ export const MODULES_SPEC = [
       { key: 'financeiro_contas_receber', label: 'Contas a receber', actions: ['view', 'create', 'edit', 'export'] },
       { key: 'financeiro_contas_pagar', label: 'Contas a pagar', actions: ['view', 'create', 'edit', 'export'] },
       { key: 'financeiro_caixa', label: 'Caixa / Conciliação', actions: ['view', 'create', 'edit'] },
+      { key: 'financeiro_boletos', label: 'Boletos e cobranças', actions: ['view', 'create', 'edit', 'export'] },
+      { key: 'financeiro_financiamentos', label: 'Financiamento próprio', actions: ['view', 'create', 'edit', 'approve', 'export'] },
       { key: 'financeiro_relatorios', label: 'Relatórios', actions: ['view', 'export'] },
     ],
   },

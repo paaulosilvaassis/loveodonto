@@ -1,11 +1,6 @@
 import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
-import {
-  ROLE_MASTER,
-  INVITABLE_ROLES,
-  INVITATION_EXPIRY_DAYS,
-  ACCESS_AUDIT_EVENTS,
-} from '../constants/tenantRoles.js';
+import { INVITABLE_ROLES, INVITATION_EXPIRY_DAYS, ACCESS_AUDIT_EVENTS } from '../constants/tenantRoles.js';
 import { requireMaster, createMembership } from './membershipService.js';
 import { logAction } from './logService.js';
 
@@ -108,6 +103,61 @@ export function listInvitations(tenantId, onlyPending = true) {
     ...i,
     invite_url: `${typeof window !== 'undefined' ? window.location.origin : ''}/convite?token=${i.token}`,
   }));
+}
+
+/** Convite pendente e não expirado para o e-mail informado (normalizado). */
+export function findPendingInvitationByEmail(tenantId, email) {
+  const db = loadDb();
+  const e = (email || '').trim().toLowerCase();
+  if (!e || e === '—') return null;
+  const now = new Date().toISOString();
+  const inv = (db.invitations || []).find(
+    (i) =>
+      i.tenant_id === tenantId &&
+      !i.accepted_at &&
+      i.expires_at > now &&
+      (i.email || '').trim().toLowerCase() === e
+  );
+  return inv ? { ...inv } : null;
+}
+
+/**
+ * Gera novo token e prorroga validade do convite (convidado ainda não aceitou).
+ */
+export function refreshInvitation(actor, tenantId, invitationId) {
+  requireMaster(actor, tenantId);
+  if (!invitationId) throw new Error('Convite inválido.');
+
+  return withDb((db) => {
+    const idx = (db.invitations || []).findIndex(
+      (i) => i.id === invitationId && i.tenant_id === tenantId
+    );
+    if (idx < 0) throw new Error('Convite não encontrado.');
+    if (db.invitations[idx].accepted_at) {
+      throw new Error('Este convite já foi aceito.');
+    }
+    const before = { ...db.invitations[idx] };
+    const token = generateToken();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + INVITATION_EXPIRY_DAYS);
+    db.invitations[idx].token = token;
+    db.invitations[idx].expires_at = expiresAt.toISOString();
+    logAccessAudit(
+      db,
+      tenantId,
+      actor.id,
+      null,
+      ACCESS_AUDIT_EVENTS.INVITE_REFRESHED,
+      before,
+      db.invitations[idx]
+    );
+    logAction('invitation:refresh', { actorId: actor.id, tenantId, invitationId });
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return {
+      ...db.invitations[idx],
+      invite_url: `${origin}/convite?token=${token}`,
+    };
+  });
 }
 
 /**

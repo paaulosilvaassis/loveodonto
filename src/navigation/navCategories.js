@@ -203,16 +203,9 @@ export const navCategories = [
       },
       {
         id: 'base-preco-admin',
-        label: 'Base de Preço',
+        label: 'Base de Preços e Procedimentos',
         icon: BadgeDollarSign,
-        route: '/gestao-comercial/base-de-preco',
-        rolesAllowed: ['admin', 'gerente'],
-      },
-      {
-        id: 'procedimentos',
-        label: 'Cadastro de Procedimentos',
-        icon: ClipboardList,
-        route: '/admin/procedimentos',
+        route: '/admin/base-precos',
         rolesAllowed: ['admin', 'gerente'],
       },
       {
@@ -274,7 +267,7 @@ export const navCategories = [
       },
       {
         id: 'financiamento',
-        label: 'Financiamento',
+        label: 'Financiamentos',
         icon: BadgeDollarSign,
         route: '/financeiro/financiamento',
         rolesAllowed: ['admin', 'gerente', 'financeiro'],
