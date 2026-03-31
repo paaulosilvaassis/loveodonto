@@ -2,6 +2,7 @@ import { withDb, loadDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { logAction } from './logService.js';
 import { enrichLeadWithTags } from './crmTagService.js';
+import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
 
 // ─── Fontes de Lead (configuráveis) ─────────────────────────────────────────
 export const LEAD_SOURCE = {
@@ -69,6 +70,7 @@ export const CRM_EVENT_TYPE = {
  * Cria um novo lead. Lead NÃO vira paciente automaticamente.
  */
 export const createLead = (user, data) => {
+  const tenantId = resolveTenantIdForWrite(user, data?.tenant_id || data?.tenantId);
   return withDb((db) => {
     if (!db.crmLeads) db.crmLeads = [];
     const now = new Date().toISOString();
@@ -89,6 +91,7 @@ export const createLead = (user, data) => {
       createdAt: now,
       updatedAt: now,
       createdByUserId: user?.id || null,
+      tenant_id: tenantId,
     };
     db.crmLeads.push(lead);
     logLeadEvent(db, id, CRM_EVENT_TYPE.STATUS_CHANGE, user?.id, {
@@ -281,6 +284,10 @@ export const createOrUpdateLeadFromMeta = (payload) => {
     }
 
     const id = createId('crmlead');
+    const tenantId = resolveTenantIdForWrite(
+      null,
+      payload?.tenant_id || payload?.tenantId || norm?.tenant_id || norm?.tenantId
+    );
     const lead = {
       id,
       name: norm.name || '',
@@ -296,6 +303,7 @@ export const createOrUpdateLeadFromMeta = (payload) => {
       createdAt: now,
       updatedAt: now,
       createdByUserId: null,
+      tenant_id: tenantId,
     };
     db.crmLeads.push(lead);
     logLeadEvent(db, id, CRM_EVENT_TYPE.STATUS_CHANGE, null, {

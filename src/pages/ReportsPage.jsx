@@ -1,4 +1,5 @@
 import { Section } from '../components/Section.jsx';
+import { Link } from 'react-router-dom';
 import { downloadCsv } from '../utils/csv.js';
 import { loadDb } from '../db/index.js';
 import { getClinicSummary } from '../services/clinicService.js';
@@ -138,6 +139,13 @@ export default function ReportsPage() {
         <strong>{clinic?.nomeClinica || 'Clínica'}</strong>
         <div className="muted">CNPJ: {clinic?.cnpj || '—'}</div>
       </div>
+      <div className="card finance-reports-hub-banner">
+        <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
+          Estes arquivos CSV complementam a{' '}
+          <Link to="/financeiro/relatorios/dre">Central de Análise</Link>
+          : decisão e cenários na central; extrações operacionais aqui.
+        </p>
+      </div>
       <Section title="Relatórios exportáveis">
         <div className="grid cards">
           <div className="card">
@@ -187,6 +195,13 @@ export default function ReportsPage() {
             <button className="button secondary" type="button" onClick={exportBoletos}>
               Exportar CSV
             </button>
+          </div>
+          <div className="card">
+            <h3>Central de Análise</h3>
+            <p className="muted">Receita, custos, lucro, margem e insights por mês.</p>
+            <Link className="button secondary" to="/financeiro/relatorios/dre">
+              Abrir DRE
+            </Link>
           </div>
         </div>
         <p className="muted">PDF não está habilitado; use CSV conforme requisito.</p>

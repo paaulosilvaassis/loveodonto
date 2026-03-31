@@ -45,7 +45,7 @@ export default function ConvitePage() {
         navigate('/gestao/dashboard', { replace: true });
         return;
       }
-      login({ userId: result.userId, tenantId: result.tenantId });
+      await login({ userId: result.userId, tenantId: result.tenantId });
       navigate('/gestao/dashboard', { replace: true });
     } catch (err) {
       setError(err?.message || 'Erro ao aceitar convite.');

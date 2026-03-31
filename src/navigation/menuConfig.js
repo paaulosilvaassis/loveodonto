@@ -71,7 +71,7 @@ export const menuSections = [
       { id: 'financiamento', label: 'Financiamentos', route: '/financeiro/financiamento', icon: BadgeDollarSign, rolesAllowed: ['admin', 'gerente', 'financeiro'], description: 'Financiamento próprio, análise, parcelas e inadimplência.' },
       { id: 'faturamento', label: 'Faturamento', route: '/financeiro/faturamento', icon: TrendingUp, rolesAllowed: ['admin', 'gerente', 'financeiro'], description: 'Produção contratada (vendas) versus recebimento no caixa.' },
       { id: 'comissoes', label: 'Comissões', route: '/financeiro/comissoes', icon: BarChart3, rolesAllowed: ['admin', 'gerente', 'financeiro'], description: 'Comissões por profissional.' },
-      { id: 'relatorios-fin', label: 'Relatórios Financeiros', route: '/financeiro/relatorios', icon: FileText, rolesAllowed: ['admin', 'gerente', 'financeiro'], description: 'Relatórios e análises financeiras.' },
+      { id: 'dre-fin', label: 'Central de Análise', route: '/financeiro/relatorios/dre', icon: BarChart3, rolesAllowed: ['admin', 'gerente', 'financeiro'], description: 'Central de análise financeira (competência, caixa e liquidez). Relatórios CSV a partir desta tela.' },
     ],
   },
   {
@@ -93,6 +93,7 @@ export const menuSections = [
     id: 'comercial',
     label: 'Gestão Comercial',
     items: [
+      { id: 'marketing-chat-inteligente', label: 'Chat Inteligente', route: '/marketing/chat-inteligente', icon: Bot, rolesAllowed: ['admin', 'gerente', 'comercial', 'recepcao', 'financeiro'], description: 'Hub de marketing conversacional (dashboard, caixa de entrada, campanhas, funis e relatorios).' },
       { id: 'chats', label: 'Histórico de Chats', route: '/comercial/chats', icon: MessageCircle, rolesAllowed: ['admin', 'gerente', 'comercial'], description: 'Histórico de atendimentos comerciais.' },
       { id: 'comercial-follow-up', label: 'Follow-up', route: '/comercial/follow-up', icon: Calendar, rolesAllowed: ['admin', 'gerente', 'recepcao', 'comercial'], description: 'Retornos, tarefas comerciais e integração com Agenda e CRM.' },
       { id: 'mensagens', label: 'Mensagens Automáticas', route: '/comercial/mensagens', icon: Sparkles, rolesAllowed: ['admin', 'gerente', 'comercial', 'recepcao'], description: 'Templates e disparos automatizados.' },
@@ -145,14 +146,22 @@ export const flattenMenu = (sections) =>
     ])
   );
 
-export const routeLabelMap = (sections = menuSections) =>
-  flattenMenu(sections).reduce((acc, item) => {
-    acc[item.route] = item.label;
-    return acc;
+export const routeLabelMap = (sections = menuSections) => {
+  const acc = flattenMenu(sections).reduce((memo, item) => {
+    memo[item.route] = item.label;
+    return memo;
   }, {});
+  acc['/financeiro/relatorios'] = 'Relatórios Financeiros';
+  return acc;
+};
 
-export const routeAccessMap = (sections = menuSections) =>
-  flattenMenu(sections).reduce((acc, item) => {
-    acc[item.route] = item.rolesAllowed || [];
-    return acc;
+const FINANCE_REPORTS_ROLES = ['admin', 'gerente', 'financeiro'];
+
+export const routeAccessMap = (sections = menuSections) => {
+  const acc = flattenMenu(sections).reduce((memo, item) => {
+    memo[item.route] = item.rolesAllowed || [];
+    return memo;
   }, {});
+  acc['/financeiro/relatorios'] = FINANCE_REPORTS_ROLES;
+  return acc;
+};

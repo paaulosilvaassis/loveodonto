@@ -10,6 +10,7 @@ import {
   reverseCheckinCommissionsForAppointment,
 } from './commissionCalculationService.js';
 import { addMinutesToTime, toMinutes as agendaToMinutes, minutesToTime } from '../utils/agendaUtils.js';
+import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
 
 export const APPOINTMENT_STATUS = {
   AGENDADO: 'agendado',
@@ -265,6 +266,7 @@ export const getAvailableSlots = ({
  */
 export const createAppointmentFromCrm = (user, payload) => {
   requirePermission(user, 'agenda:write');
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
   const db = loadDb();
   const lead = (db.crmLeads || []).find((l) => l.id === payload.leadId);
   if (!lead) throw new Error('Lead não encontrado.');
@@ -322,6 +324,7 @@ export const createAppointmentFromCrm = (user, payload) => {
     delayReason: null,
     checkInPreviousStatus: null,
     createdAt: new Date().toISOString(),
+    tenant_id: tenantId,
   };
 
   withDb((dbWrite) => {
@@ -356,6 +359,7 @@ export const createAppointmentFromCrm = (user, payload) => {
 
 export const createAppointment = (user, payload) => {
   requirePermission(user, 'agenda:write');
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
   const patientId = normalizeText(payload.patientId);
   const professionalId = normalizeText(payload.professionalId);
   const roomId = normalizeText(payload.roomId);
@@ -408,6 +412,7 @@ export const createAppointment = (user, payload) => {
     delayReason: payload.delayReason || null,
     checkInPreviousStatus: null,
     createdAt: new Date().toISOString(),
+    tenant_id: tenantId,
   };
   // #region agent log
   if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {

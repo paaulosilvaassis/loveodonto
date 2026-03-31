@@ -3,6 +3,7 @@ import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
 import { isCpfValid, isPhoneValid, onlyDigits, validateFileMeta } from '../utils/validators.js';
+import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
 
 const normalizeCpf = (value) => onlyDigits(value);
 const normalizePhoneDigits = (value) => onlyDigits(value);
@@ -204,6 +205,7 @@ export const getPatient = (patientId) => {
 
 export const createPatientQuick = (user, payload) => {
   requirePermission(user, 'patients:write');
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
   // #region agent log
   fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:186',message:'createPatientQuick entry',data:{hasPhotoUrl:typeof payload?.photo_url === 'string' && payload.photo_url.length > 0,photoUrlLength:typeof payload?.photo_url === 'string' ? payload.photo_url.length : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
   // #endregion
@@ -227,6 +229,7 @@ export const createPatientQuick = (user, payload) => {
     updated_at: new Date().toISOString(),
     created_by_user_id: user.id,
     updated_by_user_id: user.id,
+    tenant_id: tenantId,
   };
 
   assertRequired(patient.full_name, 'Nome completo é obrigatório.');
@@ -409,6 +412,7 @@ export const createPatientFromImport = (user, payload, pendingFields = []) => {
   fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'patientService.js:createPatientFromImport',message:'entry',data:{user:!!user,payloadName:payload?.full_name?.slice(0,30)},timestamp:Date.now(),runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
   // #endregion
   requirePermission(user, 'patients:write');
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
   const fullName = normalizeText(payload.full_name) || 'Paciente Importado';
   const sex = (normalizeText(payload.sex) || 'N').slice(0, 1).toUpperCase();
   const birthDate = normalizeText(payload.birth_date) || '1990-01-01';
@@ -437,6 +441,7 @@ export const createPatientFromImport = (user, payload, pendingFields = []) => {
     updated_at: new Date().toISOString(),
     created_by_user_id: user.id,
     updated_by_user_id: user.id,
+    tenant_id: tenantId,
   };
   if (pendingFields.length > 0) {
     patient.hasPendingData = true;
@@ -512,7 +517,7 @@ export const createPatientFromImport = (user, payload, pendingFields = []) => {
   });
 };
 
-const buildPatientFromImportPayload = (payload, pendingFields, user) => {
+const buildPatientFromImportPayload = (payload, pendingFields, user, tenantId) => {
   const fullName = normalizeText(payload.full_name) || 'Paciente Importado';
   const sex = (normalizeText(payload.sex) || 'N').slice(0, 1).toUpperCase();
   const birthDate = normalizeText(payload.birth_date) || '1990-01-01';
@@ -538,6 +543,7 @@ const buildPatientFromImportPayload = (payload, pendingFields, user) => {
     updated_at: new Date().toISOString(),
     created_by_user_id: user.id,
     updated_by_user_id: user.id,
+    tenant_id: tenantId,
   };
   if (pendingFields.length > 0) {
     patient.hasPendingData = true;
@@ -554,7 +560,10 @@ const buildPatientFromImportPayload = (payload, pendingFields, user) => {
 export const createPatientsFromImportBatch = (user, items) => {
   if (!items || items.length === 0) return { patientIds: [] };
   requirePermission(user, 'patients:write');
-  const built = items.map(({ payload, pendingFields = [] }) => buildPatientFromImportPayload(payload, pendingFields, user));
+  const built = items.map(({ payload, pendingFields = [] }) => {
+    const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
+    return buildPatientFromImportPayload(payload, pendingFields, user, tenantId);
+  });
   const cpfsInBatch = new Set();
   for (const { patient } of built) {
     let cpf = normalizeCpf(patient.cpf);

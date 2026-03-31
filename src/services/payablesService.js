@@ -4,6 +4,7 @@ import { listSuppliers } from './suppliersService.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { createId } from './helpers.js';
 import { getTodayCashRegister } from './cashRegisterService.js';
+import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
 
 /** Tipos de aba da régua de navegação financeira */
 export const PAYABLES_TABS = {
@@ -231,6 +232,7 @@ export const getPayablesKPIs = (month, year) => {
 
 export const createPayable = (user, payload) => {
   requirePermission(user, 'finance:write');
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
 
   const description = String(payload.description || '').trim();
   const categoryId = payload.categoryId || null;
@@ -273,6 +275,7 @@ export const createPayable = (user, payload) => {
     parentId: payload.parentId || null,
     created_at: now,
     updated_at: now,
+    tenant_id: tenantId,
   };
 
   withDb((db) => {

@@ -16,6 +16,7 @@ import {
   refreshInvitation,
   findPendingInvitationByEmail,
 } from '../services/invitationService.js';
+import { createTenantUserWithPassword } from '../services/userAuthService.js';
 import { MEMBERSHIP_ROLE_LABELS, INVITABLE_ROLES } from '../constants/tenantRoles.js';
 import { UserPlus, Copy, Trash2, Pencil, Eye, Power, Mail } from 'lucide-react';
 
@@ -44,9 +45,16 @@ export default function ConfiguracoesUsuariosPage() {
   const [inviteRole, setInviteRole] = useState('atendimento');
   const [inviteAccess, setInviteAccess] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
   const [memberModal, setMemberModal] = useState({ open: false, member: null, mode: 'view' });
+  const [modalCreateUser, setModalCreateUser] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
+  const [newUserRole, setNewUserRole] = useState('dentista');
+  const [newUserStatus, setNewUserStatus] = useState('active');
 
   const tenantId = tenant?.id;
   const isMaster = user?.isMaster || user?.role === 'admin';
@@ -111,6 +119,53 @@ export default function ConfiguracoesUsuariosPage() {
       showError(err?.message || 'Erro ao criar convite.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setError('');
+    const nameTrim = newUserName.trim();
+    const emailTrim = newUserEmail.trim().toLowerCase();
+    if (!tenantId) {
+      showError('Não foi possível identificar a clínica.');
+      return;
+    }
+    if (!nameTrim) {
+      showError('Nome é obrigatório.');
+      return;
+    }
+    if (!emailTrim) {
+      showError('E-mail é obrigatório.');
+      return;
+    }
+    if (!newUserPassword || newUserPassword.length < 8) {
+      showError('Senha deve ter no mínimo 8 caracteres.');
+      return;
+    }
+
+    setCreatingUser(true);
+    try {
+      await createTenantUserWithPassword(user, {
+        tenantId,
+        fullName: nameTrim,
+        email: emailTrim,
+        password: newUserPassword,
+        role: newUserRole,
+        status: newUserStatus,
+      });
+      pushToast('success', 'Usuário criado com sucesso e vinculado à clínica.');
+      setModalCreateUser(false);
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserPassword('');
+      setNewUserRole('dentista');
+      setNewUserStatus('active');
+      refresh();
+    } catch (err) {
+      showError(err?.message || 'Erro ao criar usuário.');
+    } finally {
+      setCreatingUser(false);
     }
   };
 
@@ -221,6 +276,9 @@ export default function ConfiguracoesUsuariosPage() {
         )}
 
         <div className="list-actions" style={{ marginBottom: '1rem' }}>
+          <Button variant="primary" icon={UserPlus} onClick={() => setModalCreateUser(true)}>
+            Novo usuário
+          </Button>
           <Button variant="primary" icon={UserPlus} onClick={() => setModalInvite(true)}>
             Convidar usuário
           </Button>
@@ -400,6 +458,73 @@ export default function ConfiguracoesUsuariosPage() {
                   {saving ? 'Criando…' : 'Criar convite'}
                 </Button>
                 <Button type="button" variant="secondary" onClick={() => { setModalInvite(false); setError(''); }}>
+                  Cancelar
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {modalCreateUser && (
+        <div className="modal-overlay" role="dialog" aria-modal="true">
+          <div className="modal card" style={{ maxWidth: '440px' }}>
+            <h3 style={{ marginBottom: '1rem' }}>Novo usuário</h3>
+            <form onSubmit={handleCreateUser} className="stack">
+              <Field label="Nome">
+                <input
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  placeholder="Nome completo"
+                  required
+                />
+              </Field>
+              <Field label="E-mail">
+                <input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  placeholder="email@exemplo.com"
+                  required
+                />
+              </Field>
+              <Field label="Senha">
+                <input
+                  type="password"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  placeholder="Mínimo de 8 caracteres"
+                  minLength={8}
+                  required
+                />
+              </Field>
+              <Field label="Cargo">
+                <select value={newUserRole} onChange={(e) => setNewUserRole(e.target.value)}>
+                  <option value="dentista">Dentista</option>
+                  <option value="recepcao">Recepção</option>
+                  <option value="financeiro">Financeiro</option>
+                  <option value="master">Admin</option>
+                </select>
+              </Field>
+              <Field label="Status">
+                <select value={newUserStatus} onChange={(e) => setNewUserStatus(e.target.value)}>
+                  <option value="active">Ativo</option>
+                  <option value="inactive">Inativo</option>
+                </select>
+              </Field>
+              <div className="flex gap-sm" style={{ marginTop: '1rem' }}>
+                <Button type="submit" variant="primary" disabled={creatingUser}>
+                  {creatingUser ? 'Criando…' : 'Criar usuário'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setModalCreateUser(false);
+                    setError('');
+                  }}
+                  disabled={creatingUser}
+                >
                   Cancelar
                 </Button>
               </div>

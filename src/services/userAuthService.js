@@ -7,6 +7,8 @@ import { createId } from './helpers.js';
 import { createMembership } from './membershipService.js';
 import { getDefaultTenant } from './tenantService.js';
 import { canManageAccess } from './accessService.js';
+import { MEMBERSHIP_ROLES, ROLE_MASTER } from '../constants/tenantRoles.js';
+import { requireMaster, countActiveMasters } from './membershipService.js';
 
 const SALT_ROUNDS = 10;
 
@@ -121,14 +123,26 @@ export async function authenticateByEmailPassword(email, password) {
   const ok = await verifyPassword(password, row.passwordHash);
   if (!ok) return null;
 
-  const access = (db.collaboratorAccess || []).find((a) => a.collaboratorId === row.collaboratorId);
-  const tenant = getDefaultTenant();
-  const membership = (db.memberships || []).find(
-    (m) => m.tenant_id === tenant?.id && m.user_id === access?.userId && m.status === 'active'
-  );
-  if (!access?.userId) return null;
-  if (!tenant) return null;
-  if (!membership || membership.has_system_access === false) return null;
+  let userId = row.userId || null;
+  if (!userId && row.collaboratorId) {
+    const access = (db.collaboratorAccess || []).find((a) => a.collaboratorId === row.collaboratorId);
+    userId = access?.userId || null;
+  }
+  if (!userId) return null;
+
+  const profile = (db.users_profile || []).find((item) => item.id === userId) || null;
+  const profileTenantId = String(profile?.tenant_id || '').trim();
+  const memberships = (db.memberships || [])
+    .filter((m) => m.user_id === userId && m.status === 'active' && m.has_system_access !== false);
+
+  if (memberships.length === 0) return null;
+
+  let selectedMembership = null;
+  if (profileTenantId) {
+    selectedMembership = memberships.find((m) => m.tenant_id === profileTenantId) || null;
+  }
+  if (!selectedMembership) selectedMembership = memberships[0];
+  if (!selectedMembership?.tenant_id) return null;
 
   const now = new Date().toISOString();
   withDb((d) => {
@@ -139,7 +153,7 @@ export async function authenticateByEmailPassword(email, password) {
     return d;
   });
 
-  return { userId: access.userId, tenantId: tenant.id };
+  return { userId, tenantId: selectedMembership.tenant_id };
 }
 
 /**
@@ -171,6 +185,15 @@ export function ensureUserAndLinkForCollaborator(actor, collaboratorId, email, r
         permissions: [],
         lastLoginAt: '',
       });
+      d.users_profile = d.users_profile || [];
+      const pIdx = d.users_profile.findIndex((p) => p.id === existing.id);
+      if (pIdx >= 0) {
+        d.users_profile[pIdx] = {
+          ...d.users_profile[pIdx],
+          tenant_id: d.users_profile[pIdx].tenant_id || tenant.id,
+          updated_at: new Date().toISOString(),
+        };
+      }
       return d;
     });
     createMembership(tenant.id, existing.id, { role: role || 'atendimento', has_system_access: hasSystemAccess });
@@ -195,6 +218,7 @@ export function ensureUserAndLinkForCollaborator(actor, collaboratorId, email, r
       full_name: (emailNorm.split('@')[0] || 'Usuário').trim(),
       email: emailNorm,
       phone: '',
+      tenant_id: tenant.id,
       created_at: now,
       updated_at: now,
     });
@@ -211,4 +235,106 @@ export function ensureUserAndLinkForCollaborator(actor, collaboratorId, email, r
   });
   createMembership(tenant.id, userId, { role: role || 'atendimento', has_system_access: hasSystemAccess });
   return userId;
+}
+
+/**
+ * Criação direta de usuário para um tenant com credenciais locais.
+ * Fluxo: users + users_profile(tenant_id obrigatório) + memberships + userAuth.
+ */
+export async function createTenantUserWithPassword(
+  actor,
+  {
+    tenantId,
+    fullName,
+    email,
+    password,
+    role = 'dentista',
+    status = 'active',
+  }
+) {
+  const normalizedTenantId = String(tenantId || '').trim();
+  if (!normalizedTenantId) {
+    const err = new Error('Clínica obrigatória para criar usuário.');
+    err.code = 'TENANT_REQUIRED';
+    throw err;
+  }
+
+  requireMaster(actor, normalizedTenantId);
+
+  const nameTrim = String(fullName || '').trim();
+  const emailNorm = String(email || '').trim().toLowerCase();
+  const passwordRaw = String(password || '');
+  const roleNorm = String(role || '').trim().toLowerCase();
+  const isActive = String(status || 'active').trim().toLowerCase() !== 'inactive';
+
+  if (!nameTrim) throw new Error('Nome é obrigatório.');
+  if (!emailNorm) throw new Error('E-mail é obrigatório.');
+  if (!passwordRaw || passwordRaw.length < 8) {
+    throw new Error('Senha deve ter no mínimo 8 caracteres.');
+  }
+  if (!MEMBERSHIP_ROLES.includes(roleNorm)) {
+    throw new Error('Cargo/perfil inválido para criação de usuário.');
+  }
+  if (roleNorm === ROLE_MASTER && countActiveMasters(normalizedTenantId) > 0) {
+    throw new Error('Já existe um administrador (MASTER) nesta clínica.');
+  }
+
+  const db = loadDb();
+  const emailTakenOnUsers = (db.users || []).some((u) => (u.email || '').toLowerCase() === emailNorm);
+  const emailTakenOnProfiles = (db.users_profile || []).some((u) => (u.email || '').toLowerCase() === emailNorm);
+  const emailTakenOnAuth = (db.userAuth || []).some((u) => (u.email || '').toLowerCase() === emailNorm);
+  if (emailTakenOnUsers || emailTakenOnProfiles || emailTakenOnAuth) {
+    const err = new Error('Este e-mail já está em uso por outro usuário.');
+    err.code = 'EMAIL_DUPLICATE';
+    throw err;
+  }
+
+  const userId = createId('user');
+  const now = new Date().toISOString();
+  const passwordHash = await hashPassword(passwordRaw);
+
+  withDb((d) => {
+    d.users = d.users || [];
+    d.users.push({
+      id: userId,
+      name: nameTrim,
+      email: emailNorm,
+      active: isActive,
+      has_system_access: isActive,
+      role: roleNorm === ROLE_MASTER ? 'admin' : roleNorm,
+    });
+
+    d.users_profile = d.users_profile || [];
+    d.users_profile.push({
+      id: userId,
+      full_name: nameTrim,
+      email: emailNorm,
+      phone: '',
+      tenant_id: normalizedTenantId,
+      created_at: now,
+      updated_at: now,
+    });
+
+    d.userAuth = d.userAuth || [];
+    d.userAuth.push({
+      id: createId('uauth'),
+      collaboratorId: null,
+      userId,
+      tenantId: normalizedTenantId,
+      email: emailNorm,
+      passwordHash,
+      mustChangePassword: false,
+      isActive: isActive,
+      lastLoginAt: null,
+      createdAt: now,
+    });
+    return d;
+  });
+
+  createMembership(normalizedTenantId, userId, {
+    role: roleNorm,
+    has_system_access: isActive,
+  });
+
+  return { userId, tenantId: normalizedTenantId };
 }

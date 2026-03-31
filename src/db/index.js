@@ -22,6 +22,74 @@ const resolveStorageKey = () => {
 
 const STORAGE_KEY = resolveStorageKey();
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const normalizeTenantValue = (value) => {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+};
+
+const TENANT_GUARDED_COLLECTIONS = [
+  'users_profile',
+  'memberships',
+  'patients',
+  'appointments',
+  'transactions',
+  'accountsReceivable',
+  'receivablePayments',
+  'payables',
+  'cashTransactions',
+  'crmLeads',
+  'crmTasks',
+  'marketingCampaigns',
+  'marketingFunnels',
+  'marketingAutomations',
+  'marketingChatConversations',
+  'marketingChatMessages',
+  'marketingChatContacts',
+];
+
+function validateTenantIntegrityOnWrite(previousDb, nextDb) {
+  const tenants = new Set((Array.isArray(nextDb?.tenants) ? nextDb.tenants : []).map((t) => normalizeTenantValue(t?.id)).filter(Boolean));
+
+  for (const collectionName of TENANT_GUARDED_COLLECTIONS) {
+    const previous = Array.isArray(previousDb?.[collectionName]) ? previousDb[collectionName] : [];
+    const current = Array.isArray(nextDb?.[collectionName]) ? nextDb[collectionName] : [];
+
+    if (current.length === 0) continue;
+    const previousById = new Map(previous.map((item) => [item?.id, item]));
+
+    for (const row of current) {
+      if (!row || typeof row !== 'object') continue;
+      const rowId = row.id;
+      if (!rowId) continue;
+
+      const before = previousById.get(rowId);
+      const isNew = !before;
+      const hadTenantBefore = normalizeTenantValue(before?.tenant_id || before?.tenantId);
+      const currentTenant = normalizeTenantValue(row.tenant_id || row.tenantId);
+
+      if (isNew && !currentTenant) {
+        console.error(`[TENANT_GUARD] create bloqueado em "${collectionName}" sem tenant_id`, { collectionName, id: rowId });
+        const error = new Error(`TENANT_REQUIRED: criação em "${collectionName}" exige tenant_id.`);
+        error.code = 'TENANT_REQUIRED';
+        throw error;
+      }
+
+      if (!isNew && hadTenantBefore && !currentTenant) {
+        console.error(`[TENANT_GUARD] update bloqueado em "${collectionName}" removendo tenant_id`, { collectionName, id: rowId });
+        const error = new Error(`TENANT_REQUIRED: update em "${collectionName}" não pode remover tenant_id.`);
+        error.code = 'TENANT_REQUIRED';
+        throw error;
+      }
+
+      if (currentTenant && tenants.size > 0 && !tenants.has(currentTenant)) {
+        console.error(`[TENANT_GUARD] persistência bloqueada em "${collectionName}" com tenant_id órfão`, { collectionName, id: rowId, tenant_id: currentTenant });
+        const error = new Error(`TENANT_INVALID: tenant_id "${currentTenant}" não existe em tenants.`);
+        error.code = 'TENANT_INVALID';
+        throw error;
+      }
+    }
+  }
+}
 
 let cachedDb = null;
 let initDbPromise = null;
@@ -430,6 +498,7 @@ export const withDb = (mutator) => {
   const cloned = clone(db);
   const result = mutator(cloned);
   const next = result && typeof result === 'object' && !Array.isArray(result) && 'patients' in result ? result : cloned;
+  validateTenantIntegrityOnWrite(db, next);
   saveDb(next);
   return result;
 };

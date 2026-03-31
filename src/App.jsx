@@ -8,6 +8,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ConvitePage from './pages/ConvitePage.jsx';
 import { PlatformAuthProvider } from './auth/PlatformAuthContext.jsx';
 import RequirePlatformAuth from './auth/RequirePlatformAuth.jsx';
+import { TenantProvider } from './tenant/TenantContext.jsx';
 import PlatformLayout from './platform/PlatformLayout.jsx';
 import PlatformLoginPage from './pages/platform/PlatformLoginPage.jsx';
 import PlatformDashboardPage from './pages/platform/PlatformDashboardPage.jsx';
@@ -26,9 +27,10 @@ const DevSeedPage = lazy(() => import('./pages/DevSeedPage.jsx'));
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <PlatformAuthProvider>
-          <Routes>
+      <TenantProvider>
+        <BrowserRouter>
+          <PlatformAuthProvider>
+            <Routes>
             {import.meta.env?.DEV ? (
               <>
                 <Route path="/dev/migrate-db" element={<Suspense fallback={null}><DevMigratePage /></Suspense>} />
@@ -69,9 +71,10 @@ export default function App() {
                 </RequireAuth>
               }
             />
-          </Routes>
-        </PlatformAuthProvider>
-      </BrowserRouter>
+            </Routes>
+          </PlatformAuthProvider>
+        </BrowserRouter>
+      </TenantProvider>
     </AuthProvider>
   );
 }

@@ -7,8 +7,8 @@ export default function RequirePlatformAuth({ children }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900">
-        <p className="text-slate-400">Carregando...</p>
+      <div className="pc-login">
+        <p>Carregando...</p>
       </div>
     );
   }

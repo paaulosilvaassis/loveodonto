@@ -1,23 +1,62 @@
 import { createContext, useContext, useMemo, useState, useEffect } from 'react';
-import { supabaseConsole } from '../lib/supabaseConsole.js';
+import { supabaseConsole, supabaseConsoleConfig } from '../lib/supabaseConsole.js';
 
 export const PLATFORM_ROLES = {
-  PLATFORM_OWNER: 'PLATFORM_OWNER',
-  PLATFORM_ADMIN: 'PLATFORM_ADMIN',
-  SALES: 'SALES',
-  SUPPORT: 'SUPPORT',
-  FINANCE: 'FINANCE',
+  OWNER: 'owner',
+  SUPER_ADMIN: 'super_admin',
+  SUPORTE: 'suporte',
+  FINANCEIRO: 'financeiro',
+  OPERACOES: 'operacoes',
+  LEITURA: 'leitura',
 };
 
 const PlatformAuthContext = createContext(null);
+const LOCAL_AUTH_STORAGE_KEY = 'platform_console_local_auth';
+const DEFAULT_PERMISSIONS = {
+  '*': [PLATFORM_ROLES.OWNER, PLATFORM_ROLES.SUPER_ADMIN],
+  'dashboard:view': [PLATFORM_ROLES.OWNER, PLATFORM_ROLES.SUPER_ADMIN, PLATFORM_ROLES.SUPORTE, PLATFORM_ROLES.FINANCEIRO, PLATFORM_ROLES.OPERACOES, PLATFORM_ROLES.LEITURA],
+  'clinics:write': [PLATFORM_ROLES.OWNER, PLATFORM_ROLES.SUPER_ADMIN, PLATFORM_ROLES.OPERACOES],
+  'billing:write': [PLATFORM_ROLES.OWNER, PLATFORM_ROLES.SUPER_ADMIN, PLATFORM_ROLES.FINANCEIRO],
+  'support:write': [PLATFORM_ROLES.OWNER, PLATFORM_ROLES.SUPER_ADMIN, PLATFORM_ROLES.SUPORTE],
+  'flags:write': [PLATFORM_ROLES.OWNER, PLATFORM_ROLES.SUPER_ADMIN, PLATFORM_ROLES.OPERACOES],
+  'audit:view': [PLATFORM_ROLES.OWNER, PLATFORM_ROLES.SUPER_ADMIN, PLATFORM_ROLES.LEITURA, PLATFORM_ROLES.OPERACOES],
+};
+
+function normalizeRole(value) {
+  return String(value || '').toLowerCase();
+}
+
+function readLocalAuthUser() {
+  try {
+    const raw = localStorage.getItem(LOCAL_AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.email) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalAuthUser(user) {
+  localStorage.setItem(LOCAL_AUTH_STORAGE_KEY, JSON.stringify(user));
+}
+
+function clearLocalAuthUser() {
+  localStorage.removeItem(LOCAL_AUTH_STORAGE_KEY);
+}
 
 export function PlatformAuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [platformUser, setPlatformUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isLocalAuthMode = supabaseConsoleConfig.authMode === 'local' || !supabaseConsole;
 
   useEffect(() => {
-    if (!supabaseConsole) {
+    if (isLocalAuthMode) {
+      const localUser = readLocalAuthUser();
+      setSession(localUser ? { user: { id: localUser.id } } : null);
+      setPlatformUser(localUser);
       setLoading(false);
       return;
     }
@@ -35,13 +74,13 @@ export function PlatformAuthProvider({ children }) {
       }
     });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [isLocalAuthMode]);
 
   async function fetchPlatformUser(authId) {
     try {
       const { data, error } = await supabaseConsole
-        .from('platform_users')
-        .select('*')
+        .from('platform_admin_users')
+        .select('id, email, full_name, role_slug, is_active')
         .eq('id', authId)
         .eq('is_active', true)
         .single();
@@ -49,7 +88,13 @@ export function PlatformAuthProvider({ children }) {
         setPlatformUser(null);
         return;
       }
-      setPlatformUser(data);
+      const role = normalizeRole(data.role_slug);
+      setPlatformUser({
+        id: data.id,
+        email: data.email,
+        name: data.full_name,
+        role,
+      });
     } catch {
       setPlatformUser(null);
     } finally {
@@ -58,7 +103,24 @@ export function PlatformAuthProvider({ children }) {
   }
 
   const login = async (email, password) => {
-    if (!supabaseConsole) throw new Error('Supabase não configurado.');
+    if (isLocalAuthMode) {
+      const cleanEmail = String(email || '').trim().toLowerCase();
+      const cleanPassword = String(password || '').trim();
+      if (!cleanEmail || !cleanPassword) {
+        throw new Error('Informe e-mail e senha para entrar.');
+      }
+      const localUser = {
+        id: `local_${Date.now()}`,
+        email: cleanEmail,
+        name: 'Admin Console (Local)',
+        role: PLATFORM_ROLES.OWNER,
+      };
+      saveLocalAuthUser(localUser);
+      setPlatformUser(localUser);
+      setSession({ user: { id: localUser.id } });
+      return { user: localUser };
+    }
+    if (!supabaseConsole) throw new Error('Supabase não configurado para a Console.');
     const { data, error } = await supabaseConsole.auth.signInWithPassword({ email, password });
     if (error) throw error;
     await fetchPlatformUser(data.user.id);
@@ -66,9 +128,22 @@ export function PlatformAuthProvider({ children }) {
   };
 
   const logout = async () => {
-    if (supabaseConsole) await supabaseConsole.auth.signOut();
+    if (isLocalAuthMode) {
+      clearLocalAuthUser();
+    } else if (supabaseConsole) {
+      await supabaseConsole.auth.signOut();
+    }
     setSession(null);
     setPlatformUser(null);
+  };
+
+  const hasPermission = (permission) => {
+    const role = platformUser?.role;
+    if (!role) return false;
+    const roleNormalized = normalizeRole(role);
+    if ((DEFAULT_PERMISSIONS['*'] || []).includes(roleNormalized)) return true;
+    const allowed = DEFAULT_PERMISSIONS[permission] || [];
+    return allowed.includes(roleNormalized);
   };
 
   const value = useMemo(
@@ -78,13 +153,12 @@ export function PlatformAuthProvider({ children }) {
       loading,
       login,
       logout,
-      isOwner: platformUser?.role === PLATFORM_ROLES.PLATFORM_OWNER,
-      canManageTeam: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN].includes(platformUser?.role),
-      canManageTenants: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN, PLATFORM_ROLES.SALES].includes(platformUser?.role),
-      canManageBilling: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN, PLATFORM_ROLES.FINANCE].includes(platformUser?.role),
-      canManageProviders: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN].includes(platformUser?.role),
+      hasPermission,
+      isLocalAuthMode,
+      authMode: supabaseConsoleConfig.authMode,
+      isOwner: platformUser?.role === PLATFORM_ROLES.OWNER,
     }),
-    [session, platformUser, loading],
+    [session, platformUser, loading, isLocalAuthMode],
   );
 
   return (

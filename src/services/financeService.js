@@ -2,6 +2,7 @@ import { loadDb, withDb } from '../db/index.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
+import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
 
 export const TRANSACTION_STATUS = {
   OPEN: 'aberto',
@@ -14,6 +15,7 @@ export const listInstallmentPlans = () => loadDb().installmentPlans;
 
 export const createTransaction = (user, payload) => {
   requirePermission(user, 'finance:write');
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
   const transaction = {
     id: createId('txn'),
     type: normalizeText(payload.type),
@@ -27,6 +29,7 @@ export const createTransaction = (user, payload) => {
     category: normalizeText(payload.category),
     installmentGroupId: normalizeText(payload.installmentGroupId),
     boletoData: payload.boletoData || null,
+    tenant_id: tenantId,
   };
 
   assertRequired(transaction.type, 'Tipo é obrigatório (pagar/receber).');
@@ -43,6 +46,7 @@ export const createTransaction = (user, payload) => {
 
 export const createInstallmentPlan = (user, payload) => {
   requirePermission(user, 'finance:write');
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
   const plan = {
     id: createId('plan'),
     patientId: normalizeText(payload.patientId),
@@ -52,6 +56,7 @@ export const createInstallmentPlan = (user, payload) => {
     startDate: normalizeText(payload.startDate),
     intervalDays: Number(payload.intervalDays || 30),
     description: normalizeText(payload.description),
+    tenant_id: tenantId,
   };
 
   assertRequired(plan.patientId, 'Paciente é obrigatório.');
@@ -78,6 +83,7 @@ export const createInstallmentPlan = (user, payload) => {
         category: 'tratamento',
         installmentGroupId,
         boletoData: null,
+        tenant_id: tenantId,
       });
     }
     return db;

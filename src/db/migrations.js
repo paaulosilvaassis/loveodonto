@@ -1235,6 +1235,82 @@ const migrations = {
       version: 41,
     };
   },
+  42: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 42 };
+    return {
+      ...db,
+      marketingChatAccounts: Array.isArray(db.marketingChatAccounts) ? db.marketingChatAccounts : [],
+      marketingChatChannels: Array.isArray(db.marketingChatChannels) ? db.marketingChatChannels : [],
+      marketingChatContacts: Array.isArray(db.marketingChatContacts) ? db.marketingChatContacts : [],
+      marketingChatConversations: Array.isArray(db.marketingChatConversations) ? db.marketingChatConversations : [],
+      marketingChatMessages: Array.isArray(db.marketingChatMessages) ? db.marketingChatMessages : [],
+      marketingChatAssignments: Array.isArray(db.marketingChatAssignments) ? db.marketingChatAssignments : [],
+      marketingChatNotes: Array.isArray(db.marketingChatNotes) ? db.marketingChatNotes : [],
+      marketingChatTags: Array.isArray(db.marketingChatTags) ? db.marketingChatTags : [],
+      marketingChatCampaigns: Array.isArray(db.marketingChatCampaigns) ? db.marketingChatCampaigns : [],
+      marketingChatAutomations: Array.isArray(db.marketingChatAutomations) ? db.marketingChatAutomations : [],
+      marketingChatFunnels: Array.isArray(db.marketingChatFunnels) ? db.marketingChatFunnels : [],
+      marketingChatSettings: db.marketingChatSettings && typeof db.marketingChatSettings === 'object' ? db.marketingChatSettings : {},
+      marketingChatWebhookLogs: Array.isArray(db.marketingChatWebhookLogs) ? db.marketingChatWebhookLogs : [],
+      marketingChatMetricsSnapshots: Array.isArray(db.marketingChatMetricsSnapshots) ? db.marketingChatMetricsSnapshots : [],
+      version: 42,
+    };
+  },
+  43: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 43 };
+    return {
+      ...db,
+      marketingChatDepartments: Array.isArray(db.marketingChatDepartments) ? db.marketingChatDepartments : [],
+      marketingChatAttendants: Array.isArray(db.marketingChatAttendants) ? db.marketingChatAttendants : [],
+      marketingChatApiConfig: db.marketingChatApiConfig && typeof db.marketingChatApiConfig === 'object' ? db.marketingChatApiConfig : {},
+      version: 43,
+    };
+  },
+  44: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 44 };
+    return {
+      ...db,
+      marketingAutomationEvents: Array.isArray(db.marketingAutomationEvents) ? db.marketingAutomationEvents : [],
+      marketingAutomationRuns: Array.isArray(db.marketingAutomationRuns) ? db.marketingAutomationRuns : [],
+      marketingAutomationRunSteps: Array.isArray(db.marketingAutomationRunSteps) ? db.marketingAutomationRunSteps : [],
+      marketingScheduledJobs: Array.isArray(db.marketingScheduledJobs) ? db.marketingScheduledJobs : [],
+      marketingJobAttempts: Array.isArray(db.marketingJobAttempts) ? db.marketingJobAttempts : [],
+      marketingAutomationMetricsDaily: Array.isArray(db.marketingAutomationMetricsDaily) ? db.marketingAutomationMetricsDaily : [],
+      version: 44,
+    };
+  },
+  45: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 45 };
+    return {
+      ...db,
+      tenantModules: Array.isArray(db.tenantModules) ? db.tenantModules : [],
+      featureFlags: Array.isArray(db.featureFlags) ? db.featureFlags : [],
+      tenantLimits: Array.isArray(db.tenantLimits) ? db.tenantLimits : [],
+      version: 45,
+    };
+  },
+  46: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 46 };
+    const usersProfile = Array.isArray(db.users_profile) ? db.users_profile : [];
+    const memberships = Array.isArray(db.memberships) ? db.memberships : [];
+    const nextProfiles = usersProfile.map((profile) => {
+      const existingTenant = String(profile?.tenant_id || '').trim();
+      if (existingTenant) return profile;
+      const membership = memberships.find((m) => m.user_id === profile.id && m.status === 'active');
+      return {
+        ...profile,
+        tenant_id: membership?.tenant_id || null,
+      };
+    });
+    return {
+      ...db,
+      users_profile: nextProfiles,
+      tenantModules: Array.isArray(db.tenantModules) ? db.tenantModules : [],
+      featureFlags: Array.isArray(db.featureFlags) ? db.featureFlags : [],
+      tenantLimits: Array.isArray(db.tenantLimits) ? db.tenantLimits : [],
+      version: 46,
+    };
+  },
 };
 
 /** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */

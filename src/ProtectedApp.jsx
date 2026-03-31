@@ -4,6 +4,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import RequireRole from './auth/RequireRole.jsx';
 import RequireAdminGate from './auth/RequireAdminGate.jsx';
+import RequireModule from './auth/RequireModule.jsx';
+import RequireFeatureFlag from './auth/RequireFeatureFlag.jsx';
 import Layout from './components/Layout.jsx';
 import AgendaPage from './pages/AgendaPage.jsx';
 import AutomationPage from './pages/AutomationPage.jsx';
@@ -20,6 +22,7 @@ import FinanceBoletosPage from './pages/FinanceBoletosPage.jsx';
 import FinanceFinanciamentoPage from './pages/FinanceFinanciamentoPage.jsx';
 import FinanceFaturamentoPage from './pages/FinanceFaturamentoPage.jsx';
 import FinanceComissoesPage from './pages/FinanceComissoesPage.jsx';
+import FinanceDREPage from './pages/FinanceDREPage.jsx';
 import FornecedoresPage from './pages/administrativo/FornecedoresPage.jsx';
 import InventoryPage from './pages/InventoryPage.jsx';
 import AdminUsuariosPage from './pages/AdminUsuariosPage.jsx';
@@ -49,11 +52,32 @@ import CrmAutomacoesPage from './pages/crm/CrmAutomacoesPage.jsx';
 import CrmConfiguracoesPage from './pages/crm/CrmConfiguracoesPage.jsx';
 import ComercialFollowUpPage from './pages/comercial/ComercialFollowUpPage.jsx';
 import SupportPage from './pages/suporte/SupportPage.jsx';
+import MarketingChatShellLayout from './pages/marketing/MarketingChatShellLayout.jsx';
+import MarketingChatDashboardPage from './pages/marketing/chatInteligente/MarketingChatDashboardPage.jsx';
+import MarketingChatConnectPage from './pages/marketing/chatInteligente/MarketingChatConnectPage.jsx';
+import MarketingChatInboxPage from './pages/marketing/chatInteligente/MarketingChatInboxPage.jsx';
+import MarketingChatInboxRealtimePage from './pages/marketing/chatInteligente/MarketingChatInboxRealtimePage.jsx';
+import MarketingChatContactsPage from './pages/marketing/chatInteligente/MarketingChatContactsPage.jsx';
+import MarketingChatCampaignsPage from './pages/marketing/chatInteligente/MarketingChatCampaignsPage.jsx';
+import MarketingChatAutomationsPage from './pages/marketing/chatInteligente/MarketingChatAutomationsPage.jsx';
+import MarketingChatAutomationObservabilityPage from './pages/marketing/chatInteligente/MarketingChatAutomationObservabilityPage.jsx';
+import MarketingChatFunnelsPage from './pages/marketing/chatInteligente/MarketingChatFunnelsPage.jsx';
+import MarketingChatOperationsPage from './pages/marketing/chatInteligente/MarketingChatOperationsPage.jsx';
+import MarketingChatIntegrationsPage from './pages/marketing/chatInteligente/MarketingChatIntegrationsPage.jsx';
+import MarketingChatSettingsPage from './pages/marketing/chatInteligente/MarketingChatSettingsPage.jsx';
+import MarketingChatReportsPage from './pages/marketing/chatInteligente/MarketingChatReportsPage.jsx';
 import { routeAccessMap } from './navigation/menuConfig.js';
+import { getRequiredFeatureFlagForRoute, getRequiredModuleForRoute } from './tenant/tenantAccess.js';
 
 const routeRoles = routeAccessMap();
 const withRole = (route, element) => (
-  <RequireRole allowedRoles={routeRoles[route]}>{element}</RequireRole>
+  <RequireRole allowedRoles={routeRoles[route]}>
+    <RequireModule moduleName={getRequiredModuleForRoute(route)}>
+      <RequireFeatureFlag flagKey={getRequiredFeatureFlagForRoute(route)}>
+        {element}
+      </RequireFeatureFlag>
+    </RequireModule>
+  </RequireRole>
 );
 const withAdminGate = (element) => <RequireAdminGate>{element}</RequireAdminGate>;
 
@@ -67,6 +91,7 @@ export default function ProtectedApp() {
         <Route path="/agenda" element={<Navigate to="/gestao/agenda" replace />} />
         <Route path="/pacientes" element={<Navigate to="/pacientes/busca" replace />} />
         <Route path="/financeiro" element={<Navigate to="/financeiro/contas-receber" replace />} />
+        <Route path="/marketing" element={<Navigate to="/marketing/chat-inteligente" replace />} />
         <Route path="/relatorios" element={<Navigate to="/financeiro/relatorios" replace />} />
         <Route path="/comunicacao" element={<Navigate to="/comercial/mensagens" replace />} />
         <Route path="/colaboradores" element={<Navigate to="/admin/colaboradores" replace />} />
@@ -123,6 +148,7 @@ export default function ProtectedApp() {
         <Route path="/financeiro/faturamento" element={withRole('/financeiro/faturamento', <FinanceFaturamentoPage />)} />
         <Route path="/financeiro/comissoes" element={withRole('/financeiro/comissoes', <FinanceComissoesPage />)} />
         <Route path="/financeiro/relatorios" element={withRole('/financeiro/relatorios', <ReportsPage />)} />
+        <Route path="/financeiro/relatorios/dre" element={withRole('/financeiro/relatorios/dre', <FinanceDREPage />)} />
         <Route path="/comercial/chats" element={withRole('/comercial/chats', <PlaceholderPage title="Histórico de Chats" description="Histórico completo de conversas." />)} />
         <Route path="/comercial/follow-up" element={withRole('/comercial/follow-up', <ComercialFollowUpPage />)} />
         <Route path="/comercial/mensagens" element={withRole('/comercial/mensagens', <CommunicationPage />)} />
@@ -139,6 +165,22 @@ export default function ProtectedApp() {
         <Route path="/comercial/whatsapp/crm" element={withRole('/comercial/whatsapp/crm', <PlaceholderPage title="WhatsApp + CRM" description="Integração com pipeline comercial." />)} />
         <Route path="/comercial/whatsapp/ia" element={withRole('/comercial/whatsapp/ia', <PlaceholderPage title="Atendimento 24/7 com IA" description="IA treinada com base da clínica." />)} />
         <Route path="/comercial/atendimento" element={withRole('/comercial/atendimento', <PlaceholderPage title="Atendimento humano/IA" description="Transbordo automático para humanos." />)} />
+        <Route path="/marketing/chat-inteligente" element={withRole('/marketing/chat-inteligente', <MarketingChatShellLayout />)}>
+          <Route index element={<Navigate to="/marketing/chat-inteligente/dashboard" replace />} />
+          <Route path="dashboard" element={<MarketingChatDashboardPage />} />
+          <Route path="conectar-whatsapp" element={<MarketingChatConnectPage />} />
+          <Route path="inbox" element={<MarketingChatInboxRealtimePage />} />
+          <Route path="caixa-entrada" element={<MarketingChatInboxPage />} />
+          <Route path="contatos" element={<MarketingChatContactsPage />} />
+          <Route path="campanhas" element={<MarketingChatCampaignsPage />} />
+          <Route path="automacoes" element={<MarketingChatAutomationsPage />} />
+          <Route path="observabilidade" element={<MarketingChatAutomationObservabilityPage />} />
+          <Route path="funis" element={<MarketingChatFunnelsPage />} />
+          <Route path="gestao-atendimento" element={<MarketingChatOperationsPage />} />
+          <Route path="integracoes" element={<MarketingChatIntegrationsPage />} />
+          <Route path="configuracoes" element={<MarketingChatSettingsPage />} />
+          <Route path="relatorios" element={<MarketingChatReportsPage />} />
+        </Route>
         <Route path="/estoque" element={<InventoryPage />} />
         <Route path="/equipe" element={<TeamPage />} />
         <Route path="/automacao" element={<AutomationPage />} />

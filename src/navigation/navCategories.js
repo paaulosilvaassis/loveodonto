@@ -287,10 +287,10 @@ export const navCategories = [
         rolesAllowed: ['admin', 'gerente', 'financeiro'],
       },
       {
-        id: 'relatorios-fin',
-        label: 'Relatórios Financeiros',
-        icon: FileText,
-        route: '/financeiro/relatorios',
+        id: 'dre-fin',
+        label: 'Central de Análise',
+        icon: BarChart3,
+        route: '/financeiro/relatorios/dre',
         rolesAllowed: ['admin', 'gerente', 'financeiro'],
       },
     ],
@@ -299,8 +299,15 @@ export const navCategories = [
     id: 'marketing',
     label: 'Marketing',
     icon: Megaphone,
-    defaultRoute: '/comercial/mensagens',
+    defaultRoute: '/marketing/chat-inteligente',
     items: [
+      {
+        id: 'marketing-chat-inteligente',
+        label: 'Chat Inteligente',
+        icon: Bot,
+        route: '/marketing/chat-inteligente',
+        rolesAllowed: ['admin', 'gerente', 'comercial', 'recepcao', 'financeiro'],
+      },
       {
         id: 'mensagens',
         label: 'Mensagens Automáticas',
@@ -454,7 +461,10 @@ if (import.meta.env?.DEV) {
     const oldRoutes = new Set(oldItems.map((item) => item.route));
     const newRoutes = new Set(newItems.map((item) => item.route.trim()));
     
-    const missingRoutes = oldItems.filter((item) => !newRoutes.has(item.route));
+    const omittedFromSidebar = new Set(['/financeiro/relatorios']);
+    const missingRoutes = oldItems.filter(
+      (item) => !newRoutes.has(item.route) && !omittedFromSidebar.has(item.route)
+    );
     
     if (missingRoutes.length > 0) {
       console.error('⚠️ NAVEGAÇÃO: Itens do menu antigo não encontrados no novo:', missingRoutes.map((item) => `${item.label} (${item.route})`));

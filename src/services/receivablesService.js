@@ -13,6 +13,7 @@ import {
   assertEnumValue,
   normalizeEnumValue,
 } from './auditEventCatalog.js';
+import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
 
 export const RECEIVABLE_TABS = {
   A_RECEBER: 'a_receber',
@@ -271,6 +272,7 @@ export const createReceivable = (user, payload) => {
     assertEnumValue('charge_method', RECEIVABLE_CHARGE_TYPE, payload.charge_method);
   }
   requirePermission(user, 'finance:write');
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
 
   const todayIso = TODAY();
   const description = String(payload.description || '').trim();
@@ -349,6 +351,7 @@ export const createReceivable = (user, payload) => {
     updated_at: now,
     canceled_at: null,
     canceled_reason: null,
+    tenant_id: tenantId,
   };
 
   record.status = computeReceivableStatus(record, todayIso);

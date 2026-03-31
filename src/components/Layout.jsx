@@ -3,8 +3,10 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
+import { useTenant } from '../tenant/useTenant.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
 import { navCategories, getActiveCategory, getActiveItem } from '../navigation/navCategories.js';
+import { canAccessRoute } from '../tenant/tenantAccess.js';
 import { logAction } from '../services/logService.js';
 import PatientQuickCreateModal from './PatientQuickCreateModal.jsx';
 import OpeningScreen, { shouldShowOpening } from './OpeningScreen.jsx';
@@ -39,6 +41,7 @@ const isAllowed = (user, allowedRoles) => {
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
   const { platformUser } = usePlatformAuth();
+  const tenant = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
   const clinicSummary = useClinicSummary();
@@ -108,8 +111,10 @@ export default function Layout({ children }) {
 
   // Filtra itens permitidos para o usuário atual
   const visibleItems = useMemo(() => {
-    return activeCategory.items.filter((item) => isAllowed(user, item.rolesAllowed));
-  }, [activeCategory, user]);
+    return activeCategory.items.filter(
+      (item) => isAllowed(user, item.rolesAllowed) && canAccessRoute(item.route, tenant.modules, tenant.flags)
+    );
+  }, [activeCategory, user, tenant.modules, tenant.flags]);
 
   return (
     <ImportJobProvider onToast={onImportToast}>
@@ -134,7 +139,9 @@ export default function Layout({ children }) {
           {navCategories.map((category) => {
             const CategoryIcon = category.icon;
             const isActive = category.id === activeCategoryId;
-            const hasAccess = category.items.some((item) => isAllowed(user, item.rolesAllowed));
+            const hasAccess = category.items.some(
+              (item) => isAllowed(user, item.rolesAllowed) && canAccessRoute(item.route, tenant.modules, tenant.flags)
+            );
 
             if (!hasAccess) return null;
 
@@ -227,6 +234,16 @@ export default function Layout({ children }) {
       </aside>
 
       <div className="content">
+        {tenant.loading ? (
+          <div className="alert" style={{ margin: '1rem 1rem 0' }}>
+            Carregando permissões da clínica...
+          </div>
+        ) : null}
+        {!tenant.loading && tenant.error ? (
+          <div className="alert error" style={{ margin: '1rem 1rem 0' }}>
+            Falha ao carregar contexto da clínica: {tenant.error}
+          </div>
+        ) : null}
         <header className="header">
           <div className="header-left">
             <button className="button secondary back-button" type="button" onClick={() => navigate(-1)}>
@@ -260,6 +277,11 @@ export default function Layout({ children }) {
           </div>
         </header>
         <main className="page">{children}</main>
+        {tenant?.tenant?.billing_status === 'overdue' ? (
+          <div className="alert warning" style={{ margin: '0 1rem 1rem' }}>
+            Atenção: existem pendências financeiras nesta clínica. Alguns recursos podem ser limitados.
+          </div>
+        ) : null}
       </div>
 
       {/* Modal de Pesquisa Rápida */}

@@ -5,6 +5,8 @@ import { logAction } from '../services/logService.js';
 import { getDefaultTenant, getTenant } from '../services/tenantService.js';
 import { getMembership } from '../services/membershipService.js';
 import { ROLE_MASTER } from '../constants/tenantRoles.js';
+import { getTenantContext } from '../services/tenantContextService.js';
+import { resolveTrustedTenantId } from '../services/tenantIdentityService.js';
 
 const AUTH_CONTEXT_KEY = '__appgestaoodonto_auth_context__';
 const getAuthContext = () => {
@@ -18,6 +20,7 @@ const getAuthContext = () => {
 const AuthContext = getAuthContext();
 
 const SESSION_KEY = 'appgestaoodonto.session';
+const LOGOUT_REASON_KEY = 'appgestaoodonto.logout_reason';
 
 const getStoredSession = () => {
   const raw = localStorage.getItem(SESSION_KEY);
@@ -73,15 +76,16 @@ export const AuthProvider = ({ children }) => {
     };
   }, [session]);
 
-  const login = ({ userId, tenantId: explicitTenantId }) => {
+  const login = async ({ userId, tenantId: explicitTenantId }) => {
     const db = loadDb();
     const baseUser = db.users.find((item) => item.id === userId && item.active !== false);
     if (!baseUser) {
       throw new Error('Usuário não encontrado ou inativo.');
     }
-    const tenant = explicitTenantId ? getTenant(explicitTenantId) : getDefaultTenant();
+    const trustedTenantId = await resolveTrustedTenantId({ fallbackTenantId: explicitTenantId });
+    const tenant = trustedTenantId ? getTenant(trustedTenantId) : getDefaultTenant();
     if (!tenant) {
-      throw new Error('Nenhuma clínica configurada.');
+      throw new Error('Usuário sem clínica válida vinculada. Entre em contato com o suporte.');
     }
     const membership = getMembership(tenant.id, userId);
     if (!membership) {
@@ -89,6 +93,14 @@ export const AuthProvider = ({ children }) => {
     }
     if (membership.has_system_access === false) {
       throw new Error('Acesso ao sistema desativado. Entre em contato com o administrador.');
+    }
+    const tenantContext = await getTenantContext(tenant.id);
+    const tenantStatus = String(tenantContext?.tenant?.status || '').toLowerCase();
+    if (tenantStatus === 'blocked') {
+      throw new Error('Esta clínica está bloqueada. Entre em contato com o suporte da plataforma.');
+    }
+    if (tenantStatus === 'suspended') {
+      throw new Error('Esta clínica está suspensa temporariamente. Regularize com o financeiro para reativar o acesso.');
     }
     const next = { userId: baseUser.id, tenantId: tenant.id };
     localStorage.setItem(SESSION_KEY, JSON.stringify(next));
@@ -100,6 +112,11 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
     setSession(null);
+  };
+
+  const logoutWithReason = (reason) => {
+    if (reason) sessionStorage.setItem(LOGOUT_REASON_KEY, String(reason));
+    logout();
   };
 
   const ensureSeedUser = () => {
@@ -134,6 +151,7 @@ export const AuthProvider = ({ children }) => {
       session,
       login,
       logout,
+      logoutWithReason,
       ensureSeedUser,
     }),
     [user, session]
@@ -149,3 +167,9 @@ export const useAuth = () => {
   }
   return ctx;
 };
+
+export function consumeLogoutReason() {
+  const raw = sessionStorage.getItem(LOGOUT_REASON_KEY);
+  if (raw) sessionStorage.removeItem(LOGOUT_REASON_KEY);
+  return raw || '';
+}

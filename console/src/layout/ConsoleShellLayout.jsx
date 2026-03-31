@@ -1,37 +1,45 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
-import { LayoutDashboard, Building2, CreditCard, FileText, Settings, Users, LogOut } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Building2,
+  Receipt,
+  CreditCard,
+  PlugZap,
+  Headset,
+  AlertTriangle,
+  Flag,
+  ShieldCheck,
+  Settings,
+  LogOut,
+} from 'lucide-react';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', route: '/dashboard', icon: LayoutDashboard },
   { id: 'tenants', label: 'Clínicas', route: '/tenants', icon: Building2 },
-  { id: 'plans', label: 'Planos', route: '/plans', icon: CreditCard },
-  { id: 'billing', label: 'Cobrança', route: '/billing', icon: FileText },
-  { id: 'providers', label: 'Provedores', route: '/providers', icon: Settings },
-  { id: 'team', label: 'Equipe', route: '/team', icon: Users },
+  { id: 'billing', label: 'Cobranças', route: '/billing', icon: Receipt },
+  { id: 'subscriptions', label: 'Assinaturas', route: '/subscriptions', icon: CreditCard },
+  { id: 'connectivities', label: 'Conectividades', route: '/connectivities', icon: PlugZap },
+  { id: 'support', label: 'Suporte', route: '/support', icon: Headset },
+  { id: 'logs-errors', label: 'Logs e Erros', route: '/logs-errors', icon: AlertTriangle },
+  { id: 'feature-flags', label: 'Funcionalidades', route: '/feature-flags', icon: Flag },
+  { id: 'audit', label: 'Auditoria', route: '/audit', icon: ShieldCheck },
+  { id: 'settings', label: 'Configurações', route: '/settings', icon: Settings },
 ];
 
 export default function ConsoleShellLayout() {
   const { platformUser, logout } = usePlatformAuth();
   const navigate = useNavigate();
-  const navClass = (isActive) =>
-    'flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px ' +
-    (isActive ? 'text-blue-400 border-blue-500' : 'text-slate-400 border-transparent hover:text-slate-200');
+  const navClass = (isActive) => `pc-nav-item${isActive ? ' pc-nav-item--active' : ''}`;
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-900">
-      <header className="bg-slate-800 border-b border-slate-700">
-        <div className="flex items-center justify-between px-4 h-14">
-          <h1 className="font-semibold text-slate-100">Console</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-400">{platformUser?.email}</span>
-            <span className="text-xs px-2 py-0.5 rounded bg-slate-700 text-slate-300">{platformUser?.role}</span>
-            <button type="button" onClick={() => logout().then(() => navigate('/login'))} className="p-2 text-slate-400 hover:text-slate-200 rounded" title="Sair">
-              <LogOut size={18} />
-            </button>
-          </div>
+    <div className="pc-layout">
+      <aside className="pc-sidebar">
+        <div className="pc-sidebar__brand">
+          <strong>Platform Console</strong>
+          <span>Love Odonto SaaS</span>
         </div>
-        <nav className="flex gap-1 px-4 border-t border-slate-700/50">
+        <nav className="pc-nav">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -42,10 +50,22 @@ export default function ConsoleShellLayout() {
             );
           })}
         </nav>
-      </header>
-      <main className="flex-1 overflow-auto p-6">
-        <Outlet />
-      </main>
+      </aside>
+
+      <div className="pc-main">
+        <header className="pc-topbar">
+          <div className="pc-topbar__user">
+            <strong>{platformUser?.name || platformUser?.email}</strong>
+            <span>{platformUser?.role}</span>
+          </div>
+          <button type="button" onClick={() => logout().then(() => navigate('/login'))} className="pc-icon-button" title="Sair">
+            <LogOut size={16} />
+          </button>
+        </header>
+        <main className="pc-content">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import RequirePlatformAuth from './auth/RequirePlatformAuth.jsx';
+import RequirePlatformPermission from './auth/RequirePlatformPermission.jsx';
 import ConsoleShellLayout from './layout/ConsoleShellLayout.jsx';
 import ConsoleLoginPage from './pages/ConsoleLoginPage.jsx';
 import ConsoleDashboardPage from './pages/ConsoleDashboardPage.jsx';
@@ -7,8 +8,12 @@ import ConsoleTenantsPage from './pages/ConsoleTenantsPage.jsx';
 import ConsoleTenantDetailPage from './pages/ConsoleTenantDetailPage.jsx';
 import ConsolePlansPage from './pages/ConsolePlansPage.jsx';
 import ConsoleBillingPage from './pages/ConsoleBillingPage.jsx';
-import ConsoleProvidersPage from './pages/ConsoleProvidersPage.jsx';
-import ConsoleTeamPage from './pages/ConsoleTeamPage.jsx';
+import ConsoleConnectivityPage from './pages/ConsoleConnectivityPage.jsx';
+import ConsoleSupportPage from './pages/ConsoleSupportPage.jsx';
+import ConsoleLogsErrorsPage from './pages/ConsoleLogsErrorsPage.jsx';
+import ConsoleFeatureFlagsPage from './pages/ConsoleFeatureFlagsPage.jsx';
+import ConsoleAuditPage from './pages/ConsoleAuditPage.jsx';
+import ConsoleSettingsPage from './pages/ConsoleSettingsPage.jsx';
 
 export default function App() {
   return (
@@ -26,10 +31,21 @@ export default function App() {
         <Route path="dashboard" element={<ConsoleDashboardPage />} />
         <Route path="tenants" element={<ConsoleTenantsPage />} />
         <Route path="tenants/:id" element={<ConsoleTenantDetailPage />} />
-        <Route path="plans" element={<ConsolePlansPage />} />
         <Route path="billing" element={<ConsoleBillingPage />} />
-        <Route path="providers" element={<ConsoleProvidersPage />} />
-        <Route path="team" element={<ConsoleTeamPage />} />
+        <Route path="subscriptions" element={<ConsolePlansPage />} />
+        <Route path="connectivities" element={<ConsoleConnectivityPage />} />
+        <Route path="support" element={<ConsoleSupportPage />} />
+        <Route path="logs-errors" element={<ConsoleLogsErrorsPage />} />
+        <Route
+          path="feature-flags"
+          element={(
+            <RequirePlatformPermission permission="flags:write">
+              <ConsoleFeatureFlagsPage />
+            </RequirePlatformPermission>
+          )}
+        />
+        <Route path="audit" element={<ConsoleAuditPage />} />
+        <Route path="settings" element={<ConsoleSettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

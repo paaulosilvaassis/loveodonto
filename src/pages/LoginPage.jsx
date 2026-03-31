@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { consumeLogoutReason, useAuth } from '../auth/AuthContext.jsx';
 import { authenticateByEmailPassword } from '../services/userAuthService.js';
 import { seedAdminCredentialsIfEmpty, forceSeedAdminCredentials } from '../db/index.js';
 import Button from '../components/Button.jsx';
@@ -40,6 +40,11 @@ export default function LoginPage() {
     }
   }, [location.state?.activated]);
 
+  useEffect(() => {
+    const reason = consumeLogoutReason();
+    if (reason) setError(reason);
+  }, []);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
@@ -52,7 +57,7 @@ export default function LoginPage() {
     try {
       const result = await authenticateByEmailPassword(emailTrim, password);
       if (result) {
-        login({ userId: result.userId, tenantId: result.tenantId });
+        await login({ userId: result.userId, tenantId: result.tenantId });
         navigate('/dashboard');
       } else {
         setError('E-mail ou senha inválidos.');

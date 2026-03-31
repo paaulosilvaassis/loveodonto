@@ -1,4 +1,4 @@
-export const DB_VERSION = 41;
+export const DB_VERSION = 46;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -266,11 +266,38 @@ export const defaultDbState = () => ({
   followUps: [],
   /** Tarefas/Follow-up do CRM (vinculadas a lead/patient/budget/appointment) */
   crmTasks: [],
+  /** Marketing > Chat Inteligente */
+  marketingChatAccounts: [],
+  marketingChatChannels: [],
+  marketingChatContacts: [],
+  marketingChatConversations: [],
+  marketingChatMessages: [],
+  marketingChatAssignments: [],
+  marketingChatNotes: [],
+  marketingChatTags: [],
+  marketingChatCampaigns: [],
+  marketingChatAutomations: [],
+  marketingChatFunnels: [],
+  marketingChatDepartments: [],
+  marketingChatAttendants: [],
+  marketingChatSettings: {},
+  marketingChatApiConfig: {},
+  marketingChatWebhookLogs: [],
+  marketingChatMetricsSnapshots: [],
+  marketingAutomationEvents: [],
+  marketingAutomationRuns: [],
+  marketingAutomationRunSteps: [],
+  marketingScheduledJobs: [],
+  marketingJobAttempts: [],
+  marketingAutomationMetricsDaily: [],
   /** Multi-tenant: 1 tenant (clínica) por instalação; MASTER gerencia acessos */
   tenants: [],
   users_profile: [],
   memberships: [],
   invitations: [],
+  tenantModules: [],
+  featureFlags: [],
+  tenantLimits: [],
   /** Painel Master: cobrança, planos, assinaturas, faturas */
   plans: [],
   subscriptions: [],

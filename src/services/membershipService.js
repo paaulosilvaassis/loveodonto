@@ -149,6 +149,7 @@ export function updateMemberProfile(actor, tenantId, userId, payload) {
         full_name: fullName,
         email: emailNorm,
         phone: phone || '',
+        tenant_id: tenantId,
         internal_notes: internalNotes !== undefined ? internalNotes : '',
         created_at: now,
         updated_at: now,
@@ -157,6 +158,7 @@ export function updateMemberProfile(actor, tenantId, userId, payload) {
       db.users_profile[pIdx].full_name = fullName;
       db.users_profile[pIdx].email = emailNorm;
       if (phone !== undefined) db.users_profile[pIdx].phone = phone;
+      if (!String(db.users_profile[pIdx].tenant_id || '').trim()) db.users_profile[pIdx].tenant_id = tenantId;
       if (internalNotes !== undefined) db.users_profile[pIdx].internal_notes = internalNotes;
       db.users_profile[pIdx].updated_at = now;
     }
