@@ -40,14 +40,6 @@ const hasUrl = Boolean(url);
 const hasAnonKey = Boolean(anonKey);
 const isUrlValid = isValidHttpUrl(url);
 const hasTruncatedKey = hasEllipsisPlaceholder(anonKey);
-const keyKind = anonKey.startsWith('sb_publishable_') ? 'publishable' : anonKey.startsWith('eyJ') ? 'jwt' : 'other';
-const keyLength = anonKey.length;
-let urlHost = '';
-try {
-  urlHost = new URL(String(url || '')).hostname;
-} catch {
-  urlHost = '';
-}
 
 export const supabaseConsoleConfig = {
   url,
@@ -55,15 +47,6 @@ export const supabaseConsoleConfig = {
   hasAnonKey,
   isUrlValid,
   hasTruncatedKey,
-};
-
-export const supabaseConsoleDebug = {
-  hasUrl,
-  hasAnonKey,
-  isUrlValid,
-  keyKind,
-  keyLength,
-  urlHost,
 };
 
 export function getConsoleSupabaseConfigError() {

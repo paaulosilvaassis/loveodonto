@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, useEffect } from 'react';
-import { supabaseConsole, getConsoleSupabaseConfigError, supabaseConsoleDebug } from '../lib/supabaseConsole.js';
+import { supabaseConsole, getConsoleSupabaseConfigError } from '../lib/supabaseConsole.js';
 
 export const PLATFORM_ROLES = {
   OWNER: 'owner',
@@ -34,9 +34,6 @@ export function PlatformAuthProvider({ children }) {
 
   useEffect(() => {
     if (configError || !supabaseConsole) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'68fcb4'},body:JSON.stringify({sessionId:'68fcb4',runId:'run1',hypothesisId:'H1',location:'PlatformAuthContext.jsx:useEffect',message:'Supabase client indisponivel por config',data:{configError:configError||null,hasClient:Boolean(supabaseConsole),debug:supabaseConsoleDebug},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setSession(null);
       setPlatformUser(null);
       setLoading(false);
@@ -93,19 +90,8 @@ export function PlatformAuthProvider({ children }) {
     if (configError || !supabaseConsole) {
       throw new Error(configError || 'Supabase da Console não está configurado.');
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'68fcb4'},body:JSON.stringify({sessionId:'68fcb4',runId:'run1',hypothesisId:'H2',location:'PlatformAuthContext.jsx:login',message:'Tentativa de signInWithPassword',data:{emailDomain:String(email||'').split('@')[1]||'',passwordLen:String(password||'').length,debug:supabaseConsoleDebug},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const { data, error } = await supabaseConsole.auth.signInWithPassword({ email, password });
-    if (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'68fcb4'},body:JSON.stringify({sessionId:'68fcb4',runId:'run1',hypothesisId:'H3',location:'PlatformAuthContext.jsx:login',message:'Erro do Supabase no login',data:{message:String(error?.message||''),name:String(error?.name||''),status:error?.status??null,code:error?.code??null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      throw error;
-    }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'68fcb4'},body:JSON.stringify({sessionId:'68fcb4',runId:'run1',hypothesisId:'H4',location:'PlatformAuthContext.jsx:login',message:'Login no Auth concluido, buscando profile',data:{hasUser:Boolean(data?.user?.id)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    if (error) throw error;
     await fetchPlatformUser(data.user.id);
     return data;
   };
