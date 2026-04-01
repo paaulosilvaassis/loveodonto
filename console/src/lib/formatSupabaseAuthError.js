@@ -7,10 +7,9 @@ export function formatConsoleSupabaseAuthError(err) {
 
   if (lower.includes('invalid api key')) {
     return (
-      'Chave da API inválida. Confira no Vercel as variáveis VITE_CONSOLE_SUPABASE_URL e '
-      + 'VITE_CONSOLE_SUPABASE_ANON_KEY: devem ser do mesmo projeto (Supabase → Settings → API). '
-      + 'Use a chave anon (JWT eyJ…) ou publishable (sb_publishable_…), valor completo, sem aspas extras no início/fim. '
-      + 'Depois faça um novo deploy.'
+      'Chave da API inválida. No Vercel, use VITE_CONSOLE_SUPABASE_ANON_KEY (JWT anon) ou '
+      + 'VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY (sb_publishable_…), sempre do mesmo projeto que a URL '
+      + '(Supabase → Settings → API). Valor completo, sem aspas nas pontas. Novo deploy obrigatório após mudar env.'
     );
   }
 

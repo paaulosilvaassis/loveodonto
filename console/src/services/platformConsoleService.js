@@ -12,7 +12,7 @@ import {
 function getClient() {
   if (!supabaseConsole) {
     throw new Error(
-      'Supabase da Console não está configurado. Defina VITE_CONSOLE_SUPABASE_URL e VITE_CONSOLE_SUPABASE_ANON_KEY com valores reais do projeto.',
+      'Supabase da Console não está configurado. Defina VITE_CONSOLE_SUPABASE_URL e VITE_CONSOLE_SUPABASE_ANON_KEY ou VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY.',
     );
   }
   return supabaseConsole;

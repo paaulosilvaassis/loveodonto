@@ -14,7 +14,11 @@ function normalizeEnvString(value) {
 }
 
 const url = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_URL);
-const anonKey = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY);
+/** Aceita anon JWT (eyJ…) ou publishable (sb_publishable_…); nomes alternativos no Vercel. */
+const anonKey = normalizeEnvString(
+  import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY
+    || import.meta.env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY,
+);
 
 function isValidHttpUrl(value) {
   try {
@@ -38,7 +42,10 @@ export const supabaseConsoleConfig = {
 
 export function getConsoleSupabaseConfigError() {
   if (!supabaseConsoleConfig.hasUrl || !supabaseConsoleConfig.hasAnonKey) {
-    return 'Defina VITE_CONSOLE_SUPABASE_URL e VITE_CONSOLE_SUPABASE_ANON_KEY no ambiente da Console (e faça um novo deploy após alterar).';
+    return (
+      'Defina VITE_CONSOLE_SUPABASE_URL e uma chave pública: VITE_CONSOLE_SUPABASE_ANON_KEY '
+      + '(JWT anon) ou VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY (sb_publishable_…). Faça um novo deploy após alterar.'
+    );
   }
   if (!supabaseConsoleConfig.isUrlValid) {
     return 'VITE_CONSOLE_SUPABASE_URL deve ser uma URL http(s) válida.';
