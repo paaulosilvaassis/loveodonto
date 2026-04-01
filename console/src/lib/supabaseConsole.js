@@ -56,40 +56,6 @@ export const supabaseConsoleConfig = {
   usesPlaceholder,
 };
 
-// #region agent log
-if (import.meta.env.DEV) {
-  let host = '';
-  try {
-    host = new URL(String(url || '').trim()).hostname;
-  } catch {
-    /* ignore */
-  }
-  const legacyWouldBlockUrl = String(url || '')
-    .toLowerCase()
-    .includes('xxx');
-  fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '68fcb4' },
-    body: JSON.stringify({
-      sessionId: '68fcb4',
-      hypothesisId: 'H1',
-      location: 'supabaseConsole.js:init',
-      message: 'Console Supabase env shape (sem segredos)',
-      data: {
-        hasUrl,
-        hasAnonKey,
-        isUrlValid,
-        usesPlaceholder,
-        urlHost: host,
-        legacySubstrXxxWouldBlock: legacyWouldBlockUrl,
-        keyLen: String(anonKey || '').length,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-}
-// #endregion
-
 export function getConsoleSupabaseConfigError() {
   if (!supabaseConsoleConfig.hasUrl || !supabaseConsoleConfig.hasAnonKey) {
     return 'Defina VITE_CONSOLE_SUPABASE_URL e VITE_CONSOLE_SUPABASE_ANON_KEY no ambiente da Console.';
