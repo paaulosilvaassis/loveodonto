@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
+import { formatConsoleSupabaseAuthError } from '../lib/formatSupabaseAuthError.js';
 
 export default function ConsoleLoginPage() {
   const { platformUser, loading, login, configError } = usePlatformAuth();
@@ -30,7 +31,7 @@ export default function ConsoleLoginPage() {
     try {
       await login(email, password);
     } catch (err) {
-      setError(err?.message || 'Falha no login.');
+      setError(formatConsoleSupabaseAuthError(err));
     } finally {
       setSubmitting(false);
     }

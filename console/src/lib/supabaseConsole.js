@@ -1,7 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 
-const url = import.meta.env.VITE_CONSOLE_SUPABASE_URL;
-const anonKey = import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY;
+/** Remove aspas envolventes comuns ao colar variáveis no Vercel (.env). */
+function normalizeEnvString(value) {
+  let s = String(value ?? '').trim();
+  if (s.length >= 2) {
+    const q0 = s[0];
+    const q1 = s[s.length - 1];
+    if ((q0 === '"' && q1 === '"') || (q0 === "'" && q1 === "'")) {
+      s = s.slice(1, -1).trim();
+    }
+  }
+  return s;
+}
+
+const url = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_URL);
+const anonKey = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY);
 
 function isValidHttpUrl(value) {
   try {
@@ -12,8 +25,8 @@ function isValidHttpUrl(value) {
   }
 }
 
-const hasUrl = Boolean(url && String(url).trim());
-const hasAnonKey = Boolean(anonKey && String(anonKey).trim());
+const hasUrl = Boolean(url);
+const hasAnonKey = Boolean(anonKey);
 const isUrlValid = isValidHttpUrl(url);
 
 export const supabaseConsoleConfig = {
