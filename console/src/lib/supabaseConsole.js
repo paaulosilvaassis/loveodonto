@@ -12,18 +12,83 @@ function isValidHttpUrl(value) {
   }
 }
 
-function hasPlaceholder(value) {
-  const normalized = String(value || '').toLowerCase();
-  return !normalized || normalized.includes('xxx') || normalized.includes('...');
+/**
+ * Detecta só placeholders óbvios de documentação.
+ * NÃO usar includes('xxx') na URL completa: o ref do projeto (.supabase.co) é aleatório e pode conter "xxx".
+ */
+function isPlaceholderSupabaseUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    if (host === 'xxx.supabase.co') return true;
+  } catch {
+    return false;
+  }
+  const lower = raw.toLowerCase().replace(/\/$/, '');
+  return lower === 'https://xxx.supabase.co' || lower === 'http://xxx.supabase.co';
 }
+
+/**
+ * Chaves reais: JWT anon (eyJ…) ou publishable (sb_publishable_…).
+ * Rejeita apenas literais de exemplo, não substrings genéricas.
+ */
+function isPlaceholderAnonKey(value) {
+  const s = String(value || '').trim();
+  if (!s) return false;
+  const lower = s.toLowerCase();
+  if (lower === 'eyj...' || lower === 'eyj…') return true;
+  if (lower === 'sb_publishable_...' || lower === 'sb_publishable_…') return true;
+  if (lower === 'your_anon_key' || lower === 'sua_chave_anon' || lower === 'sua-chave-anon') return true;
+  return false;
+}
+
+const hasUrl = Boolean(url && String(url).trim());
+const hasAnonKey = Boolean(anonKey && String(anonKey).trim());
+const isUrlValid = isValidHttpUrl(url);
+const usesPlaceholder = isPlaceholderSupabaseUrl(url) || isPlaceholderAnonKey(anonKey);
 
 export const supabaseConsoleConfig = {
   url,
-  hasUrl: Boolean(url),
-  hasAnonKey: Boolean(anonKey),
-  isUrlValid: isValidHttpUrl(url),
-  usesPlaceholder: hasPlaceholder(url) || hasPlaceholder(anonKey),
+  hasUrl,
+  hasAnonKey,
+  isUrlValid,
+  usesPlaceholder,
 };
+
+// #region agent log
+if (import.meta.env.DEV) {
+  let host = '';
+  try {
+    host = new URL(String(url || '').trim()).hostname;
+  } catch {
+    /* ignore */
+  }
+  const legacyWouldBlockUrl = String(url || '')
+    .toLowerCase()
+    .includes('xxx');
+  fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '68fcb4' },
+    body: JSON.stringify({
+      sessionId: '68fcb4',
+      hypothesisId: 'H1',
+      location: 'supabaseConsole.js:init',
+      message: 'Console Supabase env shape (sem segredos)',
+      data: {
+        hasUrl,
+        hasAnonKey,
+        isUrlValid,
+        usesPlaceholder,
+        urlHost: host,
+        legacySubstrXxxWouldBlock: legacyWouldBlockUrl,
+        keyLen: String(anonKey || '').length,
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+}
+// #endregion
 
 export function getConsoleSupabaseConfigError() {
   if (!supabaseConsoleConfig.hasUrl || !supabaseConsoleConfig.hasAnonKey) {
