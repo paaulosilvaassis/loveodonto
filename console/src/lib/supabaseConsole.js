@@ -29,15 +29,41 @@ function isValidHttpUrl(value) {
   }
 }
 
+/** Detecta chave truncada por placeholder de documentação (ex.: sb_publishable_xxx...). */
+function hasEllipsisPlaceholder(value) {
+  const s = String(value || '').trim();
+  if (!s) return false;
+  return s.endsWith('...') || s.endsWith('…');
+}
+
 const hasUrl = Boolean(url);
 const hasAnonKey = Boolean(anonKey);
 const isUrlValid = isValidHttpUrl(url);
+const hasTruncatedKey = hasEllipsisPlaceholder(anonKey);
+const keyKind = anonKey.startsWith('sb_publishable_') ? 'publishable' : anonKey.startsWith('eyJ') ? 'jwt' : 'other';
+const keyLength = anonKey.length;
+let urlHost = '';
+try {
+  urlHost = new URL(String(url || '')).hostname;
+} catch {
+  urlHost = '';
+}
 
 export const supabaseConsoleConfig = {
   url,
   hasUrl,
   hasAnonKey,
   isUrlValid,
+  hasTruncatedKey,
+};
+
+export const supabaseConsoleDebug = {
+  hasUrl,
+  hasAnonKey,
+  isUrlValid,
+  keyKind,
+  keyLength,
+  urlHost,
 };
 
 export function getConsoleSupabaseConfigError() {
@@ -50,12 +76,16 @@ export function getConsoleSupabaseConfigError() {
   if (!supabaseConsoleConfig.isUrlValid) {
     return 'VITE_CONSOLE_SUPABASE_URL deve ser uma URL http(s) válida.';
   }
+  if (supabaseConsoleConfig.hasTruncatedKey) {
+    return 'A chave pública do Supabase está truncada (termina com "..."). Cole o valor completo no Vercel e faça novo deploy.';
+  }
   return null;
 }
 
 const supabaseReady =
   supabaseConsoleConfig.hasUrl
   && supabaseConsoleConfig.hasAnonKey
-  && supabaseConsoleConfig.isUrlValid;
+  && supabaseConsoleConfig.isUrlValid
+  && !supabaseConsoleConfig.hasTruncatedKey;
 
 export const supabaseConsole = supabaseReady ? createClient(url, anonKey) : null;
