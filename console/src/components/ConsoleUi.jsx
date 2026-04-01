@@ -1,3 +1,12 @@
+export function EmptyState({ title, description }) {
+  return (
+    <div className="pc-empty-state">
+      <strong>{title}</strong>
+      {description ? <p>{description}</p> : null}
+    </div>
+  );
+}
+
 export function PageHeader({ title, description, actions }) {
   return (
     <header className="pc-page-header">
@@ -16,16 +25,21 @@ const STATUS_LABELS = {
   suspended: 'Suspenso',
   overdue: 'Em atraso',
   past_due: 'Em atraso',
+  ok: 'Em dia',
   enabled: 'Ativo',
   disabled: 'Inativo',
   healthy: 'Saudável',
   connected: 'Conectado',
+  disconnected: 'Desconectado',
   paid: 'Pago',
   open: 'Aberto',
   pending: 'Pendente',
+  resolved: 'Resolvido',
   warning: 'Atenção',
+  attention: 'Atenção',
   error: 'Erro',
   failed: 'Falha',
+  paused: 'Pausada',
 };
 
 export function toFriendlyStatusLabel(status) {
@@ -67,11 +81,11 @@ export function Panel({ title, description, children, actions }) {
 
 export function StatusBadge({ status }) {
   const normalized = String(status || '').toLowerCase();
-  const tone = ['active', 'connected', 'healthy', 'paid', 'enabled', 'open'].includes(normalized)
+  const tone = ['active', 'connected', 'healthy', 'paid', 'enabled', 'open', 'ok', 'resolved'].includes(normalized)
     ? 'success'
-    : ['suspended', 'overdue', 'error', 'failed'].includes(normalized)
+    : ['suspended', 'overdue', 'error', 'failed', 'disconnected'].includes(normalized)
       ? 'danger'
-      : ['warning', 'pending', 'attention', 'past_due'].includes(normalized)
+      : ['warning', 'pending', 'attention', 'past_due', 'paused'].includes(normalized)
         ? 'warning'
         : 'neutral';
   return <span className={`pc-badge pc-badge--${tone}`}>{toFriendlyStatusLabel(status)}</span>;

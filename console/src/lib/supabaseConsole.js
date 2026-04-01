@@ -2,7 +2,6 @@ import { createClient } from '@supabase/supabase-js';
 
 const url = import.meta.env.VITE_CONSOLE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY;
-const authMode = (import.meta.env.VITE_CONSOLE_AUTH_MODE || 'supabase').toLowerCase();
 
 function isValidHttpUrl(value) {
   try {
@@ -19,7 +18,6 @@ function hasPlaceholder(value) {
 }
 
 export const supabaseConsoleConfig = {
-  authMode,
   url,
   hasUrl: Boolean(url),
   hasAnonKey: Boolean(anonKey),
@@ -27,12 +25,23 @@ export const supabaseConsoleConfig = {
   usesPlaceholder: hasPlaceholder(url) || hasPlaceholder(anonKey),
 };
 
-const shouldUseSupabase = authMode !== 'local'
-  && supabaseConsoleConfig.hasUrl
+export function getConsoleSupabaseConfigError() {
+  if (!supabaseConsoleConfig.hasUrl || !supabaseConsoleConfig.hasAnonKey) {
+    return 'Defina VITE_CONSOLE_SUPABASE_URL e VITE_CONSOLE_SUPABASE_ANON_KEY no ambiente da Console.';
+  }
+  if (!supabaseConsoleConfig.isUrlValid) {
+    return 'VITE_CONSOLE_SUPABASE_URL deve ser uma URL http(s) válida.';
+  }
+  if (supabaseConsoleConfig.usesPlaceholder) {
+    return 'Substitua os placeholders em VITE_CONSOLE_SUPABASE_URL e VITE_CONSOLE_SUPABASE_ANON_KEY pelos valores reais do projeto Supabase da Console.';
+  }
+  return null;
+}
+
+const supabaseReady =
+  supabaseConsoleConfig.hasUrl
   && supabaseConsoleConfig.hasAnonKey
   && supabaseConsoleConfig.isUrlValid
   && !supabaseConsoleConfig.usesPlaceholder;
 
-export const supabaseConsole = shouldUseSupabase
-  ? createClient(url, anonKey)
-  : null;
+export const supabaseConsole = supabaseReady ? createClient(url, anonKey) : null;

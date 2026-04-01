@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useNavigate } from 'react-router-dom';
+import { useMemo, useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
 import { createClinicOnboarding, listCatalogs, listClinics } from '../services/platformConsoleService.js';
-import { PageHeader, Panel, StatusBadge } from '../components/ConsoleUi.jsx';
+import { PageHeader, Panel, StatusBadge, EmptyState } from '../components/ConsoleUi.jsx';
 
 const WIZARD_STEPS = [
   { id: 1, label: 'Dados' },
@@ -29,6 +28,9 @@ export default function ConsoleTenantsPage() {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [rows, setRows] = useState([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState('');
   const [form, setForm] = useState({
     clinicName: '',
     city: '',
@@ -40,12 +42,26 @@ export default function ConsoleTenantsPage() {
   });
   const catalogs = useMemo(() => listCatalogs(), []);
   const canCreateClinic = ['owner', 'super_admin'].includes(String(platformUser?.role || '').toLowerCase());
-  const rows = useMemo(() => listClinics({ query, status, plan }), [query, status, plan]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setListLoading(true);
+        const data = await listClinics({ query, status, plan });
+        if (!cancelled) setRows(data);
+      } catch (e) {
+        if (!cancelled) setListError(e?.message || 'Erro ao carregar clínicas.');
+      } finally {
+        if (!cancelled) setListLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [query, status, plan]);
 
   const handleOpenOnboarding = () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'24093c'},body:JSON.stringify({sessionId:'24093c',runId:'initial',hypothesisId:'H1',location:'ConsoleTenantsPage.jsx:handleOpenOnboarding',message:'Open onboarding requested',data:{canCreateClinic,role:String(platformUser?.role||'')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setFormError('');
     setSuccessMessage('');
     setStep(1);
@@ -73,9 +89,6 @@ export default function ConsoleTenantsPage() {
   };
 
   const validateStep = (currentStep) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'24093c'},body:JSON.stringify({sessionId:'24093c',runId:'initial',hypothesisId:'H2',location:'ConsoleTenantsPage.jsx:validateStep',message:'Validating wizard step',data:{currentStep,hasClinicName:Boolean(form.clinicName.trim()),hasAdminName:Boolean(form.adminName.trim()),hasAdminEmail:Boolean(form.adminEmail.trim()),passwordLen:Number(form.adminPassword?.length||0),planCode:form.planCode},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (currentStep === 1) {
       if (!form.clinicName.trim()) return 'Nome da clínica é obrigatório.';
       return '';
@@ -84,9 +97,6 @@ export default function ConsoleTenantsPage() {
       const email = form.adminEmail.trim().toLowerCase();
       if (!form.adminName.trim()) return 'Nome do administrador é obrigatório.';
       if (!email) return 'E-mail do administrador é obrigatório.';
-      if (!form.adminPassword || form.adminPassword.length < 8) {
-        return 'Senha deve ter no mínimo 8 caracteres.';
-      }
       return '';
     }
     if (currentStep === 3) {
@@ -98,9 +108,6 @@ export default function ConsoleTenantsPage() {
 
   const handleNext = () => {
     const err = validateStep(step);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'24093c'},body:JSON.stringify({sessionId:'24093c',runId:'initial',hypothesisId:'H2',location:'ConsoleTenantsPage.jsx:handleNext',message:'Next step decision',data:{step,hasError:Boolean(err),errorMessage:err||''},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (err) {
       setFormError(err);
       return;
@@ -129,9 +136,6 @@ export default function ConsoleTenantsPage() {
     setCreating(true);
     setFormError('');
     setSuccessMessage('');
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'24093c'},body:JSON.stringify({sessionId:'24093c',runId:'initial',hypothesisId:'H3',location:'ConsoleTenantsPage.jsx:handleConfirmCreate',message:'Creating clinic started',data:{clinicName:form.clinicName.trim(),city:form.city.trim(),ownerName:form.ownerName.trim(),adminName:form.adminName.trim(),adminEmailDomain:(form.adminEmail.split('@')[1]||''),planCode:form.planCode},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     try {
       const clinic = await createClinicOnboarding(platformUser, {
         clinicName: form.clinicName,
@@ -144,14 +148,10 @@ export default function ConsoleTenantsPage() {
       });
       setSuccessMessage('Clínica criada com sucesso.');
       setShowOnboarding(false);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'24093c'},body:JSON.stringify({sessionId:'24093c',runId:'initial',hypothesisId:'H5',location:'ConsoleTenantsPage.jsx:handleConfirmCreate',message:'Clinic created on page',data:{clinicId:clinic?.id||null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
+      const refreshed = await listClinics({ query, status, plan });
+      setRows(refreshed);
       window.setTimeout(() => navigate(`/tenants/${clinic.id}`), 700);
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'24093c'},body:JSON.stringify({sessionId:'24093c',runId:'initial',hypothesisId:'H4',location:'ConsoleTenantsPage.jsx:handleConfirmCreate',message:'Create clinic failed on page',data:{errorMessage:error?.message||'unknown'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setFormError(error?.message || 'Erro ao criar clínica.');
     } finally {
       setCreating(false);
@@ -186,42 +186,54 @@ export default function ConsoleTenantsPage() {
           </select>
         </div>
 
-        <div className="pc-table-wrap">
-          <table className="pc-table">
-            <thead>
-              <tr>
-                <th>Clínica</th>
-                <th>Responsável</th>
-                <th>Plano</th>
-                <th>Status</th>
-                <th>Saúde</th>
-                <th>Módulos</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((tenant) => (
-                <tr key={tenant.id}>
-                  <td>
-                    <strong>{tenant.name}</strong>
-                    <small>{tenant.city}/{tenant.state}</small>
-                  </td>
-                  <td>
-                    {tenant.ownerName}
-                    <small>{tenant.ownerEmail}</small>
-                  </td>
-                  <td>{tenant.plan}</td>
-                  <td><StatusBadge status={tenant.status} /></td>
-                  <td><StatusBadge status={tenant.health} /></td>
-                  <td>{tenant.modules.length}</td>
-                  <td>
-                    <Link className="pc-link-button" to={`/tenants/${tenant.id}`}>Ver detalhes</Link>
-                  </td>
+        {listError ? <p className="pc-error">{listError}</p> : null}
+        {listLoading ? <p className="pc-loading-inline">Carregando clínicas…</p> : null}
+
+        {!listLoading && !listError && rows.length === 0 ? (
+          <EmptyState
+            title="Nenhuma clínica cadastrada ainda"
+            description="Não há registros em tenants com os filtros atuais. Use Nova Clínica para cadastrar ou ajuste os filtros."
+          />
+        ) : null}
+
+        {!listLoading && rows.length > 0 ? (
+          <div className="pc-table-wrap">
+            <table className="pc-table">
+              <thead>
+                <tr>
+                  <th>Clínica</th>
+                  <th>Responsável</th>
+                  <th>Plano</th>
+                  <th>Status</th>
+                  <th>Cobrança</th>
+                  <th>Módulos</th>
+                  <th>Ações</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((tenant) => (
+                  <tr key={tenant.id}>
+                    <td>
+                      <strong>{tenant.name}</strong>
+                      <small>{tenant.city}/{tenant.state}</small>
+                    </td>
+                    <td>
+                      {tenant.ownerName}
+                      <small>{tenant.ownerEmail}</small>
+                    </td>
+                    <td>{tenant.plan}</td>
+                    <td><StatusBadge status={tenant.status} /></td>
+                    <td><StatusBadge status={tenant.billingStatus} /></td>
+                    <td>{tenant.modules.length}</td>
+                    <td>
+                      <Link className="pc-link-button" to={`/tenants/${tenant.id}`}>Ver detalhes</Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </Panel>
 
       {showOnboarding ? (
@@ -257,7 +269,7 @@ export default function ConsoleTenantsPage() {
                     <input
                       value={form.clinicName}
                       onChange={(e) => updateForm({ clinicName: e.target.value })}
-                      placeholder="Ex.: Clínica Sorriso Feliz"
+                      placeholder="Ex.: Clínica Exemplo LTDA"
                     />
                   </label>
                   <label className="pc-form-field">
@@ -282,6 +294,9 @@ export default function ConsoleTenantsPage() {
               {step === 2 ? (
                 <div className="pc-step-content">
                   <h4>Usuário administrador</h4>
+                  <p className="pc-login__hint" style={{ marginBottom: '0.75rem' }}>
+                    O cadastro cria o vínculo em tenant_users. O provisionamento de credenciais no app principal é feito pelo fluxo de auth do produto (convite ou painel), não pela Console.
+                  </p>
                   <label className="pc-form-field">
                     <span>Nome</span>
                     <input
@@ -300,13 +315,12 @@ export default function ConsoleTenantsPage() {
                     />
                   </label>
                   <label className="pc-form-field">
-                    <span>Senha</span>
+                    <span>Senha (opcional)</span>
                     <input
                       type="password"
-                      minLength={8}
                       value={form.adminPassword}
                       onChange={(e) => updateForm({ adminPassword: e.target.value })}
-                      placeholder="Mínimo de 8 caracteres"
+                      placeholder="Não armazenada na Console — uso futuro / convite"
                     />
                   </label>
                 </div>

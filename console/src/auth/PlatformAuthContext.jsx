@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, useEffect } from 'react';
-import { supabaseConsole, supabaseConsoleConfig } from '../lib/supabaseConsole.js';
+import { supabaseConsole, getConsoleSupabaseConfigError } from '../lib/supabaseConsole.js';
 
 export const PLATFORM_ROLES = {
   OWNER: 'owner',
@@ -11,7 +11,7 @@ export const PLATFORM_ROLES = {
 };
 
 const PlatformAuthContext = createContext(null);
-const LOCAL_AUTH_STORAGE_KEY = 'platform_console_local_auth';
+
 const DEFAULT_PERMISSIONS = {
   '*': [PLATFORM_ROLES.OWNER, PLATFORM_ROLES.SUPER_ADMIN],
   'dashboard:view': [PLATFORM_ROLES.OWNER, PLATFORM_ROLES.SUPER_ADMIN, PLATFORM_ROLES.SUPORTE, PLATFORM_ROLES.FINANCEIRO, PLATFORM_ROLES.OPERACOES, PLATFORM_ROLES.LEITURA],
@@ -26,40 +26,20 @@ function normalizeRole(value) {
   return String(value || '').toLowerCase();
 }
 
-function readLocalAuthUser() {
-  try {
-    const raw = localStorage.getItem(LOCAL_AUTH_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed?.email) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-function saveLocalAuthUser(user) {
-  localStorage.setItem(LOCAL_AUTH_STORAGE_KEY, JSON.stringify(user));
-}
-
-function clearLocalAuthUser() {
-  localStorage.removeItem(LOCAL_AUTH_STORAGE_KEY);
-}
-
 export function PlatformAuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [platformUser, setPlatformUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const isLocalAuthMode = supabaseConsoleConfig.authMode === 'local' || !supabaseConsole;
+  const configError = getConsoleSupabaseConfigError();
 
   useEffect(() => {
-    if (isLocalAuthMode) {
-      const localUser = readLocalAuthUser();
-      setSession(localUser ? { user: { id: localUser.id } } : null);
-      setPlatformUser(localUser);
+    if (configError || !supabaseConsole) {
+      setSession(null);
+      setPlatformUser(null);
       setLoading(false);
       return;
     }
+
     supabaseConsole.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       if (s?.user) fetchPlatformUser(s.user.id);
@@ -74,7 +54,7 @@ export function PlatformAuthProvider({ children }) {
       }
     });
     return () => subscription.unsubscribe();
-  }, [isLocalAuthMode]);
+  }, [configError]);
 
   async function fetchPlatformUser(authId) {
     try {
@@ -86,41 +66,30 @@ export function PlatformAuthProvider({ children }) {
         .single();
       if (error || !data) {
         setPlatformUser(null);
+        await supabaseConsole.auth.signOut();
+        setSession(null);
         return;
       }
       const role = normalizeRole(data.role_slug);
       setPlatformUser({
         id: data.id,
         email: data.email,
-        name: data.full_name,
+        name: data.full_name || data.email,
         role,
       });
     } catch {
       setPlatformUser(null);
+      await supabaseConsole.auth.signOut();
+      setSession(null);
     } finally {
       setLoading(false);
     }
   }
 
   const login = async (email, password) => {
-    if (isLocalAuthMode) {
-      const cleanEmail = String(email || '').trim().toLowerCase();
-      const cleanPassword = String(password || '').trim();
-      if (!cleanEmail || !cleanPassword) {
-        throw new Error('Informe e-mail e senha para entrar.');
-      }
-      const localUser = {
-        id: `local_${Date.now()}`,
-        email: cleanEmail,
-        name: 'Admin Console (Local)',
-        role: PLATFORM_ROLES.OWNER,
-      };
-      saveLocalAuthUser(localUser);
-      setPlatformUser(localUser);
-      setSession({ user: { id: localUser.id } });
-      return { user: localUser };
+    if (configError || !supabaseConsole) {
+      throw new Error(configError || 'Supabase da Console não está configurado.');
     }
-    if (!supabaseConsole) throw new Error('Supabase não configurado para a Console.');
     const { data, error } = await supabaseConsole.auth.signInWithPassword({ email, password });
     if (error) throw error;
     await fetchPlatformUser(data.user.id);
@@ -128,9 +97,7 @@ export function PlatformAuthProvider({ children }) {
   };
 
   const logout = async () => {
-    if (isLocalAuthMode) {
-      clearLocalAuthUser();
-    } else if (supabaseConsole) {
+    if (supabaseConsole) {
       await supabaseConsole.auth.signOut();
     }
     setSession(null);
@@ -154,11 +121,11 @@ export function PlatformAuthProvider({ children }) {
       login,
       logout,
       hasPermission,
-      isLocalAuthMode,
-      authMode: supabaseConsoleConfig.authMode,
+      configError,
+      supabaseReady: Boolean(supabaseConsole && !configError),
       isOwner: platformUser?.role === PLATFORM_ROLES.OWNER,
     }),
-    [session, platformUser, loading, isLocalAuthMode],
+    [session, platformUser, loading, configError],
   );
 
   return (

@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
 
 export default function ConsoleLoginPage() {
-  const { platformUser, loading, login, isLocalAuthMode } = usePlatformAuth();
+  const { platformUser, loading, login, configError } = usePlatformAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -41,10 +41,12 @@ export default function ConsoleLoginPage() {
       <div className="pc-login__card">
         <h1>Platform Console</h1>
         <p>Acesso restrito ao time operador do SaaS Love Odonto.</p>
-        {isLocalAuthMode ? (
-          <p className="pc-login__hint">
-            Modo local ativo: Supabase indisponível ou não configurado. Para desenvolvimento, qualquer e-mail/senha válidos funcionam.
-          </p>
+        {configError ? (
+          <div className="pc-login__hint pc-login__hint--error" role="alert">
+            <strong>Não foi possível conectar ao Supabase.</strong>
+            {' '}
+            {configError}
+          </div>
         ) : null}
         <form onSubmit={handleSubmit} className="pc-login__form">
           <label htmlFor="email">E-mail</label>
@@ -54,6 +56,7 @@ export default function ConsoleLoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            disabled={Boolean(configError)}
             placeholder="admin@loveodonto.com"
           />
           <label htmlFor="password">Senha</label>
@@ -63,9 +66,10 @@ export default function ConsoleLoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            disabled={Boolean(configError)}
           />
           {error ? <p className="pc-error">{error}</p> : null}
-          <button type="submit" className="pc-button pc-button--full" disabled={submitting}>
+          <button type="submit" className="pc-button pc-button--full" disabled={submitting || Boolean(configError)}>
             {submitting ? 'Entrando...' : 'Entrar na Console'}
           </button>
         </form>

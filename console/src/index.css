@@ -624,6 +624,40 @@ body {
   font-size: 0.78rem;
 }
 
+.pc-login__hint--error {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fecaca;
+}
+
+.pc-empty-state {
+  padding: 2.25rem 1.25rem;
+  text-align: center;
+  color: var(--console-muted);
+  border: 1px dashed var(--console-border);
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.pc-empty-state strong {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--console-text);
+  margin-bottom: 0.35rem;
+}
+
+.pc-empty-state p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.pc-loading-inline {
+  color: var(--console-muted);
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+}
+
 .pc-login__form {
   display: grid;
   gap: 0.5rem;
