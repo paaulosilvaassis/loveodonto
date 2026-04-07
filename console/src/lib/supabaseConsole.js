@@ -49,18 +49,27 @@ export const supabaseConsoleConfig = {
   hasTruncatedKey,
 };
 
+const envHint = import.meta.env.DEV
+  ? 'Arquivo: console/.env (na pasta da Console). Reinicie o Vite após alterar.'
+  : 'No Vercel (Environment Variables), faça um novo deploy após alterar.';
+
 export function getConsoleSupabaseConfigError() {
   if (!supabaseConsoleConfig.hasUrl || !supabaseConsoleConfig.hasAnonKey) {
     return (
       'Defina VITE_CONSOLE_SUPABASE_URL e uma chave pública: VITE_CONSOLE_SUPABASE_ANON_KEY '
-      + '(JWT anon) ou VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY (sb_publishable_…). Faça um novo deploy após alterar.'
+      + '(JWT anon) ou VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY (sb_publishable_…). '
+      + envHint
     );
   }
   if (!supabaseConsoleConfig.isUrlValid) {
     return 'VITE_CONSOLE_SUPABASE_URL deve ser uma URL http(s) válida.';
   }
   if (supabaseConsoleConfig.hasTruncatedKey) {
-    return 'A chave pública do Supabase está truncada (termina com "..."). Cole o valor completo no Vercel e faça novo deploy.';
+    return (
+      'A chave pública do Supabase está truncada ou é placeholder (termina com "..."). '
+      + 'Cole a chave completa em VITE_CONSOLE_SUPABASE_ANON_KEY (ou VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY). '
+      + envHint
+    );
   }
   return null;
 }
