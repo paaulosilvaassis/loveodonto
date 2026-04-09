@@ -30,6 +30,12 @@ function normalizeText(value) {
   return String(value || '').trim();
 }
 
+function getDefaultPlanLimits(planCode) {
+  if (planCode === 'Start') return { patients: 500, users: 10, storage_gb: 5 };
+  if (planCode === 'Growth') return { patients: 1500, users: 30, storage_gb: 20 };
+  return { patients: 5000, users: 100, storage_gb: 50 };
+}
+
 function includeQuery(values, query) {
   if (!query) return true;
   const normalizedQuery = String(query).toLowerCase();
@@ -479,6 +485,13 @@ export async function createClinicOnboarding(actor, payload) {
     updated_by: actor.id,
   });
   if (subErr) throw new Error(subErr.message);
+
+  const { error: limitsErr } = await client.from('tenant_limits').upsert({
+    tenant_id: tenantId,
+    limits_json: getDefaultPlanLimits(planCode),
+    updated_by: actor.id,
+  }, { onConflict: 'tenant_id' });
+  if (limitsErr) throw new Error(limitsErr.message);
 
   if (modulesFromPlan.length) {
     const modRows = modulesFromPlan.map((module_key) => ({

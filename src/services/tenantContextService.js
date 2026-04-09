@@ -16,6 +16,12 @@ function parseJsonSafe(value, fallback = {}) {
   }
 }
 
+function isUuid(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || '').trim(),
+  );
+}
+
 function buildModuleMap(rows = []) {
   const map = {};
   if (!Array.isArray(rows) || rows.length === 0) return createDefaultModuleMap();
@@ -50,6 +56,9 @@ async function fetchOptionalTenantLimits(tenantId) {
     .eq('tenant_id', tenantId)
     .maybeSingle();
   if (error) {
+    if (String(error.code || '').toUpperCase() === 'PGRST205') {
+      return null;
+    }
     const message = String(error.message || '').toLowerCase();
     if (message.includes('relation') && message.includes('does not exist')) {
       return null;
@@ -78,7 +87,7 @@ export async function getTenantContext(tenantId) {
   if (!tenantId) {
     throw new Error('Clínica não informada para carregar o contexto.');
   }
-  if (!supabasePlatformClient) {
+  if (!supabasePlatformClient || !isUuid(tenantId)) {
     const tenant = getTenant(tenantId);
     const warnings = [];
     const status = String(tenant?.status || '').toLowerCase();

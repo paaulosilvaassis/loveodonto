@@ -89,6 +89,13 @@ begin
     (v_tenant_2, 'Growth', 'past_due', 99900, 'monthly', now() - interval '35 day', now() - interval '5 day')
   on conflict do nothing;
 
+  insert into public.tenant_limits (tenant_id, limits_json)
+  values
+    (v_tenant_1, '{"patients":5000,"users":100,"storage_gb":50}'::jsonb),
+    (v_tenant_2, '{"patients":1500,"users":30,"storage_gb":20}'::jsonb)
+  on conflict (tenant_id) do update
+    set limits_json = excluded.limits_json;
+
   insert into public.tenant_billing_events (tenant_id, event_type, status, amount_cents, due_at, created_at)
   values
     (v_tenant_1, 'invoice.paid', 'paid', 149900, now() - interval '20 day', now() - interval '20 day'),

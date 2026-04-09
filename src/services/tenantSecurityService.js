@@ -1,13 +1,12 @@
-import { getTenantContext } from './tenantContextService.js';
+import { readTenantAccessSnapshot } from './platformAccessService.js';
 import { isModuleEnabled } from '../tenant/tenantAccess.js';
 
 export async function assertTenantActive(tenantId) {
-  const context = await getTenantContext(tenantId);
-  const status = String(context?.tenant?.status || '').toLowerCase();
-  if (status === 'blocked') {
+  const context = await readTenantAccessSnapshot(tenantId);
+  if (context.isTenantBlocked && context.tenantStatus === 'blocked') {
     throw new Error('Clínica bloqueada pela plataforma.');
   }
-  if (status === 'suspended') {
+  if (context.isTenantBlocked && context.tenantStatus === 'suspended') {
     throw new Error('Clínica suspensa pela plataforma.');
   }
   return context;

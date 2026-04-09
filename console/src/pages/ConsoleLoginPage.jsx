@@ -28,9 +28,13 @@ export default function ConsoleLoginPage() {
     e.preventDefault();
     setError('');
     setSubmitting(true);
+    const debug = import.meta.env.DEV || String(import.meta.env.VITE_CONSOLE_AUTH_DEBUG || '') === '1';
+    if (debug) console.info('[PlatformConsole][Auth]', 'form:submit');
     try {
       await login(email, password);
+      if (debug) console.info('[PlatformConsole][Auth]', 'form:login flow finished (redirect via <Navigate>)');
     } catch (err) {
+      if (debug) console.info('[PlatformConsole][Auth]', 'form:login error', err?.code || err?.message);
       setError(formatConsoleSupabaseAuthError(err));
     } finally {
       setSubmitting(false);

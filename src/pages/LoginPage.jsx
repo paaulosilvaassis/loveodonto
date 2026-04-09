@@ -168,6 +168,9 @@ export default function LoginPage() {
               )}
               <Link to="/activate" className="link">Recebeu um convite? Ativar acesso</Link>
               <Link to="/forgot-password" className="link">Esqueci minha senha</Link>
+              <Link to="/platform/login" className="link">
+                É operador da plataforma (Console)? Entrar aqui
+              </Link>
               {import.meta.env?.DEV && (
                 <button
                   type="button"

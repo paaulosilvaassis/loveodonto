@@ -1,0 +1,3 @@
+{"sessionId":"68fcb4","location":"scripts/root-dev-banner.js","message":"root npm run dev — app clínica :5176; console :5177 ou /platform/login","data":{"clinicPort":5176,"consolePort":5177},"timestamp":1775493401118,"hypothesisId":"H6","runId":"root-dev"}
+{"sessionId":"68fcb4","location":"scripts/root-dev-banner.js","message":"root npm run dev — app clínica :5176; console :5177 ou /platform/login","data":{"clinicPort":5176,"consolePort":5177},"timestamp":1775569437773,"hypothesisId":"H6","runId":"root-dev"}
+{"sessionId":"68fcb4","location":"scripts/root-dev-banner.js","message":"root npm run dev — app clínica :5176; console :5177 ou /platform/login","data":{"clinicPort":5176,"consolePort":5177},"timestamp":1775579131223,"hypothesisId":"H6","runId":"root-dev"}

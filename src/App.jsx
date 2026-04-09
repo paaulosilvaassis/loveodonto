@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import { RequireAuth } from './auth/RequireAuth.jsx';
+import RequireTenantAccess from './auth/RequireTenantAccess.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ActivatePage from './pages/ActivatePage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
@@ -65,9 +66,11 @@ export default function App() {
               path="/*"
               element={
                 <RequireAuth>
-                  <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>Carregando…</div>}>
-                    <ProtectedApp />
-                  </Suspense>
+                  <RequireTenantAccess>
+                    <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>Carregando…</div>}>
+                      <ProtectedApp />
+                    </Suspense>
+                  </RequireTenantAccess>
                 </RequireAuth>
               }
             />

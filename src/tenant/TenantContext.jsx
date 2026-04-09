@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext.jsx';
-import { getTenantContext as fetchTenantContext, subscribeTenantRealtimeChanges } from '../services/tenantContextService.js';
+import { subscribeTenantRealtimeChanges } from '../services/tenantContextService.js';
+import { readTenantAccessSnapshot } from '../services/platformAccessService.js';
 import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
 
 const TenantContext = createContext(null);
@@ -15,7 +16,7 @@ const EMPTY_CONTEXT = {
 };
 
 export function TenantProvider({ children }) {
-  const { user, logoutWithReason } = useAuth();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tenantContext, setTenantContext] = useState(EMPTY_CONTEXT);
@@ -29,16 +30,8 @@ export function TenantProvider({ children }) {
     }
     try {
       setError('');
-      const context = await fetchTenantContext(user.tenantId);
+      const context = await readTenantAccessSnapshot(user.tenantId);
       setTenantContext(context);
-      const status = String(context?.tenant?.status || '').toLowerCase();
-      if (status === 'blocked') {
-        logoutWithReason('Sua clínica foi bloqueada pela plataforma. Acesso encerrado.');
-        return;
-      }
-      if (status === 'suspended') {
-        logoutWithReason('Sua clínica está suspensa no momento. Acesso encerrado.');
-      }
     } catch (err) {
       setError(err?.message || 'Falha ao carregar contexto do tenant.');
     } finally {

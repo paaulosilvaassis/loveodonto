@@ -5,7 +5,7 @@ import { logAction } from '../services/logService.js';
 import { getDefaultTenant, getTenant } from '../services/tenantService.js';
 import { getMembership } from '../services/membershipService.js';
 import { ROLE_MASTER } from '../constants/tenantRoles.js';
-import { getTenantContext } from '../services/tenantContextService.js';
+import { assertTenantAllowed } from '../services/platformAccessService.js';
 import { resolveTrustedTenantId } from '../services/tenantIdentityService.js';
 
 const AUTH_CONTEXT_KEY = '__appgestaoodonto_auth_context__';
@@ -94,14 +94,7 @@ export const AuthProvider = ({ children }) => {
     if (membership.has_system_access === false) {
       throw new Error('Acesso ao sistema desativado. Entre em contato com o administrador.');
     }
-    const tenantContext = await getTenantContext(tenant.id);
-    const tenantStatus = String(tenantContext?.tenant?.status || '').toLowerCase();
-    if (tenantStatus === 'blocked') {
-      throw new Error('Esta clínica está bloqueada. Entre em contato com o suporte da plataforma.');
-    }
-    if (tenantStatus === 'suspended') {
-      throw new Error('Esta clínica está suspensa temporariamente. Regularize com o financeiro para reativar o acesso.');
-    }
+    await assertTenantAllowed(tenant.id);
     const next = { userId: baseUser.id, tenantId: tenant.id };
     localStorage.setItem(SESSION_KEY, JSON.stringify(next));
     setSession(next);
