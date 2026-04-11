@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .vercel/
+.cursor/debug-*.log
 .env
 .env.*
 !.env.example
