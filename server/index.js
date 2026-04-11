@@ -9,7 +9,13 @@ import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 
 const app = express();
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Platform-Key'],
+  }),
+);
 app.use(express.json());
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -57,6 +63,11 @@ function validateServiceRoleKey(value) {
       + 'Use a chave service_role do mesmo projeto Supabase da Console e do app.',
     );
   }
+}
+
+function isOptionalTenantLimitsError(error) {
+  const code = String(error?.code || '').toUpperCase();
+  return code === 'PGRST116' || code === 'PGRST205';
 }
 
 function normalizeDatabaseError(error, fallbackMessage) {
@@ -331,9 +342,6 @@ async function requireAppUser(req, res, next) {
 }
 
 app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H4',location:'server/index.js:/internal/app/tenant-context:start',message:'Backend tenant-context endpoint called',data:{hasAuthUser:Boolean(req?.appAuthUser?.id),authUserId:String(req?.appAuthUser?.id||'')},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   try {
     const authUserId = req.appAuthUser.id;
     const { data: tenantUser, error: tenantUserError } = await supabase
@@ -344,9 +352,6 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
       .limit(1)
       .maybeSingle();
     if (tenantUserError) throw tenantUserError;
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H4',location:'server/index.js:/internal/app/tenant-context:tenant-user',message:'Backend tenant_users lookup completed',data:{authUserId,hasTenantId:Boolean(tenantUser?.tenant_id),role:String(tenantUser?.role||tenantUser?.role_slug||''),isActive:Boolean(tenantUser?.is_active ?? tenantUser?.status === 'active')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (!tenantUser?.tenant_id) {
       return res.status(404).json({
         error:
@@ -377,7 +382,7 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
     if (globalFlagsResult.error) throw globalFlagsResult.error;
     if (tenantFlagsResult.error) throw tenantFlagsResult.error;
     if (subscriptionResult.error) throw subscriptionResult.error;
-    if (limitsResult.error && String(limitsResult.error.code || '').toUpperCase() !== 'PGRST116') {
+    if (limitsResult.error && !isOptionalTenantLimitsError(limitsResult.error)) {
       throw limitsResult.error;
     }
 
@@ -407,9 +412,7 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
       },
     });
   } catch (err) {
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H4',location:'server/index.js:/internal/app/tenant-context:catch',message:'Backend tenant-context failed',data:{message:String(err?.message||''),authUserId:String(req?.appAuthUser?.id||'')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    console.error('[tenant-context]', err);
     res.status(400).json({
       error: normalizeDatabaseError(err, 'Falha ao carregar contexto da clínica.'),
     });

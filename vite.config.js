@@ -16,6 +16,33 @@ function rejectTruncatedKey(value) {
  * O app na raiz (5176) expõe /platform/login, mas muitos devs só preenchem console/.env.
  * Mesclamos VITE_CONSOLE_SUPABASE_* do diretório console/ como fallback de VITE_SUPABASE_PLATFORM_*.
  */
+const internalAppProxy = {
+  '/internal/app': {
+    target: 'http://127.0.0.1:3001',
+    changeOrigin: true,
+    configure(proxy) {
+      proxy.on('error', (err, _req, res) => {
+        if (!res || res.headersSent || typeof res.writeHead !== 'function') {
+          return;
+        }
+        const msg = String(err?.code || err?.message || err || '');
+        const isConn =
+          msg.includes('ECONNREFUSED')
+          || msg.includes('ECONNRESET')
+          || msg.includes('socket hang up');
+        res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(
+          JSON.stringify({
+            error: isConn
+              ? 'Não foi possível conectar ao backend SaaS na porta 3001. Inicie com npm run server:restart ou npm run stack:start.'
+              : `Falha no proxy para o backend (3001): ${msg || 'erro desconhecido'}`,
+          }),
+        );
+      });
+    },
+  },
+};
+
 function mergedPlatformEnv(mode) {
   const rootEnv = loadEnv(mode, __dirname, '');
   const consoleEnv = loadEnv(mode, path.join(__dirname, 'console'), '');
@@ -45,12 +72,7 @@ export default defineConfig(({ mode }) => {
     port: 5176,
     strictPort: true,
     open: true,
-    proxy: {
-      '/internal/app': {
-        target: 'http://127.0.0.1:3001',
-        changeOrigin: true,
-      },
-    },
+    proxy: internalAppProxy,
     fs: {
       allow: [
         'C:/Users/paaul/.cursor/projects/c-Users-paaul-Desktop-appgestaoodonto-main-appgestaoodonto/assets',
@@ -61,6 +83,11 @@ export default defineConfig(({ mode }) => {
     configureServer(server) {
       server.middlewares.use((req, res, next) => next());
     },
+  },
+  preview: {
+    port: 4176,
+    strictPort: true,
+    proxy: internalAppProxy,
   },
 };
 });

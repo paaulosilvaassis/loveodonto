@@ -48,6 +48,30 @@ function buildFeatureFlags(globalRows = [], tenantRows = []) {
   return map;
 }
 
+/** Base da Admin API (ex.: http://127.0.0.1:3001). Vazio = usa o proxy do Vite em /internal/app. */
+function getAdminApiBaseUrl() {
+  return String(import.meta.env?.VITE_APP_ADMIN_API_BASE_URL || '').trim().replace(/\/$/, '');
+}
+
+function getTenantContextRequestUrl() {
+  const base = getAdminApiBaseUrl();
+  if (base) {
+    return `${base}/internal/app/tenant-context`;
+  }
+  return '/internal/app/tenant-context';
+}
+
+function isLikelyNetworkFetchFailure(error) {
+  const lower = String(error?.message || '').toLowerCase();
+  return (
+    lower.includes('failed to fetch')
+    || lower.includes('networkerror')
+    || lower.includes('fetch failed')
+    || lower.includes('network request failed')
+    || lower.includes('load failed')
+  );
+}
+
 async function runLoggedQuery(label, hypothesisId, queryFactory, dataBuilder = null, runId = 'timeout-debug') {
   const startedAt = Date.now();
   try {
@@ -64,35 +88,44 @@ async function fetchTenantContextViaAdminApi() {
     throw new Error(sessionError.message || 'Falha ao obter sessão SaaS.');
   }
   const accessToken = sessionData?.session?.access_token || '';
-  // #region agent log
-  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run1',hypothesisId:'H4',location:'src/services/tenantContextService.js:fetchTenantContextViaAdminApi:session',message:'Tenant context request session snapshot',data:{hasAccessToken:Boolean(accessToken),sessionError:Boolean(sessionError)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!accessToken) {
     throw new Error('Sessão SaaS ausente para carregar contexto da clínica.');
   }
+  const fetchOpts = {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  };
+
   let response;
+  const primaryUrl = getTenantContextRequestUrl();
   try {
-    response = await fetch('/internal/app/tenant-context', {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    });
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run1',hypothesisId:'H4',location:'src/services/tenantContextService.js:fetchTenantContextViaAdminApi:response',message:'Tenant context response status',data:{status:Number(response?.status||0),ok:Boolean(response?.ok)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
+    response = await fetch(primaryUrl, fetchOpts);
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run1',hypothesisId:'H5',location:'src/services/tenantContextService.js:fetchTenantContextViaAdminApi:catch',message:'Tenant context fetch network exception',data:{name:String(error?.name||''),message:String(error?.message||'')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-    const lower = String(error?.message || '').toLowerCase();
-    if (lower.includes('failed to fetch') || lower.includes('networkerror') || lower.includes('fetch failed')) {
-      throw new Error(
-        'Não foi possível conectar ao backend SaaS em http://localhost:3001. '
-        + 'Inicie o backend para carregar o contexto da clínica.',
-      );
+    const devDirectFallback =
+      import.meta.env.DEV
+      && !getAdminApiBaseUrl()
+      && primaryUrl.startsWith('/')
+      && isLikelyNetworkFetchFailure(error);
+    if (devDirectFallback) {
+      try {
+        response = await fetch('http://127.0.0.1:3001/internal/app/tenant-context', fetchOpts);
+      } catch {
+        // segue para mensagem abaixo
+      }
     }
-    throw error;
+    if (!response) {
+      if (isLikelyNetworkFetchFailure(error)) {
+        throw new Error(
+          'Não foi possível conectar ao backend SaaS em http://127.0.0.1:3001. '
+          + 'Confirme: (1) terminal com `npm run server:restart` ou `npm run server:dev` ativo; '
+          + '(2) `npm run dev` na porta 5176; '
+          + '(3) opcional no .env: VITE_APP_ADMIN_API_BASE_URL=http://127.0.0.1:3001',
+        );
+      }
+      throw error;
+    }
   }
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -108,6 +141,12 @@ async function fetchTenantContextViaAdminApi() {
         json?.error
         || 'Usuário autenticado sem vínculo ativo em tenant_users. '
           + 'Faça o provisionamento da clínica pela Console antes de acessar o app.',
+      );
+    }
+    if (response.status === 502 || response.status >= 500) {
+      throw new Error(
+        json?.error
+        || 'O backend SaaS (porta 3001) não respondeu. Inicie com npm run server:restart ou npm run stack:start e tente de novo.',
       );
     }
     throw new Error(json?.error || `Erro HTTP ${response.status} ao carregar contexto da clínica.`);
