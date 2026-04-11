@@ -43,7 +43,7 @@ export default defineConfig(({ mode }) => {
   plugins: [react()],
   server: {
     port: 5176,
-    strictPort: false,
+    strictPort: true,
     open: true,
     proxy: {
       '/internal/app': {

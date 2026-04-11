@@ -19,6 +19,7 @@
     "console:build": "cd console && npm run build",
     "server:dev": "cd server && npm run dev",
     "server:restart": "powershell -ExecutionPolicy Bypass -File \"scripts/restart-backend.ps1\"",
+    "stack:start": "powershell -ExecutionPolicy Bypass -File \"scripts/start-local-stack.ps1\"",
     "server:start": "cd server && npm run start"
   },
   "dependencies": {

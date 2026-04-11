@@ -14,6 +14,34 @@ npm install
 npm run dev
 ```
 
+## Stack local SaaS
+Para evitar conflito de portas entre app, Console e backend, use:
+
+```bash
+npm run stack:start
+```
+
+Esse comando sobe a stack local na ordem correta:
+
+- backend SaaS: `http://localhost:3001`
+- app principal: `http://localhost:5176`
+- Console: `http://localhost:5177/login`
+
+### Ordem manual recomendada
+Se preferir subir manualmente, use sempre esta ordem em terminais separados:
+
+```bash
+npm run server:restart
+npm run dev
+npm run console:dev
+```
+
+### Troubleshooting de portas
+- O app principal usa a porta fixa `5176` com `strictPort: true`.
+- Se `5176` estiver ocupada, o app falha ao iniciar em vez de “roubar” a `5177`.
+- A Console usa `5177`.
+- Se aparecer `ERR_CONNECTION_REFUSED`, confirme se os três processos estão ativos.
+
 ## Banco DEV persistente (localStorage)
 O ambiente de desenvolvimento usa um banco local persistente no navegador, separado por chave.
 
