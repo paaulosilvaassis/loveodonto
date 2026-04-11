@@ -7,6 +7,8 @@ import { getMembership } from '../services/membershipService.js';
 import { ROLE_MASTER } from '../constants/tenantRoles.js';
 import { assertTenantAllowed } from '../services/platformAccessService.js';
 import { resolveTrustedTenantId } from '../services/tenantIdentityService.js';
+import { supabasePlatformClient } from '../lib/supabaseClients.js';
+import { fetchSaasAccessBootstrap, isSaasModeEnabled } from '../services/saasAuthService.js';
 
 const AUTH_CONTEXT_KEY = '__appgestaoodonto_auth_context__';
 const getAuthContext = () => {
@@ -50,6 +52,39 @@ function resolveUserFromSession(session, loadDbFn) {
   };
 }
 
+async function getPersistedSaasSession(session) {
+  if (!supabasePlatformClient) return null;
+  if (session?.user?.id) return session;
+  const { data, error } = await supabasePlatformClient.auth.getSession();
+  if (error) {
+    throw new Error(error.message || 'Falha ao obter sessão SaaS.');
+  }
+  return data?.session || null;
+}
+
+async function resolveSaasUserFromSession(session) {
+  // #region agent log
+  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run3',hypothesisId:'H14',location:'src/auth/AuthContext.jsx:resolveSaasUserFromSession:start',message:'Resolve SaaS user from session started',data:{hasSession:Boolean(session),hasUserId:Boolean(session?.user?.id),hasPlatformClient:Boolean(supabasePlatformClient)},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  const persistedSession = await getPersistedSaasSession(session);
+  if (!persistedSession?.user?.id) return null;
+  const bootstrap = await fetchSaasAccessBootstrap(supabasePlatformClient);
+  // #region agent log
+  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run3',hypothesisId:'H14',location:'src/auth/AuthContext.jsx:resolveSaasUserFromSession:bootstrap',message:'Resolve SaaS user bootstrap result',data:{hasTenantId:Boolean(bootstrap?.tenantId),isActive:Boolean(bootstrap?.isActive),role:String(bootstrap?.role||'')},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  if (!bootstrap?.tenantId) return null;
+  return {
+    id: persistedSession.user.id,
+    name: persistedSession.user.user_metadata?.full_name || persistedSession.user.email || 'Usuário',
+    email: persistedSession.user.email || '',
+    role: bootstrap.role,
+    has_system_access: bootstrap.isActive,
+    isMaster: bootstrap.role === 'admin',
+    tenantId: bootstrap.tenantId,
+    authMode: 'saas',
+  };
+}
+
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(() => getStoredSession());
   const [user, setUser] = useState(undefined);
@@ -62,6 +97,14 @@ export const AuthProvider = ({ children }) => {
     let cancelled = false;
     const rafId = requestAnimationFrame(() => {
       if (cancelled) return;
+      if (session.authMode === 'saas') {
+        resolveSaasUserFromSession(session).then((resolved) => {
+          if (!cancelled) setUser(resolved);
+        }).catch(() => {
+          if (!cancelled) setUser(null);
+        });
+        return;
+      }
       loadDbAsync().then(() => {
         if (cancelled) return;
         const resolved = resolveUserFromSession(session, loadDb);
@@ -77,6 +120,33 @@ export const AuthProvider = ({ children }) => {
   }, [session]);
 
   const login = async ({ userId, tenantId: explicitTenantId }) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run3',hypothesisId:'H15',location:'src/auth/AuthContext.jsx:login:start',message:'AuthContext login started',data:{saasMode:Boolean(isSaasModeEnabled()),hasUserId:Boolean(userId),hasTenantId:Boolean(explicitTenantId)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (isSaasModeEnabled()) {
+      const { data, error } = await supabasePlatformClient.auth.getSession();
+      if (error) {
+        throw new Error(error.message || 'Falha ao obter sessão SaaS.');
+      }
+      const currentSession = data?.session || null;
+      if (!currentSession?.user?.id) {
+        throw new Error('Sessão SaaS ausente. Faça login novamente.');
+      }
+      const resolved = await resolveSaasUserFromSession(currentSession);
+      if (!resolved?.tenantId) {
+        throw new Error('Usuário SaaS sem clínica vinculada.');
+      }
+      await assertTenantAllowed(resolved.tenantId);
+      const next = {
+        authMode: 'saas',
+        userId: currentSession.user.id,
+        tenantId: resolved.tenantId,
+      };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(next));
+      setSession(next);
+      setUser(resolved);
+      return resolved;
+    }
     const db = loadDb();
     const baseUser = db.users.find((item) => item.id === userId && item.active !== false);
     if (!baseUser) {
@@ -104,7 +174,11 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
+    if (session?.authMode === 'saas' && supabasePlatformClient) {
+      supabasePlatformClient.auth.signOut().catch(() => {});
+    }
     setSession(null);
+    setUser(null);
   };
 
   const logoutWithReason = (reason) => {

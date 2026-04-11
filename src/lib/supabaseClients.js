@@ -26,5 +26,9 @@ export const supabasePlatformClient =
       })
     : null;
 
+// #region agent log
+fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run2',hypothesisId:'H12',location:'src/lib/supabaseClients.js:module',message:'Supabase clients config snapshot',data:{hasAppUrl:Boolean(appUrl),hasAppKey:Boolean(appKey),hasPlatformUrl:Boolean(platformUrl),hasPlatformKey:Boolean(platformKey),hasPlatformClient:Boolean(supabasePlatformClient)},timestamp:Date.now()})}).catch(()=>{});
+// #endregion
+
 // Alias para compatibilidade com código que importa supabase (app)
 export const supabase = supabaseAppClient;

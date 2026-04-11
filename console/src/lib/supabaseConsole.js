@@ -49,6 +49,10 @@ export const supabaseConsoleConfig = {
   hasTruncatedKey,
 };
 
+// #region agent log
+fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run1',hypothesisId:'H6',location:'console/src/lib/supabaseConsole.js:config',message:'Console Supabase config snapshot',data:{hasUrl,hasAnonKey,isUrlValid,hasTruncatedKey},timestamp:Date.now()})}).catch(()=>{});
+// #endregion
+
 const envHint = import.meta.env.DEV
   ? 'Arquivo: console/.env (na pasta da Console). Reinicie o Vite após alterar.'
   : 'No Vercel (Environment Variables), faça um novo deploy após alterar.';

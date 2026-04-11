@@ -3,12 +3,55 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { consumeLogoutReason, useAuth } from '../auth/AuthContext.jsx';
 import { authenticateByEmailPassword } from '../services/userAuthService.js';
+import { isSaasModeEnabled, signInSaasWithPassword } from '../services/saasAuthService.js';
 import { seedAdminCredentialsIfEmpty, forceSeedAdminCredentials } from '../db/index.js';
 import Button from '../components/Button.jsx';
 import appLogo from '../assets/love-odonto-logo.png';
 
+function formatLoginErrorMessage(error) {
+  const raw = String(error?.message || error || '').trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return 'Erro ao fazer login.';
+  if (
+    lower.includes('failed to fetch')
+    || lower.includes('networkerror')
+    || lower.includes('network request failed')
+    || lower.includes('fetch failed')
+  ) {
+    return (
+      'Erro de rede no login. Verifique se o Supabase está acessível e se o backend local '
+      + '(http://localhost:3001) está em execução.'
+    );
+  }
+  if (
+    lower.includes('supabase da plataforma não configurado')
+    || lower.includes('vite_supabase_platform_url')
+    || lower.includes('vite_supabase_platform_anon_key')
+  ) {
+    return (
+      'Configuração do Supabase ausente no app principal. '
+      + 'Defina VITE_SUPABASE_PLATFORM_URL e VITE_SUPABASE_PLATFORM_ANON_KEY.'
+    );
+  }
+  if (
+    lower.includes('invalid login credentials')
+    || lower.includes('e-mail ou senha inválidos')
+    || lower.includes('email ou senha invalidos')
+  ) {
+    return 'E-mail ou senha inválidos.';
+  }
+  if (lower.includes('stack depth limit exceeded')) {
+    return (
+      'O backend SaaS entrou em recursão no banco ao validar seu acesso. '
+      + 'Verifique se SUPABASE_SERVICE_ROLE_KEY no backend é a service role key correta do mesmo projeto Supabase.'
+    );
+  }
+  return raw;
+}
+
 export default function LoginPage() {
   const { login, ensureSeedUser, user } = useAuth();
+  const saasEnabled = isSaasModeEnabled();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -20,14 +63,18 @@ export default function LoginPage() {
   const location = useLocation();
 
   useEffect(() => {
+    if (saasEnabled) return;
     ensureSeedUser();
     seedAdminCredentialsIfEmpty().catch(() => {});
-  }, [ensureSeedUser]);
+  }, [ensureSeedUser, saasEnabled]);
 
   useEffect(() => {
     if (import.meta.env?.DEV) {
       console.log('[LoginPage] Componente renderizado');
     }
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run3',hypothesisId:'H13',location:'src/pages/LoginPage.jsx:useEffect[mount]',message:'Login page mounted',data:{saasEnabled:Boolean(saasEnabled)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
   }, []);
 
   // Não redireciona automaticamente quando usuário está logado - permite ver a página de login
@@ -54,8 +101,24 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run2',hypothesisId:'H9',location:'src/pages/LoginPage.jsx:handleSubmit:start',message:'Login submit started',data:{saasEnabled:Boolean(saasEnabled),hasEmail:Boolean(emailTrim),hasPassword:Boolean(password)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     try {
+      if (saasEnabled) {
+        const result = await signInSaasWithPassword(emailTrim, password);
+        // #region agent log
+        fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run2',hypothesisId:'H9',location:'src/pages/LoginPage.jsx:handleSubmit:saasSuccess',message:'SaaS sign-in returned',data:{hasAuthUserId:Boolean(result?.authUserId),hasTenantId:Boolean(result?.tenantId)},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        await login({ userId: result.authUserId, tenantId: result.tenantId });
+        navigate('/gestao/dashboard');
+        return;
+      }
+
       const result = await authenticateByEmailPassword(emailTrim, password);
+      // #region agent log
+      fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run2',hypothesisId:'H10',location:'src/pages/LoginPage.jsx:handleSubmit:legacyResult',message:'Legacy auth result',data:{hasResult:Boolean(result),tenantId:String(result?.tenantId||'')},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (result) {
         await login({ userId: result.userId, tenantId: result.tenantId });
         navigate('/dashboard');
@@ -63,7 +126,10 @@ export default function LoginPage() {
         setError('E-mail ou senha inválidos.');
       }
     } catch (err) {
-      setError(err?.message || 'Erro ao fazer login.');
+      // #region agent log
+      fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run2',hypothesisId:'H11',location:'src/pages/LoginPage.jsx:handleSubmit:catch',message:'Login submit exception',data:{message:String(err?.message||''),name:String(err?.name||'')},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setError(formatLoginErrorMessage(err));
     } finally {
       setLoading(false);
     }

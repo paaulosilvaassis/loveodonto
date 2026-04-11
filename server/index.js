@@ -1,186 +1,632 @@
 /**
- * Admin API - comunicação Console -> App
- * Protegido por API key. NUNCA expor ao frontend do app.
- *
- * Variáveis de ambiente:
- * - ADMIN_API_KEY: chave secreta (header X-Admin-API-Key)
- * - SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY: para operações no banco
+ * Backend SaaS local: integração obrigatória entre Console (5177) e App (5176).
+ * Usa SOMENTE service role no servidor para provisionamento e snapshot do tenant.
  */
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const ADMIN_API_KEY = process.env.ADMIN_API_KEY;
-const PLATFORM_API_KEY = process.env.PLATFORM_API_KEY || process.env.ADMIN_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const PLATFORM_API_KEY = process.env.PLATFORM_API_KEY || process.env.ADMIN_API_KEY || '';
+const PORT = Number(process.env.ADMIN_API_PORT || 3001);
 
-const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
-  : null;
-
-function requireApiKey(req, res, next) {
-  const key = req.headers['x-admin-api-key'];
-  if (!ADMIN_API_KEY || key !== ADMIN_API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  next();
-}
-
-function requireSupabase(req, res, next) {
-  if (!supabase) {
-    return res.status(503).json({ error: 'Admin API: Supabase não configurado' });
-  }
-  next();
-}
-
-function requirePlatformKey(req, res, next) {
-  const key = req.headers['x-platform-key'];
-  if (!PLATFORM_API_KEY || key !== PLATFORM_API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  next();
-}
-
-app.use('/internal/admin', requireApiKey, requireSupabase);
-app.use('/internal/platform', requirePlatformKey, requireSupabase);
-
-// POST /internal/admin/tenants - criar tenant
-app.post('/internal/admin/tenants', async (req, res) => {
+function decodeJwtPayload(token) {
+  const raw = String(token || '').trim();
+  if (!raw.startsWith('eyJ')) return null;
+  const parts = raw.split('.');
+  if (parts.length < 2) return null;
   try {
-    const { name, owner_email, plan_id, status } = req.body;
-    const { data, error } = await supabase
-      .from('platform_tenants')
-      .insert({
-        name: name || 'Nova Clínica',
-        owner_email: owner_email || null,
-        plan_id: plan_id || null,
-        status: status || 'trial',
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (err) {
-    res.status(400).json({ error: err?.message || 'Erro ao criar tenant' });
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+  } catch {
+    return null;
   }
+}
+
+function validateServiceRoleKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    throw new Error('Admin API: SUPABASE_SERVICE_ROLE_KEY está vazia.');
+  }
+  if (raw.startsWith('sb_publishable_')) {
+    throw new Error(
+      'Admin API: SUPABASE_SERVICE_ROLE_KEY está com uma chave publishable (sb_publishable_), não service_role. '
+      + 'Troque pela service_role key do MESMO projeto Supabase usado pela Console e pelo app.',
+    );
+  }
+  if (raw.startsWith('sb_secret_')) {
+    return;
+  }
+  const payload = decodeJwtPayload(raw);
+  const role = String(payload?.role || payload?.app_metadata?.role || '').trim().toLowerCase();
+  if (!role) {
+    throw new Error(
+      'Admin API: não foi possível validar SUPABASE_SERVICE_ROLE_KEY como service_role. '
+      + 'Use a service_role key ou uma server secret key do mesmo projeto Supabase da Console e do app.',
+    );
+  }
+  if (role !== 'service_role') {
+    throw new Error(
+      'Admin API: SUPABASE_SERVICE_ROLE_KEY não é uma service role key válida. '
+      + 'Use a chave service_role do mesmo projeto Supabase da Console e do app.',
+    );
+  }
+}
+
+function normalizeDatabaseError(error, fallbackMessage) {
+  const raw = String(error?.message || error || '').trim();
+  const lower = raw.toLowerCase();
+  if (lower.includes('stack depth limit exceeded')) {
+    return (
+      'O banco retornou "stack depth limit exceeded". '
+      + 'Isso normalmente indica que o backend NÃO está usando a service role key correta '
+      + 'e entrou em recursão de RLS no Supabase. Verifique SUPABASE_SERVICE_ROLE_KEY.'
+    );
+  }
+  return raw || fallbackMessage;
+}
+
+console.log('[SaaS Admin API] SUPABASE_URL loaded', Boolean(SUPABASE_URL));
+console.log('[SaaS Admin API] SERVICE_ROLE_KEY loaded', Boolean(SUPABASE_SERVICE_ROLE_KEY));
+console.log('[SaaS Admin API] PLATFORM_API_KEY loaded', Boolean(PLATFORM_API_KEY));
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('Admin API: configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY antes de iniciar o backend.');
+}
+validateServiceRoleKey(SUPABASE_SERVICE_ROLE_KEY);
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
 });
 
-// PATCH /internal/admin/tenants/:id/status
-app.patch('/internal/admin/tenants/:id/status', async (req, res) => {
+const PLAN_CONFIG = {
+  Start: {
+    priceCents: 0,
+    modules: ['Agenda', 'Pacientes'],
+    limits: { patients: 500, users: 10, storage_gb: 5 },
+  },
+  Growth: {
+    priceCents: 19900,
+    modules: ['Agenda', 'Pacientes', 'Financeiro', 'CRM'],
+    limits: { patients: 1500, users: 30, storage_gb: 20 },
+  },
+  Scale: {
+    priceCents: 49900,
+    modules: ['Agenda', 'Pacientes', 'Financeiro', 'CRM', 'Estoque', 'Marketing', 'Suporte'],
+    limits: { patients: 5000, users: 100, storage_gb: 50 },
+  },
+};
+
+function normalizeText(value) {
+  return String(value || '').trim();
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeStatus(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizePlanCode(value) {
+  const raw = normalizeText(value);
+  if (!raw) return '';
+  const lower = raw.toLowerCase();
+  if (lower === 'start') return 'Start';
+  if (lower === 'growth') return 'Growth';
+  if (lower === 'scale') return 'Scale';
+  return PLAN_CONFIG[raw] ? raw : '';
+}
+
+function buildModuleMap(rows = []) {
+  const map = {};
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const key = String(row?.module_key || '').trim().toUpperCase();
+    if (key) map[key] = Boolean(row?.enabled !== false);
+  }
+  return map;
+}
+
+function buildFeatureFlags(globalRows = [], tenantRows = []) {
+  const map = {};
+  for (const row of Array.isArray(globalRows) ? globalRows : []) {
+    const key = normalizeText(row?.flag_key);
+    if (key) map[key] = Boolean(row?.enabled);
+  }
+  for (const row of Array.isArray(tenantRows) ? tenantRows : []) {
+    const key = normalizeText(row?.flag_key);
+    if (key) map[key] = Boolean(row?.enabled);
+  }
+  return map;
+}
+
+function makeTemporaryPassword() {
+  return `Lo#${randomUUID().replace(/-/g, '').slice(0, 18)}Aa1`;
+}
+
+async function createAuthUserAndTenantLink({
+  email,
+  password,
+  fullName,
+  tenantId,
+  roleSlug = 'owner',
+}) {
+  const { data: authCreateData, error: authCreateError } = await supabase.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName },
+    app_metadata: { tenant_id: tenantId, role: roleSlug },
+  });
+  if (authCreateError || !authCreateData?.user?.id) {
+    throw authCreateError || new Error('Falha ao criar usuário no Supabase Auth.');
+  }
+  const authUserId = authCreateData.user.id;
+  console.log('[ProvisionUser] auth user criado', { authUserId, email, tenantId });
+
+  const tenantUserPayload = {
+    tenant_id: tenantId,
+    email,
+    full_name: fullName,
+    user_id: authUserId,
+    role: roleSlug,
+    role_slug: roleSlug,
+    is_active: true,
+    status: 'active',
+  };
+
+  const { data: existingTenantUser, error: existingTenantUserError } = await supabase
+    .from('tenant_users')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('email', email)
+    .maybeSingle();
+  if (existingTenantUserError) {
+    await supabase.auth.admin.deleteUser(authUserId).catch(() => {});
+    throw existingTenantUserError;
+  }
+
+  let tenantUserQuery;
+  if (existingTenantUser?.id) {
+    tenantUserQuery = supabase
+      .from('tenant_users')
+      .update(tenantUserPayload)
+      .eq('id', existingTenantUser.id);
+  } else {
+    tenantUserQuery = supabase
+      .from('tenant_users')
+      .insert(tenantUserPayload);
+  }
+
+  const { data: tenantUser, error: tenantUserError } = await tenantUserQuery
+    .select('id, tenant_id, user_id, email, full_name, role, role_slug, is_active, status')
+    .single();
+  if (tenantUserError) {
+    await supabase.auth.admin.deleteUser(authUserId).catch(() => {});
+    throw tenantUserError;
+  }
+  if (!tenantUser?.user_id) {
+    await supabase.auth.admin.deleteUser(authUserId).catch(() => {});
+    throw new Error('Falha crítica: tenant_users persistido sem user_id.');
+  }
+  console.log('[ProvisionUser] tenant_users atualizado com user_id', {
+    tenantUserId: tenantUser.id,
+    userId: tenantUser.user_id,
+    tenantId,
+  });
+
+  return {
+    authUserId,
+    tenantUser,
+  };
+}
+
+async function insertAuditLog({ actor, action, targetType, targetId, tenantId = null, metadata = {} }) {
+  const payload = {
+    actor_admin_id: actor?.id || null,
+    actor_role: actor?.role || null,
+    action,
+    target_type: targetType,
+    target_id: String(targetId || ''),
+    tenant_id: tenantId,
+    metadata: {
+      ...(metadata && typeof metadata === 'object' ? metadata : { note: String(metadata || '') }),
+      actor_email: actor?.email || null,
+    },
+  };
+  const { error } = await supabase.from('audit_logs').insert(payload);
+  if (error) throw error;
+}
+
+async function getConsoleActorFromBearerToken(accessToken) {
+  const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
+  if (userError || !userData?.user?.id) {
+    throw new Error(
+      normalizeDatabaseError(userError, '')
+      || 'Token da Console inválido. Verifique se a Console usa o mesmo projeto Supabase configurado no backend.',
+    );
+  }
+  const authUser = userData.user;
+  const { data: actorRow, error: actorError } = await supabase
+    .from('platform_admin_users')
+    .select('id, email, full_name, role_slug, is_active')
+    .eq('id', authUser.id)
+    .eq('is_active', true)
+    .maybeSingle();
+  if (actorError) throw actorError;
+  if (!actorRow?.id) {
+    throw new Error(
+      'Usuário autenticado não possui perfil ativo em platform_admin_users. '
+      + 'Crie ou corrija esse vínculo no mesmo projeto Supabase da Console.',
+    );
+  }
+  return {
+    id: actorRow.id,
+    email: actorRow.email || authUser.email || '',
+    name: actorRow.full_name || actorRow.email || authUser.email || 'Operador',
+    role: actorRow.role_slug || 'leitura',
+  };
+}
+
+async function requireConsoleAccess(req, res, next) {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
-    if (!['trial', 'active', 'suspended'].includes(status)) {
-      return res.status(400).json({ error: 'status inválido' });
+    const platformKey = normalizeText(req.headers['x-platform-key']);
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H2',location:'server/index.js:requireConsoleAccess:start',message:'Backend validating console access',data:{hasPlatformKey:Boolean(platformKey),hasAuthorization:Boolean(normalizeText(req.headers.authorization))},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (PLATFORM_API_KEY && platformKey && platformKey === PLATFORM_API_KEY) {
+      // #region agent log
+      fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H2',location:'server/index.js:requireConsoleAccess:platformKey',message:'Backend accepted console access via platform key',data:{authMode:'platform-key'},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      req.platformActor = { id: null, email: '', name: 'system', role: 'system' };
+      return next();
     }
-    const { data, error } = await supabase
-      .from('platform_tenants')
-      .update({ status })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    res.json(data);
-  } catch (err) {
-    res.status(400).json({ error: err?.message || 'Erro ao atualizar status' });
-  }
-});
-
-// PATCH /internal/admin/tenants/:id/plan
-app.patch('/internal/admin/tenants/:id/plan', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { plan_id } = req.body;
-    const { data, error } = await supabase
-      .from('platform_tenants')
-      .update({ plan_id: plan_id || null })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    res.json(data);
-  } catch (err) {
-    res.status(400).json({ error: err?.message || 'Erro ao atualizar plano' });
-  }
-});
-
-// GET /internal/admin/tenants/:id/usage
-app.get('/internal/admin/tenants/:id/usage', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { data: tenant } = await supabase.from('platform_tenants').select('*').eq('id', id).single();
-    if (!tenant) return res.status(404).json({ error: 'Tenant não encontrado' });
-    res.json({ tenant, usage: { users: 0, patients: 0 } });
-  } catch (err) {
-    res.status(500).json({ error: err?.message || 'Erro ao buscar usage' });
-  }
-});
-
-// --- /internal/platform/* (x-platform-key) ---
-app.post('/internal/platform/tenants', async (req, res) => {
-  try {
-    const { name, owner_email, plan_id, status } = req.body;
-    const { data, error } = await supabase
-      .from('platform_tenants')
-      .insert({
-        name: name || 'Nova Clínica',
-        owner_email: owner_email || null,
-        plan_id: plan_id || null,
-        status: status || 'trial',
-      })
-      .select()
-      .single();
-    if (error) throw error;
-    res.status(201).json(data);
-  } catch (err) {
-    res.status(400).json({ error: err?.message || 'Erro ao criar tenant' });
-  }
-});
-
-app.patch('/internal/platform/tenants/:id/status', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-    if (!['trial', 'active', 'suspended'].includes(status)) {
-      return res.status(400).json({ error: 'status inválido' });
+    const authHeader = normalizeText(req.headers.authorization);
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    const accessToken = match?.[1] || '';
+    if (!accessToken) {
+      return res.status(401).json({ error: 'Sessão da Console ausente.' });
     }
-    const { data, error } = await supabase
-      .from('platform_tenants')
-      .update({ status })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    res.json(data);
+    req.platformActor = await getConsoleActorFromBearerToken(accessToken);
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H2',location:'server/index.js:requireConsoleAccess:bearer',message:'Backend accepted console access via bearer token',data:{authMode:'bearer',actorId:String(req.platformActor?.id||''),role:String(req.platformActor?.role||'')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    next();
   } catch (err) {
-    res.status(400).json({ error: err?.message || 'Erro ao atualizar status' });
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H2',location:'server/index.js:requireConsoleAccess:catch',message:'Backend rejected console access',data:{message:String(err?.message||'')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    res.status(401).json({ error: err?.message || 'Falha ao validar sessão da Console.' });
   }
-});
+}
 
-app.patch('/internal/platform/tenants/:id/plan', async (req, res) => {
+async function requireAppUser(req, res, next) {
   try {
-    const { id } = req.params;
-    const { plan_id } = req.body;
-    const { data, error } = await supabase
-      .from('platform_tenants')
-      .update({ plan_id: plan_id || null })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    res.json(data);
+    const authHeader = normalizeText(req.headers.authorization);
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    const accessToken = match?.[1] || '';
+    if (!accessToken) {
+      return res.status(401).json({ error: 'Token do app ausente.' });
+    }
+    const { data, error } = await supabase.auth.getUser(accessToken);
+    if (error || !data?.user?.id) {
+      return res.status(401).json({
+        error:
+          normalizeDatabaseError(error, '')
+          || 'Token do app inválido. Verifique se login SaaS e backend usam o mesmo projeto Supabase.',
+      });
+    }
+    req.appAuthUser = data.user;
+    next();
   } catch (err) {
-    res.status(400).json({ error: err?.message || 'Erro ao atualizar plano' });
+    res.status(401).json({ error: err?.message || 'Falha ao validar sessão do app.' });
+  }
+}
+
+app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H4',location:'server/index.js:/internal/app/tenant-context:start',message:'Backend tenant-context endpoint called',data:{hasAuthUser:Boolean(req?.appAuthUser?.id),authUserId:String(req?.appAuthUser?.id||'')},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  try {
+    const authUserId = req.appAuthUser.id;
+    const { data: tenantUser, error: tenantUserError } = await supabase
+      .from('tenant_users')
+      .select('tenant_id, role, role_slug, is_active, status')
+      .eq('user_id', authUserId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (tenantUserError) throw tenantUserError;
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H4',location:'server/index.js:/internal/app/tenant-context:tenant-user',message:'Backend tenant_users lookup completed',data:{authUserId,hasTenantId:Boolean(tenantUser?.tenant_id),role:String(tenantUser?.role||tenantUser?.role_slug||''),isActive:Boolean(tenantUser?.is_active ?? tenantUser?.status === 'active')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    if (!tenantUser?.tenant_id) {
+      return res.status(404).json({
+        error:
+          'Usuário sem vínculo ativo em tenant_users. '
+          + 'Faça o provisionamento da clínica pela Console antes de acessar o app.',
+      });
+    }
+
+    const tenantId = tenantUser.tenant_id;
+    const [
+      tenantResult,
+      modulesResult,
+      globalFlagsResult,
+      tenantFlagsResult,
+      subscriptionResult,
+      limitsResult,
+    ] = await Promise.all([
+      supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle(),
+      supabase.from('tenant_modules').select('module_key, enabled').eq('tenant_id', tenantId),
+      supabase.from('feature_flags').select('flag_key, enabled').eq('scope_type', 'global'),
+      supabase.from('feature_flags').select('flag_key, enabled').eq('scope_type', 'tenant').eq('scope_ref', tenantId),
+      supabase.from('tenant_subscriptions').select('*').eq('tenant_id', tenantId).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
+      supabase.from('tenant_limits').select('limits_json').eq('tenant_id', tenantId).maybeSingle(),
+    ]);
+
+    if (tenantResult.error) throw tenantResult.error;
+    if (modulesResult.error) throw modulesResult.error;
+    if (globalFlagsResult.error) throw globalFlagsResult.error;
+    if (tenantFlagsResult.error) throw tenantFlagsResult.error;
+    if (subscriptionResult.error) throw subscriptionResult.error;
+    if (limitsResult.error && String(limitsResult.error.code || '').toUpperCase() !== 'PGRST116') {
+      throw limitsResult.error;
+    }
+
+    const tenant = tenantResult.data || null;
+    const subscription = subscriptionResult.data || null;
+    const warnings = [];
+    const tenantStatus = normalizeStatus(tenant?.status);
+    const billingStatus = normalizeStatus(tenant?.billing_status || subscription?.status);
+    if (['blocked', 'suspended', 'cancelled', 'canceled'].includes(tenantStatus)) {
+      warnings.push(`Status da clínica: ${tenantStatus}`);
+    }
+    if (['overdue', 'past_due'].includes(billingStatus)) {
+      warnings.push('Existem pendências de cobrança');
+    }
+
+    res.json({
+      tenant,
+      modules: buildModuleMap(modulesResult.data || []),
+      flags: buildFeatureFlags(globalFlagsResult.data || [], tenantFlagsResult.data || []),
+      limits: limitsResult.data?.limits_json || {},
+      subscription,
+      warnings,
+      access: {
+        tenantId,
+        role: tenantUser.role || tenantUser.role_slug || 'atendimento',
+        isActive: tenantUser.is_active ?? tenantUser.status === 'active',
+      },
+    });
+  } catch (err) {
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H4',location:'server/index.js:/internal/app/tenant-context:catch',message:'Backend tenant-context failed',data:{message:String(err?.message||''),authUserId:String(req?.appAuthUser?.id||'')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao carregar contexto da clínica.'),
+    });
   }
 });
 
-const PORT = process.env.ADMIN_API_PORT || 4000;
+app.post('/internal/platform/provision-user', requireConsoleAccess, async (req, res) => {
+  try {
+    const email = normalizeEmail(req.body?.email);
+    const password = normalizeText(req.body?.password);
+    const fullName = normalizeText(req.body?.full_name);
+    const tenantId = normalizeText(req.body?.tenant_id);
+
+    if (!email) return res.status(400).json({ error: 'email é obrigatório.' });
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: 'password deve ter pelo menos 8 caracteres.' });
+    }
+    if (!fullName) return res.status(400).json({ error: 'full_name é obrigatório.' });
+    if (!tenantId) return res.status(400).json({ error: 'tenant_id é obrigatório.' });
+
+    const { authUserId, tenantUser } = await createAuthUserAndTenantLink({
+      email,
+      password,
+      fullName,
+      tenantId,
+      roleSlug: 'owner',
+    });
+
+    return res.status(201).json({
+      success: true,
+      email,
+      password,
+      user: {
+        id: authUserId,
+        email,
+        full_name: fullName,
+      },
+      tenantUser,
+    });
+  } catch (err) {
+    console.error('[ProvisionUser] erro detalhado', {
+      message: normalizeDatabaseError(err, String(err || '')),
+      email: normalizeEmail(req.body?.email),
+      tenantId: normalizeText(req.body?.tenant_id),
+    });
+    res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao provisionar usuário da clínica.'),
+    });
+  }
+});
+
+app.post('/internal/platform/tenants/provision', requireConsoleAccess, async (req, res) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H3',location:'server/index.js:/internal/platform/tenants/provision:start',message:'Backend tenant provision endpoint called',data:{hasActor:Boolean(req?.platformActor),hasResponsibleEmail:Boolean(String(req?.body?.responsibleEmail||'').trim()),plan:String(req?.body?.plan||'')},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  let createdTenantId = null;
+  let createdAuthUserId = null;
+  let createdAuthUser = false;
+
+  try {
+    const actor = req.platformActor;
+    const tradeName = normalizeText(req.body?.tradeName);
+    const legalName = normalizeText(req.body?.legalName || tradeName);
+    const responsibleName = normalizeText(req.body?.responsibleName);
+    const responsibleEmail = normalizeEmail(req.body?.responsibleEmail);
+    const responsiblePassword = normalizeText(req.body?.responsiblePassword);
+    const city = normalizeText(req.body?.city);
+    const status = normalizeStatus(req.body?.status || 'active') || 'active';
+    const planCode = normalizePlanCode(req.body?.plan);
+
+    if (!tradeName) return res.status(400).json({ error: 'tradeName é obrigatório.' });
+    if (!responsibleName) return res.status(400).json({ error: 'responsibleName é obrigatório.' });
+    if (!responsibleEmail) return res.status(400).json({ error: 'responsibleEmail é obrigatório.' });
+    if (!planCode) return res.status(400).json({ error: 'plan inválido. Use Start, Growth ou Scale.' });
+    if (responsiblePassword && responsiblePassword.length < 8) {
+      return res.status(400).json({ error: 'responsiblePassword deve ter pelo menos 8 caracteres.' });
+    }
+
+    const { data: existingTenantUserByEmail, error: existingTenantUserError } = await supabase
+      .from('tenant_users')
+      .select('id, tenant_id, user_id')
+      .eq('email', responsibleEmail)
+      .maybeSingle();
+    if (existingTenantUserError) throw existingTenantUserError;
+    if (existingTenantUserByEmail?.tenant_id) {
+      return res.status(409).json({ error: 'Este e-mail já está vinculado a outra clínica em tenant_users.' });
+    }
+
+    const generatedPassword = responsiblePassword || makeTemporaryPassword();
+    const passwordWasGenerated = !responsiblePassword;
+
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .insert({
+        legal_name: legalName,
+        trade_name: tradeName,
+        status,
+        billing_status: 'ok',
+        plan_code: planCode,
+        owner_name: responsibleName,
+        owner_email: responsibleEmail,
+        city: city || null,
+        created_by: actor?.id || null,
+        updated_by: actor?.id || null,
+      })
+      .select('id, legal_name, trade_name, owner_name, owner_email, city, status, billing_status, plan_code, created_at, updated_at')
+      .single();
+    if (tenantError || !tenant?.id) throw tenantError || new Error('Falha ao criar tenant.');
+    createdTenantId = tenant.id;
+    console.log('[Provision] tenant criado', { tenantId: createdTenantId, planCode, responsibleEmail });
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H3',location:'server/index.js:/internal/platform/tenants/provision:tenant',message:'Backend created tenant row',data:{tenantId:String(createdTenantId||''),responsibleEmail},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+
+    const { authUserId, tenantUser } = await createAuthUserAndTenantLink({
+      email: responsibleEmail,
+      password: generatedPassword,
+      fullName: responsibleName,
+      tenantId: createdTenantId,
+      roleSlug: 'owner',
+    });
+    createdAuthUserId = authUserId;
+    createdAuthUser = true;
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H3',location:'server/index.js:/internal/platform/tenants/provision:user-link',message:'Backend created auth user and tenant link',data:{tenantId:String(createdTenantId||''),authUserId:String(createdAuthUserId||''),tenantUserHasUserId:Boolean(tenantUser?.user_id)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+
+    const { data: subscription, error: subscriptionError } = await supabase
+      .from('tenant_subscriptions')
+      .insert({
+        tenant_id: createdTenantId,
+        plan_code: planCode,
+        status: status === 'active' ? 'active' : 'paused',
+        amount_cents: PLAN_CONFIG[planCode].priceCents,
+        cycle: 'monthly',
+        next_billing_at: new Date(Date.now() + 30 * 86400000).toISOString(),
+        updated_by: actor?.id || null,
+      })
+      .select('id, tenant_id, plan_code, status, amount_cents, cycle, next_billing_at, created_at, updated_at')
+      .single();
+    if (subscriptionError) throw subscriptionError;
+    console.log('[Provision] assinatura criada', { subscriptionId: subscription.id, tenantId: createdTenantId });
+
+    const moduleRows = PLAN_CONFIG[planCode].modules.map((moduleKey) => ({
+      tenant_id: createdTenantId,
+      module_key: moduleKey,
+      enabled: true,
+      updated_by: actor?.id || null,
+    }));
+    const { data: tenantModules, error: tenantModulesError } = await supabase
+      .from('tenant_modules')
+      .insert(moduleRows)
+      .select('id, tenant_id, module_key, enabled, created_at, updated_at');
+    if (tenantModulesError) throw tenantModulesError;
+    console.log('[Provision] módulos criados', { tenantId: createdTenantId, modules: PLAN_CONFIG[planCode].modules });
+
+    const { error: tenantLimitsError } = await supabase.from('tenant_limits').upsert({
+      tenant_id: createdTenantId,
+      limits_json: PLAN_CONFIG[planCode].limits,
+      updated_by: actor?.id || null,
+    }, { onConflict: 'tenant_id' });
+    if (tenantLimitsError) throw tenantLimitsError;
+
+    await insertAuditLog({
+      actor,
+      action: 'tenant.provision.completed',
+      targetType: 'tenant',
+      targetId: createdTenantId,
+      tenantId: createdTenantId,
+      metadata: {
+        responsible_email: responsibleEmail,
+        responsible_user_id: createdAuthUserId,
+        plan: planCode,
+        modules: PLAN_CONFIG[planCode].modules,
+      },
+    });
+    console.log('[Provision] audit log criado', { tenantId: createdTenantId });
+
+    return res.status(201).json({
+      tenant,
+      tenantUser,
+      responsibleUser: {
+        id: createdAuthUserId,
+        email: responsibleEmail,
+        full_name: responsibleName,
+      },
+      subscription,
+      tenantModules: tenantModules || [],
+      ...(passwordWasGenerated ? { temporaryPassword: generatedPassword } : {}),
+    });
+  } catch (err) {
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H3',location:'server/index.js:/internal/platform/tenants/provision:catch',message:'Backend tenant provision failed',data:{message:String(err?.message||''),tenantId:String(createdTenantId||''),authUserId:String(createdAuthUserId||'')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    console.error('[Provision] erro detalhado', {
+      message: normalizeDatabaseError(err, String(err || '')),
+      tenantId: createdTenantId,
+      authUserId: createdAuthUserId,
+    });
+    if (createdAuthUser && createdAuthUserId) {
+      const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(createdAuthUserId);
+      if (deleteAuthError) {
+        console.error('[Provision] rollback auth user falhou', deleteAuthError.message);
+      }
+    }
+    if (createdTenantId) {
+      const { error: deleteTenantError } = await supabase.from('tenants').delete().eq('id', createdTenantId);
+      if (deleteTenantError) {
+        console.error('[Provision] rollback tenant falhou', deleteTenantError.message);
+      }
+    }
+    res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao provisionar clínica.'),
+    });
+  }
+});
+
 app.listen(PORT, () => {
-  console.log(`Admin API rodando na porta ${PORT}`);
-  if (!ADMIN_API_KEY) console.warn('ADMIN_API_KEY não definida - API rejeitará requisições');
+  console.log(`[SaaS Admin API] rodando na porta ${PORT}`);
 });

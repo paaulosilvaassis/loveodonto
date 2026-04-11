@@ -18,6 +18,7 @@
     "console:dev": "cd console && npm run dev",
     "console:build": "cd console && npm run build",
     "server:dev": "cd server && npm run dev",
+    "server:restart": "powershell -ExecutionPolicy Bypass -File \"scripts/restart-backend.ps1\"",
     "server:start": "cd server && npm run start"
   },
   "dependencies": {

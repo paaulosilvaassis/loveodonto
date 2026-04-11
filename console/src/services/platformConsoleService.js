@@ -9,6 +9,52 @@ import {
   INTEGRATION_KEYS,
 } from './platformConsoleConstants.js';
 
+const DEFAULT_PLATFORM_API_BASE_URL = 'http://localhost:3001';
+
+function normalizeEnvString(value) {
+  return String(value ?? '').trim();
+}
+
+function isValidHttpUrl(value) {
+  try {
+    const parsed = new URL(String(value || ''));
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function resolvePlatformApiUrl(path) {
+  const baseUrl = normalizeEnvString(
+    import.meta.env.VITE_PLATFORM_API_BASE_URL || DEFAULT_PLATFORM_API_BASE_URL,
+  );
+  const normalizedPath = String(path || '').trim();
+  if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
+  const base = baseUrl.replace(/\/+$/, '');
+  const suffix = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+  return `${base}${suffix}`;
+}
+
+export function getPlatformApiConfigError() {
+  const baseUrl = normalizeEnvString(
+    import.meta.env.VITE_PLATFORM_API_BASE_URL || DEFAULT_PLATFORM_API_BASE_URL,
+  );
+  const platformApiKey = normalizeEnvString(import.meta.env.VITE_PLATFORM_API_KEY);
+  if (!baseUrl) {
+    return 'VITE_PLATFORM_API_BASE_URL está vazio. Configure com o backend local (ex.: http://localhost:3001).';
+  }
+  if (!isValidHttpUrl(baseUrl)) {
+    return 'VITE_PLATFORM_API_BASE_URL deve ser uma URL http(s) válida (ex.: http://localhost:3001).';
+  }
+  if (!platformApiKey) {
+    return (
+      'VITE_PLATFORM_API_KEY não foi definido na Console. '
+      + 'Sem essa chave a Console não pode provisionar clínicas no backend local.'
+    );
+  }
+  return null;
+}
+
 function getClient() {
   if (!supabaseConsole) {
     throw new Error(
@@ -28,6 +74,83 @@ function normalizeEmail(value) {
 
 function normalizeText(value) {
   return String(value || '').trim();
+}
+
+function normalizePlanForProvision(planCode) {
+  const value = String(planCode || '').trim().toLowerCase();
+  if (value === 'start') return 'Start';
+  if (value === 'growth') return 'Growth';
+  if (value === 'scale') return 'Scale';
+  return '';
+}
+
+function mapPlatformApiErrorMessage(error) {
+  const raw = String(error?.message || error || '').trim();
+  const lower = raw.toLowerCase();
+  if (lower.includes('stack depth limit exceeded')) {
+    return (
+      'O backend local respondeu com "stack depth limit exceeded". '
+      + 'Isso normalmente acontece quando SUPABASE_SERVICE_ROLE_KEY está incorreta '
+      + 'ou não é a service role key do mesmo projeto Supabase.'
+    );
+  }
+  return raw;
+}
+
+async function callPlatformApi(path, { method = 'POST', body } = {}) {
+  const configError = getPlatformApiConfigError();
+  if (configError) {
+    throw new Error(configError);
+  }
+  const client = getClient();
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError) {
+    throw new Error(sessionError.message || 'Falha ao obter sessão da Console.');
+  }
+  const accessToken = sessionData?.session?.access_token || '';
+  if (!accessToken) {
+    throw new Error('Sessão expirada. Faça login novamente na Console.');
+  }
+  // #region agent log
+  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H1',location:'console/src/services/platformConsoleService.js:callPlatformApi:start',message:'Console calling backend API',data:{path:String(path||''),method:String(method||'POST'),hasAccessToken:Boolean(accessToken),hasPlatformKey:Boolean(normalizeEnvString(import.meta.env.VITE_PLATFORM_API_KEY))},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    'x-platform-key': normalizeEnvString(import.meta.env.VITE_PLATFORM_API_KEY),
+  };
+  const init = { method, headers };
+  if (body !== undefined && method !== 'GET' && method !== 'HEAD') {
+    headers['Content-Type'] = 'application/json';
+    init.body = JSON.stringify(body);
+  }
+  let response;
+  try {
+    response = await fetch(resolvePlatformApiUrl(path), init);
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H1',location:'console/src/services/platformConsoleService.js:callPlatformApi:response',message:'Console backend API response received',data:{path:String(path||''),status:Number(response?.status||0),ok:Boolean(response?.ok)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  } catch (error) {
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H1',location:'console/src/services/platformConsoleService.js:callPlatformApi:catch',message:'Console backend API network exception',data:{path:String(path||''),name:String(error?.name||''),message:String(error?.message||'')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    throw new Error(mapPlatformApiErrorMessage(error) || 'Falha ao chamar o backend local.');
+  }
+  const text = await response.text();
+  let json = {};
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = { error: text };
+    }
+  }
+  if (!response.ok) {
+    throw new Error(
+      mapPlatformApiErrorMessage(json?.error || json?.message || `Erro HTTP ${response.status}`)
+      || `Erro HTTP ${response.status}`,
+    );
+  }
+  return json;
 }
 
 function getDefaultPlanLimits(planCode) {
@@ -441,50 +564,38 @@ export async function createClinicOnboarding(actor, payload) {
   const ownerName = normalizeText(payload?.ownerName);
   const adminName = normalizeText(payload?.adminName);
   const adminEmail = normalizeEmail(payload?.adminEmail);
+  const adminPassword = normalizeText(payload?.adminPassword);
   const planCode = normalizeText(payload?.planCode);
 
   if (!clinicName) throw new Error('Nome da clínica é obrigatório.');
   if (!adminName) throw new Error('Nome do administrador é obrigatório.');
   if (!adminEmail) throw new Error('E-mail do administrador é obrigatório.');
+  if (adminPassword && adminPassword.length < 8) {
+    throw new Error('Senha do administrador deve ter pelo menos 8 caracteres ou ficar vazia.');
+  }
   if (!PLAN_CATALOG.includes(planCode)) throw new Error('Plano inválido.');
-
-  const { data: dupOwner } = await client.from('tenants').select('id').eq('owner_email', adminEmail).maybeSingle();
-  if (dupOwner) throw new Error('Este e-mail já está em uso como responsável de uma clínica.');
-
-  const { data: dupTu } = await client.from('tenant_users').select('id').eq('email', adminEmail).maybeSingle();
-  if (dupTu) throw new Error('Este e-mail já está vinculado a uma clínica.');
-
-  const modulesFromPlan = PLAN_MODULES[planCode] || [];
-
-  const { data: tenantRow, error: tInsErr } = await client
-    .from('tenants')
-    .insert({
-      legal_name: clinicName,
-      trade_name: clinicName,
-      status: 'active',
-      billing_status: 'ok',
-      plan_code: planCode,
-      owner_name: ownerName || adminName,
-      owner_email: adminEmail,
+  const provisioned = await callPlatformApi('/internal/platform/tenants/provision', {
+    method: 'POST',
+    body: {
+      tradeName: clinicName,
+      legalName: clinicName,
+      responsibleName: ownerName || adminName,
+      responsibleEmail: adminEmail,
+      ...(adminPassword ? { responsiblePassword: adminPassword } : {}),
       city: city || null,
-      created_by: actor.id,
-      updated_by: actor.id,
-    })
-    .select('id')
-    .single();
-  if (tInsErr) throw new Error(tInsErr.message);
-  const tenantId = tenantRow.id;
-
-  const { error: subErr } = await client.from('tenant_subscriptions').insert({
-    tenant_id: tenantId,
-    plan_code: planCode,
-    status: 'active',
-    amount_cents: PLAN_PRICES_CENTS[planCode] ?? 0,
-    cycle: 'monthly',
-    next_billing_at: new Date(Date.now() + 30 * 86400000).toISOString(),
-    updated_by: actor.id,
+      plan: normalizePlanForProvision(planCode),
+      status: 'active',
+    },
   });
-  if (subErr) throw new Error(subErr.message);
+
+  const tenantId = provisioned?.tenant?.id;
+  const tenantUserId = provisioned?.tenantUser?.user_id;
+  if (!tenantId) {
+    throw new Error('Provisionamento concluído sem tenant válido.');
+  }
+  if (!tenantUserId) {
+    throw new Error('Provisionamento incompleto: tenant_users retornou sem user_id.');
+  }
 
   const { error: limitsErr } = await client.from('tenant_limits').upsert({
     tenant_id: tenantId,
@@ -493,36 +604,11 @@ export async function createClinicOnboarding(actor, payload) {
   }, { onConflict: 'tenant_id' });
   if (limitsErr) throw new Error(limitsErr.message);
 
-  if (modulesFromPlan.length) {
-    const modRows = modulesFromPlan.map((module_key) => ({
-      tenant_id: tenantId,
-      module_key,
-      enabled: true,
-      updated_by: actor.id,
-    }));
-    const { error: modErr } = await client.from('tenant_modules').insert(modRows);
-    if (modErr) throw new Error(modErr.message);
-  }
-
-  const { error: tuErr } = await client.from('tenant_users').insert({
-    tenant_id: tenantId,
-    user_id: null,
-    full_name: adminName,
-    email: adminEmail,
-    role_slug: 'admin',
-    status: 'active',
-  });
-  if (tuErr) throw new Error(tuErr.message);
-
-  await insertAudit(actor, 'tenant.onboarding.created', 'tenant', tenantId, {
-    clinicName,
-    adminEmail,
-    planCode,
-    modules: modulesFromPlan,
-  }, tenantId);
-
   const detail = await getClinicDetail(tenantId);
-  return detail?.clinic || { id: tenantId, name: clinicName };
+  return {
+    clinic: detail?.clinic || { id: tenantId, name: clinicName },
+    temporaryPassword: provisioned?.temporaryPassword || null,
+  };
 }
 
 export async function toggleClinicStatus(actor, tenantId) {

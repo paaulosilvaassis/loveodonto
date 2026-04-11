@@ -1,7 +1,12 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
-import { createClinicOnboarding, listCatalogs, listClinics } from '../services/platformConsoleService.js';
+import {
+  createClinicOnboarding,
+  getPlatformApiConfigError,
+  listCatalogs,
+  listClinics,
+} from '../services/platformConsoleService.js';
 import { PageHeader, Panel, StatusBadge, EmptyState } from '../components/ConsoleUi.jsx';
 
 const WIZARD_STEPS = [
@@ -28,6 +33,7 @@ export default function ConsoleTenantsPage() {
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [provisionResult, setProvisionResult] = useState(null);
   const [rows, setRows] = useState([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState('');
@@ -41,6 +47,7 @@ export default function ConsoleTenantsPage() {
     planCode: 'Start',
   });
   const catalogs = useMemo(() => listCatalogs(), []);
+  const platformApiConfigError = useMemo(() => getPlatformApiConfigError(), []);
   const canCreateClinic = ['owner', 'super_admin'].includes(String(platformUser?.role || '').toLowerCase());
 
   useEffect(() => {
@@ -64,6 +71,7 @@ export default function ConsoleTenantsPage() {
   const handleOpenOnboarding = () => {
     setFormError('');
     setSuccessMessage('');
+    setProvisionResult(null);
     setStep(1);
     setForm({
       clinicName: '',
@@ -97,6 +105,9 @@ export default function ConsoleTenantsPage() {
       const email = form.adminEmail.trim().toLowerCase();
       if (!form.adminName.trim()) return 'Nome do administrador é obrigatório.';
       if (!email) return 'E-mail do administrador é obrigatório.';
+      if (form.adminPassword && form.adminPassword.length < 8) {
+        return 'Senha deve ter pelo menos 8 caracteres ou ficar vazia (o servidor gera uma temporária).';
+      }
       return '';
     }
     if (currentStep === 3) {
@@ -137,7 +148,7 @@ export default function ConsoleTenantsPage() {
     setFormError('');
     setSuccessMessage('');
     try {
-      const clinic = await createClinicOnboarding(platformUser, {
+      const result = await createClinicOnboarding(platformUser, {
         clinicName: form.clinicName,
         city: form.city,
         ownerName: form.ownerName,
@@ -148,9 +159,15 @@ export default function ConsoleTenantsPage() {
       });
       setSuccessMessage('Clínica criada com sucesso.');
       setShowOnboarding(false);
+      setProvisionResult({
+        clinicName: result?.clinic?.name || form.clinicName,
+        clinicId: result?.clinic?.id || '',
+        adminEmail: form.adminEmail,
+        temporaryPassword: result?.temporaryPassword || '',
+        passwordWasGenerated: Boolean(result?.temporaryPassword),
+      });
       const refreshed = await listClinics({ query, status, plan });
       setRows(refreshed);
-      window.setTimeout(() => navigate(`/tenants/${clinic.id}`), 700);
     } catch (error) {
       setFormError(error?.message || 'Erro ao criar clínica.');
     } finally {
@@ -164,12 +181,63 @@ export default function ConsoleTenantsPage() {
         title="Clínicas"
         description="Gestão de clínicas, módulos, situação da conta e governança operacional."
         actions={canCreateClinic ? (
-          <button type="button" className="pc-button" onClick={handleOpenOnboarding}>
+          <button
+            type="button"
+            className="pc-button"
+            onClick={handleOpenOnboarding}
+            disabled={Boolean(platformApiConfigError)}
+            title={platformApiConfigError || 'Criar nova clínica'}
+          >
             + Nova Clínica
           </button>
         ) : null}
       />
+      {platformApiConfigError ? <p className="pc-error">{platformApiConfigError}</p> : null}
       {successMessage ? <p className="pc-success">{successMessage}</p> : null}
+      {provisionResult ? (
+        <Panel
+          title="Credenciais da clínica provisionada"
+          description="Provisionamento concluído sem sucesso parcial. Use estas credenciais no Love Odonto."
+          actions={(
+            <button
+              type="button"
+              className="pc-button pc-button--active"
+              onClick={async () => {
+                const credentialsText = [
+                  `Clínica: ${provisionResult.clinicName}`,
+                  `E-mail: ${provisionResult.adminEmail}`,
+                  provisionResult.passwordWasGenerated
+                    ? `Senha temporária: ${provisionResult.temporaryPassword}`
+                    : 'Senha: a definida no cadastro da clínica',
+                  'Troque a senha no primeiro acesso.',
+                ].join('\n');
+                await navigator.clipboard.writeText(credentialsText);
+                setSuccessMessage('Credenciais copiadas com sucesso.');
+              }}
+            >
+              Copiar credenciais
+            </button>
+          )}
+        >
+          <div className="pc-review-grid">
+            <p><strong>Clínica:</strong> {provisionResult.clinicName}</p>
+            <p><strong>E-mail do responsável:</strong> {provisionResult.adminEmail}</p>
+            <p><strong>Senha:</strong> {provisionResult.passwordWasGenerated ? provisionResult.temporaryPassword : 'A senha definida no cadastro'}</p>
+            <p><strong>Aviso:</strong> Troque a senha no primeiro acesso.</p>
+          </div>
+          {provisionResult.clinicId ? (
+            <div className="pc-inline-actions">
+              <button
+                type="button"
+                className="pc-button"
+                onClick={() => navigate(`/tenants/${provisionResult.clinicId}`)}
+              >
+                Ir para detalhe da clínica
+              </button>
+            </div>
+          ) : null}
+        </Panel>
+      ) : null}
       <Panel>
         <div className="pc-filters">
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por clínica, e-mail, cidade..." />

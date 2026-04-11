@@ -45,6 +45,12 @@ export default defineConfig(({ mode }) => {
     port: 5176,
     strictPort: false,
     open: true,
+    proxy: {
+      '/internal/app': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+    },
     fs: {
       allow: [
         'C:/Users/paaul/.cursor/projects/c-Users-paaul-Desktop-appgestaoodonto-main-appgestaoodonto/assets',
