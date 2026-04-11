@@ -18062,7 +18062,7 @@ textarea:focus {
   border-color: var(--color-primary-dark);
 }
 
-/* Modal Styles */
+/* Modal Styles — variantes “compactas”: não aplicar em .modal-content-large (evita conflito com modais largos, ex.: novo colaborador) */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -18076,7 +18076,7 @@ textarea:focus {
   z-index: 1000;
 }
 
-.modal-content {
+.modal-content:not(.modal-content-large) {
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl);
