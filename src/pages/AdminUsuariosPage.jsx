@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { canManageAccess } from '../services/accessService.js';
 import { listUsersWithAccess, ROLE_LABELS } from '../services/accessService.js';
 import { listUserInvites, createUserInvite } from '../services/userInviteService.js';

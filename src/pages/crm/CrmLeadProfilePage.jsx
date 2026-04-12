@@ -16,7 +16,7 @@ import {
 } from '../../services/crmService.js';
 import { LeadTasksTab } from '../../crm/ui/LeadTasksTab.jsx';
 import { linkAppointmentAndComplete } from '../../services/crmTaskService.js';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { ArrowLeft, MessageCircle, Tag, Calendar, FileText } from 'lucide-react';
 
 const TABS = [

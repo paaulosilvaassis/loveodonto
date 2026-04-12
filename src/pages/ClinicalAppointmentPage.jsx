@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, Component } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import { createId } from '../services/helpers.js';
 import { getAppointmentDetails, APPOINTMENT_STATUS } from '../services/appointmentService.js';
@@ -55,9 +55,6 @@ import { listProcedures, getPriceTableForPatient, getDefaultPriceTable, PROCEDUR
 import { getPatient, PENDING_FIELDS_MAP } from '../services/patientService.js';
 
 function ClinicalAppointmentPageContent() {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:ClinicalAppointmentPageContent',message:'Component render started',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
   const { appointmentId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -72,9 +69,6 @@ function ClinicalAppointmentPageContent() {
   const [sectionToast, setSectionToast] = useState(null);
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:useEffect',message:'useEffect started',data:{appointmentId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     try {
       if (appointmentId) {
         loadAppointmentData();
@@ -83,9 +77,6 @@ function ClinicalAppointmentPageContent() {
         setLoading(false);
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:useEffect catch',message:'Error in useEffect',data:{error:err.message,stack:err.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       console.error('Erro no useEffect:', err);
       setError(err.message || 'Erro ao inicializar página');
       setLoading(false);
@@ -94,22 +85,13 @@ function ClinicalAppointmentPageContent() {
   }, [appointmentId]);
 
   const loadAppointmentData = () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:loadAppointmentData',message:'loadAppointmentData started',data:{appointmentId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     try {
       const db = loadDb();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:loadAppointmentData',message:'DB loaded',data:{hasDb:!!db,hasPatients:!!db?.patients,hasTeam:!!db?.team,hasRooms:!!db?.rooms},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       if (!db) {
         throw new Error('Banco de dados não disponível');
       }
 
       const details = getAppointmentDetails(appointmentId);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:loadAppointmentData',message:'Appointment details fetched',data:{hasDetails:!!details,hasAppointment:!!details?.appointment,status:details?.appointment?.status,patientId:details?.appointment?.patientId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       
       if (!details || !details.appointment) {
         setError('Atendimento não encontrado');
@@ -122,13 +104,7 @@ function ClinicalAppointmentPageContent() {
 
       const apt = details.appointment;
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:loadAppointmentData',message:'Checking appointment status',data:{appointmentStatus:apt.status,expectedStatus:APPOINTMENT_STATUS.EM_ATENDIMENTO,statusMatch:apt.status === APPOINTMENT_STATUS.EM_ATENDIMENTO},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       if (apt.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:loadAppointmentData',message:'Status check failed',data:{appointmentStatus:apt.status,expectedStatus:APPOINTMENT_STATUS.EM_ATENDIMENTO},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
         setError('Atendimento não está em andamento');
         setLoading(false);
         setTimeout(() => {
@@ -141,9 +117,6 @@ function ClinicalAppointmentPageContent() {
       
       // Usar dados já retornados por getAppointmentDetails
       const patientData = details.patient || null;
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:loadAppointmentData',message:'Patient data found',data:{hasPatient:!!patientData,patientId:apt.patientId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       setPatient(patientData);
 
       const professionalData = details.professional || null;
@@ -153,13 +126,7 @@ function ClinicalAppointmentPageContent() {
       setRoom(roomData);
 
       setLoading(false);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:loadAppointmentData',message:'loadAppointmentData completed',data:{hasAppointment:!!apt,hasPatient:!!patientData,hasProfessional:!!professionalData,hasRoom:!!roomData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:loadAppointmentData catch',message:'Error in loadAppointmentData',data:{error:err.message,stack:err.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       console.error('Erro ao carregar dados do atendimento:', err);
       setError(err.message || 'Erro ao carregar dados do atendimento');
       setLoading(false);
@@ -171,9 +138,6 @@ function ClinicalAppointmentPageContent() {
   };
 
   const menuItems = useMemo(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:menuItems',message:'menuItems useMemo executing',data:{hasPatient:!!patient,patientInsurance:patient?.insurance_provider},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     const items = [
       { id: 'desenvolvimento', label: 'Observações do Orçamento', icon: FileText },
       { id: 'procedimentos', label: 'Procedimentos a Realizar', icon: ClipboardList },
@@ -193,9 +157,6 @@ function ClinicalAppointmentPageContent() {
     return items;
   }, [patient]);
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:render check',message:'Render state check',data:{loading,error:!!error,hasAppointment:!!appointment,hasPatient:!!patient},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -311,14 +272,8 @@ function ClinicalAppointmentPageContent() {
     }
   };
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:render',message:'Starting main render',data:{hasAppointment:!!appointment,hasPatient:!!patient,patientId:patient?.id,menuItemsCount:menuItems.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
   
   // Renderização simplificada para debug
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:render return',message:'About to return JSX',data:{hasAppointment:!!appointment,hasPatient:!!patient},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
   
   // Agrupar itens do menu
   const atendimentoItems = menuItems.filter(item => 
@@ -737,13 +692,7 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
           status: item.status || 'pending',
         }));
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:ProcedimentosSection',message:'supabase filter snapshot',data:{appointmentId,budgetsCount:budgets.length,filteredBudgetsCount:filteredBudgets.length,itemsCount:items.length,cutoffDate:cutoffDate.toISOString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-        // #endregion
 
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:ProcedimentosSection',message:'procedures mapped snapshot',data:{mappedProceduresCount:mappedProcedures.length,exampleKeys:mappedProcedures[0] ? Object.keys(mappedProcedures[0]) : []},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        // #endregion
 
         setProcedures(mappedProcedures);
       } catch (error) {
@@ -1352,9 +1301,6 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
       throw new Error('Paciente não identificado para persistir orçamento.');
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:persistBudgetToSupabase',message:'persist start',data:{appointmentId,hasSupabaseId:!!budgetData.supabaseBudgetId,proceduresCount:budgetData?.procedures?.length || 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
 
     const total = (budgetData.procedures || []).reduce((sum, proc) => {
       return sum + (Number(proc.quantity || 1) * Number(proc.unitValue || 0));
@@ -1389,9 +1335,6 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
       .from('budget_items')
       .select('*', { count: 'exact', head: true });
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:persistBudgetToSupabase',message:'persist done',data:{supabaseBudgetId,budgetsCount:budgetsCount?.count || null,budgetItemsCount:budgetItemsCount?.count || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
 
     setBudget((prev) => ({ ...prev, supabaseBudgetId }));
   };
@@ -1455,23 +1398,14 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
   };
 
   const handleGeneratePDF = () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'handleGeneratePDF iniciado',data:{hasBudget:!!budget,hasPatient:!!patient,hasUser:!!user,appointmentId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     
     if (!budget || !patient) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'Dados não disponíveis',data:{hasBudget:!!budget,hasPatient:!!patient},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       setToast({ message: 'Dados do orçamento ou paciente não disponíveis', type: 'error' });
       setTimeout(() => setToast(null), 3000);
       return;
     }
 
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'Iniciando geração de PDF',data:{budgetProceduresCount:budget.procedures?.length || 0,patientName:patient.full_name || patient.nickname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       // Salvar o orçamento antes de gerar PDF
       saveBudget(user, appointmentId, budget);
       persistBudgetToSupabase(budget).catch((error) => {
@@ -2059,9 +1993,6 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
       saveBudget(user, appointmentId, nextBudget);
       setBudget(nextBudget);
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'HTML criado, tentando abrir janela',data:{htmlLength:htmlContent.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
 
       // Tentar abrir em nova janela para impressão
       let printWindow = null;
@@ -2074,36 +2005,21 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
           setTimeout(() => {
             try {
               printWindow.print();
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'print() chamado com sucesso',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-              // #endregion
             } catch (printError) {
-              // #region agent log
-              fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'Erro ao chamar print()',data:{errorMessage:printError.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-              // #endregion
               console.warn('Erro ao chamar print():', printError);
               // Se print() falhar, pelo menos o HTML foi baixado
             }
           }, 500);
         } else {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'Popup bloqueado',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-          // #endregion
           // Se popup foi bloqueado, apenas mostrar mensagem
           setToast({ message: 'Popup bloqueado. O arquivo HTML foi baixado. Abra-o e use Ctrl+P para imprimir como PDF.', type: 'success' });
           setTimeout(() => setToast(null), 7000);
         }
       } catch (windowError) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'Erro ao abrir janela',data:{errorMessage:windowError.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-        // #endregion
         console.warn('Erro ao abrir janela de impressão:', windowError);
         // Mesmo se a janela falhar, o download do HTML já foi feito
       }
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'PDF gerado com sucesso',data:{hasPrintWindow:!!printWindow},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
       
       setToast({ message: 'PDF gerado com sucesso! Use Ctrl+P para salvar como PDF.', type: 'success' });
       setTimeout(() => setToast(null), 5000);
@@ -2117,9 +2033,6 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
         origin: documentEntry.origin,
       }, user.id);
     } catch (error) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:handleGeneratePDF',message:'Erro ao gerar PDF',data:{errorMessage:error.message,errorStack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       console.error('Erro ao gerar PDF:', error);
       setToast({ message: `Erro ao gerar PDF: ${error.message}`, type: 'error' });
       setTimeout(() => setToast(null), 5000);
@@ -3238,16 +3151,10 @@ class ClinicalAppointmentErrorBoundary extends Component {
   }
 
   static getDerivedStateFromError(error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:getDerivedStateFromError',message:'Error Boundary caught error',data:{error:error.message,stack:error.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     return { hasError: true, error };
   }
 
   componentDidCatch(error, errorInfo) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:componentDidCatch',message:'Error Boundary componentDidCatch',data:{error:error.message,stack:error.stack,errorInfo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     console.error('Erro capturado pelo Error Boundary:', error, errorInfo);
   }
 
@@ -3275,9 +3182,6 @@ class ClinicalAppointmentErrorBoundary extends Component {
 
 // Export direto - renderização normal sem portal
 export default function ClinicalAppointmentPage() {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ClinicalAppointmentPage.jsx:export default',message:'Wrapper component started',data:{pathname:window.location.pathname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
   
   return <ClinicalAppointmentPageContent />;
 }

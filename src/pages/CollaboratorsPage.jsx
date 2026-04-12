@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useMatch, useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { Link, useMatch, useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/useAuth.js';
 import { Field } from '../components/Field.jsx';
 import { Section } from '../components/Section.jsx';
 import { Tabs } from '../components/Tabs.jsx';
@@ -339,12 +339,6 @@ export default function CollaboratorsPage() {
       return acc;
     }, {});
   }, [db.collaboratorPhones]);
-
-  const openCreateCollaborator = () => {
-    setError('');
-    setSuccess('');
-    navigate('/admin/colaboradores/novo');
-  };
 
   const closeCreateCollaborator = () => {
     navigate('/admin/colaboradores', { replace: true });
@@ -1369,9 +1363,27 @@ export default function CollaboratorsPage() {
             <button className="button secondary" type="button" onClick={refreshCollaboratorsListOnly}>
               Atualizar
             </button>
-            <button className="button primary" type="button" onClick={openCreateCollaborator} disabled={!isEditor}>
-              Novo Colaborador
-            </button>
+            {isEditor ? (
+              <Link
+                className="button primary"
+                to="/admin/colaboradores/novo"
+                onClick={() => {
+                  setError('');
+                  setSuccess('');
+                }}
+              >
+                Novo Colaborador
+              </Link>
+            ) : (
+              <button
+                className="button primary"
+                type="button"
+                disabled
+                title="Sem permissão para cadastrar colaboradores."
+              >
+                Novo Colaborador
+              </button>
+            )}
           </div>
           <div className="card collaborator-directory">
             <div

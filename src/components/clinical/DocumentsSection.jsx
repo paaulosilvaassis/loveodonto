@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { FileText, Search, Save, Download, Send, Edit2, X, FileCheck, ClipboardList, Stethoscope, Pill } from 'lucide-react';
 import { SectionCard } from '../SectionCard.jsx';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { loadDb } from '../../db/index.js';
 import {
   createDocumentRecord,

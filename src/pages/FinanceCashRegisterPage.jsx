@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { Section } from '../components/Section.jsx';
 import { getCashSummaryForDate, getTodayCashRegister, openCashRegister } from '../services/cashRegisterService.js';
 

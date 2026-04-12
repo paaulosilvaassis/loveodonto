@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import {
   APPOINTMENT_STATUS,
@@ -76,9 +76,6 @@ export default function PatientJourneyPage() {
   }, []);
 
   const refreshData = useCallback(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PatientJourneyPage.jsx:refreshData',message:'refreshData called',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
     const journeyEntries = listJourneyEntriesByDate(selectedDate);
     setAppointments(journeyEntries);
     setRooms(listRooms());
@@ -221,30 +218,18 @@ export default function PatientJourneyPage() {
   const formattedSelectedDate = selectedDate ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
 
   const handleCallPatient = async (appointmentId) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PatientJourneyPage.jsx:handleCallPatient',message:'handleCallPatient CALLED',data:{appointmentId,appointmentsLength:appointments.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     
     const appointment = appointments.find((a) => a.id === appointmentId);
     if (!appointment) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PatientJourneyPage.jsx:handleCallPatient',message:'handleCallPatient - appointment not found',data:{appointmentId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       return;
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PatientJourneyPage.jsx:handleCallPatient',message:'Before callPatient',data:{appointmentId,currentStatus:appointment.status,consultorioId:appointment.consultorioId,roomId:appointment.roomId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
 
     // Se já tem consultório definido, chamar direto
     if (appointment.consultorioId || appointment.roomId) {
       try {
         const result = callPatient(user, appointmentId, appointment.consultorioId || appointment.roomId);
         
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PatientJourneyPage.jsx:handleCallPatient',message:'After callPatient - result',data:{appointmentId,resultStatus:result?.status,resultCalledAt:result?.calledAt},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
         
         // Verificar se o resultado tem o status correto
         if (result && result.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO) {
@@ -275,9 +260,6 @@ export default function PatientJourneyPage() {
     try {
       const result = callPatient(user, callRoomModal.appointmentId, roomId);
       
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PatientJourneyPage.jsx:handleCallWithRoom',message:'After callPatient - result',data:{appointmentId:callRoomModal.appointmentId,roomId,resultStatus:result?.status,resultCalledAt:result?.calledAt},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       
       // Verificar se o resultado tem o status correto
       if (result && result.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO) {

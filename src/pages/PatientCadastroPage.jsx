@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { canManageAccess } from '../services/accessService.js';
 import { Section } from '../components/Section.jsx';
 import { SectionCard } from '../components/SectionCard.jsx';
@@ -283,9 +283,6 @@ export default function PatientCadastroPage() {
   const professionalId = searchParams.get('professionalId') || '';
 
   const handleAvatarDebugClick = (source) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:260',message:'avatar click',data:{source,patientId:patientId || null,editMode,hasPhotoUrl:!!draft.profile.photo_url,hasFileInput:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
   };
 
   const ageDisplay = useMemo(() => calculateAge(draft.profile.birth_date), [draft.profile.birth_date]);
@@ -333,9 +330,6 @@ export default function PatientCadastroPage() {
   });
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:298',message:'cadastro mount',data:{mode:patientId ? 'EDIT' : 'CREATE',patientId:patientId || null,pathname:location.pathname,search:location.search},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
     if (!patientId) {
       const next = emptyDraft();
       // Pré-preencher nome se vier da agenda
@@ -349,21 +343,12 @@ export default function PatientCadastroPage() {
       setPendingData({ hasPendingData: false, pendingFields: [], pendingCriticalFields: [] });
       setShowPendingHighlight(false);
       setShowPendingModal(false);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:305',message:'cadastro create init',data:{patientId:null,clearedStatus:true,prefillName,returnToAgenda},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H2'})}).catch(()=>{});
-      // #endregion
       return;
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:311',message:'cadastro edit load',data:{patientId},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
     const patient = getPatient(patientId);
     if (!patient) {
       setStatus({ error: 'Paciente não encontrado.', success: '' });
       setEditMode(false);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:318',message:'cadastro edit not found',data:{patientId},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3'})}).catch(()=>{});
-      // #endregion
       return;
     }
     const record = getPatientRecord(patientId);
@@ -382,9 +367,6 @@ export default function PatientCadastroPage() {
     if (highlightPending && patient.profile?.hasPendingData) {
       setShowPendingModal(true);
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:327',message:'cadastro edit loaded',data:{patientId,hasProfile:Boolean(patient?.profile?.id)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
   }, [patientId]);
 
   const updateDraft = (section, field, value) => {
@@ -399,9 +381,6 @@ export default function PatientCadastroPage() {
 
   const handlePhotoUpload = (event) => {
     const file = event.target.files?.[0];
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:358',message:'cadastro photo input change',data:{hasFile:!!file,type:file?.type || null,size:file?.size || null,patientId:patientId || null,editMode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     if (!file) {
       setPhotoPreview(null);
       return;
@@ -429,16 +408,10 @@ export default function PatientCadastroPage() {
       setPhotoPreview(dataUrl);
       updateDraft('profile', 'photo_url', dataUrl);
       setStatus({ error: '', success: '' });
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:384',message:'cadastro photo reader load',data:{patientId:patientId || null,hasPreview:!!dataUrl,previewLength:typeof dataUrl === 'string' ? dataUrl.length : 0,editMode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-      // #endregion
 
       if (patientId) {
         try {
           setPhotoUploading(true);
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:392',message:'cadastro photo upload start',data:{patientId,editMode,hasPreview:!!dataUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-          // #endregion
           uploadPatientPhoto(user, patientId, { type: file.type, size: file.size, dataUrl });
           setStatus({ error: '', success: 'Foto atualizada com sucesso.' });
         } catch (err) {
@@ -452,9 +425,6 @@ export default function PatientCadastroPage() {
       setStatus({ error: 'Erro ao ler o arquivo. Tente novamente.', success: '' });
       setPhotoPreview(null);
       if (photoInputRef.current) photoInputRef.current.value = '';
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:409',message:'cadastro photo reader error',data:{patientId:patientId || null,editMode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
     };
     reader.readAsDataURL(file);
   };
@@ -512,12 +482,6 @@ export default function PatientCadastroPage() {
   const handleSave = async () => {
     try {
       setStatus({ error: '', success: '' });
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:365',message:'cadastro save start',data:{mode:patientId ? 'EDIT' : 'CREATE',patientId:patientId || null},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:369',message:'cadastro save with photo',data:{patientId:patientId || null,hasPhotoUrl:!!draft.profile.photo_url,photoUrlLength:typeof draft.profile.photo_url === 'string' ? draft.profile.photo_url.length : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
-      // #endregion
       if (!user) {
         setStatus({ error: 'Usuário não autenticado.', success: '' });
         return;
@@ -534,17 +498,11 @@ export default function PatientCadastroPage() {
         setStatus({ error: 'Preencha os campos obrigatórios: Nome, Sexo, Data de nascimento e CPF.', success: '' });
         return;
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:379',message:'cadastro save payload summary',data:{nameLen:(payloadProfile.full_name || '').length,cpfLen:(payloadProfile.cpf || '').length,sexLen:(payloadProfile.sex || '').length,birthLen:(payloadProfile.birth_date || '').length},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
 
       const existingPatient = patientId ? getPatient(patientId) : null;
       let createdFromScratch = !patientId || !existingPatient;
       let nextPatientId = patientId;
       if (createdFromScratch) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:493',message:'cadastro create with photo',data:{hasPhotoUrl:!!draft.profile.photo_url,photoUrlLength:typeof draft.profile.photo_url === 'string' ? draft.profile.photo_url.length : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
-        // #endregion
         const created = createPatientQuick(user, {
           full_name: payloadProfile.full_name,
           sex: payloadProfile.sex,
@@ -554,9 +512,6 @@ export default function PatientCadastroPage() {
           social_name: payloadProfile.social_name,
         });
         nextPatientId = created.patientId || created.id;
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:504',message:'cadastro create result',data:{nextPatientId:nextPatientId || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
-        // #endregion
         // Garantir que o paciente foi persistido antes de continuar
         const verifyPatient = getPatient(nextPatientId);
         if (!verifyPatient) {
@@ -570,21 +525,12 @@ export default function PatientCadastroPage() {
           throw new Error('Erro ao atualizar paciente. Tente novamente.');
         }
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:409',message:'cadastro save resolved id',data:{nextPatientId,createdFromScratch,mode:patientId ? 'EDIT' : 'CREATE'},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:411',message:'cadastro save before core updates',data:{nextPatientId,hasDraftDocs:!!draft.documents,hasDraftBirth:!!draft.birth,hasDraftEducation:!!draft.education},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
 
       const runStep = async (step, fn) => {
         try {
           return await fn();
         } catch (error) {
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:419',message:'cadastro save step error',data:{step,nextPatientId,message:String(error?.message || error)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-          // #endregion
           throw error;
         }
       };
@@ -636,9 +582,6 @@ export default function PatientCadastroPage() {
         patient_type: draft.record.patient_type,
       }));
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:456',message:'cadastro save before phones',data:{hasPhonesRefs:!!draft.phones?.refs},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
 
       if (draft.phones?.refs) {
         await runStep('upsertPhone:primary', () => upsertPhone(nextPatientId, draft.phones.refs.primary, draft.phones.primary, {
@@ -658,9 +601,6 @@ export default function PatientCadastroPage() {
         }));
       }
 
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:474',message:'cadastro save before address/insurance',data:{hasAddress:hasAddressContent(draft.address),hasInsurance:[draft.insurance?.insurance_name,draft.insurance?.membership_number,draft.insurance?.validity,draft.insurance?.company_partner].some((value)=>Boolean((value||'').trim()))},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
 
       if (hasAddressContent(draft.address)) {
         if (draft.address.id) {
@@ -721,9 +661,6 @@ export default function PatientCadastroPage() {
         success: createdFromScratch ? 'Cadastro criado com sucesso.' : 'Cadastro atualizado com sucesso.',
       });
       if (createdFromScratch) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:506',message:'cadastro save navigate',data:{nextPatientId,createdFromScratch,returnToAgenda,slotDate,startTime,professionalId},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H5'})}).catch(()=>{});
-        // #endregion
         
         // Se veio da agenda, voltar para agenda e reabrir o fluxo
         if (returnToAgenda && slotDate && startTime) {
@@ -740,9 +677,6 @@ export default function PatientCadastroPage() {
       }
     } catch (error) {
       setStatus({ error: error?.message || 'Falha ao salvar cadastro.', success: '' });
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientCadastroPage.jsx:514',message:'cadastro save error',data:{patientId:patientId || null,message:String(error?.message || error)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-      // #endregion
     }
   };
 

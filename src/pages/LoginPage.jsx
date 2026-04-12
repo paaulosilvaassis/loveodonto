@@ -1,17 +1,29 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
-import { consumeLogoutReason, useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
+import { consumeLogoutReason } from '../auth/logoutReason.js';
 import { authenticateByEmailPassword } from '../services/userAuthService.js';
 import { isSaasModeEnabled, signInSaasWithPassword } from '../services/saasAuthService.js';
 import { seedAdminCredentialsIfEmpty, forceSeedAdminCredentials } from '../db/index.js';
 import Button from '../components/Button.jsx';
 import appLogo from '../assets/love-odonto-logo.png';
 
+function isAbortLikeError(error) {
+  if (String(error?.name || '') === 'AbortError') return true;
+  return String(error?.message || '').toLowerCase().includes('abort');
+}
+
 function formatLoginErrorMessage(error) {
+  if (String(error?.name || '') === 'AbortError') {
+    return 'A conexão foi interrompida ao validar o acesso. Tente entrar novamente.';
+  }
   const raw = String(error?.message || error || '').trim();
   const lower = raw.toLowerCase();
   if (!raw) return 'Erro ao fazer login.';
+  if (lower.includes('abort')) {
+    return 'A conexão foi interrompida ao validar o acesso. Tente entrar novamente.';
+  }
   if (
     lower.includes('failed to fetch')
     || lower.includes('networkerror')
@@ -72,9 +84,6 @@ export default function LoginPage() {
     if (import.meta.env?.DEV) {
       console.log('[LoginPage] Componente renderizado');
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run3',hypothesisId:'H13',location:'src/pages/LoginPage.jsx:useEffect[mount]',message:'Login page mounted',data:{saasEnabled:Boolean(saasEnabled)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   }, []);
 
   // Não redireciona automaticamente quando usuário está logado - permite ver a página de login
@@ -101,24 +110,25 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run2',hypothesisId:'H9',location:'src/pages/LoginPage.jsx:handleSubmit:start',message:'Login submit started',data:{saasEnabled:Boolean(saasEnabled),hasEmail:Boolean(emailTrim),hasPassword:Boolean(password)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     try {
       if (saasEnabled) {
-        const result = await signInSaasWithPassword(emailTrim, password);
-        // #region agent log
-        fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run2',hypothesisId:'H9',location:'src/pages/LoginPage.jsx:handleSubmit:saasSuccess',message:'SaaS sign-in returned',data:{hasAuthUserId:Boolean(result?.authUserId),hasTenantId:Boolean(result?.tenantId)},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        await login({ userId: result.authUserId, tenantId: result.tenantId });
-        navigate('/gestao/dashboard');
-        return;
+        let lastErr;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const result = await signInSaasWithPassword(emailTrim, password);
+            await login({ userId: result.authUserId, tenantId: result.tenantId });
+            navigate('/gestao/dashboard');
+            return;
+          } catch (err) {
+            lastErr = err;
+            if (attempt === 0 && isAbortLikeError(err)) continue;
+            throw err;
+          }
+        }
+        throw lastErr;
       }
 
       const result = await authenticateByEmailPassword(emailTrim, password);
-      // #region agent log
-      fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run2',hypothesisId:'H10',location:'src/pages/LoginPage.jsx:handleSubmit:legacyResult',message:'Legacy auth result',data:{hasResult:Boolean(result),tenantId:String(result?.tenantId||'')},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (result) {
         await login({ userId: result.userId, tenantId: result.tenantId });
         navigate('/dashboard');
@@ -126,9 +136,6 @@ export default function LoginPage() {
         setError('E-mail ou senha inválidos.');
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run2',hypothesisId:'H11',location:'src/pages/LoginPage.jsx:handleSubmit:catch',message:'Login submit exception',data:{message:String(err?.message||''),name:String(err?.name||'')},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setError(formatLoginErrorMessage(err));
     } finally {
       setLoading(false);

@@ -272,9 +272,6 @@ export const CalendarHeader = ({
               type="button"
               className={`agenda-view-toggle-button ${view === item.value ? 'active' : ''}`}
               onClick={() => {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarHeader.jsx:274',message:'View button clicked',data:{currentView:view,newView:item.value,willChangeToTimeline:item.value === 'timeline'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-                // #endregion
                 onViewChange(item.value);
               }}
             >

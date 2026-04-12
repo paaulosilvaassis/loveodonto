@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTenant } from '../tenant/useTenant.js';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 
 function resolveMessage(status) {
   if (status === 'blocked') {

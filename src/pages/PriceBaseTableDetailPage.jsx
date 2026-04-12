@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { usePriceBaseBasePath } from '../hooks/usePriceBaseBasePath.js';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { SectionCard } from '../components/SectionCard.jsx';
 import PriceBaseImportWizard from '../components/PriceBaseImportWizard.jsx';
 import {

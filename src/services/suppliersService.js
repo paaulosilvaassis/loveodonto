@@ -60,9 +60,6 @@ export const createSupplier = (user, payload) => {
     throw new Error('Status é obrigatório.');
   }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf53c2'},body:JSON.stringify({sessionId:'bf53c2',location:'suppliersService.js:createSupplier',message:'createSupplier called',data:{hasTrade:!!trade_name,hasLegal:!!legal_name,category,phone,status,document},timestamp:Date.now(),runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
 
   const normalizedDoc = normalizeDocument(document);
   if (normalizedDoc) {
@@ -70,9 +67,6 @@ export const createSupplier = (user, payload) => {
       (s) => normalizeDocument(s.document) === normalizedDoc
     );
     if (existing) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf53c2'},body:JSON.stringify({sessionId:'bf53c2',location:'suppliersService.js:createSupplier',message:'duplicate document detected',data:{document,existingId:existing.id},timestamp:Date.now(),runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       throw new Error('Já existe fornecedor cadastrado com este CPF/CNPJ.');
     }
   }
@@ -125,9 +119,6 @@ export const createSupplier = (user, payload) => {
 
   logAction('suppliers:create', { supplierId: id, userId: user?.id || null });
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'bf53c2'},body:JSON.stringify({sessionId:'bf53c2',location:'suppliersService.js:createSupplier',message:'supplier created',data:{id,category,status},timestamp:Date.now(),runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-  // #endregion
 
   return supplier;
 };

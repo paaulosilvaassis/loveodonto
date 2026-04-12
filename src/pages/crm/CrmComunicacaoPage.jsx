@@ -8,7 +8,7 @@ import {
   logMessage,
   LEAD_SOURCE_LABELS,
 } from '../../services/crmService.js';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { MessageCircle, Send, Search, ExternalLink } from 'lucide-react';
 
 /** Templates com texto padrão para preencher a mensagem. */

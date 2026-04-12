@@ -38,9 +38,6 @@ export const CreateAppointmentPanel = ({
   onSubmit,
   error,
 }) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/components/agenda/CreateAppointmentPanel.jsx:41',message:'render',data:{open,mode,hasUser:Boolean(user),patientId:appointment?.patientId || ''},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-  // #endregion
   const [draft, setDraft] = useState(buildDraft(appointment));
   const [patientQuery, setPatientQuery] = useState('');
   const navigate = useNavigate();
@@ -112,9 +109,6 @@ export const CreateAppointmentPanel = ({
     !suggestLoading && patientSuggestions.length === 0 && normalizedQuery.length >= suggestMinChars(searchType);
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/components/agenda/CreateAppointmentPanel.jsx:101',message:'suggest effect',data:{query:debouncedQuery,type:detectSearchType(debouncedQuery)},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H5'})}).catch(()=>{});
-    // #endregion
     const type = detectSearchType(debouncedQuery);
     const normalized = normalizeSuggestQuery(debouncedQuery, type);
     const minChars = suggestMinChars(type);

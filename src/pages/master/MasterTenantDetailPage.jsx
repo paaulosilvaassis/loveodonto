@@ -8,7 +8,7 @@ import { getSubscriptionByTenant } from '../../services/subscriptionService.js';
 import { listInvoices } from '../../services/invoiceService.js';
 import { getUsageByTenant } from '../../services/usageService.js';
 import { updateTenantFromMaster } from '../../services/tenantService.js';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { MEMBERSHIP_ROLE_LABELS } from '../../constants/tenantRoles.js';
 
 const tabItems = [

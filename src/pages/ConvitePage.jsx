@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { Section } from '../components/Section.jsx';
 import { Field } from '../components/Field.jsx';
 import Button from '../components/Button.jsx';

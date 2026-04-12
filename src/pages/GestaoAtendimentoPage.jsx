@@ -14,7 +14,7 @@ import {
 import { updateAppointmentStatus } from '../services/patientFlowService.js';
 import { markNoShow } from '../services/journeyEntryService.js';
 import { APPOINTMENT_STATUS } from '../services/appointmentService.js';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import {
   Users,
   UserCheck,

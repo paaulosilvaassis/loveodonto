@@ -36,9 +36,6 @@ const withDbResult = (mutator) => {
 };
 
 const ensurePatient = (db, patientId) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:37',message:'ensure patient',data:{patientId,patientsCount:db.patients.length},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H8'})}).catch(()=>{});
-  // #endregion
   const patient = db.patients.find((item) => item.id === patientId);
   if (!patient) throw new Error(`Paciente não encontrado (id: ${patientId || 'vazio'})`);
   return patient;
@@ -177,17 +174,8 @@ export const suggestPatients = (type, query, limit = 10) => {
 
 export const getPatient = (patientId) => {
   const db = loadDb();
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:156',message:'patient get entry',data:{patientId,hasPatients:Array.isArray(db.patients),hasPatientDocuments:Array.isArray(db.patientDocuments),hasPatientBirth:Array.isArray(db.patientBirth),hasPatientEducation:Array.isArray(db.patientEducation),hasPatientPhones:Array.isArray(db.patientPhones),hasPatientAddresses:Array.isArray(db.patientAddresses),hasPatientRelationships:Array.isArray(db.patientRelationships),hasPatientInsurances:Array.isArray(db.patientInsurances),hasPatientAccess:Array.isArray(db.patientAccess),hasPatientActivitySummary:Array.isArray(db.patientActivitySummary)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H10'})}).catch(()=>{});
-  // #endregion
   const profile = db.patients.find((item) => item.id === patientId);
   if (!profile) return null;
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:165',message:'patient get profile photo',data:{patientId,hasPhotoUrl:typeof profile.photo_url === 'string' && profile.photo_url.length > 0,photoUrlLength:typeof profile.photo_url === 'string' ? profile.photo_url.length : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H7'})}).catch(()=>{});
-  // #endregion
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:163',message:'patient get before filter',data:{patientId,hasPatientDocuments:Array.isArray(db.patientDocuments),hasPatientPhones:Array.isArray(db.patientPhones),hasPatientAddresses:Array.isArray(db.patientAddresses),hasPatientInsurances:Array.isArray(db.patientInsurances)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H10'})}).catch(()=>{});
-  // #endregion
   return {
     profile,
     documents: (Array.isArray(db.patientDocuments) ? db.patientDocuments.find((item) => item.patient_id === patientId) : null) || {},
@@ -206,9 +194,6 @@ export const getPatient = (patientId) => {
 export const createPatientQuick = (user, payload) => {
   requirePermission(user, 'patients:write');
   const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:186',message:'createPatientQuick entry',data:{hasPhotoUrl:typeof payload?.photo_url === 'string' && payload.photo_url.length > 0,photoUrlLength:typeof payload?.photo_url === 'string' ? payload.photo_url.length : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
-  // #endregion
   const patient = {
     id: createId('patient'),
     guid: crypto.randomUUID(),
@@ -239,9 +224,6 @@ export const createPatientQuick = (user, payload) => {
   if (!isCpfValid(patient.cpf)) throw new Error('CPF inválido.');
 
   return withDbResult((db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:203',message:'patient create start',data:{createdId:patient.id,beforeCount:db.patients.length},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
     ensureCpfUnique(db, patient.cpf);
     db.patients.push(patient);
     const documents = {
@@ -283,9 +265,6 @@ export const createPatientQuick = (user, payload) => {
     };
     db.patientActivitySummary.push(activity);
     logAction('patients:create-quick', { patientId: patient.id, userId: user.id });
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:244',message:'patient create done',data:{createdId:patient.id,afterCount:db.patients.length},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
     return {
       patientId: patient.id,
       profile: patient,
@@ -408,9 +387,6 @@ export function computePendingFields(db, patientId) {
  * Cria paciente a partir de importação (permite dados incompletos, marca pendências).
  */
 export const createPatientFromImport = (user, payload, pendingFields = []) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'53053a'},body:JSON.stringify({sessionId:'53053a',location:'patientService.js:createPatientFromImport',message:'entry',data:{user:!!user,payloadName:payload?.full_name?.slice(0,30)},timestamp:Date.now(),runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-  // #endregion
   requirePermission(user, 'patients:write');
   const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
   const fullName = normalizeText(payload.full_name) || 'Paciente Importado';
@@ -747,14 +723,8 @@ export const createPatientFromLead = (user, lead) => {
 
 export const updatePatientProfile = (user, patientId, payload) => {
   requirePermission(user, 'patients:write');
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:257',message:'updatePatientProfile entry',data:{patientId,hasPhotoUrl:typeof payload?.photo_url === 'string' && payload.photo_url.length > 0,photoUrlLength:typeof payload?.photo_url === 'string' ? payload.photo_url.length : 0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
-  // #endregion
   return withDbResult((db) => {
     const existing = db.patients.find((item) => item.id === patientId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:260',message:'patient update',data:{patientId,existingFound:Boolean(existing),patientsCount:db.patients.length},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
     const basePatient = existing || {
       id: patientId,
       guid: crypto.randomUUID(),
@@ -829,13 +799,7 @@ export const updatePatientPendingData = (user, patientId, hasPendingData, pendin
 
 export const uploadPatientPhoto = (user, patientId, file) => {
   requirePermission(user, 'patients:write');
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:325',message:'uploadPatientPhoto entry',data:{patientId,type:file?.type || null,size:file?.size || null,hasDataUrl:!!file?.dataUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
   const validation = validateFileMeta(file, ['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:327',message:'uploadPatientPhoto validation',data:{patientId,ok:validation.ok,message:validation.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
   if (!validation.ok) throw new Error(validation.message);
   return updatePatientProfile(user, patientId, { photo_url: file.dataUrl });
 };
@@ -844,14 +808,8 @@ export const updatePatientDocuments = (user, patientId, payload) => {
   requirePermission(user, 'patients:write');
   if (payload.cpf && !isCpfValid(payload.cpf)) throw new Error('CPF inválido.');
   return withDbResult((db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:327',message:'updatePatientDocuments entry',data:{patientId,hasPatientDocuments:Array.isArray(db.patientDocuments),patientDocumentsType:typeof db.patientDocuments,patientDocumentsLength:Array.isArray(db.patientDocuments) ? db.patientDocuments.length : 'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
     ensurePatient(db, patientId);
     if (payload.cpf) ensureCpfUnique(db, payload.cpf, patientId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:333',message:'updatePatientDocuments before filter',data:{patientId,hasPatientDocuments:Array.isArray(db.patientDocuments),patientDocumentsValue:db.patientDocuments ? 'exists' : 'undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
     if (!Array.isArray(db.patientDocuments)) {
       db.patientDocuments = [];
     }
@@ -886,13 +844,7 @@ export const updatePatientDocuments = (user, patientId, payload) => {
 export const updatePatientBirth = (user, patientId, payload) => {
   requirePermission(user, 'patients:write');
   return withDbResult((db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:359',message:'updatePatientBirth entry',data:{patientId,hasPatientBirth:Array.isArray(db.patientBirth),patientBirthType:typeof db.patientBirth,patientBirthLength:Array.isArray(db.patientBirth) ? db.patientBirth.length : 'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     const patient = ensurePatient(db, patientId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:363',message:'updatePatientBirth before filter',data:{patientId,hasPatientBirth:Array.isArray(db.patientBirth),patientBirthValue:db.patientBirth ? 'exists' : 'undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     if (!Array.isArray(db.patientBirth)) {
       db.patientBirth = [];
     }
@@ -918,13 +870,7 @@ export const updatePatientBirth = (user, patientId, payload) => {
 export const updatePatientEducation = (user, patientId, payload) => {
   requirePermission(user, 'patients:write');
   return withDbResult((db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:381',message:'updatePatientEducation entry',data:{patientId,hasPatientEducation:Array.isArray(db.patientEducation),patientEducationType:typeof db.patientEducation,patientEducationLength:Array.isArray(db.patientEducation) ? db.patientEducation.length : 'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
     ensurePatient(db, patientId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:385',message:'updatePatientEducation before filter',data:{patientId,hasPatientEducation:Array.isArray(db.patientEducation),patientEducationValue:db.patientEducation ? 'exists' : 'undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
     if (!Array.isArray(db.patientEducation)) {
       db.patientEducation = [];
     }
@@ -958,13 +904,7 @@ export const addPatientPhone = (user, patientId, payload) => {
     e164: buildE164(digits, payload.country_code || '55'),
   };
   return withDbResult((db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:444',message:'addPatientPhone entry',data:{patientId,hasPatientPhones:Array.isArray(db.patientPhones),patientPhonesType:typeof db.patientPhones,patientPhonesLength:Array.isArray(db.patientPhones) ? db.patientPhones.length : 'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
     ensurePatient(db, patientId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:448',message:'addPatientPhone before forEach',data:{patientId,hasPatientPhones:Array.isArray(db.patientPhones),patientPhonesValue:db.patientPhones ? 'exists' : 'undefined',isPrimary:phone.is_primary},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-    // #endregion
     if (!Array.isArray(db.patientPhones)) {
       db.patientPhones = [];
     }
@@ -982,9 +922,6 @@ export const addPatientPhone = (user, patientId, payload) => {
 export const updatePatientPhone = (user, phoneId, payload) => {
   requirePermission(user, 'patients:write');
   return withDbResult((db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:427',message:'updatePatientPhone entry',data:{phoneId,hasPatientPhones:Array.isArray(db.patientPhones),patientPhonesType:typeof db.patientPhones,patientPhonesLength:Array.isArray(db.patientPhones) ? db.patientPhones.length : 'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H5'})}).catch(()=>{});
-    // #endregion
     if (!Array.isArray(db.patientPhones)) {
       db.patientPhones = [];
     }
@@ -1044,13 +981,7 @@ export const addPatientAddress = (user, patientId, payload) => {
     is_primary: Boolean(payload.is_primary),
   };
   return withDbResult((db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:521',message:'addPatientAddress entry',data:{patientId,hasPatientAddresses:Array.isArray(db.patientAddresses),patientAddressesType:typeof db.patientAddresses,patientAddressesLength:Array.isArray(db.patientAddresses) ? db.patientAddresses.length : 'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H8'})}).catch(()=>{});
-    // #endregion
     ensurePatient(db, patientId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:525',message:'addPatientAddress before forEach',data:{patientId,hasPatientAddresses:Array.isArray(db.patientAddresses),patientAddressesValue:db.patientAddresses ? 'exists' : 'undefined',isPrimary:address.is_primary},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H8'})}).catch(()=>{});
-    // #endregion
     if (!Array.isArray(db.patientAddresses)) {
       db.patientAddresses = [];
     }
@@ -1091,13 +1022,7 @@ export const updatePatientRelationships = (user, patientId, payload) => {
     lgpd_whatsapp_opt_in: Boolean(payload.lgpd_whatsapp_opt_in),
   };
   return withDbResult((db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:558',message:'updatePatientRelationships entry',data:{patientId,hasPatientRelationships:Array.isArray(db.patientRelationships),patientRelationshipsType:typeof db.patientRelationships,patientRelationshipsLength:Array.isArray(db.patientRelationships) ? db.patientRelationships.length : 'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
-    // #endregion
     ensurePatient(db, patientId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:562',message:'updatePatientRelationships before filter',data:{patientId,hasPatientRelationships:Array.isArray(db.patientRelationships),patientRelationshipsValue:db.patientRelationships ? 'exists' : 'undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
-    // #endregion
     if (!Array.isArray(db.patientRelationships)) {
       db.patientRelationships = [];
     }
@@ -1151,13 +1076,7 @@ export const updatePatientAccess = (user, patientId, payload) => {
     access_phone: normalizeText(payload.access_phone),
   };
   return withDbResult((db) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:608',message:'updatePatientAccess entry',data:{patientId,hasPatientAccess:Array.isArray(db.patientAccess),patientAccessType:typeof db.patientAccess,patientAccessLength:Array.isArray(db.patientAccess) ? db.patientAccess.length : 'N/A'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H7'})}).catch(()=>{});
-    // #endregion
     ensurePatient(db, patientId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/services/patientService.js:612',message:'updatePatientAccess before filter',data:{patientId,hasPatientAccess:Array.isArray(db.patientAccess),patientAccessValue:db.patientAccess ? 'exists' : 'undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H7'})}).catch(()=>{});
-    // #endregion
     if (!Array.isArray(db.patientAccess)) {
       db.patientAccess = [];
     }

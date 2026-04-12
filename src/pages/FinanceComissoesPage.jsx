@@ -20,7 +20,7 @@ import {
   YAxis,
   CartesianGrid,
 } from 'recharts';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import { formatCurrencyBRL } from '../utils/currency.js';
 import {

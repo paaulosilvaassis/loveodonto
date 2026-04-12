@@ -62,6 +62,7 @@ function getTenantContextRequestUrl() {
 }
 
 function isLikelyNetworkFetchFailure(error) {
+  if (String(error?.name || '') === 'AbortError') return true;
   const lower = String(error?.message || '').toLowerCase();
   return (
     lower.includes('failed to fetch')
@@ -69,6 +70,7 @@ function isLikelyNetworkFetchFailure(error) {
     || lower.includes('fetch failed')
     || lower.includes('network request failed')
     || lower.includes('load failed')
+    || lower.includes('abort')
   );
 }
 
@@ -126,7 +128,15 @@ async function fetchTenantContextViaAdminApiAttempt() {
       throw error;
     }
   }
-  const json = await response.json().catch(() => ({}));
+  let json;
+  try {
+    json = await response.json();
+  } catch (parseErr) {
+    if (String(parseErr?.name || '') === 'AbortError' || String(parseErr?.message || '').toLowerCase().includes('abort')) {
+      throw parseErr;
+    }
+    json = {};
+  }
   if (!response.ok) {
     if (response.status === 401) {
       throw new Error(
@@ -154,15 +164,36 @@ async function fetchTenantContextViaAdminApiAttempt() {
 }
 
 function isTransientTenantContextError(err) {
+  if (String(err?.name || '') === 'AbortError') return true;
   const m = String(err?.message || '').toLowerCase();
   return (
-    m.includes('failed to fetch')
+    m.includes('abort')
+    || m.includes('failed to fetch')
     || m.includes('network')
     || m.includes('3001')
     || m.includes('não respondeu')
     || m.includes('502')
     || m.includes('503')
     || m.includes('504')
+  );
+}
+
+/**
+ * Em DEV: Admin API local (:3001) opcional. Se não houver conexão, usa o caminho direto
+ * Supabase (anon + RLS) já implementado abaixo — evita bloquear o app só com Vite.
+ */
+function isDevAdminApiUnreachable(err) {
+  if (!import.meta.env.DEV) return false;
+  const m = String(err?.message || '').toLowerCase();
+  return (
+    m.includes('3001')
+    && (
+      m.includes('conectar')
+      || m.includes('não respondeu')
+      || m.includes('failed to fetch')
+      || m.includes('network')
+      || m.includes('econnrefused')
+    )
   );
 }
 
@@ -243,18 +274,27 @@ export async function getTenantContext(tenantId) {
     };
   }
 
-  const apiContext = await runLoggedQuery(
-    'admin_api_tenant_context',
-    'H12',
-    () => fetchTenantContextViaAdminApi(),
-    (result) => ({
-      tenantId: String(result?.tenant?.id || result?.access?.tenantId || ''),
-      tenantStatus: String(result?.tenant?.status || ''),
-      warningCount: Array.isArray(result?.warnings) ? result.warnings.length : 0,
-      moduleCount: result?.modules && typeof result.modules === 'object' ? Object.keys(result.modules).length : 0,
-    }),
-    'post-fix',
-  );
+  let apiContext;
+  try {
+    apiContext = await runLoggedQuery(
+      'admin_api_tenant_context',
+      'H12',
+      () => fetchTenantContextViaAdminApi(),
+      (result) => ({
+        tenantId: String(result?.tenant?.id || result?.access?.tenantId || ''),
+        tenantStatus: String(result?.tenant?.status || ''),
+        warningCount: Array.isArray(result?.warnings) ? result.warnings.length : 0,
+        moduleCount: result?.modules && typeof result.modules === 'object' ? Object.keys(result.modules).length : 0,
+      }),
+      'post-fix',
+    );
+  } catch (err) {
+    if (isDevAdminApiUnreachable(err)) {
+      apiContext = null;
+    } else {
+      throw err;
+    }
+  }
   if (apiContext?.tenant) {
     return {
       tenant: apiContext.tenant || null,

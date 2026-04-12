@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAppointmentDetails, updateAppointment, checkInAppointment, APPOINTMENT_STATUS } from '../../services/appointmentService.js';
 import { AGENDA_CONFIG } from '../../utils/agendaConfig.js';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { suggestPatients, recalcAndPersistPendingData } from '../../services/patientService.js';
 import { getLeadById } from '../../services/crmService.js';
 import { RegisterPatientFromLeadModal } from './RegisterPatientFromLeadModal.jsx';
@@ -12,9 +12,6 @@ import { onlyDigits } from '../../utils/validators.js';
 import { loadDb } from '../../db/index.js';
 
 export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onReschedule, onUpdate }) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentDetailsModal.jsx:mount',message:'modal render',data:{open,appointmentId,hasAppointmentId:!!appointmentId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
-  // #endregion
   const { user } = useAuth();
   const navigate = useNavigate();
   const [details, setDetails] = useState(null);
@@ -34,9 +31,6 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
   useEffect(() => {
     if (open && appointmentId) {
       const data = getAppointmentDetails(appointmentId);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentDetailsModal.jsx:useEffect',message:'getAppointmentDetails result',data:{appointmentId,hasData:!!data,hasAppointment:!!data?.appointment,leadId:data?.appointment?.leadId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
-      // #endregion
       setDetails(data);
       setShowReschedule(false);
       setIsEditing(false);
@@ -289,9 +283,6 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
 
   const isLeadWithoutPatient = Boolean(appointment.leadId && !appointment.patientId);
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentDetailsModal.jsx:leadCheck',message:'lead state for Cadastrar paciente',data:{appointmentId:appointment?.id,leadId:appointment?.leadId,patientId:appointment?.patientId,isLeadWithoutPatient},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-  // #endregion
 
   const handleRescheduleYes = () => {
     setShowReschedule(false);
@@ -332,9 +323,6 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
 
   const leadForRegister = appointment?.leadId ? getLeadById(appointment.leadId) : null;
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentDetailsModal.jsx:leadForRegister',message:'leadForRegister computed',data:{hasLeadForRegister:!!leadForRegister,leadId:appointment?.leadId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-  // #endregion
 
   const handleRegisterFromLeadSuccess = () => {
     const updatedData = getAppointmentDetails(appointmentId);
@@ -348,9 +336,6 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
     if (onUpdate) onUpdate();
   };
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentDetailsModal.jsx:render',message:'render with showRegisterFromLead',data:{showRegisterFromLead},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-  // #endregion
 
   return (
     <>
@@ -398,9 +383,6 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
                 className="button primary"
                 onClick={(e) => {
                   e.stopPropagation();
-                  // #region agent log
-                  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AppointmentDetailsModal.jsx:buttonClick',message:'Cadastrar paciente clicked',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-                  // #endregion
                   setShowRegisterFromLead(true);
                 }}
               >

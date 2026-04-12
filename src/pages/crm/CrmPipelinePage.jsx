@@ -5,7 +5,7 @@ import { LeadCard } from '../../crm/ui/LeadCard.jsx';
 import { ScheduleFromLeadModal } from '../../crm/ui/ScheduleFromLeadModal.jsx';
 import { getPipelineStages, listLeads, moveLeadToStage } from '../../services/crmService.js';
 import { listTags } from '../../services/crmTagService.js';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 
 /**
  * Pipeline Kanban: colunas vindas de PipelineStage, cards de leads.

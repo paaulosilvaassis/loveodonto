@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { addDays, endOfMonth, endOfWeek, startOfMonth, startOfWeek, eachDayOfInterval } from 'date-fns';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import {
   APPOINTMENT_STATUS,
@@ -34,14 +34,6 @@ import { canPlaceEvent } from '../utils/calendar/overlap.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { onlyDigits } from '../utils/validators.js';
 
-// #region agent log
-const statusOptions = Object.values(APPOINTMENT_STATUS).map((value) => {
-  const config = AGENDA_CONFIG.status[value];
-  const label = config?.label || value;
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:37',message:'statusOptions mapping',data:{value,hasConfig:!!config,label},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  return { value, label };
-});
-// #endregion
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -62,26 +54,10 @@ const MONTH_LABELS = [
 ];
 
 export default function AgendaPage() {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:61',message:'AgendaPage render start',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-  // #endregion
   const { user } = useAuth();
   const location = useLocation();
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:64',message:'useAuth result',data:{hasUser:!!user,userId:user?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
   const [searchParams, setSearchParams] = useSearchParams();
   const [dbSnapshot, setDbSnapshot] = useState(() => {
-    // #region agent log
-    try {
-      const db = loadDb();
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:75',message:'loadDb success',data:{hasDb:!!db,version:db?.version,appointmentsCount:db?.appointments?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      return db;
-    } catch (err) {
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:75',message:'loadDb error',data:{error:err?.message,stack:err?.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      throw err;
-    }
-    // #endregion
   });
 
   const [view, setView] = useState('semana');
@@ -327,16 +303,10 @@ export default function AgendaPage() {
     const isMountingWithTimeline = prevView === null && view === 'timeline';
     const isAlreadyInTimeline = prevView === 'timeline' && view === 'timeline';
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:307',message:'Timeline view change effect',data:{view,prevView,selectedDate,today:todayIso(),isChangingToTimeline,isMountingWithTimeline,isAlreadyInTimeline,timelineInitialized},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     
     // Só atualiza para hoje quando MUDA para timeline OU quando monta com timeline
     if (isChangingToTimeline || isMountingWithTimeline) {
       const today = todayIso();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:312',message:'Timeline detected - setting to today',data:{view,prevView,selectedDate,today,reason:isChangingToTimeline ? 'changing' : 'mounting'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       // Atualiza a data imediatamente (sem requestAnimationFrame) para que o scroll possa detectar
       setSelectedDate(today);
       setTimelineInitialized(true);
@@ -450,9 +420,6 @@ export default function AgendaPage() {
     [timelineDates, dateObj]
   );
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:393',message:'Range calculation start',data:{view,hasSelectedWeekdayObj:!!selectedWeekdayObj,selectedWeekdayIso,hasMonthStart:!!monthStart,hasWeekStart:!!weekStart,hasTimelineStart:!!timelineStart},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
 
   const rangeStart =
     view === 'mes'
@@ -471,9 +438,6 @@ export default function AgendaPage() {
       ? timelineEnd
       : selectedWeekdayObj;
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:408',message:'Range calculation end',data:{view,hasRangeStart:!!rangeStart,hasRangeEnd:!!rangeEnd,rangeStartIso:rangeStart?.toISOString()?.slice(0,10) || null,rangeEndIso:rangeEnd?.toISOString()?.slice(0,10) || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-  // #endregion
   const rangeStartIso = rangeStart.toISOString().slice(0, 10);
   const rangeEndIso = rangeEnd.toISOString().slice(0, 10);
 
@@ -546,19 +510,6 @@ export default function AgendaPage() {
   );
 
   useEffect(() => {
-    // #region agent log
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && enrichedAppointments.length > 0) {
-      const sample = enrichedAppointments.slice(0, 3).map((a) => ({
-        id: a.id,
-        date: a.date,
-        startTime: a.startTime,
-        endTime: a.endTime,
-        slotCapacity: a.slotCapacity,
-        hasSlotCapacity: 'slotCapacity' in a,
-      }));
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:453',message:'Enriched appointments sample',data:{total:enrichedAppointments.length,sample},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    }
-    // #endregion
   }, [enrichedAppointments]);
 
   const timelineDays = useMemo(
@@ -568,11 +519,6 @@ export default function AgendaPage() {
         const dayOfWeek = date.getDay();
         const comparisonDate = view === 'timeline' ? selectedDate : selectedWeekdayIso;
         const isSelected = iso === comparisonDate;
-        // #region agent log
-        if (iso === selectedDate || iso === selectedWeekdayIso) {
-          fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:543',message:'Timeline day selection check',data:{iso,view,selectedDate,selectedWeekdayIso,comparisonDate,isSelected},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-        }
-        // #endregion
         return {
           iso,
           weekday: WEEKDAY_LABELS[dayOfWeek],
@@ -588,75 +534,21 @@ export default function AgendaPage() {
   );
 
   useEffect(() => {
-    // #region agent log
-    const selectedCount = timelineDays.filter((day) => day.isSelected).length;
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:474',message:'Timeline selection state',data:{view,selectedDate,selectedWeekdayIso,selectedCount,timelineCount:timelineDays.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
   }, [view, selectedDate, selectedWeekdayIso, timelineDays]);
 
   useEffect(() => {
-    // #region agent log
-    const timelineIsos = timelineDays.map((day) => day.iso);
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:482',message:'Timeline days list',data:{view,timelineCount:timelineIsos.length,firstIso:timelineIsos[0] || null,lastIso:timelineIsos[timelineIsos.length - 1] || null,timelineIsos},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
-    // #endregion
   }, [view, timelineDays]);
 
   useEffect(() => {
     if (view === 'mes') return;
     let rafId = 0;
     rafId = requestAnimationFrame(() => {
-      // #region agent log
-      const selectedEl = document.querySelector('.agenda-timeline .timeline-day--selected');
-      const numberEl = selectedEl?.querySelector('.timeline-day-number') || null;
-      const numberStyles = numberEl ? getComputedStyle(numberEl) : null;
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:484',message:'Timeline selected styles',data:{hasSelected:Boolean(selectedEl),numberText:numberEl?.textContent || null,numberColor:numberStyles?.color || null,numberVisibility:numberStyles?.visibility || null,numberOpacity:numberStyles?.opacity || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
 
-      // #region agent log
-      const numberElAny = document.querySelector('.agenda-timeline .timeline-day-number');
-      const numberAnyStyles = numberElAny ? getComputedStyle(numberElAny) : null;
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:492',message:'Timeline number styles sample',data:{sampleText:numberElAny?.textContent || null,sampleColor:numberAnyStyles?.color || null,sampleVisibility:numberAnyStyles?.visibility || null,sampleOpacity:numberAnyStyles?.opacity || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
 
-      // #region agent log
-      const selectedRect = selectedEl ? selectedEl.getBoundingClientRect() : null;
-      const numberRect = numberEl ? numberEl.getBoundingClientRect() : null;
-      const selectedStyles = selectedEl ? getComputedStyle(selectedEl) : null;
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:500',message:'Timeline selected layout',data:{selectedRect,numberRect,selectedOverflow:selectedStyles?.overflow || null,selectedDisplay:selectedStyles?.display || null,selectedVisibility:selectedStyles?.visibility || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-      // #endregion
 
-      // #region agent log
-      const timelineEl = document.querySelector('.agenda-timeline');
-      const timelineStyles = timelineEl ? getComputedStyle(timelineEl) : null;
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:508',message:'Timeline container styles',data:{timelineFound:Boolean(timelineEl),overflowX:timelineStyles?.overflowX || null,overflowY:timelineStyles?.overflowY || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
 
-      // #region agent log
-      const selectedComputedStyles = selectedEl ? getComputedStyle(selectedEl) : null;
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:512',message:'Timeline selected computed',data:{selectedClass:selectedEl?.className || null,selectedBg:selectedComputedStyles?.backgroundColor || null,selectedColor:selectedComputedStyles?.color || null,selectedOpacity:selectedComputedStyles?.opacity || null,selectedPointer:selectedComputedStyles?.pointerEvents || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-      // #endregion
 
-      // #region agent log
-      const centerX = numberRect ? numberRect.left + numberRect.width / 2 : null;
-      const centerY = numberRect ? numberRect.top + numberRect.height / 2 : null;
-      const topEl = numberRect ? document.elementFromPoint(centerX, centerY) : null;
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:516',message:'Timeline number hit test',data:{centerX,centerY,topTag:topEl?.tagName || null,topClass:topEl?.className || null,topText:topEl?.textContent?.slice(0,10) || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
 
-      // #region agent log
-      const wrapperEl = document.querySelector('.agenda-timeline-wrapper');
-      const timelineRect = timelineEl ? timelineEl.getBoundingClientRect() : null;
-      const wrapperRect = wrapperEl ? wrapperEl.getBoundingClientRect() : null;
-      const outOfTimeline =
-        numberRect && timelineRect
-          ? numberRect.top < timelineRect.top || numberRect.bottom > timelineRect.bottom
-          : null;
-      const outOfWrapper =
-        numberRect && wrapperRect
-          ? numberRect.top < wrapperRect.top || numberRect.bottom > wrapperRect.bottom
-          : null;
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:528',message:'Timeline clipping check',data:{timelineRect,wrapperRect,numberRect,outOfTimeline,outOfWrapper},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-      // #endregion
     });
     return () => cancelAnimationFrame(rafId);
   }, [view, timelineDays, selectedWeekdayIso]);
@@ -672,9 +564,6 @@ export default function AgendaPage() {
       const firstRect = first ? first.getBoundingClientRect() : null;
       const lastRect = last ? last.getBoundingClientRect() : null;
       const timelineRect = timelineEl.getBoundingClientRect();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:546',message:'Timeline edge visibility',data:{scrollLeft:timelineEl.scrollLeft,clientWidth:timelineEl.clientWidth,scrollWidth:timelineEl.scrollWidth,timelineRect,firstRect,lastRect},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
-      // #endregion
     };
     logEdges();
     timelineEl.addEventListener('scroll', logEdges);
@@ -709,9 +598,6 @@ export default function AgendaPage() {
     const timelineStyles = getComputedStyle(timelineEl);
     const wrapperStyles = wrapperEl ? getComputedStyle(wrapperEl) : null;
     const stickyStyles = stickyEl ? getComputedStyle(stickyEl) : null;
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:573',message:'Timeline edge metrics',data:{scrollLeft:timelineEl.scrollLeft,maxScrollLeft,atMin,atMax,leftOverflow,rightOverflow,timelineRect,wrapperRect,prevRect,nextRect,firstRect,lastRect,timelinePaddingLeft:timelineStyles.paddingLeft,timelinePaddingRight:timelineStyles.paddingRight,timelineOverflowX:timelineStyles.overflowX,timelineOverflowY:timelineStyles.overflowY,wrapperPaddingLeft:wrapperStyles?.paddingLeft || null,wrapperPaddingRight:wrapperStyles?.paddingRight || null,wrapperOverflow:wrapperStyles?.overflow || null,stickyOverflow:stickyStyles?.overflow || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
-    // #endregion
   }, [view, timelineDays]);
 
   useEffect(() => {
@@ -721,9 +607,6 @@ export default function AgendaPage() {
     const selectedStyles = getComputedStyle(selectedEl);
     const numberEl = selectedEl.querySelector('.timeline-day-number');
     const numberStyles = numberEl ? getComputedStyle(numberEl) : null;
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:596',message:'Timeline selected visual styles',data:{selectedBg:selectedStyles.backgroundColor,selectedBgImage:selectedStyles.backgroundImage,selectedShadow:selectedStyles.boxShadow,selectedColor:selectedStyles.color,selectedOpacity:selectedStyles.opacity,numberColor:numberStyles?.color || null,numberVisibility:numberStyles?.visibility || null,numberOpacity:numberStyles?.opacity || null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
-    // #endregion
   }, [view, timelineDays, selectedWeekdayIso]);
 
   useEffect(() => {
@@ -739,9 +622,6 @@ export default function AgendaPage() {
           // Sempre prioriza o botão selecionado
           const targetEl = timelineEl.querySelector('.timeline-day--selected');
           if (!targetEl) {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:710',message:'No selected element found for scroll',data:{view,selectedDate,hasTimelineEl:!!timelineEl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-            // #endregion
             return;
           }
 
@@ -765,9 +645,6 @@ export default function AgendaPage() {
           const maxScrollLeft = timelineEl.scrollWidth - timelineEl.clientWidth;
           const finalScrollLeft = Math.max(0, Math.min(maxScrollLeft, desiredScrollLeft));
 
-          // #region agent log
-          fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:732',message:'Scrolling to selected day',data:{view,selectedDate,targetIso:targetEl.getAttribute('data-iso') || targetEl.textContent?.slice(0,10),currentScroll,finalScrollLeft,scrollOffset,targetLeftRelative,targetCenterRelative,containerCenter},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
-          // #endregion
 
           timelineEl.scrollTo({
             left: finalScrollLeft,
@@ -924,9 +801,6 @@ export default function AgendaPage() {
   };
 
   const openDetailsModal = (appointmentId) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:openDetailsModal',message:'open details modal',data:{appointmentId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H6'})}).catch(()=>{});
-    // #endregion
     setDetailsModalState({
       open: true,
       appointmentId,
@@ -987,9 +861,6 @@ export default function AgendaPage() {
         slotCapacity,
       };
       const validation = validateOverlap(candidate);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:814',message:'Step2 submit validation',data:{slotCapacity:draft.slotCapacity,normalized:slotCapacity,validationOk:validation.ok,validationMessage:validation.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       if (!validation.ok) {
         setError(validation.message);
         return;
@@ -1009,13 +880,7 @@ export default function AgendaPage() {
         notes: draft.notes,
         slotCapacity,
       };
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:840',message:'Step2 submit payload',data:{slotCapacity,hasSlotCapacity:'slotCapacity' in payload},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       const appointment = createAppointment(user, payload);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:833',message:'Step2 created appointment',data:{id:appointment.id,slotCapacity:appointment.slotCapacity,hasSlotCapacity:'slotCapacity' in appointment},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       refresh();
       setStep2ModalState({ open: false, step1Data: null });
       // Abrir modal de detalhes após sucesso
@@ -1042,9 +907,6 @@ export default function AgendaPage() {
         slotCapacity,
       };
       const validation = validateOverlap(candidate, panelState.mode === 'edit' ? draft.id : null);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:845',message:'Panel submit validation',data:{mode:panelState.mode,slotCapacity:draft.slotCapacity,normalized:slotCapacity,validationOk:validation.ok,validationMessage:validation.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-      // #endregion
       if (!validation.ok) {
         setError(validation.message);
         return;
@@ -1064,16 +926,10 @@ export default function AgendaPage() {
         notes: draft.notes,
         slotCapacity,
       };
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:870',message:'Panel submit payload',data:{mode:panelState.mode,slotCapacity,hasSlotCapacity:'slotCapacity' in payload},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       const appointment =
         panelState.mode === 'edit'
           ? updateAppointment(user, draft.id, payload)
           : createAppointment(user, payload);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:866',message:'Panel created/updated appointment',data:{id:appointment.id,slotCapacity:appointment.slotCapacity,hasSlotCapacity:'slotCapacity' in appointment},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       if (draft.confirmAfter) {
         confirmAppointment(appointment);
       }
@@ -1234,9 +1090,6 @@ export default function AgendaPage() {
         : normalizeSlotCapacity(originalAppointment.slotCapacity),
     };
     const validation = validateOverlap(candidate, appointmentId);
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:1015',message:'Drop validation',data:{appointmentId,targetDate:finalTargetDate,newStartTime,newEndTime,slotCapacity:candidate.slotCapacity,hasTargetAppointment:!!targetAppointment,validationOk:validation.ok,validationMessage:validation.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
     if (!validation.ok) {
       setError(validation.message);
       return;
@@ -1329,15 +1182,9 @@ export default function AgendaPage() {
 
   // Wrapper para setView que sempre seleciona o dia atual quando muda para timeline
   const handleViewChange = (newView) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:1295',message:'View change handler called',data:{currentView:view,newView,willChangeToTimeline:newView === 'timeline',isChangingView:view !== newView,prevViewRef:prevViewRef.current},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     // Se está mudando para timeline (de outra view), sempre seleciona o dia atual
     if (newView === 'timeline' && view !== 'timeline') {
       const today = todayIso();
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:1298',message:'Setting date to today for timeline',data:{today,currentSelectedDate:selectedDate},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       // Atualiza prevViewRef antes de mudar a view para que o useEffect detecte corretamente
       prevViewRef.current = view;
       setSelectedDate(today);
@@ -1377,9 +1224,6 @@ export default function AgendaPage() {
           onPrev={handleTimelinePrev}
           onNext={handleTimelineNext}
           onSelectDate={(date) => {
-            // #region agent log
-            fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:1289',message:'Timeline day selected',data:{date,view,timelineInitialized,today:todayIso()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-            // #endregion
             // Permite seleção manual de dias na timeline
             setSelectedDate(date);
           }}
@@ -1510,16 +1354,6 @@ export default function AgendaPage() {
         newStartTime={rescheduleModalState.newStartTime}
         newEndTime={rescheduleModalState.newEndTime}
       />
-      {/* #region agent log */}
-      {(() => {
-        try {
-          fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:return',message:'AgendaPage render complete',data:{view,appointmentsCount:appointments.length,blocksCount:blocks.length,hasSelectedProfessional:!!selectedProfessionalId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        } catch (err) {
-          fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AgendaPage.jsx:return',message:'AgendaPage render error',data:{error:err?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-        }
-        return null;
-      })()}
-      {/* #endregion */}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SectionCard } from '../../../components/SectionCard.jsx';
 import { getMarketingSettings } from '../../../services/marketingChatService.js';
-import { useAuth } from '../../../auth/AuthContext.jsx';
+import { useAuth } from '../../../auth/useAuth.js';
 
 export default function MarketingChatSettingsPage() {
   const { user } = useAuth();

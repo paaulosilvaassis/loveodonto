@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SectionCard } from '../../../components/SectionCard.jsx';
 import { getMarketingDashboardSnapshot } from '../../../services/marketingChatService.js';
-import { useAuth } from '../../../auth/AuthContext.jsx';
+import { useAuth } from '../../../auth/useAuth.js';
 
 const PERIOD_OPTIONS = [
   { id: 'today', label: 'Hoje' },

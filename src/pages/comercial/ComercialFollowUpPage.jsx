@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { SectionCard } from '../../components/SectionCard.jsx';
 import { loadDb } from '../../db/index.js';
 import { getLeadById } from '../../services/crmService.js';

@@ -6,7 +6,7 @@ import {
   getMarketingWhatsAppConnectionOverview,
   refreshMarketingWhatsAppConnectionStatus,
 } from '../../../services/marketingChatService.js';
-import { useAuth } from '../../../auth/AuthContext.jsx';
+import { useAuth } from '../../../auth/useAuth.js';
 
 const STATUS_META = {
   nao_conectado: { label: 'Não conectado', tone: 'neutral' },

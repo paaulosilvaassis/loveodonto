@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { crmShellNavItems } from '../crmShellConfig.js';
 
 const isAllowed = (user, allowedRoles) => {

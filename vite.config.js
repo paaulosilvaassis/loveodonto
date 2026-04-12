@@ -47,15 +47,20 @@ const internalAppProxy = {
 function mergedPlatformEnv(mode) {
   const rootEnv = loadEnv(mode, __dirname, '');
   const consoleEnv = loadEnv(mode, path.join(__dirname, 'console'), '');
+  /** Mesmo projeto: nomes PLATFORM, CONSOLE ou legado VITE_SUPABASE_* na raiz. */
   const platformUrl = (
     rootEnv.VITE_SUPABASE_PLATFORM_URL
+    || rootEnv.VITE_SUPABASE_URL
     || consoleEnv.VITE_CONSOLE_SUPABASE_URL
+    || consoleEnv.VITE_SUPABASE_URL
     || ''
   ).trim();
   const platformKey = rejectTruncatedKey(
     rootEnv.VITE_SUPABASE_PLATFORM_ANON_KEY
+      || rootEnv.VITE_SUPABASE_ANON_KEY
       || consoleEnv.VITE_CONSOLE_SUPABASE_ANON_KEY
-      || consoleEnv.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY,
+      || consoleEnv.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY
+      || consoleEnv.VITE_SUPABASE_ANON_KEY,
   );
   return { platformUrl, platformKey };
 }
@@ -70,19 +75,19 @@ export default defineConfig(({ mode }) => {
   },
   plugins: [react()],
   server: {
+    /** Mesmo motivo que `console/vite.config.js`: bind IPv4 + IPv6 no Windows. */
+    host: true,
     port: 5176,
     strictPort: true,
     open: true,
     proxy: internalAppProxy,
+    /** Caminhos relativos ao repo — evita fs.allow fixo por máquina (quebrava outros PCs). */
     fs: {
       allow: [
-        'C:/Users/paaul/.cursor/projects/c-Users-paaul-Desktop-appgestaoodonto-main-appgestaoodonto/assets',
-        'C:/Users/paaul/Downloads',
-        'C:/Users/paaul/Desktop/appgestaoodonto-main/appgestaoodonto',
+        __dirname,
+        path.join(__dirname, 'public'),
+        path.join(__dirname, 'console'),
       ],
-    },
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => next());
     },
   },
   preview: {

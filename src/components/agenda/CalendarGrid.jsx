@@ -183,15 +183,6 @@ export const CalendarGrid = ({
               });
             });
 
-            // #region agent log
-            if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-              const sampleLayout = Array.from(layout.entries()).slice(0, 3).map(([id, info]) => ({
-                id,
-                ...info,
-              }));
-              fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarGrid.jsx:157',message:'Overlap layout calculation',data:{day:day.iso,appointmentCount:dayAppointments.length,layoutSize:layout.size,sampleLayout,groupedKeys:Object.keys(groupedByResource)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-            }
-            // #endregion
 
             return layout;
           })();
@@ -313,31 +304,6 @@ export const CalendarGrid = ({
                   ((toMinutes(appointment.endTime) - toMinutes(appointment.startTime)) / slotMinutes) * rowHeight;
                 const finalHeight = Math.max(Math.max(rowHeight, calculatedHeight), 70);
 
-                // #region agent log
-                if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-                  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      location: 'CalendarGrid.jsx:105',
-                      message: 'Appointment height calculation',
-                      data: {
-                        id: appointment.id,
-                        startTime: appointment.startTime,
-                        endTime: appointment.endTime,
-                        rowHeight,
-                        calculatedHeight,
-                        finalHeight,
-                        slotMinutes,
-                      },
-                      timestamp: Date.now(),
-                      sessionId: 'debug-session',
-                      runId: 'run1',
-                      hypothesisId: 'D',
-                    }),
-                  }).catch(() => {});
-                }
-                // #endregion
 
                 if (toMinutes(appointment.endTime) <= startMinutes) return null;
                 if (toMinutes(appointment.startTime) >= endMinutes) return null;
@@ -367,24 +333,7 @@ export const CalendarGrid = ({
                       }
                     : { zIndex: 10 };
 
-                // #region agent log
-                if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && layout.columns > 1) {
-                  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarGrid.jsx:269',message:'Rendering overlap event',data:{id:appointment.id,columns:layout.columns,columnIndex:layout.columnIndex,columnWidth,leftOffset,overlapStyle},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                }
-                // #endregion
 
-                // #region agent log
-                try {
-                  if (!onDragOverEvent || typeof onDragOverEvent !== 'function') {
-                    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarGrid.jsx:377',message:'onDragOverEvent check',data:{hasOnDragOverEvent:!!onDragOverEvent,type:typeof onDragOverEvent,appointmentId:appointment.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-                  }
-                  if (!onDragLeaveEvent || typeof onDragLeaveEvent !== 'function') {
-                    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarGrid.jsx:377',message:'onDragLeaveEvent check',data:{hasOnDragLeaveEvent:!!onDragLeaveEvent,type:typeof onDragLeaveEvent,appointmentId:appointment.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-                  }
-                } catch (err) {
-                  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'CalendarGrid.jsx:377',message:'Error checking drag handlers',data:{error:err?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-                }
-                // #endregion
                 return (
                   <EventCard
                     key={appointment.id}

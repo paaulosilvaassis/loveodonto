@@ -11,7 +11,7 @@ import {
   testMarketingWebhookConnection,
   updateMarketingChannel,
 } from '../../../services/marketingChatService.js';
-import { useAuth } from '../../../auth/AuthContext.jsx';
+import { useAuth } from '../../../auth/useAuth.js';
 
 const EMPTY_CHANNEL = { name: '', type: 'WhatsApp', provider: 'cloud-api', status: 'desconectado' };
 

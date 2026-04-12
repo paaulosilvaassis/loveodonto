@@ -4,7 +4,13 @@ import { useTenant } from '../tenant/useTenant.js';
 export default function RequireTenantAccess({ children }) {
   const { loading, error, isTenantBlocked } = useTenant();
 
-  if (loading) return null;
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#94a3b8' }}>
+        Carregando dados da clínica…
+      </div>
+    );
+  }
 
   if (error) {
     return (

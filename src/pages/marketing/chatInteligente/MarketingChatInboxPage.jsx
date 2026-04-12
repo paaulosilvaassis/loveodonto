@@ -11,7 +11,7 @@ import {
   sendMarketingConversationMessage,
   updateMarketingTag,
 } from '../../../services/marketingChatService.js';
-import { useAuth } from '../../../auth/AuthContext.jsx';
+import { useAuth } from '../../../auth/useAuth.js';
 
 const STATUS_OPTIONS = [
   { id: 'todas', label: 'Todas' },

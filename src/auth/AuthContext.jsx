@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { loadDb, loadDbAsync, withDb } from '../db/index.js';
 import { roles } from '../permissions/permissions.js';
 import { logAction } from '../services/logService.js';
@@ -9,20 +9,15 @@ import { assertTenantAllowed } from '../services/platformAccessService.js';
 import { resolveTrustedTenantId } from '../services/tenantIdentityService.js';
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { fetchSaasAccessBootstrap, isSaasModeEnabled } from '../services/saasAuthService.js';
+import { LOGOUT_REASON_KEY } from './logoutReason.js';
+import { raceWithTimeout } from '../utils/promiseTimeout.js';
+import { AuthContext } from './authContext.js';
 
-const AUTH_CONTEXT_KEY = '__appgestaoodonto_auth_context__';
-const getAuthContext = () => {
-  if (typeof globalThis === 'undefined') return createContext(null);
-  if (!globalThis[AUTH_CONTEXT_KEY]) {
-    globalThis[AUTH_CONTEXT_KEY] = createContext(null);
-  }
-  return globalThis[AUTH_CONTEXT_KEY];
-};
-
-const AuthContext = getAuthContext();
+/** Evita RequireAuth preso em "Carregando…" se getSession/RPC não retornarem. */
+const AUTH_SAAS_HYDRATE_TIMEOUT_MS = 32000;
+const AUTH_LOCAL_DB_TIMEOUT_MS = 45000;
 
 const SESSION_KEY = 'appgestaoodonto.session';
-const LOGOUT_REASON_KEY = 'appgestaoodonto.logout_reason';
 
 const getStoredSession = () => {
   const raw = localStorage.getItem(SESSION_KEY);
@@ -95,48 +90,63 @@ export const AuthProvider = ({ children }) => {
     let cancelled = false;
     if (session.authMode === 'saas') {
       (async () => {
+        const clearSaasSession = () => {
+          try {
+            localStorage.removeItem(SESSION_KEY);
+          } catch (_) {
+            /* ignore */
+          }
+          if (!cancelled) {
+            setSession(null);
+            setUser(null);
+          }
+        };
         try {
           if (!supabasePlatformClient) {
-            if (!cancelled) setUser(null);
+            clearSaasSession();
             return;
           }
-          const { data, error } = await supabasePlatformClient.auth.getSession();
-          if (cancelled) return;
-          if (error) throw error;
-          const supa = data?.session;
-          if (!supa?.user?.id) {
-            localStorage.removeItem(SESSION_KEY);
-            if (!cancelled) {
-              setSession(null);
-              setUser(null);
-            }
-            return;
-          }
-          const resolved = await resolveSaasUserFromSession(supa);
-          if (cancelled) return;
-          if (!resolved?.tenantId) {
-            setUser(null);
-            return;
-          }
-          const nextStored = {
-            authMode: 'saas',
-            userId: supa.user.id,
-            tenantId: resolved.tenantId,
-          };
-          localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
-          setUser(resolved);
-          setSession((prev) => {
-            if (
-              prev?.authMode === 'saas'
-              && prev.userId === nextStored.userId
-              && prev.tenantId === nextStored.tenantId
-            ) {
-              return prev;
-            }
-            return nextStored;
-          });
-        } catch {
-          if (!cancelled) setUser(null);
+          await raceWithTimeout(
+            (async () => {
+              const { data, error } = await supabasePlatformClient.auth.getSession();
+              if (cancelled) return;
+              if (error) throw error;
+              const supa = data?.session;
+              if (!supa?.user?.id) {
+                clearSaasSession();
+                return;
+              }
+              const resolved = await resolveSaasUserFromSession(supa);
+              if (cancelled) return;
+              if (!resolved?.tenantId) {
+                clearSaasSession();
+                return;
+              }
+              const nextStored = {
+                authMode: 'saas',
+                userId: supa.user.id,
+                tenantId: resolved.tenantId,
+              };
+              localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
+              if (!cancelled) {
+                setUser(resolved);
+                setSession((prev) => {
+                  if (
+                    prev?.authMode === 'saas'
+                    && prev.userId === nextStored.userId
+                    && prev.tenantId === nextStored.tenantId
+                  ) {
+                    return prev;
+                  }
+                  return nextStored;
+                });
+              }
+            })(),
+            AUTH_SAAS_HYDRATE_TIMEOUT_MS,
+            '__AUTH_SAAS_HYDRATE_TIMEOUT__',
+          );
+        } catch (e) {
+          if (!cancelled) clearSaasSession();
         }
       })();
       return () => {
@@ -145,13 +155,25 @@ export const AuthProvider = ({ children }) => {
     }
     const rafId = requestAnimationFrame(() => {
       if (cancelled) return;
-      loadDbAsync().then(() => {
-        if (cancelled) return;
-        const resolved = resolveUserFromSession(session, loadDb);
-        if (!cancelled) setUser(resolved);
-      }).catch(() => {
-        if (!cancelled) setUser(null);
-      });
+      raceWithTimeout(loadDbAsync(), AUTH_LOCAL_DB_TIMEOUT_MS, '__AUTH_LOCAL_DB_TIMEOUT__')
+        .then(() => {
+          if (cancelled) return;
+          const resolved = resolveUserFromSession(session, loadDb);
+          if (!cancelled) setUser(resolved);
+        })
+        .catch((e) => {
+          if (!cancelled) {
+            if (String(e?.message || '') === '__AUTH_LOCAL_DB_TIMEOUT__') {
+              try {
+                localStorage.removeItem(SESSION_KEY);
+              } catch (_) {
+                /* ignore */
+              }
+              setSession(null);
+            }
+            setUser(null);
+          }
+        });
     });
     return () => {
       cancelled = true;
@@ -173,8 +195,18 @@ export const AuthProvider = ({ children }) => {
         return;
       }
       try {
-        const resolved = await resolveSaasUserFromSession(authSession);
+        const resolved = await raceWithTimeout(
+          resolveSaasUserFromSession(authSession),
+          AUTH_SAAS_HYDRATE_TIMEOUT_MS,
+          '__AUTH_SAAS_ONAUTH_TIMEOUT__',
+        );
         if (!resolved?.tenantId) {
+          try {
+            localStorage.removeItem(SESSION_KEY);
+          } catch (_) {
+            /* ignore */
+          }
+          setSession(null);
           setUser(null);
           return;
         }
@@ -187,6 +219,12 @@ export const AuthProvider = ({ children }) => {
         setSession(nextStored);
         setUser(resolved);
       } catch {
+        try {
+          localStorage.removeItem(SESSION_KEY);
+        } catch (_) {
+          /* ignore */
+        }
+        setSession(null);
         setUser(null);
       }
     });
@@ -298,17 +336,3 @@ export const AuthProvider = ({ children }) => {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-
-export const useAuth = () => {
-  const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error('useAuth deve ser usado dentro de AuthProvider.');
-  }
-  return ctx;
-};
-
-export function consumeLogoutReason() {
-  const raw = sessionStorage.getItem(LOGOUT_REASON_KEY);
-  if (raw) sessionStorage.removeItem(LOGOUT_REASON_KEY);
-  return raw || '';
-}

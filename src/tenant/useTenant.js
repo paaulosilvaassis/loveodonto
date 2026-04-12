@@ -1,1 +1,8 @@
-export { useTenant } from './TenantContext.jsx';
+import { useContext } from 'react';
+import { TenantContext } from './tenantContext.js';
+
+export function useTenant() {
+  const ctx = useContext(TenantContext);
+  if (!ctx) throw new Error('useTenant deve ser usado dentro de TenantProvider.');
+  return ctx;
+}

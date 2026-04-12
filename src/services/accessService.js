@@ -61,7 +61,8 @@ export function can(user, moduleKey, actionKey) {
   const u = db.users?.find((x) => x.id === user.id) || user;
   const hasAccess = u.has_system_access !== false && u.active !== false;
   if (!hasAccess) return false;
-  if (u.role === ROLE_ADMIN || u.role === 'master' || user.isMaster) return true;
+  const roleNorm = String(u.role || '').toLowerCase();
+  if (roleNorm === ROLE_ADMIN || roleNorm === 'master' || user.isMaster) return true;
 
   const catalog = getPermissionsCatalog();
   const permission = catalog.find((p) => p.module_key === moduleKey && p.action_key === actionKey);
@@ -86,7 +87,8 @@ export function canByPermission(user, permission) {
   const db = loadDb();
   const u = db.users?.find((x) => x.id === user.id) || user;
   if (u.has_system_access === false || u.active === false) return false;
-  if (u.role === ROLE_ADMIN || u.role === 'master' || user.isMaster) return true;
+  const roleNorm = String(u.role || '').toLowerCase();
+  if (roleNorm === ROLE_ADMIN || roleNorm === 'master' || user.isMaster) return true;
   if (permission === '*') return true;
   const [moduleKey, rawAction] = (permission || '').split(':');
   const actionKey = LEGACY_ACTION_MAP[rawAction] || rawAction;

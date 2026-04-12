@@ -198,21 +198,22 @@ export function PlatformAuthProvider({ children }) {
               ok: false,
               code: 'BACKEND_DOWN',
               message:
-                'Backend da plataforma (porta 3001) não respondeu. Na raiz do projeto use: npm run console:stack '
-                + '(sobe API + Console juntos). Ou: npm run server:restart e mantenha esse terminal aberto; depois npm run console:dev.',
+                'Backend da plataforma (porta 3001) não respondeu. Na raiz do repositório execute: npm run console:dev '
+                + '(sobe a API automaticamente se necessário). Se a API já estiver no ar: npm run console:vite-only. '
+                + 'Alternativa: npm run server:restart num terminal e npm run console:vite-only noutro.',
             };
           }
           throw netErr;
         }
 
-        // Com Vite proxy, backend parado costuma virar 502/504 (fetch não lança — só status ruim).
-        if ([502, 503, 504].includes(response.status)) {
+        // Com Vite proxy, backend parado costuma virar 502/504; em alguns casos o proxy devolve 500 (ex.: ECONNREFUSED).
+        if ([502, 503, 504].includes(response.status) || (import.meta.env.DEV && response.status === 500)) {
           return {
             ok: false,
             code: 'BACKEND_DOWN',
             message:
-              'Backend da plataforma (porta 3001) não respondeu. Na raiz: npm run console:stack '
-              + 'ou npm run server:restart (terminal aberto) + npm run console:dev.',
+              'Backend da plataforma (porta 3001) não respondeu. Na raiz: npm run console:dev '
+              + '(API + Console) ou npm run server:restart + npm run console:vite-only.',
           };
         }
 
@@ -241,8 +242,8 @@ export function PlatformAuthProvider({ children }) {
             message:
               json?.error
               && looksLikeJwtMismatch
-                ? `${json.error} Verifique se server/.env (SUPABASE_URL) é o mesmo projeto Supabase que console/.env (VITE_CONSOLE_SUPABASE_URL) e se SUPABASE_SERVICE_ROLE_KEY é desse projeto.`
-                : json?.error || 'Sessão não aceita pelo backend. Mesmo projeto Supabase no server/.env e na Console.',
+                ? `${json.error} Verifique o ficheiro .env na raiz do repo (recomendado) ou server/.env: SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY do mesmo projeto que VITE_CONSOLE_SUPABASE_* (Console).`
+                : json?.error || 'Sessão não aceita pelo backend. Alinhe o projeto Supabase (raiz .env ou server + console).',
           };
         }
         if (!response.ok) {

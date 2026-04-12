@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { CrmLayout } from '../../crm/ui/CrmLayout.jsx';
 import { listAutomations, createAutomation } from '../../services/crmService.js';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { Zap, Plus } from 'lucide-react';
 
 /**

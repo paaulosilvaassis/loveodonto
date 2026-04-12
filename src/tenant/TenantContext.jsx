@@ -1,10 +1,13 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '../auth/useAuth.js';
+import { TenantContext } from './tenantContext.js';
 import { subscribeTenantRealtimeChanges } from '../services/tenantContextService.js';
 import { readTenantAccessSnapshot } from '../services/platformAccessService.js';
 import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
+import { raceWithTimeout } from '../utils/promiseTimeout.js';
 
-const TenantContext = createContext(null);
+const TENANT_SNAPSHOT_TIMEOUT_MS = 40000;
+
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const EMPTY_CONTEXT = {
   tenant: null,
@@ -17,7 +20,7 @@ const EMPTY_CONTEXT = {
 
 export function TenantProvider({ children }) {
   const { user } = useAuth();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [tenantContext, setTenantContext] = useState(EMPTY_CONTEXT);
 
@@ -30,7 +33,12 @@ export function TenantProvider({ children }) {
     }
     try {
       setError('');
-      const context = await readTenantAccessSnapshot(user.tenantId);
+      setLoading(true);
+      const context = await raceWithTimeout(
+        readTenantAccessSnapshot(user.tenantId),
+        TENANT_SNAPSHOT_TIMEOUT_MS,
+        'Tempo esgotado ao carregar dados da clínica (rede ou API). Verifique o backend em :3001 e tente novamente.',
+      );
       setTenantContext(context);
     } catch (err) {
       setError(err?.message || 'Falha ao carregar contexto do tenant.');
@@ -40,7 +48,6 @@ export function TenantProvider({ children }) {
   };
 
   useEffect(() => {
-    setLoading(true);
     refreshTenantContext();
   }, [user?.id, user?.tenantId]);
 
@@ -73,10 +80,4 @@ export function TenantProvider({ children }) {
   );
 
   return <TenantContext.Provider value={value}>{children}</TenantContext.Provider>;
-}
-
-export function useTenant() {
-  const ctx = useContext(TenantContext);
-  if (!ctx) throw new Error('useTenant deve ser usado dentro de TenantProvider.');
-  return ctx;
 }

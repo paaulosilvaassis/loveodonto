@@ -69,9 +69,6 @@ export async function fetchSaasAccessBootstrap(client = supabasePlatformClient) 
 
 export async function signInSaasWithPassword(email, password) {
   const client = supabasePlatformClient;
-  // #region agent log
-  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run1',hypothesisId:'H1',location:'src/services/saasAuthService.js:signInSaasWithPassword:start',message:'SaaS login started',data:{hasClient:Boolean(client),hasEmail:Boolean(String(email||'').trim())},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!client) {
     throw new Error('Supabase da plataforma não configurado para login SaaS.');
   }
@@ -80,15 +77,9 @@ export async function signInSaasWithPassword(email, password) {
     password,
   });
   if (signError) {
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run1',hypothesisId:'H2',location:'src/services/saasAuthService.js:signInSaasWithPassword:error',message:'SaaS login signIn error',data:{code:String(signError?.code||''),message:String(signError?.message||'')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     throw new Error(mapSaasAuthError(signError));
   }
   const bootstrap = await fetchSaasAccessBootstrap(client);
-  // #region agent log
-  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run1',hypothesisId:'H3',location:'src/services/saasAuthService.js:signInSaasWithPassword:bootstrap',message:'SaaS bootstrap resolved',data:{hasTenantId:Boolean(bootstrap?.tenantId),isActive:Boolean(bootstrap?.isActive),role:String(bootstrap?.role||'')},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!bootstrap.isActive) {
     await client.auth.signOut();
     throw new Error('Seu acesso a esta clínica está desativado.');

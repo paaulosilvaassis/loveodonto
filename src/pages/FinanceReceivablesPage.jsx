@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import { getProfessionalOptions } from '../services/collaboratorService.js';
 import { formatCurrencyBRL, parseCurrencyBRL, applyCurrencyMaskBRL } from '../utils/currency.js';

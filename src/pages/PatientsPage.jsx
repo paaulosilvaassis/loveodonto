@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, FileText, ClipboardList, Edit } from 'lucide-react';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { Section } from '../components/Section.jsx';
 import { Tabs } from '../components/Tabs.jsx';
 import { FormRow } from '../components/FormRow.jsx';
@@ -109,9 +109,6 @@ export default function PatientsPage() {
   const [activeSuggestIndex, setActiveSuggestIndex] = useState(-1);
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientsPage.jsx:108',message:'PatientsPage mount',data:{pathname:location.pathname},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
   }, [location.pathname]);
   const [selectedId, setSelectedId] = useState('');
   const [activeSection, setActiveSection] = useState('Dados Principais');
@@ -130,9 +127,6 @@ export default function PatientsPage() {
   const autoSearchTimeoutRef = useRef(null);
   const photoInputRef = useRef(null);
   const [photoPreview, setPhotoPreview] = useState(null);
-  // #region agent log
-  fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'PatientsPage.jsx:112',message:'render',data:{section:activeSection || ''},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-  // #endregion
 
   const navigate = useNavigate();
   const canEdit = can(user, 'patients:write');
@@ -480,9 +474,6 @@ export default function PatientsPage() {
 
   const handlePhotoUpload = (event) => {
     const file = event.target.files?.[0];
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientsPage.jsx:473',message:'photo input change',data:{hasFile:!!file,type:file?.type || null,size:file?.size || null,selectedId:selectedId || null,canEdit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
     if (!file) {
       setPhotoPreview(null);
       return;
@@ -781,9 +772,6 @@ export default function PatientsPage() {
                 title="Cadastro de Paciente Completo"
                 subtitle="Cadastro completo com todas as informações do paciente"
                 onClick={() => {
-                  // #region agent log
-                  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientsPage.jsx:774',message:'patients action card click',data:{route:'/pacientes/cadastro'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-                  // #endregion
                   navigate('/pacientes/cadastro');
                 }}
                 disabled={!canEdit}
@@ -939,9 +927,6 @@ export default function PatientsPage() {
               className="button secondary"
               type="button"
               onClick={() => {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientsPage.jsx:872',message:'patients selected action',data:{action:'prontuario',selectedId:selectedId || null},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H6'})}).catch(()=>{});
-                // #endregion
                 navigate(`/prontuario/${selectedId}`);
               }}
             >
@@ -951,9 +936,6 @@ export default function PatientsPage() {
               className="button secondary"
               type="button"
               onClick={() => {
-                // #region agent log
-                fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/pages/PatientsPage.jsx:879',message:'patients selected action',data:{action:'cadastro-completo',selectedId:selectedId || null},timestamp:Date.now(),sessionId:'debug-session',runId:'pre-fix',hypothesisId:'H6'})}).catch(()=>{});
-                // #endregion
                 navigate(`/pacientes/cadastro/${selectedId}`);
               }}
             >

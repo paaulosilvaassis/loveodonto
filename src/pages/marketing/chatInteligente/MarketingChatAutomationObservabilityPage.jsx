@@ -7,7 +7,7 @@ import {
   listMarketingInboxConversations,
   reprocessMarketingScheduledJob,
 } from '../../../services/marketingChatService.js';
-import { useAuth } from '../../../auth/AuthContext.jsx';
+import { useAuth } from '../../../auth/useAuth.js';
 
 const STATUS_OPTIONS = ['todos', 'queued', 'running', 'retrying', 'failed', 'completed', 'cancelled'];
 const PERIOD_OPTIONS = [

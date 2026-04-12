@@ -40,18 +40,12 @@ const WAITING_COMPAT_STATUSES = new Set([
 const normalizeWorkflow = (appointment) => {
   if (!appointment) return appointment;
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'appointmentService.js:normalizeWorkflow',message:'normalizeWorkflow called',data:{appointmentId:appointment?.id,currentStatus:appointment?.status,checkInAt:appointment?.checkInAt,hasCheckInAt:!!appointment?.checkInAt,isWaitingCompat:WAITING_COMPAT_STATUSES.has(appointment?.status),calledAt:appointment?.calledAt,startedAt:appointment?.startedAt},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
   
   // PROTEÇÃO CRÍTICA: Se já está em atendimento ou finalizado, NUNCA alterar o status
   // Isso previne que normalizeWorkflow reverta incorretamente o status após callPatient
   if (appointment.status === APPOINTMENT_STATUS.EM_ATENDIMENTO || 
       appointment.status === APPOINTMENT_STATUS.FINALIZADO ||
       appointment.status === APPOINTMENT_STATUS.ATENDIDO) {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'appointmentService.js:normalizeWorkflow',message:'normalizeWorkflow - protected status, no change',data:{appointmentId:appointment.id,status:appointment.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     return appointment;
   }
   
@@ -63,16 +57,10 @@ const normalizeWorkflow = (appointment) => {
       status: APPOINTMENT_STATUS.EM_ESPERA,
     };
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'appointmentService.js:normalizeWorkflow',message:'normalizeWorkflow - forcing EM_ESPERA',data:{appointmentId:appointment.id,oldStatus:appointment.status,newStatus:normalized.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-    // #endregion
     
     return normalized;
   }
   
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'appointmentService.js:normalizeWorkflow',message:'normalizeWorkflow - no change',data:{appointmentId:appointment.id,status:appointment.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-  // #endregion
   
   return appointment;
 };
@@ -137,11 +125,6 @@ export const hasConflict = ({
   const placementResult = canPlaceEvent(validAppointments, candidate, appointmentId);
   const appointmentConflict = !placementResult.ok;
   
-  // #region agent log
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'appointmentService.js:34',message:'Conflict check',data:{date,startTime,endTime,professionalId,roomId,capacity:candidate.slotCapacity,appointmentConflict,reason:placementResult.reason},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  }
-  // #endregion
 
   // Verificar também conflitos com blocos
   const start = toMinutes(startTime);
@@ -414,11 +397,6 @@ export const createAppointment = (user, payload) => {
     createdAt: new Date().toISOString(),
     tenant_id: tenantId,
   };
-  // #region agent log
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'appointmentService.js:105',message:'Creating appointment with slotCapacity',data:{id:appointment.id,slotCapacity:appointment.slotCapacity,hasSlotCapacity:'slotCapacity' in appointment,date,startTime,endTime,professionalId,roomId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-  }
-  // #endregion
 
   withDb((db) => {
     db.appointments.push(appointment);
@@ -614,9 +592,6 @@ export const callPatient = (user, appointmentId, consultorioId) => {
     }
     const appointment = normalizeWorkflow(db.appointments[index]);
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'appointmentService.js:callPatient',message:'Before callPatient - appointment state',data:{appointmentId,currentStatus:appointment.status,checkInAt:appointment.checkInAt,calledAt:appointment.calledAt,consultorioId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     
     if (![APPOINTMENT_STATUS.EM_ESPERA, APPOINTMENT_STATUS.CHEGOU].includes(appointment.status)) {
       throw new Error('Paciente deve estar em espera para ser chamado.');
@@ -638,16 +613,9 @@ export const callPatient = (user, appointmentId, consultorioId) => {
     db.appointments[index] = next;
     upsertJourneyEntryForAppointment(db, next, { calledAt: now, startedAt: now });
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'appointmentService.js:callPatient',message:'After callPatient - next state',data:{appointmentId,nextStatus:next.status,nextCalledAt:next.calledAt,nextStartedAt:next.startedAt,nextConsultorioId:next.consultorioId,dbAppointmentsLength:db.appointments.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     
     logAction('journey:call', { appointmentId, userId: user.id, consultorioId: next.consultorioId, calledAt: now });
     
-    // #region agent log
-    const savedAppointment = db.appointments[index];
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'appointmentService.js:callPatient',message:'Before return - final state',data:{appointmentId,returnedStatus:savedAppointment.status,returnedCalledAt:savedAppointment.calledAt,returnedStartedAt:savedAppointment.startedAt,returnedConsultorioId:savedAppointment.consultorioId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     
     return savedAppointment;
   });

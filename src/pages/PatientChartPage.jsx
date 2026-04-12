@@ -6,7 +6,7 @@ import { Tabs } from '../components/Tabs.jsx';
 import { SectionHeaderActions } from '../components/SectionHeaderActions.jsx';
 import OdontogramModule from '../components/odontogram/OdontogramModule.jsx';
 import { BASIC_CONDITIONS } from '../components/odontogram/odontogramConstants.js';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { roles } from '../permissions/permissions.js';
 import { getPatient } from '../services/patientService.js';
 import { getPatientChart, touchPatientChart } from '../services/patientChartService.js';

@@ -1,28 +1,29 @@
 /**
- * Um único comando: garante Admin API (3001) + Vite da Console (5177).
- * Se a API já estiver no ar, só sobe a Console (não mata o processo que você já tinha).
+ * API 3001 + Vite Console 5177. Preflight Supabase em scripts/preflight-local.mjs.
  */
 import { spawn } from 'node:child_process';
-import http from 'node:http';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  ensureConsolePortFree,
+  isPortInUse,
+  probeApiHealth,
+  probeConsoleLogin,
+  REPO_ROOT,
+  validateEnvStackOrExit,
+} from './preflight-local.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(__dirname, '..');
+const root = REPO_ROOT;
 const PORT = Number(process.env.ADMIN_API_PORT || 3001);
+const CONSOLE_DEV_PORT = 5177;
+const CONSOLE_LOGIN_URL = `http://127.0.0.1:${CONSOLE_DEV_PORT}/login`;
 
 function checkHealth() {
-  return new Promise((resolve) => {
-    const req = http.get(`http://127.0.0.1:${PORT}/health`, (res) => {
-      res.resume();
-      resolve(res.statusCode === 200);
-    });
-    req.on('error', () => resolve(false));
-    req.setTimeout(1500, () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
+  return probeApiHealth(PORT);
 }
 
 async function waitForHealth(maxMs = 90000) {
@@ -32,28 +33,53 @@ async function waitForHealth(maxMs = 90000) {
     await new Promise((r) => setTimeout(r, 350));
   }
   throw new Error(
-    `O backend não respondeu em http://127.0.0.1:${PORT}/health. Confira server/.env (SUPABASE_*) e tente: npm run server:restart`,
+    `Backend sem resposta em http://127.0.0.1:${PORT}/health — confira server/.env`,
   );
 }
 
+function spawnServerNode() {
+  const serverDir = path.join(root, 'server');
+  const serverEntry = path.join(serverDir, 'index.js');
+  if (!fs.existsSync(serverEntry)) {
+    throw new Error('[console+api] Falta server/index.js');
+  }
+  return spawn(process.execPath, [serverEntry], {
+    cwd: serverDir,
+    stdio: 'inherit',
+    env: { ...process.env },
+  });
+}
+
+function spawnConsoleVite() {
+  const consoleDir = path.join(root, 'console');
+  const bannerScript = path.join(root, 'scripts', 'console-dev-banner.js');
+  if (fs.existsSync(bannerScript)) {
+    execFileSync(process.execPath, [bannerScript], { stdio: 'inherit', cwd: consoleDir });
+  }
+  const viteCli = path.join(consoleDir, 'node_modules', 'vite', 'bin', 'vite.js');
+  if (!fs.existsSync(viteCli)) {
+    throw new Error('[console+api] cd console && npm install');
+  }
+  return spawn(process.execPath, [viteCli, '--port', String(CONSOLE_DEV_PORT), '--strictPort'], {
+    cwd: consoleDir,
+    stdio: 'inherit',
+    env: { ...process.env },
+  });
+}
+
 async function main() {
+  validateEnvStackOrExit();
+
   let serverProc = null;
   let serverStartedByUs = false;
 
-  const alreadyUp = await checkHealth();
-  if (alreadyUp) {
-    console.log(`[console+api] API já ativa em :${PORT} — apenas iniciando a Console.\n`);
-  } else {
-    console.log(`[console+api] Iniciando Admin API na porta ${PORT}...\n`);
-    serverProc = spawn('npm', ['run', 'server:dev'], {
-      cwd: root,
-      stdio: 'inherit',
-      shell: true,
-      env: { ...process.env },
-    });
+  let apiUp = await checkHealth();
+  if (!apiUp) {
+    console.log(`[console+api] A subir Admin API :${PORT}...\n`);
+    serverProc = spawnServerNode();
     serverStartedByUs = true;
     serverProc.on('error', (err) => {
-      console.error('[console+api] Falha ao iniciar o backend:', err.message);
+      console.error('[console+api] Backend:', err.message);
       process.exit(1);
     });
     try {
@@ -63,34 +89,55 @@ async function main() {
       if (serverProc) serverProc.kill('SIGTERM');
       process.exit(1);
     }
-    console.log('[console+api] Admin API pronta.\n');
+    console.log('[console+api] API pronta.\n');
+    apiUp = true;
+  } else {
+    console.log(`[console+api] API já ativa :${PORT}\n`);
   }
 
-  console.log('[console+api] Iniciando Platform Console (Vite)...\n');
-  const viteProc = spawn('npm', ['run', 'dev'], {
-    cwd: path.join(root, 'console'),
-    stdio: 'inherit',
-    shell: true,
-    env: { ...process.env },
-  });
+  const loginPageOk = await probeConsoleLogin(CONSOLE_DEV_PORT);
+  if (apiUp && loginPageOk) {
+    console.log('[console+api] Console já OK (' + CONSOLE_LOGIN_URL + ').');
+    console.log(`  API http://127.0.0.1:${PORT}/health | Console http://localhost:${CONSOLE_DEV_PORT}/login`);
+    console.log('[console+api] Sem segundo Vite. Ctrl+C noutro terminal se quiser reiniciar.\n');
+    process.exit(0);
+  }
+
+  if (await isPortInUse(CONSOLE_DEV_PORT)) {
+    await ensureConsolePortFree(CONSOLE_DEV_PORT);
+  }
+
+  console.log('[console+api] A subir Vite Console...\n');
+  let viteProc;
+  try {
+    viteProc = spawnConsoleVite();
+  } catch (e) {
+    console.error(String(e.message || e));
+    if (serverStartedByUs && serverProc) serverProc.kill('SIGTERM');
+    process.exit(1);
+  }
 
   viteProc.on('error', (err) => {
-    console.error('[console+api] Falha ao iniciar a Console:', err.message);
+    console.error('[console+api] Vite:', err.message);
     if (serverStartedByUs && serverProc) serverProc.kill('SIGTERM');
     process.exit(1);
   });
 
   viteProc.on('exit', (code) => {
     if (serverStartedByUs && serverProc) {
-      console.log('\n[console+api] Encerrando Admin API iniciada por este script.');
+      console.log('\n[console+api] A encerrar API iniciada aqui.');
       serverProc.kill('SIGTERM');
     }
     process.exit(code ?? 0);
   });
 
   if (serverStartedByUs && serverProc) {
-    serverProc.on('exit', (code) => {
-      console.error(`\n[console+api] Backend encerrou (código ${code}). Fechando Vite.`);
+    serverProc.on('exit', (code, signal) => {
+      const d =
+        code === null && signal
+          ? String(signal)
+          : String(code);
+      console.error('\n[console+api] Backend parou (' + d + '). A fechar Vite.');
       viteProc.kill('SIGTERM');
       process.exit(code ?? 1);
     });
@@ -104,7 +151,19 @@ async function main() {
   process.on('SIGTERM', shutdown);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+const __filename = fileURLToPath(import.meta.url);
+if (process.argv.includes('--env-check-only')) {
+  validateEnvStackOrExit();
+  process.exit(0);
+}
+
+const isMainModule =
+  process.argv[1]
+  && path.normalize(path.resolve(process.argv[1])) === path.normalize(__filename);
+
+if (isMainModule) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

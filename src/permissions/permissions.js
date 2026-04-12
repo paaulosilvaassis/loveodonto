@@ -46,7 +46,12 @@ export const can = (user, permission) => {
   if (!user) return false;
   if (user.isMaster === true) return true;
   if (canByPermission(user, permission)) return true;
-  const allowed = rolePermissions[user.role] || [];
+  /** Mesma convenção de RequireAdminGate / RequireRole — evita falha silenciosa se role vier capitalizado (ex.: "Admin"). */
+  const roleKey = String(user.role || '').toLowerCase();
+  const allowed =
+    rolePermissions[roleKey] ||
+    (roleKey === 'master' ? rolePermissions[roles.admin] : undefined) ||
+    [];
   if (allowed.includes('*')) return true;
   return allowed.includes(permission);
 };

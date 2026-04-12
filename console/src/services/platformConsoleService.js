@@ -115,9 +115,6 @@ async function callPlatformApi(path, { method = 'POST', body } = {}) {
   if (!accessToken) {
     throw new Error('Sessão expirada. Faça login novamente na Console.');
   }
-  // #region agent log
-  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H1',location:'console/src/services/platformConsoleService.js:callPlatformApi:start',message:'Console calling backend API',data:{path:String(path||''),method:String(method||'POST'),hasAccessToken:Boolean(accessToken),hasPlatformKey:Boolean(normalizeEnvString(import.meta.env.VITE_PLATFORM_API_KEY))},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const headers = {
     Authorization: `Bearer ${accessToken}`,
     'x-platform-key': normalizeEnvString(import.meta.env.VITE_PLATFORM_API_KEY),
@@ -130,13 +127,7 @@ async function callPlatformApi(path, { method = 'POST', body } = {}) {
   let response;
   try {
     response = await fetch(resolvePlatformApiUrl(path), init);
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H1',location:'console/src/services/platformConsoleService.js:callPlatformApi:response',message:'Console backend API response received',data:{path:String(path||''),status:Number(response?.status||0),ok:Boolean(response?.ok)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
   } catch (error) {
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H1',location:'console/src/services/platformConsoleService.js:callPlatformApi:catch',message:'Console backend API network exception',data:{path:String(path||''),name:String(error?.name||''),message:String(error?.message||'')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     throw new Error(mapPlatformApiErrorMessage(error) || 'Falha ao chamar o backend local.');
   }
   const text = await response.text();

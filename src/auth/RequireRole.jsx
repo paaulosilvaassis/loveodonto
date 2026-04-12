@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { useAuth } from './AuthContext.jsx';
+import { useAuth } from './useAuth.js';
 
 const isAllowed = (role, allowedRoles) => {
   if (!allowedRoles || allowedRoles.length === 0) return true;

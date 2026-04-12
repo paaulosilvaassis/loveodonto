@@ -14,28 +14,11 @@ function normalizeEnvString(value) {
 }
 
 const url = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_URL);
-const rawPublishable = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY);
-const rawAnon = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY);
-
-/**
- * Prioridade: publishable dedicada; senão anon; se os dois existirem, prefere o que parece
- * sb_publishable_ ou eyJ (evita anon placeholder errado bloquear a chave boa na outra variável).
- */
-function resolvePublicSupabaseKey() {
-  const pub = rawPublishable;
-  const anon = rawAnon;
-  if (pub.startsWith('sb_publishable_')) return pub;
-  if (anon.startsWith('sb_publishable_')) return anon;
-  if (anon.startsWith('eyJ')) return anon;
-  if (pub.startsWith('eyJ')) return pub;
-  return pub || anon;
-}
-
-const anonKey = resolvePublicSupabaseKey();
-
-export function getConsoleSupabasePublicKey() {
-  return resolvePublicSupabaseKey();
-}
+/** Aceita anon JWT (eyJ…) ou publishable (sb_publishable_…); nomes alternativos no Vercel. */
+const anonKey = normalizeEnvString(
+  import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY
+    || import.meta.env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY,
+);
 
 function isValidHttpUrl(value) {
   try {
@@ -56,8 +39,7 @@ function hasEllipsisPlaceholder(value) {
 const hasUrl = Boolean(url);
 const hasAnonKey = Boolean(anonKey);
 const isUrlValid = isValidHttpUrl(url);
-const hasTruncatedKey =
-  hasEllipsisPlaceholder(rawAnon) || hasEllipsisPlaceholder(rawPublishable);
+const hasTruncatedKey = hasEllipsisPlaceholder(anonKey);
 
 export const supabaseConsoleConfig = {
   url,
@@ -97,5 +79,10 @@ const supabaseReady =
   && supabaseConsoleConfig.hasAnonKey
   && supabaseConsoleConfig.isUrlValid
   && !supabaseConsoleConfig.hasTruncatedKey;
+
+/** Mesma chave pública do `createClient` (anon ou publishable) — ex. header `apikey` em login REST de fallback. */
+export function getConsoleSupabasePublicKey() {
+  return anonKey;
+}
 
 export const supabaseConsole = supabaseReady ? createClient(url, anonKey) : null;

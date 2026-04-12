@@ -165,9 +165,6 @@ export default function PatientQuickCreateModal({ isOpen, onClose }) {
 
   const handleCreateNew = () => {
     onClose();
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/components/PatientQuickCreateModal.jsx:168',message:'quick create new click',data:{route:'/pacientes/cadastro'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
     navigate('/pacientes/cadastro');
   };
 

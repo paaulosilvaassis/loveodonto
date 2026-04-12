@@ -27,33 +27,6 @@ export const EventCard = ({
   } = appointment;
   const statusStyle = statusStyles[status] || {};
 
-  // #region agent log
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        location: 'EventCard.jsx:14',
-        message: 'EventCard render data',
-        data: {
-          patientFirstName,
-          patientName,
-          patientPhone,
-          startTime,
-          endTime,
-          procedureName,
-          isReturn,
-          status,
-          hasStatusStyle: !!statusStyle,
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'A',
-      }),
-    }).catch(() => {});
-  }
-  // #endregion
 
   const borderLeftColor = statusStyle.borderLeft || statusStyle.border || '#e2e8f0';
   const statusBadgeClass = `event-status-badge event-status-badge--${statusStyle.badgeVariant || 'neutral'}`;
@@ -87,42 +60,6 @@ export const EventCard = ({
     .filter(Boolean)
     .join(' • ');
 
-  // #region agent log
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    setTimeout(() => {
-      const cardElement = document.querySelector(`[data-appointment-id="${appointment.id}"]`);
-      if (cardElement) {
-        const computedStyle = window.getComputedStyle(cardElement);
-        const rect = cardElement.getBoundingClientRect();
-        fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            location: 'EventCard.jsx:45',
-            message: 'EventCard DOM measurements',
-            data: {
-              id: appointment.id,
-              height: rect.height,
-              width: rect.width,
-              computedHeight: computedStyle.height,
-              computedMinHeight: computedStyle.minHeight,
-              computedOverflow: computedStyle.overflow,
-              styleHeight: style?.height,
-              styleMinHeight: style?.minHeight,
-              hasContent: !!cardElement.querySelector('.event-card-content'),
-              hasRow2: !!cardElement.querySelector('.event-card-row-2'),
-              hasBadges: !!cardElement.querySelector('.event-card-badges'),
-            },
-            timestamp: Date.now(),
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'C',
-          }),
-        }).catch(() => {});
-      }
-    }, 100);
-  }
-  // #endregion
 
   const [isDragging, setIsDragging] = useState(false);
   const dragStartTimeRef = useRef(null);

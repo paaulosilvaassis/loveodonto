@@ -4,8 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/esbuild-preflight.js && node scripts/debug-dev.js && vite",
-    "start:dev": "node scripts/esbuild-preflight.js && node scripts/debug-dev.js && vite --mode development",
+    "env:check": "node ./scripts/preflight-local.mjs --mode stack",
+    "preflight:app": "node ./scripts/preflight-local.mjs --mode app",
+    "preflight:api": "node ./scripts/preflight-local.mjs --mode api",
+    "preflight:console": "node ./scripts/preflight-local.mjs --mode console-vite",
+    "vite:clean": "node scripts/clean-vite-cache.mjs",
+    "dev": "node ./scripts/preflight-local.mjs --mode app && node scripts/esbuild-preflight.js && node scripts/debug-dev.js && vite",
+    "dev:all": "concurrently -n app,saas -c cyan,magenta \"npm run dev\" \"node ./scripts/dev-console-with-api.js\"",
+    "start:dev": "node ./scripts/preflight-local.mjs --mode app && node scripts/esbuild-preflight.js && node scripts/debug-dev.js && vite --mode development",
     "build": "tsc -b && vite build",
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
@@ -15,11 +21,16 @@
     "db:seed:dev": "node scripts/seed-dev-db.js",
     "db:reset:dev": "node scripts/reset-dev-db.js",
     "organize-export": "node scripts/organize-patient-export.js",
-    "console:dev": "cd console && npm run dev",
-    "console:stack": "node scripts/dev-console-with-api.js",
+    "console:dev": "node ./scripts/dev-console-with-api.js",
+    "console:stack": "npm run console:dev",
+    "console:vite": "node ./scripts/dev-console-with-api.js",
+    "console:vite-only": "node ./scripts/preflight-local.mjs --mode console-vite && cd console && npm run dev",
+    "api:dev": "node ./scripts/preflight-local.mjs --mode api && cd server && npm run dev",
+    "backend:dev": "node ./scripts/preflight-local.mjs --mode api && cd server && npm run dev",
     "console:build": "cd console && npm run build",
-    "server:dev": "cd server && npm run dev",
+    "server:dev": "node ./scripts/preflight-local.mjs --mode api && cd server && npm run dev",
     "server:restart": "powershell -ExecutionPolicy Bypass -File \"scripts/restart-backend.ps1\"",
+    "server:restar": "powershell -ExecutionPolicy Bypass -File \"scripts/restart-backend.ps1\"",
     "stack:start": "powershell -ExecutionPolicy Bypass -File \"scripts/start-local-stack.ps1\"",
     "server:start": "cd server && npm run start"
   },
@@ -68,6 +79,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "concurrently": "^9.2.0"
   }
 }

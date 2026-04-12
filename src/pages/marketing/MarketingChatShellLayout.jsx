@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { startMarketingAutomationRuntime, stopMarketingAutomationRuntime } from '../../services/marketingChatService.js';
 
 const TABS = [

@@ -8,7 +8,7 @@ import {
   LEAD_SOURCE_LABELS,
   LEAD_INTEREST_LABELS,
 } from '../../services/crmService.js';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { loadDb } from '../../db/index.js';
 import { Inbox, UserPlus } from 'lucide-react';
 

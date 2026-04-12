@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, LogOut, UserPlus } from 'lucide-react';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
 import { useTenant } from '../tenant/useTenant.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Building2, Plus, Search } from 'lucide-react';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import { listSuppliers } from '../../services/suppliersService.js';
 import SupplierFormModal from '../../components/SupplierFormModal.jsx';
 

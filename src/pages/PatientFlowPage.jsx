@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Calendar, Search, Filter } from 'lucide-react';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { SectionCard } from '../components/SectionCard.jsx';
 import FlowPatientList from '../components/flow/FlowPatientList.jsx';
 import FlowSidebar from '../components/flow/FlowSidebar.jsx';

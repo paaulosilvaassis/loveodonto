@@ -136,9 +136,6 @@ export function RegisterPatientFromLeadModal({ open, onClose, lead, appointmentI
     }
   };
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'RegisterPatientFromLeadModal.jsx:renderCheck',message:'open/lead check',data:{open,hasLead:!!lead,leadId:lead?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H4'})}).catch(()=>{});
-  // #endregion
 
   const handleBackdropClick = (e) => {
     if (e.target !== e.currentTarget) return;

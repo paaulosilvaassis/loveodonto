@@ -17,7 +17,7 @@ import {
   updateMarketingDepartment,
   updateMarketingTag,
 } from '../../../services/marketingChatService.js';
-import { useAuth } from '../../../auth/AuthContext.jsx';
+import { useAuth } from '../../../auth/useAuth.js';
 
 const SECTION_TAGS = 'tags';
 const SECTION_DEPARTMENTS = 'departments';

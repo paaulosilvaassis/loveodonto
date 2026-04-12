@@ -40,39 +40,9 @@ const collectFiles = (dir, acc = []) => {
   return acc;
 };
 
-// #region agent log
-fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    location: 'scripts/debug-dev.js:19',
-    message: 'debug-dev start',
-    data: { cwd, rootFiles },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'pre-fix',
-    hypothesisId: 'H1',
-  }),
-}).catch(() => {});
-// #endregion
 
 let parseError = null;
 const scanFiles = collectFiles(srcDirPath);
-// #region agent log
-fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    location: 'scripts/debug-dev.js:53',
-    message: 'parse scan start',
-    data: { srcDirPath, fileCount: scanFiles.length },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: scriptRunId,
-    hypothesisId: 'H8',
-  }),
-}).catch(() => {});
-// #endregion
 
 for (const filePath of scanFiles) {
   try {
@@ -89,93 +59,7 @@ for (const filePath of scanFiles) {
   }
 }
 
-// #region agent log
-fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    location: 'scripts/debug-dev.js:83',
-    message: 'parse scan result',
-    data: parseError ? parseError : { ok: true },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: scriptRunId,
-    hypothesisId: 'H8',
-  }),
-}).catch(() => {});
-// #endregion
 
-// #region agent log
-fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    location: 'scripts/debug-dev.js:33',
-    message: 'index.html presence',
-    data: {
-      indexHtmlExists: fs.existsSync(indexHtmlPath),
-      publicIndexExists: fs.existsSync(publicIndexPath),
-      indexHtmlPath,
-      publicIndexPath,
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'pre-fix',
-    hypothesisId: 'H1',
-  }),
-}).catch(() => {});
-// #endregion
 
-// #region agent log
-fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    location: 'scripts/debug-dev.js:50',
-    message: 'src directory presence',
-    data: {
-      srcDirExists: fs.existsSync(srcDirPath),
-      srcDirPath,
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'pre-fix',
-    hypothesisId: 'H2',
-  }),
-}).catch(() => {});
-// #endregion
 
-// #region agent log
-fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    location: 'scripts/debug-dev.js:66',
-    message: 'vite config presence',
-    data: {
-      viteConfigFiles: viteConfigCandidates.filter((file) => fs.existsSync(file)),
-      searched: viteConfigCandidates,
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'pre-fix',
-    hypothesisId: 'H3',
-  }),
-}).catch(() => {});
-// #endregion
 
-// #region agent log
-fetch('http://127.0.0.1:7244/ingest/56ea22fe-9ec4-4d67-9a0f-1f3b37662bbd', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    location: 'scripts/debug-dev.js:83',
-    message: 'debug-dev end',
-    data: { cwd, scriptDir: __dirname },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'pre-fix',
-    hypothesisId: 'H4',
-  }),
-}).catch(() => {});
-// #endregion

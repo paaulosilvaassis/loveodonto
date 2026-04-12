@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { Field } from '../components/Field.jsx';
 import { Section } from '../components/Section.jsx';
 import { Tabs } from '../components/Tabs.jsx';

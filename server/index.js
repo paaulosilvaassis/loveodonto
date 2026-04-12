@@ -2,11 +2,30 @@
  * Backend SaaS local: integração obrigatória entre Console (5177) e App (5176).
  * Usa SOMENTE service role no servidor para provisionamento e snapshot do tenant.
  */
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.join(__dirname, '..');
+/**
+ * 1) `server/.env` — valores base.
+ * 2) `.env` e `.env.local` na **raiz do repositório** com `override: true` — um único sítio para
+ *    `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` alinhados com a Console (5177) e o app (5176).
+ * Variáveis de ambiente do sistema continuam a ser sobrescritas pelo último ficheiro carregado.
+ */
+dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config({ path: path.join(repoRoot, '.env'), override: true });
+dotenv.config({ path: path.join(repoRoot, '.env.local'), override: true });
+console.log(
+  '[SaaS Admin API] env: server/.env depois raiz .env/.env.local (a raiz prevalece — veja .env.example na raiz).',
+);
 
 const app = express();
 app.use(
@@ -88,14 +107,87 @@ function normalizeDatabaseError(error, fallbackMessage) {
   return raw || fallbackMessage;
 }
 
+/** Só para diagnóstico local: compara host da Console em `console/.env` com `server/.env` (sem expor segredos). */
+function parseEnvFileKeyValues(filePath) {
+  const out = {};
+  try {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    for (const line of raw.split(/\r?\n/)) {
+      const t = line.trim();
+      if (!t || t.startsWith('#')) continue;
+      const eq = t.indexOf('=');
+      if (eq === -1) continue;
+      const key = t.slice(0, eq).trim();
+      let val = t.slice(eq + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+        val = val.slice(1, -1);
+      }
+      out[key] = val;
+    }
+  } catch {
+    /* ficheiro ausente */
+  }
+  return out;
+}
+
+function warnIfConsoleSupabaseHostnameDiffersFromServer() {
+  const consoleDir = path.join(repoRoot, 'console');
+  /** Último ganha; inclui raiz do repo (onde o Vite da Console também lê). */
+  const merged = {
+    ...parseEnvFileKeyValues(path.join(consoleDir, '.env')),
+    ...parseEnvFileKeyValues(path.join(consoleDir, '.env.local')),
+    ...parseEnvFileKeyValues(path.join(consoleDir, '.env.development')),
+    ...parseEnvFileKeyValues(path.join(consoleDir, '.env.development.local')),
+    ...parseEnvFileKeyValues(path.join(repoRoot, '.env')),
+    ...parseEnvFileKeyValues(path.join(repoRoot, '.env.local')),
+  };
+  const raw = String(
+    merged.VITE_CONSOLE_SUPABASE_URL
+    || merged.VITE_SUPABASE_URL
+    || '',
+  ).trim();
+  if (!raw || !SUPABASE_URL) return;
+  let consoleHost;
+  let serverHost;
+  try {
+    consoleHost = new URL(raw).hostname;
+    serverHost = new URL(SUPABASE_URL).hostname;
+  } catch {
+    return;
+  }
+  if (consoleHost === serverHost) return;
+  console.error(
+    '[Admin API] AVISO: projeto Supabase da Console ≠ SUPABASE_URL do backend — login JWT falha (kid).\n'
+    + `  console (VITE_CONSOLE_SUPABASE_URL host): ${consoleHost}\n`
+    + `  backend (SUPABASE_URL host):              ${serverHost}\n`
+    + '  Ação: copie o MESMO URL e service_role para `.env` na RAIZ do repo (prevalece sobre server/.env) ou edite server/.env. '
+    + 'Supabase → Settings → API. Reinicie o backend.\n',
+  );
+}
+
 console.log('[SaaS Admin API] SUPABASE_URL loaded', Boolean(SUPABASE_URL));
+if (SUPABASE_URL) {
+  try {
+    console.log('[SaaS Admin API] SUPABASE_URL host', new URL(SUPABASE_URL).hostname);
+  } catch {
+    console.log('[SaaS Admin API] SUPABASE_URL não é uma URL http(s) válida — corrija .env na raiz ou server/.env');
+  }
+}
 console.log('[SaaS Admin API] SERVICE_ROLE_KEY loaded', Boolean(SUPABASE_SERVICE_ROLE_KEY));
 console.log('[SaaS Admin API] PLATFORM_API_KEY loaded', Boolean(PLATFORM_API_KEY));
+warnIfConsoleSupabaseHostnameDiffersFromServer();
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Admin API: configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY antes de iniciar o backend.');
+  console.error('[SaaS Admin API] FATAL: defina SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY antes de iniciar.');
+  console.error('  Use `.env` na RAIZ do repositório (prevalece sobre server/.env). Veja `.env.example`.');
+  process.exit(1);
 }
-validateServiceRoleKey(SUPABASE_SERVICE_ROLE_KEY);
+try {
+  validateServiceRoleKey(SUPABASE_SERVICE_ROLE_KEY);
+} catch (e) {
+  console.error('[SaaS Admin API] SUPABASE_SERVICE_ROLE_KEY inválida:', e?.message || e);
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -145,7 +237,7 @@ function explainJwtVerifyFailure(userError, accessToken) {
     return (
       `${base} — Diagnóstico: o access token foi emitido pelo Auth de "${tokenHost}", `
       + `mas SUPABASE_URL deste servidor aponta para "${serverHost}". `
-      + 'Alinhe console/.env e server/.env ao mesmo projeto (Settings → API), reinicie Vite e o backend, '
+      + 'Alinhe `.env` na raiz do repo (prevalece) ou `console/.env` e `server/.env` ao mesmo projeto (Settings → API), reinicie Vite e o backend, '
       + 'limpe dados do site em localhost:5177 e faça login de novo.'
     );
   }
@@ -352,13 +444,7 @@ async function getConsoleActorFromBearerToken(accessToken) {
 async function requireConsoleAccess(req, res, next) {
   try {
     const platformKey = normalizeText(req.headers['x-platform-key']);
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H2',location:'server/index.js:requireConsoleAccess:start',message:'Backend validating console access',data:{hasPlatformKey:Boolean(platformKey),hasAuthorization:Boolean(normalizeText(req.headers.authorization))},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (PLATFORM_API_KEY && platformKey && platformKey === PLATFORM_API_KEY) {
-      // #region agent log
-      fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H2',location:'server/index.js:requireConsoleAccess:platformKey',message:'Backend accepted console access via platform key',data:{authMode:'platform-key'},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       req.platformActor = { id: null, email: '', name: 'system', role: 'system' };
       return next();
     }
@@ -369,14 +455,8 @@ async function requireConsoleAccess(req, res, next) {
       return res.status(401).json({ error: 'Sessão da Console ausente.' });
     }
     req.platformActor = await getConsoleActorFromBearerToken(accessToken);
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H2',location:'server/index.js:requireConsoleAccess:bearer',message:'Backend accepted console access via bearer token',data:{authMode:'bearer',actorId:String(req.platformActor?.id||''),role:String(req.platformActor?.role||'')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     next();
   } catch (err) {
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H2',location:'server/index.js:requireConsoleAccess:catch',message:'Backend rejected console access',data:{message:String(err?.message||'')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     res.status(401).json({ error: err?.message || 'Falha ao validar sessão da Console.' });
   }
 }
@@ -596,9 +676,6 @@ app.post('/internal/platform/provision-user', requireConsoleAccess, async (req, 
 });
 
 app.post('/internal/platform/tenants/provision', requireConsoleAccess, async (req, res) => {
-  // #region agent log
-  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H3',location:'server/index.js:/internal/platform/tenants/provision:start',message:'Backend tenant provision endpoint called',data:{hasActor:Boolean(req?.platformActor),hasResponsibleEmail:Boolean(String(req?.body?.responsibleEmail||'').trim()),plan:String(req?.body?.plan||'')},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   let createdTenantId = null;
   let createdAuthUserId = null;
   let createdAuthUser = false;
@@ -654,9 +731,6 @@ app.post('/internal/platform/tenants/provision', requireConsoleAccess, async (re
     if (tenantError || !tenant?.id) throw tenantError || new Error('Falha ao criar tenant.');
     createdTenantId = tenant.id;
     console.log('[Provision] tenant criado', { tenantId: createdTenantId, planCode, responsibleEmail });
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H3',location:'server/index.js:/internal/platform/tenants/provision:tenant',message:'Backend created tenant row',data:{tenantId:String(createdTenantId||''),responsibleEmail},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     const { authUserId, tenantUser } = await createAuthUserAndTenantLink({
       email: responsibleEmail,
@@ -667,9 +741,6 @@ app.post('/internal/platform/tenants/provision', requireConsoleAccess, async (re
     });
     createdAuthUserId = authUserId;
     createdAuthUser = true;
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H3',location:'server/index.js:/internal/platform/tenants/provision:user-link',message:'Backend created auth user and tenant link',data:{tenantId:String(createdTenantId||''),authUserId:String(createdAuthUserId||''),tenantUserHasUserId:Boolean(tenantUser?.user_id)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     const { data: subscription, error: subscriptionError } = await supabase
       .from('tenant_subscriptions')
@@ -735,9 +806,6 @@ app.post('/internal/platform/tenants/provision', requireConsoleAccess, async (re
       ...(passwordWasGenerated ? { temporaryPassword: generatedPassword } : {}),
     });
   } catch (err) {
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d56780'},body:JSON.stringify({sessionId:'d56780',runId:'run1',hypothesisId:'H3',location:'server/index.js:/internal/platform/tenants/provision:catch',message:'Backend tenant provision failed',data:{message:String(err?.message||''),tenantId:String(createdTenantId||''),authUserId:String(createdAuthUserId||'')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     console.error('[Provision] erro detalhado', {
       message: normalizeDatabaseError(err, String(err || '')),
       tenantId: createdTenantId,
@@ -761,6 +829,16 @@ app.post('/internal/platform/tenants/provision', requireConsoleAccess, async (re
   }
 });
 
-app.listen(PORT, () => {
+const httpServer = app.listen(PORT, () => {
   console.log(`[SaaS Admin API] rodando na porta ${PORT}`);
+});
+httpServer.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(
+      `[SaaS Admin API] Porta ${PORT} já em uso. Encerre o processo nessa porta ou defina ADMIN_API_PORT com outro valor.`,
+    );
+  } else {
+    console.error('[SaaS Admin API] Erro ao escutar:', err?.message || err);
+  }
+  process.exit(1);
 });

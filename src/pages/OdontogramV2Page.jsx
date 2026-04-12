@@ -8,7 +8,7 @@ import { FACE_LABELS, FACES, STATUS_OPTIONS } from '../components/odontogram-v2/
 import { OdontogramV2Provider, useOdontogramV2 } from '../components/odontogram-v2/odontogramV2Store.jsx';
 import { getPatient } from '../services/patientService.js';
 import { getOdontogramV2, updateOdontogramV2 } from '../services/patientOdontogramV2Service.js';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 
 const downloadJson = (data) => {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });

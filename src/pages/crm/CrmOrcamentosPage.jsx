@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { CrmLayout } from '../../crm/ui/CrmLayout.jsx';
-import { useAuth } from '../../auth/AuthContext.jsx';
+import { useAuth } from '../../auth/useAuth.js';
 import {
   listCrmBudgets,
   getCrmBudgetKPIs,

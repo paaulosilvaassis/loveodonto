@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Plus, Eye, FileText, DollarSign, RefreshCcw, XCircle, BadgeCheck, AlertTriangle, BellRing } from 'lucide-react';
-import { useAuth } from '../auth/AuthContext.jsx';
+import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import {
   listFinancings,

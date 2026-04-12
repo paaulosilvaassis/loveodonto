@@ -2003,6 +2003,14 @@ textarea:focus {
   transform: none;
 }
 
+a.button {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 .list {
   list-style: none;
   padding: 0;
@@ -7077,10 +7085,38 @@ textarea:focus {
   background: var(--color-bg-card, var(--color-bg));
 }
 
-.collaborator-create-modal-body {
-  max-height: min(78vh, 640px);
-  overflow-y: auto;
-  padding-right: 0.25rem;
+/* Modal "Novo colaborador": scroll único no body (ver CollaboratorCreateModal.jsx) */
+.collaborator-create-modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.collaborator-create-modal-fields .form-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .collaborator-create-modal-fields .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .collaborator-create-modal-fields .form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.collaborator-create-modal-fields .form-grid > * {
+  min-width: 0;
+}
+
+.collaborator-create-modal-fields textarea.collaborator-rh-textarea {
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .collaborator-directory-cards {

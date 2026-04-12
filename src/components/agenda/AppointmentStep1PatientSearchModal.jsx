@@ -85,16 +85,10 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
   };
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/components/agenda/AppointmentStep1PatientSearchModal.jsx:57',message:'search effect triggered',data:{debouncedQuery,patientQuery,open},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
-    // #endregion
     const type = detectSearchType(debouncedQuery);
     const normalized = normalizeSuggestQuery(debouncedQuery, type);
     const minChars = suggestMinChars(type);
 
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/components/agenda/AppointmentStep1PatientSearchModal.jsx:62',message:'search params calculated',data:{type,normalized,normalizedLength:normalized?.length,minChars},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
 
     if (!normalized || normalized.length < minChars) {
       setPatientSuggestions([]);
@@ -110,14 +104,8 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
 
     try {
       const { results } = suggestPatients(type, normalized, 10);
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/components/agenda/AppointmentStep1PatientSearchModal.jsx:75',message:'suggestPatients result',data:{resultsCount:results?.length,firstResult:results?.[0]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
       setPatientSuggestions(results);
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/components/agenda/AppointmentStep1PatientSearchModal.jsx:78',message:'suggestPatients error',data:{error:err?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-      // #endregion
       setPatientSuggestions([]);
     } finally {
       setSuggestLoading(false);
@@ -130,9 +118,6 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
   };
 
   const handleSelectPatient = (patient) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/components/agenda/AppointmentStep1PatientSearchModal.jsx:89',message:'patient selected',data:{patientId:patient?.id,patientName:patient?.name || patient?.full_name},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
     setSelectedPatient(patient);
     setPatientQuery(patient.name || patient.full_name || patient.nickname || patient.social_name || '');
     setSuggestOpen(false);
@@ -158,9 +143,6 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
 
   const handleContinue = () => {
     if (!selectedPatient) return;
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/614eba6f-bd1f-4c67-b060-4700f9b57da0',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/components/agenda/AppointmentStep1PatientSearchModal.jsx:113',message:'handleContinue called',data:{hasSelectedPatient:!!selectedPatient,patientId:selectedPatient?.id,patientKeys:Object.keys(selectedPatient || {})},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
-    // #endregion
     onContinue({
       appointmentType: 'consulta',
       patient: selectedPatient,
