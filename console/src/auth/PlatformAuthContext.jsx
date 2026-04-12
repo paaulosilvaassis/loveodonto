@@ -10,6 +10,7 @@ import {
 import {
   supabaseConsole,
   getConsoleSupabaseConfigError,
+  getConsoleSupabasePublicKey,
   supabaseConsoleConfig,
 } from '../lib/supabaseConsole.js';
 import { PLATFORM_ROLES } from './platformRoles.js';
@@ -30,9 +31,14 @@ function authLog(phase, detail) {
 
 const PROFILE_FETCH_TIMEOUT_MS = 15000;
 const GET_SESSION_TIMEOUT_MS = 12000;
-const CONSOLE_PUBLIC_KEY =
-  String(import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY || '').trim()
-  || String(import.meta.env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY || '').trim();
+/** Mesma chave pública usada em createClient (respeita prioridade publishable vs anon). */
+const CONSOLE_PUBLIC_KEY = getConsoleSupabasePublicKey();
+
+/** Erros típicos de refresh/access token corrompido ou projeto trocado no .env. */
+function isInvalidJwtSessionMessage(msg) {
+  const lower = String(msg || '').toLowerCase();
+  return lower.includes('jwt') && (lower.includes('invalid') || lower.includes('malformed'));
+}
 
 function withTimeout(promise, ms, label) {
   let timer;
@@ -82,6 +88,30 @@ function mapRowToPlatformUser(data) {
   };
 }
 
+/** Backend 3001 com service role — não passa por RLS do PostgREST (evita 54001). */
+function getConsoleProfileApiUrl() {
+  const raw = String(import.meta.env.VITE_PLATFORM_API_BASE_URL || '').trim();
+  const base = raw.replace(/\/$/, '');
+  const path = '/internal/platform/console-profile';
+  if (!base) {
+    return path;
+  }
+  // Em dev, fetch direto para http://localhost:3001 pode falhar (IPv4 vs IPv6, CORS em edge cases).
+  // O proxy do Vite (`console/vite.config.js`) encaminha `/internal/platform` → mesmo backend.
+  if (import.meta.env.DEV) {
+    try {
+      const u = new URL(base);
+      const h = u.hostname.toLowerCase();
+      if (h === 'localhost' || h === '127.0.0.1' || h === '::1') {
+        return path;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return `${base}${path}`;
+}
+
 export function PlatformAuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [platformUser, setPlatformUser] = useState(null);
@@ -104,41 +134,91 @@ export function PlatformAuthProvider({ children }) {
     }
 
     const job = (async () => {
-      authLog('fetchPlatformUser:started', { authId, source, table: 'platform_admin_users' });
+      authLog('fetchPlatformUser:started', { authId, source, via: 'admin-api' });
       try {
-        const query = supabaseConsole
-          .from('platform_admin_users')
-          .select('id, email, full_name, role_slug, is_active')
-          .eq('id', authId)
-          .eq('is_active', true)
-          .maybeSingle();
-
-        const { data, error } = await withTimeout(
-          query,
-          PROFILE_FETCH_TIMEOUT_MS,
-          'platform_admin_users',
-        );
-
-        if (error) {
-          authLog('fetchPlatformUser:queryError', { message: error.message, code: error.code, source });
+        const { data: sessionData, error: sessionErr } = await supabaseConsole.auth.getSession();
+        if (sessionErr) {
+          return { ok: false, code: 'SESSION', message: sessionErr.message || 'Sessão inválida.' };
+        }
+        const accessToken = sessionData?.session?.access_token || '';
+        const sessionUserId = sessionData?.session?.user?.id || '';
+        if (!accessToken || sessionUserId !== authId) {
           return {
             ok: false,
-            code: error.code || 'QUERY_ERROR',
-            message: 'Não foi possível carregar o perfil de administrador. Verifique as políticas RLS e a tabela platform_admin_users.',
+            code: 'SESSION',
+            message: 'Sessão inconsistente. Faça login novamente.',
           };
         }
-        if (!data) {
-          authLog('fetchPlatformUser:not_found_or_inactive', { authId, source });
+
+        let response;
+        try {
+          response = await withTimeout(
+            fetch(getConsoleProfileApiUrl(), {
+              method: 'GET',
+              headers: { Authorization: `Bearer ${accessToken}` },
+            }),
+            PROFILE_FETCH_TIMEOUT_MS,
+            'console-profile',
+          );
+        } catch (netErr) {
+          const m = String(netErr?.message || '').toLowerCase();
+          const looksLikeNetworkFailure =
+            m.includes('failed to fetch')
+            || m.includes('networkerror')
+            || m.includes('network request failed')
+            || m.includes('load failed');
+          if (looksLikeNetworkFailure) {
+            return {
+              ok: false,
+              code: 'BACKEND_DOWN',
+              message:
+                'Backend da plataforma (porta 3001) não respondeu. Na raiz do projeto: npm run server:restart '
+                + '(ou npm run stack:start). Em dev, o perfil usa o proxy do Vite para /internal/platform; '
+                + 'garanta o server em ADMIN_API_PORT (padrão 3001).',
+            };
+          }
+          throw netErr;
+        }
+
+        const json = await response.json().catch(() => ({}));
+        if (response.status === 404) {
+          authLog('fetchPlatformUser:not_found', { source });
           return {
             ok: false,
             code: 'PROFILE_NOT_FOUND',
             message:
-              'Este usuário não tem perfil ativo em platform_admin_users (ou o UUID não bate com auth.users). '
-              + 'Crie a linha no Supabase com o mesmo id do usuário em Authentication.',
+              json?.error
+              || 'Sem perfil em platform_admin_users. No Supabase: Authentication → UUID do usuário → Table Editor → '
+                + 'crie linha com esse id, role_slug = super_admin, is_active = true.',
           };
         }
-        const profile = mapRowToPlatformUser(data);
-        authLog('fetchPlatformUser:success', { email: profile.email, role: profile.role, source });
+        if (response.status === 401) {
+          const serverMsg = String(json?.error || '').toLowerCase();
+          const looksLikeJwtMismatch =
+            serverMsg.includes('invalid jwt')
+            || serverMsg.includes('jwt')
+            || serverMsg.includes('signature')
+            || serverMsg.includes('token');
+          return {
+            ok: false,
+            code: 'UNAUTHORIZED',
+            message:
+              json?.error
+              && looksLikeJwtMismatch
+                ? `${json.error} Verifique se server/.env (SUPABASE_URL) é o mesmo projeto Supabase que console/.env (VITE_CONSOLE_SUPABASE_URL) e se SUPABASE_SERVICE_ROLE_KEY é desse projeto.`
+                : json?.error || 'Sessão não aceita pelo backend. Mesmo projeto Supabase no server/.env e na Console.',
+          };
+        }
+        if (!response.ok) {
+          return {
+            ok: false,
+            code: 'API_ERROR',
+            message: json?.error || `Erro HTTP ${response.status} ao carregar perfil.`,
+          };
+        }
+
+        const profile = mapRowToPlatformUser(json);
+        authLog('fetchPlatformUser:success', { email: profile.email, role: profile.role, source, via: 'admin-api' });
         return { ok: true, profile };
       } catch (e) {
         const timedOut = e?.code === 'TIMEOUT' || String(e?.message || '').includes('Timeout');
@@ -198,8 +278,20 @@ export function PlatformAuthProvider({ children }) {
             GET_SESSION_TIMEOUT_MS,
             'getSession',
           );
-          if (error) authLog('bootstrap:getSessionError', error.message);
-          s = data?.session ?? null;
+          if (error) {
+            authLog('bootstrap:getSessionError', error.message);
+            if (isInvalidJwtSessionMessage(error.message)) {
+              try {
+                await supabaseConsole.auth.signOut({ scope: 'local' });
+                authLog('bootstrap:clearedStaleAuthStorage');
+              } catch {
+                /* ignore */
+              }
+            }
+            s = null;
+          } else {
+            s = data?.session ?? null;
+          }
         } catch (e) {
           authLog('bootstrap:getSessionTimeout', String(e?.message || e));
           s = null;
@@ -264,6 +356,12 @@ export function PlatformAuthProvider({ children }) {
     authLog('login:started', { email });
     if (configError || !supabaseConsole) {
       throw new Error(configError || 'Supabase da Console não está configurado.');
+    }
+
+    try {
+      await supabaseConsole.auth.signOut({ scope: 'local' });
+    } catch {
+      /* evita sessão/refresh token antigo atrapalhar o próximo login */
     }
 
     let connectivityProbe = { attempted: false };

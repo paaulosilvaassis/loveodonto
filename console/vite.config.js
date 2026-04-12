@@ -13,9 +13,11 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss()],
     server: {
-      /** Evita conflito com o app principal (`npm run dev` na raiz), que também usa 5176. */
-      port: 5178,
+      /** Mesma porta que `npm run console:dev` / README (app principal na raiz usa 5176). */
+      port: 5177,
       strictPort: true,
+      /** Igual ao app na raiz: abre o login da Console no navegador ao subir o Vite. */
+      open: '/login',
       proxy: {
         '/internal/platform': {
           target: backendTarget,

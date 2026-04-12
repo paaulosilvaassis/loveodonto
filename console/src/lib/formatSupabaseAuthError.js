@@ -14,6 +14,12 @@ export function formatConsoleSupabaseAuthError(err) {
   if (code === 'TIMEOUT') {
     return 'A consulta do perfil demorou demais. Verifique rede, projeto Supabase e políticas RLS.';
   }
+  if (code === 'UNAUTHORIZED') {
+    return (
+      String(err?.message || '').trim()
+      || 'Sessão não aceita pelo backend. Alinhe server/.env com console/.env (mesmo projeto Supabase).'
+    );
+  }
 
   const raw = String(err?.message || err || '').trim();
   const lower = raw.toLowerCase();
@@ -27,7 +33,14 @@ export function formatConsoleSupabaseAuthError(err) {
   }
 
   if (lower.includes('jwt') && (lower.includes('invalid') || lower.includes('malformed'))) {
-    return 'Token ou chave em formato inválido. Verifique se a chave anon/public foi copiada por completo no Vercel.';
+    return (
+      'Falha de JWT no login (Supabase Auth). (1) Em console/.env: chave publishable em '
+      + 'VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY ou anon JWT (eyJ…) em VITE_CONSOLE_SUPABASE_ANON_KEY, '
+      + 'mesmo projeto que VITE_CONSOLE_SUPABASE_URL, sem aspas; reinicie o Vite. '
+      + '(2) Apague dados do site para localhost:5177 (DevTools → Application → Limpar dados). '
+      + '(3) Se o erro citar "signature" ou "segments" após o login, o backend em server/.env '
+      + '(SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY) precisa ser o mesmo projeto que a Console.'
+    );
   }
 
   if (

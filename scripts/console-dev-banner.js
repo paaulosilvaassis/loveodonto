@@ -2,5 +2,6 @@
 console.log('');
 console.log('  Platform Console (Vite)');
 console.log('  → http://localhost:5177/login');
+console.log('  (O Vite tenta abrir essa URL no navegador; se não abrir, cole manualmente.)');
 console.log('  (App da clínica na raiz usa http://localhost:5176)');
 console.log('');

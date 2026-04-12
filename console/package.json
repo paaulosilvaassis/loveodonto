@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "node ../scripts/console-dev-banner.js && vite --port 5177 --strictPort",
+    "dev": "node ../scripts/console-dev-banner.js && vite --strictPort",
     "build": "vite build",
     "preview": "vite preview"
   },

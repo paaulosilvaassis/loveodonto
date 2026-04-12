@@ -14,11 +14,28 @@ function normalizeEnvString(value) {
 }
 
 const url = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_URL);
-/** Aceita anon JWT (eyJ…) ou publishable (sb_publishable_…); nomes alternativos no Vercel. */
-const anonKey = normalizeEnvString(
-  import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY
-    || import.meta.env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY,
-);
+const rawPublishable = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY);
+const rawAnon = normalizeEnvString(import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY);
+
+/**
+ * Prioridade: publishable dedicada; senão anon; se os dois existirem, prefere o que parece
+ * sb_publishable_ ou eyJ (evita anon placeholder errado bloquear a chave boa na outra variável).
+ */
+function resolvePublicSupabaseKey() {
+  const pub = rawPublishable;
+  const anon = rawAnon;
+  if (pub.startsWith('sb_publishable_')) return pub;
+  if (anon.startsWith('sb_publishable_')) return anon;
+  if (anon.startsWith('eyJ')) return anon;
+  if (pub.startsWith('eyJ')) return pub;
+  return pub || anon;
+}
+
+const anonKey = resolvePublicSupabaseKey();
+
+export function getConsoleSupabasePublicKey() {
+  return resolvePublicSupabaseKey();
+}
 
 function isValidHttpUrl(value) {
   try {
@@ -39,7 +56,8 @@ function hasEllipsisPlaceholder(value) {
 const hasUrl = Boolean(url);
 const hasAnonKey = Boolean(anonKey);
 const isUrlValid = isValidHttpUrl(url);
-const hasTruncatedKey = hasEllipsisPlaceholder(anonKey);
+const hasTruncatedKey =
+  hasEllipsisPlaceholder(rawAnon) || hasEllipsisPlaceholder(rawPublishable);
 
 export const supabaseConsoleConfig = {
   url,
@@ -48,10 +66,6 @@ export const supabaseConsoleConfig = {
   isUrlValid,
   hasTruncatedKey,
 };
-
-// #region agent log
-fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run1',hypothesisId:'H6',location:'console/src/lib/supabaseConsole.js:config',message:'Console Supabase config snapshot',data:{hasUrl,hasAnonKey,isUrlValid,hasTruncatedKey},timestamp:Date.now()})}).catch(()=>{});
-// #endregion
 
 const envHint = import.meta.env.DEV
   ? 'Arquivo: console/.env (na pasta da Console). Reinicie o Vite após alterar.'
