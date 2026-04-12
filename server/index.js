@@ -18,6 +18,11 @@ app.use(
 );
 app.use(express.json());
 
+/** Health check leve (sem Supabase) — usado pelo script `npm run console:stack` para saber quando a API está escutando. */
+app.get('/health', (_req, res) => {
+  res.status(200).json({ ok: true, service: 'saas-admin-api' });
+});
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PLATFORM_API_KEY = process.env.PLATFORM_API_KEY || process.env.ADMIN_API_KEY || '';
@@ -95,6 +100,64 @@ validateServiceRoleKey(SUPABASE_SERVICE_ROLE_KEY);
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+/** Host do `iss` do JWT (sem verificar assinatura) — só para diagnóstico de projeto errado. */
+function jwtAccessTokenIssuerHost(accessToken) {
+  try {
+    const raw = String(accessToken || '').trim();
+    if (!raw.startsWith('eyJ')) return null;
+    const parts = raw.split('.');
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    const iss = String(payload.iss || '').trim();
+    if (!iss) return null;
+    return new URL(iss).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function configuredSupabaseHost() {
+  try {
+    return new URL(SUPABASE_URL).hostname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Enriquece mensagem de falha do GoTrue (ex.: unrecognized kid) comparando emissor do token e SUPABASE_URL.
+ */
+function explainJwtVerifyFailure(userError, accessToken) {
+  const base = normalizeDatabaseError(userError, '') || String(userError?.message || '').trim();
+  const lower = base.toLowerCase();
+  const looksLikeJwt =
+    lower.includes('jwt')
+    || lower.includes('kid')
+    || lower.includes('unverifiable')
+    || lower.includes('signature')
+    || lower.includes('token');
+  if (!looksLikeJwt) return base || 'Token inválido.';
+
+  const tokenHost = jwtAccessTokenIssuerHost(accessToken);
+  const serverHost = configuredSupabaseHost();
+  if (tokenHost && serverHost && tokenHost !== serverHost) {
+    return (
+      `${base} — Diagnóstico: o access token foi emitido pelo Auth de "${tokenHost}", `
+      + `mas SUPABASE_URL deste servidor aponta para "${serverHost}". `
+      + 'Alinhe console/.env e server/.env ao mesmo projeto (Settings → API), reinicie Vite e o backend, '
+      + 'limpe dados do site em localhost:5177 e faça login de novo.'
+    );
+  }
+  if (tokenHost && serverHost && tokenHost === serverHost) {
+    return (
+      `${base} — Mesmo projeto (${tokenHost}), mas a assinatura não bateu. `
+      + 'Limpe sessão no browser (Application → Clear site data), faça login de novo; confira se anon/publishable '
+      + 'e service_role no .env são do projeto atual (sem chaves antigas ou cortadas).'
+    );
+  }
+  return base;
+}
 
 const PLAN_CONFIG = {
   Start: {
@@ -260,7 +323,7 @@ async function getConsoleActorFromBearerToken(accessToken) {
   const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
   if (userError || !userData?.user?.id) {
     throw new Error(
-      normalizeDatabaseError(userError, '')
+      explainJwtVerifyFailure(userError, accessToken)
       || 'Token da Console inválido. Verifique se a Console usa o mesmo projeto Supabase configurado no backend.',
     );
   }
@@ -330,8 +393,9 @@ async function requireAppUser(req, res, next) {
     if (error || !data?.user?.id) {
       return res.status(401).json({
         error:
-          normalizeDatabaseError(error, '')
-          || 'Token do app inválido. Verifique se login SaaS e backend usam o mesmo projeto Supabase.',
+          explainJwtVerifyFailure(error, accessToken)
+          || normalizeDatabaseError(error, '')
+          || 'Token do app inválido. O login SaaS (app 5176) e server/.env (SUPABASE_URL) devem ser o mesmo projeto Supabase.',
       });
     }
     req.appAuthUser = data.user;
@@ -357,7 +421,7 @@ app.get('/internal/platform/console-profile', async (req, res) => {
     if (userError || !userData?.user?.id) {
       return res.status(401).json({
         error:
-          normalizeDatabaseError(userError, '')
+          explainJwtVerifyFailure(userError, accessToken)
           || 'Token inválido. Console e backend devem usar o mesmo projeto Supabase.',
       });
     }
@@ -441,6 +505,13 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
     }
 
     const tenant = tenantResult.data || null;
+    if (!tenant) {
+      return res.status(404).json({
+        error:
+          'Clínica não encontrada em `tenants` para o vínculo em tenant_users. '
+          + 'O provisionamento pode estar incompleto — refaça ou corrija na Platform Console (5177).',
+      });
+    }
     const subscription = subscriptionResult.data || null;
     const warnings = [];
     const tenantStatus = normalizeStatus(tenant?.status);
@@ -467,8 +538,14 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
     });
   } catch (err) {
     console.error('[tenant-context]', err);
+    const raw = normalizeDatabaseError(err, 'Falha ao carregar contexto da clínica.');
+    const lower = String(raw || '').toLowerCase();
+    const hint =
+      lower.includes('relation') && lower.includes('does not exist')
+        ? ' Rode as migrations do schema SaaS no Supabase (mesmo projeto que app e backend).'
+        : '';
     res.status(400).json({
-      error: normalizeDatabaseError(err, 'Falha ao carregar contexto da clínica.'),
+      error: `${raw}${hint}`,
     });
   }
 });

@@ -52,6 +52,10 @@ function resolveUserFromSession(session, loadDbFn) {
   };
 }
 
+/**
+ * Aceita sessão completa do Supabase Auth OU o objeto reduzido do localStorage;
+ * nesse caso reidrata via supabasePlatformClient.auth.getSession() (storageKey próprio).
+ */
 async function getPersistedSaasSession(session) {
   if (!supabasePlatformClient) return null;
   if (session?.user?.id) return session;
@@ -63,15 +67,9 @@ async function getPersistedSaasSession(session) {
 }
 
 async function resolveSaasUserFromSession(session) {
-  // #region agent log
-  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run3',hypothesisId:'H14',location:'src/auth/AuthContext.jsx:resolveSaasUserFromSession:start',message:'Resolve SaaS user from session started',data:{hasSession:Boolean(session),hasUserId:Boolean(session?.user?.id),hasPlatformClient:Boolean(supabasePlatformClient)},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   const persistedSession = await getPersistedSaasSession(session);
   if (!persistedSession?.user?.id) return null;
   const bootstrap = await fetchSaasAccessBootstrap(supabasePlatformClient);
-  // #region agent log
-  fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run3',hypothesisId:'H14',location:'src/auth/AuthContext.jsx:resolveSaasUserFromSession:bootstrap',message:'Resolve SaaS user bootstrap result',data:{hasTenantId:Boolean(bootstrap?.tenantId),isActive:Boolean(bootstrap?.isActive),role:String(bootstrap?.role||'')},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!bootstrap?.tenantId) return null;
   return {
     id: persistedSession.user.id,
@@ -95,16 +93,58 @@ export const AuthProvider = ({ children }) => {
       return;
     }
     let cancelled = false;
+    if (session.authMode === 'saas') {
+      (async () => {
+        try {
+          if (!supabasePlatformClient) {
+            if (!cancelled) setUser(null);
+            return;
+          }
+          const { data, error } = await supabasePlatformClient.auth.getSession();
+          if (cancelled) return;
+          if (error) throw error;
+          const supa = data?.session;
+          if (!supa?.user?.id) {
+            localStorage.removeItem(SESSION_KEY);
+            if (!cancelled) {
+              setSession(null);
+              setUser(null);
+            }
+            return;
+          }
+          const resolved = await resolveSaasUserFromSession(supa);
+          if (cancelled) return;
+          if (!resolved?.tenantId) {
+            setUser(null);
+            return;
+          }
+          const nextStored = {
+            authMode: 'saas',
+            userId: supa.user.id,
+            tenantId: resolved.tenantId,
+          };
+          localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
+          setUser(resolved);
+          setSession((prev) => {
+            if (
+              prev?.authMode === 'saas'
+              && prev.userId === nextStored.userId
+              && prev.tenantId === nextStored.tenantId
+            ) {
+              return prev;
+            }
+            return nextStored;
+          });
+        } catch {
+          if (!cancelled) setUser(null);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
     const rafId = requestAnimationFrame(() => {
       if (cancelled) return;
-      if (session.authMode === 'saas') {
-        resolveSaasUserFromSession(session).then((resolved) => {
-          if (!cancelled) setUser(resolved);
-        }).catch(() => {
-          if (!cancelled) setUser(null);
-        });
-        return;
-      }
       loadDbAsync().then(() => {
         if (cancelled) return;
         const resolved = resolveUserFromSession(session, loadDb);
@@ -119,10 +159,41 @@ export const AuthProvider = ({ children }) => {
     };
   }, [session]);
 
+  /** Mantém user alinhado após refresh de token e logout do Supabase (modo SaaS). */
+  useEffect(() => {
+    if (!supabasePlatformClient) return undefined;
+    const { data: { subscription } } = supabasePlatformClient.auth.onAuthStateChange(async (event, authSession) => {
+      const stored = getStoredSession();
+      if (!stored || stored.authMode !== 'saas') return;
+      if (event === 'INITIAL_SESSION') return;
+      if (!authSession?.user?.id) {
+        localStorage.removeItem(SESSION_KEY);
+        setSession(null);
+        setUser(null);
+        return;
+      }
+      try {
+        const resolved = await resolveSaasUserFromSession(authSession);
+        if (!resolved?.tenantId) {
+          setUser(null);
+          return;
+        }
+        const nextStored = {
+          authMode: 'saas',
+          userId: authSession.user.id,
+          tenantId: resolved.tenantId,
+        };
+        localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
+        setSession(nextStored);
+        setUser(resolved);
+      } catch {
+        setUser(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
   const login = async ({ userId, tenantId: explicitTenantId }) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'35f1e2'},body:JSON.stringify({sessionId:'35f1e2',runId:'run3',hypothesisId:'H15',location:'src/auth/AuthContext.jsx:login:start',message:'AuthContext login started',data:{saasMode:Boolean(isSaasModeEnabled()),hasUserId:Boolean(userId),hasTenantId:Boolean(explicitTenantId)},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (isSaasModeEnabled()) {
       const { data, error } = await supabasePlatformClient.auth.getSession();
       if (error) {
@@ -203,6 +274,7 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     if (!session || !user) return;
+    if (session.authMode === 'saas') return;
     const db = loadDb();
     const u = db.users.find((item) => item.id === session.userId);
     if (u && u.has_system_access === false) {

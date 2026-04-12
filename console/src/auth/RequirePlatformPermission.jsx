@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom';
-import { usePlatformAuth } from './PlatformAuthContext.jsx';
+import { usePlatformAuth } from './usePlatformAuth.js';
 
 export default function RequirePlatformPermission({ permission, children }) {
   const { hasPermission } = usePlatformAuth();

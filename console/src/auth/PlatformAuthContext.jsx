@@ -1,12 +1,11 @@
 import {
-  createContext,
-  useContext,
   useMemo,
   useState,
   useEffect,
   useRef,
   useCallback,
 } from 'react';
+import { PlatformAuthContext } from './platformAuthContext.js';
 import {
   supabaseConsole,
   getConsoleSupabaseConfigError,
@@ -14,8 +13,6 @@ import {
   supabaseConsoleConfig,
 } from '../lib/supabaseConsole.js';
 import { PLATFORM_ROLES } from './platformRoles.js';
-
-const PlatformAuthContext = createContext(null);
 
 const AUTH_DEBUG =
   import.meta.env.DEV || String(import.meta.env.VITE_CONSOLE_AUTH_DEBUG || '') === '1';
@@ -29,7 +26,8 @@ function authLog(phase, detail) {
   }
 }
 
-const PROFILE_FETCH_TIMEOUT_MS = 15000;
+/** Inclui margem para retries (502 / rede) ao chamar o perfil. */
+const PROFILE_FETCH_TIMEOUT_MS = 25000;
 const GET_SESSION_TIMEOUT_MS = 12000;
 /** Mesma chave pública usada em createClient (respeita prioridade publishable vs anon). */
 const CONSOLE_PUBLIC_KEY = getConsoleSupabasePublicKey();
@@ -112,6 +110,34 @@ function getConsoleProfileApiUrl() {
   return `${base}${path}`;
 }
 
+/** Vários retries: backend ou proxy podem demorar a ficar prontos logo após subir o terminal. */
+async function fetchConsoleProfileWithRetries(url, init) {
+  const maxAttempts = 4;
+  let lastErr;
+  let lastResponse;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 400 * attempt));
+    }
+    try {
+      const res = await fetch(url, init);
+      lastResponse = res;
+      if ([502, 503, 504].includes(res.status) && attempt < maxAttempts - 1) {
+        authLog('fetchPlatformUser:retry', { attempt: attempt + 1, status: res.status });
+        continue;
+      }
+      return res;
+    } catch (e) {
+      lastErr = e;
+      if (attempt < maxAttempts - 1) {
+        authLog('fetchPlatformUser:retry', { attempt: attempt + 1, error: String(e?.message || e) });
+      }
+    }
+  }
+  if (lastResponse) return lastResponse;
+  throw lastErr ?? new Error('Falha ao contatar o backend da plataforma.');
+}
+
 export function PlatformAuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [platformUser, setPlatformUser] = useState(null);
@@ -153,7 +179,7 @@ export function PlatformAuthProvider({ children }) {
         let response;
         try {
           response = await withTimeout(
-            fetch(getConsoleProfileApiUrl(), {
+            fetchConsoleProfileWithRetries(getConsoleProfileApiUrl(), {
               method: 'GET',
               headers: { Authorization: `Bearer ${accessToken}` },
             }),
@@ -172,12 +198,22 @@ export function PlatformAuthProvider({ children }) {
               ok: false,
               code: 'BACKEND_DOWN',
               message:
-                'Backend da plataforma (porta 3001) não respondeu. Na raiz do projeto: npm run server:restart '
-                + '(ou npm run stack:start). Em dev, o perfil usa o proxy do Vite para /internal/platform; '
-                + 'garanta o server em ADMIN_API_PORT (padrão 3001).',
+                'Backend da plataforma (porta 3001) não respondeu. Na raiz do projeto use: npm run console:stack '
+                + '(sobe API + Console juntos). Ou: npm run server:restart e mantenha esse terminal aberto; depois npm run console:dev.',
             };
           }
           throw netErr;
+        }
+
+        // Com Vite proxy, backend parado costuma virar 502/504 (fetch não lança — só status ruim).
+        if ([502, 503, 504].includes(response.status)) {
+          return {
+            ok: false,
+            code: 'BACKEND_DOWN',
+            message:
+              'Backend da plataforma (porta 3001) não respondeu. Na raiz: npm run console:stack '
+              + 'ou npm run server:restart (terminal aberto) + npm run console:dev.',
+          };
         }
 
         const json = await response.json().catch(() => ({}));
@@ -527,9 +563,3 @@ export function PlatformAuthProvider({ children }) {
     </PlatformAuthContext.Provider>
   );
 }
-
-export const usePlatformAuth = () => {
-  const ctx = useContext(PlatformAuthContext);
-  if (!ctx) throw new Error('usePlatformAuth deve ser usado dentro de PlatformAuthProvider.');
-  return ctx;
-};

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
+import { usePlatformAuth } from '../auth/usePlatformAuth.js';
 import { listFeatureFlags, updateFeatureFlag } from '../services/platformConsoleService.js';
 import { PageHeader, Panel, StatusBadge, EmptyState } from '../components/ConsoleUi.jsx';
 

@@ -1,3 +1,7 @@
+/**
+ * Chamadas à Admin API (3001): provisionamento e dados exigem o mesmo projeto Supabase
+ * que `server/.env` (service role). `VITE_PLATFORM_API_KEY` deve coincidir com `PLATFORM_API_KEY` no server.
+ */
 import { supabaseConsole } from '../lib/supabaseConsole.js';
 import {
   ALLOWED_ONBOARDING_ROLES,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
+import { usePlatformAuth } from '../auth/usePlatformAuth.js';
 import { formatConsoleSupabaseAuthError } from '../lib/formatSupabaseAuthError.js';
 
 export default function ConsoleLoginPage() {

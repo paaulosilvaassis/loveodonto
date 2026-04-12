@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { usePlatformAuth } from './PlatformAuthContext.jsx';
+import { usePlatformAuth } from './usePlatformAuth.js';
 
 const LOADING_HINT_MS = 20000;
 
@@ -24,7 +24,8 @@ export default function RequirePlatformAuth({ children }) {
         <p>Carregando...</p>
         {showSlowHint ? (
           <p className="pc-login__hint" style={{ marginTop: '1rem', maxWidth: '28rem' }}>
-            Se ficar muito tempo aqui, verifique o Supabase (RLS, migration 003) e as variáveis de ambiente na Vercel.
+            Se ficar muito tempo aqui, verifique se o backend da plataforma está no ar (porta 3001), o .env da Console
+            e se existe linha ativa em platform_admin_users para seu usuário.
             {' '}
             <button type="button" className="pc-button" onClick={() => window.location.reload()}>
               Recarregar página

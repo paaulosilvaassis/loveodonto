@@ -82,7 +82,7 @@ async function runLoggedQuery(label, hypothesisId, queryFactory, dataBuilder = n
   }
 }
 
-async function fetchTenantContextViaAdminApi() {
+async function fetchTenantContextViaAdminApiAttempt() {
   const { data: sessionData, error: sessionError } = await supabasePlatformClient.auth.getSession();
   if (sessionError) {
     throw new Error(sessionError.message || 'Falha ao obter sessão SaaS.');
@@ -112,16 +112,15 @@ async function fetchTenantContextViaAdminApi() {
       try {
         response = await fetch('http://127.0.0.1:3001/internal/app/tenant-context', fetchOpts);
       } catch {
-        // segue para mensagem abaixo
+        /* segue */
       }
     }
     if (!response) {
       if (isLikelyNetworkFetchFailure(error)) {
         throw new Error(
           'Não foi possível conectar ao backend SaaS em http://127.0.0.1:3001. '
-          + 'Confirme: (1) terminal com `npm run server:restart` ou `npm run server:dev` ativo; '
-          + '(2) `npm run dev` na porta 5176; '
-          + '(3) opcional no .env: VITE_APP_ADMIN_API_BASE_URL=http://127.0.0.1:3001',
+            + 'Na raiz: `npm run server:restart` ou `npm run console:stack` (API + Console). '
+            + 'O app (5176) usa o proxy `/internal/app` → 3001; o backend precisa estar ativo.',
         );
       }
       throw error;
@@ -133,25 +132,57 @@ async function fetchTenantContextViaAdminApi() {
       throw new Error(
         json?.error
         || 'Sua sessão SaaS não foi aceita pelo backend local. '
-          + 'Verifique se app, backend e Console usam o mesmo projeto Supabase.',
+          + 'Alinhe `VITE_SUPABASE_PLATFORM_*` no app com `SUPABASE_URL` no server (mesmo projeto Supabase).',
       );
     }
     if (response.status === 404) {
       throw new Error(
         json?.error
-        || 'Usuário autenticado sem vínculo ativo em tenant_users. '
-          + 'Faça o provisionamento da clínica pela Console antes de acessar o app.',
+        || 'Usuário sem vínculo em tenant_users ou clínica inexistente. '
+          + 'Provisione a clínica na Platform Console (5177) antes de usar o app.',
       );
     }
-    if (response.status === 502 || response.status >= 500) {
+    if (response.status === 502 || response.status === 503 || response.status === 504 || response.status >= 500) {
       throw new Error(
         json?.error
-        || 'O backend SaaS (porta 3001) não respondeu. Inicie com npm run server:restart ou npm run stack:start e tente de novo.',
+        || 'O backend SaaS (porta 3001) não respondeu. Na raiz: `npm run server:restart` ou `npm run stack:start`.',
       );
     }
     throw new Error(json?.error || `Erro HTTP ${response.status} ao carregar contexto da clínica.`);
   }
   return json;
+}
+
+function isTransientTenantContextError(err) {
+  const m = String(err?.message || '').toLowerCase();
+  return (
+    m.includes('failed to fetch')
+    || m.includes('network')
+    || m.includes('3001')
+    || m.includes('não respondeu')
+    || m.includes('502')
+    || m.includes('503')
+    || m.includes('504')
+  );
+}
+
+async function fetchTenantContextViaAdminApi() {
+  const maxAttempts = 4;
+  let lastErr;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 400 * attempt));
+    }
+    try {
+      return await fetchTenantContextViaAdminApiAttempt();
+    } catch (err) {
+      lastErr = err;
+      if (!isTransientTenantContextError(err) || attempt === maxAttempts - 1) {
+        throw err;
+      }
+    }
+  }
+  throw lastErr;
 }
 
 async function fetchOptionalTenantLimits(tenantId) {

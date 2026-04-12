@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
+import { usePlatformAuth } from '../auth/usePlatformAuth.js';
 import {
   LayoutDashboard,
   Building2,

@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
+import { usePlatformAuth } from '../auth/usePlatformAuth.js';
 import {
   createClinicOnboarding,
   getPlatformApiConfigError,

@@ -5,14 +5,40 @@ export function formatConsoleSupabaseAuthError(err) {
   const code = err?.code;
   if (code === 'PROFILE_NOT_FOUND') {
     return (
-      'Sem perfil de administrador da plataforma para este usuário. No Supabase, confira a tabela '
-      + 'platform_admin_users: precisa existir uma linha com id igual ao UUID do usuário em Authentication '
-      + 'e is_active = true. Se você acabou de rodar o SQL do schema, rode também a migration 003 '
-      + '(política "console admin read self") para o login conseguir ler o próprio registro.'
+      'Sem perfil de administrador para este usuário. O backend (GET /internal/platform/console-profile) '
+      + 'não encontrou linha ativa em platform_admin_users. No Supabase → Table Editor: crie/edite uma linha '
+      + 'com id = UUID do usuário em Authentication, is_active = true e role_slug adequado (ex.: super_admin). '
+      + 'O carregamento do perfil não usa RLS no navegador; usa a service role no servidor.'
+    );
+  }
+  if (code === 'BACKEND_DOWN') {
+    return (
+      String(err?.message || '').trim()
+      || 'Backend da plataforma (porta 3001) indisponível. Na raiz do projeto: npm run server:restart '
+      + 'e mantenha o terminal do backend aberto.'
+    );
+  }
+  if (code === 'API_ERROR') {
+    const raw = String(err?.message || '').trim();
+    if (raw) return raw;
+    return (
+      'O backend retornou erro ao ler platform_admin_users. Confira server/.env: SUPABASE_URL e '
+      + 'SUPABASE_SERVICE_ROLE_KEY do mesmo projeto que console/.env (VITE_CONSOLE_SUPABASE_URL).'
+    );
+  }
+  if (code === 'UNKNOWN') {
+    const raw = String(err?.message || '').trim();
+    return (
+      raw
+      || 'Falha inesperada ao validar o perfil. Abra o DevTools (Console), ative VITE_CONSOLE_AUTH_DEBUG=1 '
+      + 'e confira se o backend em 3001 está no ar e aponta para o mesmo Supabase da Console.'
     );
   }
   if (code === 'TIMEOUT') {
-    return 'A consulta do perfil demorou demais. Verifique rede, projeto Supabase e políticas RLS.';
+    return (
+      'A consulta do perfil demorou demais. Verifique rede, se o backend (3001) responde e se o projeto '
+      + 'Supabase está acessível.'
+    );
   }
   if (code === 'UNAUTHORIZED') {
     return (

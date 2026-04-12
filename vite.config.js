@@ -13,8 +13,9 @@ function rejectTruncatedKey(value) {
 }
 
 /**
- * O app na raiz (5176) expõe /platform/login, mas muitos devs só preenchem console/.env.
- * Mesclamos VITE_CONSOLE_SUPABASE_* do diretório console/ como fallback de VITE_SUPABASE_PLATFORM_*.
+ * App na raiz (5176): em dev, `VITE_SUPABASE_PLATFORM_*` pode vir do `.env` da raiz OU,
+ * se vazio, do `console/.env` como `VITE_CONSOLE_SUPABASE_*` (um único projeto Supabase para app + Console + backend).
+ * O define abaixo injeta os valores no bundle; reinicie o Vite após mudar env.
  */
 const internalAppProxy = {
   '/internal/app': {

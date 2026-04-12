@@ -10,6 +10,13 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const backendTarget = env.VITE_PLATFORM_API_BASE_URL || 'http://127.0.0.1:3001';
 
+  const platformApiProxy = {
+    '/internal/platform': {
+      target: backendTarget,
+      changeOrigin: true,
+    },
+  };
+
   return {
     plugins: [react(), tailwindcss()],
     server: {
@@ -18,12 +25,13 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
       /** Igual ao app na raiz: abre o login da Console no navegador ao subir o Vite. */
       open: '/login',
-      proxy: {
-        '/internal/platform': {
-          target: backendTarget,
-          changeOrigin: true,
-        },
-      },
+      proxy: platformApiProxy,
+    },
+    /** `vite preview` também encaminha /internal/platform → 3001 (mesmo contrato do dev). */
+    preview: {
+      port: 5177,
+      strictPort: true,
+      proxy: platformApiProxy,
     },
     build: {
       outDir: 'dist',

@@ -16,6 +16,7 @@
     "db:reset:dev": "node scripts/reset-dev-db.js",
     "organize-export": "node scripts/organize-patient-export.js",
     "console:dev": "cd console && npm run dev",
+    "console:stack": "node scripts/dev-console-with-api.js",
     "console:build": "cd console && npm run build",
     "server:dev": "cd server && npm run dev",
     "server:restart": "powershell -ExecutionPolicy Bypass -File \"scripts/restart-backend.ps1\"",

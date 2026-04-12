@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
+import { usePlatformAuth } from '../auth/usePlatformAuth.js';
 import {
   changeClinicPlan,
   getClinicDetail,
