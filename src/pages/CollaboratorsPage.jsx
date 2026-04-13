@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useMatch, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
 import { Field } from '../components/Field.jsx';
 import { Section } from '../components/Section.jsx';
@@ -35,7 +35,7 @@ import { canManageAccess } from '../services/accessService.js';
 import AccessTab from '../components/access/AccessTab.jsx';
 import { getUserAccess } from '../services/accessService.js';
 import { Eye, Pencil, UserCheck, UserX } from 'lucide-react';
-import CollaboratorCreateModal from '../components/collaborators/CollaboratorCreateModal.jsx';
+import { NewCollaboratorDialog } from '../components/collaborators/CollaboratorCreateModal.jsx';
 import { CollaboratorRhProfileFields } from '../components/collaborators/CollaboratorRhProfileFields.jsx';
 import { getAllCargosFlat } from '../constants/collaboratorRhCatalog.js';
 
@@ -100,9 +100,8 @@ const isCollaboratorActive = (collaborator) =>
 
 export default function CollaboratorsPage() {
   const navigate = useNavigate();
-  const matchCreate = useMatch({ path: '/admin/colaboradores/novo', end: true });
-  const isCreateFlow = Boolean(matchCreate);
   const { user } = useAuth();
+  const [openNewCollaborator, setOpenNewCollaborator] = useState(false);
   const [collaborators, setCollaborators] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
@@ -286,19 +285,13 @@ export default function CollaboratorsPage() {
   }, [refreshCollaboratorsListOnly]);
 
   useEffect(() => {
-    if (isCreateFlow && !isEditor) {
-      navigate('/admin/colaboradores', { replace: true });
-    }
-  }, [isCreateFlow, isEditor, navigate]);
-
-  useEffect(() => {
-    if (!isCreateFlow) return;
+    if (!openNewCollaborator) return;
     setSelectedId('');
     setEditingSection('');
     setEditingTab('');
     setError('');
     setSuccess('');
-  }, [isCreateFlow]);
+  }, [openNewCollaborator]);
 
   useEffect(() => {
     if (activeTab === 'acessos' && selectedId && import.meta.env?.DEV) {
@@ -340,12 +333,8 @@ export default function CollaboratorsPage() {
     }, {});
   }, [db.collaboratorPhones]);
 
-  const closeCreateCollaborator = () => {
-    navigate('/admin/colaboradores', { replace: true });
-  };
-
   const handleCollaboratorCreated = (newId) => {
-    navigate('/admin/colaboradores', { replace: true });
+    setOpenNewCollaborator(false);
     setSelectedId(newId);
     setActiveTab('cadastro');
     setActiveSection('Dados Principais');
@@ -1363,27 +1352,18 @@ export default function CollaboratorsPage() {
             <button className="button secondary" type="button" onClick={refreshCollaboratorsListOnly}>
               Atualizar
             </button>
-            {isEditor ? (
-              <Link
-                className="button primary"
-                to="/admin/colaboradores/novo"
-                onClick={() => {
-                  setError('');
-                  setSuccess('');
-                }}
-              >
-                Novo Colaborador
-              </Link>
-            ) : (
-              <button
-                className="button primary"
-                type="button"
-                disabled
-                title="Sem permissão para cadastrar colaboradores."
-              >
-                Novo Colaborador
-              </button>
-            )}
+            <button
+              className="button primary"
+              type="button"
+              title={isEditor ? undefined : 'Abrir cadastro. Salvar exige permissão de escrita em colaboradores.'}
+              onClick={() => {
+                setError('');
+                setSuccess('');
+                setOpenNewCollaborator(true);
+              }}
+            >
+              Novo Colaborador
+            </button>
           </div>
           <div className="card collaborator-directory">
             <div
@@ -1645,10 +1625,10 @@ export default function CollaboratorsPage() {
         <div className="card muted">Selecione um colaborador para visualizar os detalhes.</div>
       )}
 
-      <CollaboratorCreateModal
-        open={isCreateFlow && isEditor}
+      <NewCollaboratorDialog
+        open={openNewCollaborator}
         user={user}
-        onClose={closeCreateCollaborator}
+        onOpenChange={setOpenNewCollaborator}
         onSaved={handleCollaboratorCreated}
       />
 

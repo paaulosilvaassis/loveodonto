@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Field } from '../Field.jsx';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Dialog } from 'radix-ui';
+import Button from '../Button.jsx';
 import { CollaboratorRhProfileFields } from './CollaboratorRhProfileFields.jsx';
 import { addCollaboratorPhone, createCollaborator } from '../../services/collaboratorService.js';
 import { onlyDigits, isPhoneValid } from '../../utils/validators.js';
@@ -26,11 +27,7 @@ const defaultForm = () => ({
   phoneNumero: '',
 });
 
-/**
- * Modal de cadastro inicial: persiste apenas no submit (createCollaborator + telefone opcional).
- * Layout: overlay (sem centralização vertical) → card flex col (max-h viewport) → header | body scroll único | footer.
- */
-export default function CollaboratorCreateModal({ open, user, onClose, onSaved }) {
+export default function CollaboratorCreateModal({ open, user, onOpenChange, onSaved }) {
   const formBodyRef = useRef(null);
   const [form, setForm] = useState(defaultForm);
   const [dirty, setDirty] = useState(false);
@@ -41,50 +38,24 @@ export default function CollaboratorCreateModal({ open, user, onClose, onSaved }
     if (dirty) {
       if (!window.confirm('Descartar o cadastro em andamento?')) return;
     }
-    onClose();
-  }, [dirty, onClose]);
+    setDirty(false);
+    onOpenChange(false);
+  }, [dirty, onOpenChange]);
 
   useEffect(() => {
-    if (open) {
-      setForm(defaultForm());
-      setDirty(false);
-      setLocalError('');
-      setSubmitting(false);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.documentElement.style.overflow = '';
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [open]);
-
-  /** Sempre abrir com o topo do formulário visível (evita scroll “no meio” por anchoring/restauração). */
-  useLayoutEffect(() => {
     if (!open) return;
-    const el = formBodyRef.current;
-    if (!el) return;
-    el.scrollTop = 0;
-    el.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    setForm(defaultForm());
+    setDirty(false);
+    setLocalError('');
+    setSubmitting(false);
   }, [open]);
 
   useEffect(() => {
-    if (!open) return undefined;
-    const onKeyDown = (e) => {
-      if (e.key !== 'Escape') return;
-      e.preventDefault();
-      tryClose();
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [open, tryClose]);
-
-  if (!open) return null;
+    if (!open) return;
+    requestAnimationFrame(() => {
+      formBodyRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+    });
+  }, [open]);
 
   const profile = form;
   const patchProfile = (partial) => {
@@ -168,98 +139,156 @@ export default function CollaboratorCreateModal({ open, user, onClose, onSaved }
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[1000] overflow-hidden bg-black/50 p-4 backdrop-blur-sm"
-      role="presentation"
-      onClick={tryClose}
+    <Dialog.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (next) {
+          onOpenChange(true);
+          return;
+        }
+        tryClose();
+      }}
     >
-      <div
-        className="mx-auto mt-6 flex max-h-[calc(100vh-3rem)] w-full max-w-6xl min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="collaborator-create-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <header className="shrink-0 border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <h1 id="collaborator-create-title" className="text-2xl font-semibold text-slate-900">
-                Novo colaborador
-              </h1>
-              <p className="mt-1 text-sm text-slate-500">
-                Preencha os dados abaixo e salve. O colaborador só será criado após a confirmação.
-              </p>
-            </div>
-            <button
-              type="button"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-              onClick={tryClose}
-            >
-              Fechar
-            </button>
-          </div>
-        </header>
-
-        <form
-          className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-          onSubmit={handleSubmit}
-          id="collaborator-create-form"
+      <Dialog.Portal>
+        <Dialog.Overlay
+          className="fixed inset-0"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 20000,
+            background: 'rgba(0, 0, 0, 0.55)',
+            backdropFilter: 'blur(2px)',
+          }}
+        />
+        <Dialog.Content
+          className="fixed left-1/2 top-1/2 z-[20001] w-[min(96vw,1150px)] max-w-none -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border-0 bg-white p-0 shadow-2xl outline-none"
+          style={{
+            position: 'fixed',
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 20001,
+            width: 'min(96vw, 1150px)',
+            borderRadius: '1.5rem',
+            border: '0',
+            background: '#fff',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+            outline: 'none',
+          }}
+          onPointerDownOutside={(event) => {
+            event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            event.preventDefault();
+          }}
         >
-          <div
-            ref={formBodyRef}
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-6 sm:px-6 [overflow-anchor:none]"
-          >
-            {localError ? (
-              <div
-                className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
-                role="alert"
-              >
-                {localError}
+          <div className="flex h-[85vh] max-h-[85vh] min-h-0 flex-col">
+            <header className="shrink-0 border-b border-slate-200 bg-white px-8 py-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <Dialog.Title className="text-3xl font-semibold tracking-tight text-slate-900">
+                    Novo colaborador
+                  </Dialog.Title>
+                  <Dialog.Description className="mt-2 text-sm text-slate-500">
+                    Preencha os dados abaixo para cadastrar um novo colaborador na clínica.
+                  </Dialog.Description>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="rounded-xl px-4 py-2 text-slate-600 hover:bg-slate-100"
+                  onClick={tryClose}
+                >
+                  Fechar
+                </Button>
               </div>
-            ) : null}
+            </header>
 
-            <div className="collaborator-create-modal-fields">
-              <CollaboratorRhProfileFields profile={profile} disabled={false} onPatch={patchProfile} photoSlot={null} />
-              <div className="collaborator-rh-block border-b-0 pb-0 pt-2">
-                <h4 className="collaborator-rh-block-title">Contato</h4>
-                <div className="form-grid">
-                  <Field label="Telefone — tipo">
-                    <select value={form.phoneTipo} onChange={(e) => patchProfile({ phoneTipo: e.target.value })}>
-                      <option value="Celular">Celular</option>
-                      <option value="Fixo">Fixo</option>
-                      <option value="Comercial">Comercial</option>
-                    </select>
-                  </Field>
-                  <Field label="Telefone — DDD">
-                    <input
-                      value={form.phoneDdd}
-                      onChange={(e) => patchProfile({ phoneDdd: e.target.value })}
-                      placeholder="11"
-                      maxLength={3}
-                    />
-                  </Field>
-                  <Field label="Telefone — número">
-                    <input
-                      value={form.phoneNumero}
-                      onChange={(e) => patchProfile({ phoneNumero: e.target.value })}
-                      placeholder="Somente números"
-                    />
-                  </Field>
+            <form
+              className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+              onSubmit={handleSubmit}
+              id="collaborator-create-form"
+            >
+              <div
+                ref={formBodyRef}
+                className="scroll-area flex-1 min-h-0 overflow-y-auto px-8 py-6"
+              >
+                {localError ? (
+                  <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+                    {localError}
+                  </div>
+                ) : null}
+
+                <div className="collaborator-create-modal-fields">
+                  <CollaboratorRhProfileFields profile={profile} disabled={false} onPatch={patchProfile} photoSlot={null} />
+                  <section className="space-y-5">
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-semibold text-slate-900">Contato</h3>
+                      <p className="text-sm text-slate-500">Informações de telefone para contato principal.</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium leading-5 text-slate-700">Telefone - tipo</label>
+                        <select
+                          className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                          value={form.phoneTipo}
+                          onChange={(e) => patchProfile({ phoneTipo: e.target.value })}
+                        >
+                          <option value="Celular">Celular</option>
+                          <option value="Fixo">Fixo</option>
+                          <option value="Comercial">Comercial</option>
+                        </select>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium leading-5 text-slate-700">Telefone - DDD</label>
+                        <input
+                          className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                          value={form.phoneDdd}
+                          onChange={(e) => patchProfile({ phoneDdd: e.target.value })}
+                          placeholder="11"
+                          maxLength={3}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium leading-5 text-slate-700">Telefone - número</label>
+                        <input
+                          className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                          value={form.phoneNumero}
+                          onChange={(e) => patchProfile({ phoneNumero: e.target.value })}
+                          placeholder="Somente números"
+                        />
+                      </div>
+                    </div>
+                  </section>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <footer className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-white px-4 py-4 sm:px-6">
-            <button type="button" className="button secondary" onClick={tryClose} disabled={submitting}>
-              Cancelar
-            </button>
-            <button type="submit" className="button primary" disabled={submitting}>
-              {submitting ? 'Salvando…' : 'Salvar colaborador'}
-            </button>
-          </footer>
-        </form>
-      </div>
-    </div>
+              <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-5">
+                <div className="flex items-center justify-end gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                    onClick={tryClose}
+                    disabled={submitting}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="rounded-xl bg-gradient-to-r from-violet-600 via-fuchsia-500 to-pink-500 text-white shadow-lg hover:opacity-95"
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Salvando...' : 'Salvar colaborador'}
+                  </Button>
+                </div>
+              </footer>
+            </form>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
+
+export { CollaboratorCreateModal as NewCollaboratorDialog };
