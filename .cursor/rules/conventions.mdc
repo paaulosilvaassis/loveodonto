@@ -1,0 +1,122 @@
+---
+description: Convenções obrigatórias do projeto Love Odonto após estabilização estrutural
+globs: 
+alwaysApply: true
+---
+
+# Convenções Obrigatórias — Love Odonto
+
+## 1. Modais
+
+### Padrão único: `src/components/ui/Modal.jsx` (Radix)
+
+Todo novo modal **deve** usar exclusivamente:
+
+```jsx
+import {
+  ModalRoot, ModalContent, ModalHeader, ModalBody,
+  ModalFooter, ModalTitle, ModalDescription,
+} from '@/components/ui/Modal.jsx';
+
+<ModalRoot open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+  <ModalContent size="md"> {/* sm | md | lg | xl */}
+    <ModalHeader>
+      <ModalTitle>Título</ModalTitle>
+    </ModalHeader>
+    <ModalBody>
+      {/* conteúdo */}
+    </ModalBody>
+    <ModalFooter>
+      {/* ações */}
+    </ModalFooter>
+  </ModalContent>
+</ModalRoot>
+```
+
+### Proibições em modais
+
+- **Não** usar `div.modal-backdrop`, `div.modal-overlay`, `div.legacy-modal-*`
+- **Não** usar `position: fixed` inline para criar overlays
+- **Não** usar `z-index` inline em modais
+- **Não** usar `onClick={e => e.stopPropagation()}` no conteúdo — Radix gerencia isso
+- **Não** usar `if (!open) return null` — Radix controla visibilidade via `open`
+- Para formulários com submit no footer: usar `<form id="form-id">` no `ModalBody` e `<button form="form-id">` no `ModalFooter`
+- Para evitar fechamento acidental em formulários: `onInteractOutside={(e) => e.preventDefault()}`
+
+---
+
+## 2. Toasts
+
+### Padrão único: classe CSS global `.toast`
+
+```jsx
+{toast && (
+  <div className={`toast ${toast.type}`} role="status">
+    {toast.message}
+  </div>
+)}
+```
+
+### Proibições em toasts
+
+- **Não** usar `style={{ position: 'fixed', ... }}` inline
+- **Não** usar `document.createElement` para toasts
+- **Não** usar `document.body.appendChild` para toasts
+- **Não** usar `z-index` inline — a classe `.toast` usa `var(--z-toast)`
+- Posição, cor, sombra e animação são controlados pela classe CSS global
+
+---
+
+## 3. z-index
+
+### Escala unificada via tokens CSS (`:root`)
+
+| Token                   | Valor | Uso                        |
+|-------------------------|-------|----------------------------|
+| `--z-dropdown`          | 100   | Dropdowns, autocomplete    |
+| `--z-sticky`            | 200   | Headers sticky             |
+| `--z-panel`             | 500   | Painéis laterais           |
+| `--z-modal-base`        | 1000  | Modais base (legado)       |
+| `--z-modal-base-content`| 1010  | Conteúdo modal base        |
+| `--z-modal-overlay`     | 2000  | Overlay Radix              |
+| `--z-modal-content`     | 2010  | Conteúdo Radix             |
+| `--z-toast`             | 2100  | Toasts globais             |
+| `--z-legacy-backdrop`   | 3000  | Backdrop legado (temporário)|
+| `--z-legacy-content`    | 3010  | Conteúdo legado            |
+| `--z-critical`          | 9999  | Reservado emergência       |
+
+### Regra
+
+- **Nunca** usar `z-index` hardcoded em componentes
+- Sempre referenciar tokens: `z-index: var(--z-modal-content)`
+- Exceção: dropdowns posicionados via `createPortal` com `position: fixed` podem usar `z-index: 10000` temporariamente
+
+---
+
+## 4. Manipulação de DOM
+
+### Proibições
+
+- **Não** usar `document.querySelector` em componentes — usar refs (`useRef`)
+- **Não** usar `document.createElement` + `appendChild` — usar estado React + JSX
+- **Não** modificar `document.body.style` diretamente — usar classes CSS
+- Exceção aceita: `createPortal(content, document.body)` para dropdowns posicionados
+
+---
+
+## 5. CSS
+
+- Tailwind ativo via `@tailwindcss/vite` + `@import 'tailwindcss'` em `src/index.css`
+- Estilos globais em `src/index.css` — tokens em `:root`
+- Classes de modal base (`app-modal__*`) definidas no CSS global
+- Não criar novas classes `modal-*` genéricas — usar o componente Radix
+
+---
+
+## 6. Debug
+
+- `console.log` / `console.debug` permitidos **apenas** com guard:
+  ```js
+  if (import.meta.env?.DEV) console.debug('...');
+  ```
+- Nunca deixar `console.log` desprotegido em produção

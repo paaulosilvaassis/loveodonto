@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Dialog } from 'radix-ui';
 import Button from '../Button.jsx';
 import { CollaboratorRhProfileFields } from './CollaboratorRhProfileFields.jsx';
 import { addCollaboratorPhone, createCollaborator } from '../../services/collaboratorService.js';
 import { onlyDigits, isPhoneValid } from '../../utils/validators.js';
+import {
+  ModalBody,
+  ModalContent,
+  ModalDescription,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../ui/Modal.jsx';
 
 const defaultForm = () => ({
   nomeCompleto: '',
@@ -139,7 +147,7 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
   };
 
   return (
-    <Dialog.Root
+    <ModalRoot
       open={open}
       onOpenChange={(next) => {
         if (next) {
@@ -149,145 +157,97 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
         tryClose();
       }}
     >
-      <Dialog.Portal>
-        <Dialog.Overlay
-          className="fixed inset-0"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 20000,
-            background: 'rgba(0, 0, 0, 0.55)',
-            backdropFilter: 'blur(2px)',
-          }}
-        />
-        <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[20001] w-[min(96vw,1150px)] max-w-none -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-3xl border-0 bg-white p-0 shadow-2xl outline-none"
-          style={{
-            position: 'fixed',
-            left: '50%',
-            top: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 20001,
-            width: 'min(96vw, 1150px)',
-            borderRadius: '1.5rem',
-            border: '0',
-            background: '#fff',
-            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
-            outline: 'none',
-          }}
-          onPointerDownOutside={(event) => {
-            event.preventDefault();
-          }}
-          onInteractOutside={(event) => {
-            event.preventDefault();
-          }}
-        >
-          <div className="flex h-[85vh] max-h-[85vh] min-h-0 flex-col">
-            <header className="shrink-0 border-b border-slate-200 bg-white px-8 py-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <Dialog.Title className="text-3xl font-semibold tracking-tight text-slate-900">
-                    Novo colaborador
-                  </Dialog.Title>
-                  <Dialog.Description className="mt-2 text-sm text-slate-500">
-                    Preencha os dados abaixo para cadastrar um novo colaborador na clínica.
-                  </Dialog.Description>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="rounded-xl px-4 py-2 text-slate-600 hover:bg-slate-100"
-                  onClick={tryClose}
-                >
-                  Fechar
-                </Button>
-              </div>
-            </header>
-
-            <form
-              className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-              onSubmit={handleSubmit}
-              id="collaborator-create-form"
-            >
-              <div
-                ref={formBodyRef}
-                className="scroll-area flex-1 min-h-0 overflow-y-auto px-8 py-6"
-              >
-                {localError ? (
-                  <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-                    {localError}
-                  </div>
-                ) : null}
-
-                <div className="collaborator-create-modal-fields">
-                  <CollaboratorRhProfileFields profile={profile} disabled={false} onPatch={patchProfile} photoSlot={null} />
-                  <section className="space-y-5">
-                    <div className="space-y-1">
-                      <h3 className="text-xl font-semibold text-slate-900">Contato</h3>
-                      <p className="text-sm text-slate-500">Informações de telefone para contato principal.</p>
-                    </div>
-                    <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-                      <div className="flex flex-col gap-2">
-                        <label className="text-sm font-medium leading-5 text-slate-700">Telefone - tipo</label>
-                        <select
-                          className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
-                          value={form.phoneTipo}
-                          onChange={(e) => patchProfile({ phoneTipo: e.target.value })}
-                        >
-                          <option value="Celular">Celular</option>
-                          <option value="Fixo">Fixo</option>
-                          <option value="Comercial">Comercial</option>
-                        </select>
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <label className="text-sm font-medium leading-5 text-slate-700">Telefone - DDD</label>
-                        <input
-                          className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
-                          value={form.phoneDdd}
-                          onChange={(e) => patchProfile({ phoneDdd: e.target.value })}
-                          placeholder="11"
-                          maxLength={3}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <label className="text-sm font-medium leading-5 text-slate-700">Telefone - número</label>
-                        <input
-                          className="h-11 w-full rounded-xl border border-slate-300 bg-white px-4 text-sm text-slate-900 shadow-sm outline-none transition focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
-                          value={form.phoneNumero}
-                          onChange={(e) => patchProfile({ phoneNumero: e.target.value })}
-                          placeholder="Somente números"
-                        />
-                      </div>
-                    </div>
-                  </section>
-                </div>
-              </div>
-
-              <footer className="shrink-0 border-t border-slate-200 bg-white px-8 py-5">
-                <div className="flex items-center justify-end gap-3">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                    onClick={tryClose}
-                    disabled={submitting}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="rounded-xl bg-gradient-to-r from-violet-600 via-fuchsia-500 to-pink-500 text-white shadow-lg hover:opacity-95"
-                    disabled={submitting}
-                  >
-                    {submitting ? 'Salvando...' : 'Salvar colaborador'}
-                  </Button>
-                </div>
-              </footer>
-            </form>
+      <ModalContent
+        size="xl"
+        className="collaborator-create-modal"
+        onPointerDownOutside={(event) => {
+          event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          event.preventDefault();
+        }}
+      >
+        <ModalHeader className="collaborator-create-modal__header">
+          <div>
+            <ModalTitle className="collaborator-create-modal__title">Novo colaborador</ModalTitle>
+            <ModalDescription>
+              Preencha os dados abaixo para cadastrar um novo colaborador na clínica.
+            </ModalDescription>
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+          <Button type="button" variant="ghost" className="collaborator-create-modal__close" onClick={tryClose}>
+            Fechar
+          </Button>
+        </ModalHeader>
+
+        <ModalBody ref={formBodyRef} className="scroll-area collaborator-create-modal__body">
+          <form className="collaborator-create-modal__form" onSubmit={handleSubmit} id="collaborator-create-form">
+            {localError ? (
+              <div className="collaborator-create-modal__alert" role="alert">
+                {localError}
+              </div>
+            ) : null}
+
+            <div className="collaborator-create-modal__section-stack">
+              <div className="collaborator-create-modal-fields">
+                <CollaboratorRhProfileFields profile={profile} disabled={false} onPatch={patchProfile} photoSlot={null} />
+              </div>
+
+              <section className="collaborator-create-modal__section">
+                <h3 className="collaborator-create-modal__section-title">Contato</h3>
+                <p className="collaborator-create-modal__section-description">
+                  Informações de telefone para contato principal.
+                </p>
+                <div className="collaborator-create-modal__contact-grid">
+                  <div className="collaborator-create-modal__field">
+                    <label htmlFor="new-collab-phone-tipo">Telefone - tipo</label>
+                    <select
+                      id="new-collab-phone-tipo"
+                      className="collaborator-create-modal__control"
+                      value={form.phoneTipo}
+                      onChange={(e) => patchProfile({ phoneTipo: e.target.value })}
+                    >
+                      <option value="Celular">Celular</option>
+                      <option value="Fixo">Fixo</option>
+                      <option value="Comercial">Comercial</option>
+                    </select>
+                  </div>
+                  <div className="collaborator-create-modal__field">
+                    <label htmlFor="new-collab-phone-ddd">Telefone - DDD</label>
+                    <input
+                      id="new-collab-phone-ddd"
+                      className="collaborator-create-modal__control"
+                      value={form.phoneDdd}
+                      onChange={(e) => patchProfile({ phoneDdd: e.target.value })}
+                      placeholder="11"
+                      maxLength={3}
+                    />
+                  </div>
+                  <div className="collaborator-create-modal__field">
+                    <label htmlFor="new-collab-phone-numero">Telefone - número</label>
+                    <input
+                      id="new-collab-phone-numero"
+                      className="collaborator-create-modal__control"
+                      value={form.phoneNumero}
+                      onChange={(e) => patchProfile({ phoneNumero: e.target.value })}
+                      placeholder="Somente números"
+                    />
+                  </div>
+                </div>
+              </section>
+            </div>
+          </form>
+        </ModalBody>
+
+        <ModalFooter className="collaborator-create-modal__footer">
+          <Button type="button" variant="secondary" onClick={tryClose} disabled={submitting}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="collaborator-create-form" disabled={submitting}>
+            {submitting ? 'Salvando...' : 'Salvar colaborador'}
+          </Button>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 }
 

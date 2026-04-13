@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Calendar } from 'lucide-react';
-import { APPOINTMENT_STATUS } from '../../services/appointmentService.js';
+import { Calendar } from 'lucide-react';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../ui/Modal.jsx';
 
 const CANCEL_REASONS = [
   'Paciente solicitou',
@@ -39,13 +46,11 @@ export default function CancelOrRescheduleModal({ open, onClose, appointment, on
       });
 
       if (rescheduleNow) {
-        // Navegar para agenda com filtros
         navigate(`/gestao/agenda?patientId=${appointment.patientId}&reschedule=true`);
       }
 
       onClose();
     } catch (error) {
-      console.error('Erro ao cancelar:', error);
       alert(error.message || 'Erro ao cancelar agendamento');
     } finally {
       setLoading(false);
@@ -57,20 +62,15 @@ export default function CancelOrRescheduleModal({ open, onClose, appointment, on
     onClose();
   };
 
-  if (!open) return null;
-
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Desmarcar Agendamento</h2>
-          <button type="button" className="modal-close" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
+    <ModalRoot open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+      <ModalContent size="md">
+        <ModalHeader>
+          <ModalTitle>Desmarcar Agendamento</ModalTitle>
+        </ModalHeader>
 
-        <div className="modal-body">
-          {appointment.patient && (
+        <ModalBody>
+          {appointment?.patient && (
             <div className="cancel-modal-patient-info">
               <strong>Paciente:</strong> {appointment.patient.full_name || appointment.patient.nickname}
               <br />
@@ -113,9 +113,9 @@ export default function CancelOrRescheduleModal({ open, onClose, appointment, on
             </label>
             <small>Se marcado, você será redirecionado para a Agenda para escolher nova data/hora</small>
           </div>
-        </div>
+        </ModalBody>
 
-        <div className="modal-footer">
+        <ModalFooter>
           <button type="button" className="button secondary" onClick={onClose}>
             Cancelar
           </button>
@@ -138,8 +138,8 @@ export default function CancelOrRescheduleModal({ open, onClose, appointment, on
               {loading ? 'Processando...' : 'Confirmar Cancelamento'}
             </button>
           )}
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 }

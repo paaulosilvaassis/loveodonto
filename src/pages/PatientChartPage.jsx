@@ -330,17 +330,6 @@ export default function PatientChartPage() {
   const pendingCriticalFields = Array.isArray(patient.profile?.pendingCriticalFields) ? patient.profile.pendingCriticalFields : [];
   const canView = canViewChart(user);
 
-  // DIAGNÓSTICO PRONTUÁRIO (remover após validar fluxo master/admin + pendências)
-  if (typeof console !== 'undefined' && console.debug) {
-    console.debug('[Prontuário]', {
-      role: user?.role,
-      isMaster: user?.isMaster,
-      hasPendingData,
-      pendingCriticalFields,
-      canViewChart: canView,
-    });
-  }
-
   return (
     <div className="stack">
       <Section title={`Prontuário — ${patient.profile?.full_name || 'Paciente'}`}>

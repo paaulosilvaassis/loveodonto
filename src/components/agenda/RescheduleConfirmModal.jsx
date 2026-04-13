@@ -1,6 +1,13 @@
-export const RescheduleConfirmModal = ({ open, onClose, onConfirm, appointment, newDate, newStartTime, newEndTime }) => {
-  if (!open) return null;
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../ui/Modal.jsx';
 
+export const RescheduleConfirmModal = ({ open, onClose, onConfirm, appointment, newDate, newStartTime, newEndTime }) => {
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     const date = new Date(`${dateStr}T00:00:00`);
@@ -8,15 +15,13 @@ export const RescheduleConfirmModal = ({ open, onClose, onConfirm, appointment, 
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content reschedule-confirm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>Confirmar Reagendamento</h3>
-          <button type="button" className="modal-close" onClick={onClose}>
-            ×
-          </button>
-        </div>
-        <div className="modal-body">
+    <ModalRoot open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+      <ModalContent size="sm">
+        <ModalHeader>
+          <ModalTitle>Confirmar Reagendamento</ModalTitle>
+        </ModalHeader>
+
+        <ModalBody>
           <p>
             Reagendar agendamento para <strong>{formatDate(newDate)}</strong> às <strong>{newStartTime}</strong>?
           </p>
@@ -42,16 +47,17 @@ export const RescheduleConfirmModal = ({ open, onClose, onConfirm, appointment, 
               </span>
             </div>
           </div>
-        </div>
-        <div className="modal-footer">
+        </ModalBody>
+
+        <ModalFooter>
           <button type="button" className="button button-secondary" onClick={onClose}>
             Cancelar
           </button>
           <button type="button" className="button button-primary" onClick={onConfirm}>
             Confirmar Reagendamento
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 };

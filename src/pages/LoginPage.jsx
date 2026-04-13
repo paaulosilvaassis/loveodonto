@@ -259,11 +259,7 @@ export default function LoginPage() {
           </form>
 
           {toast && (
-            <div
-              className={`toast ${toast.type}`}
-              role="status"
-              style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 1000 }}
-            >
+            <div className={`toast ${toast.type}`} role="status">
               {toast.message}
             </div>
           )}

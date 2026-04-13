@@ -5,6 +5,15 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
 import { suggestPatients } from '../../services/patientService.js';
 import { normalizeText } from '../../services/helpers.js';
 import { onlyDigits } from '../../utils/validators.js';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+  ModalDescription,
+} from '../ui/Modal.jsx';
 
 const PATIENT_SUGGEST_PORTAL_ID = 'appointment-step1-patient-suggest-portal';
 
@@ -89,7 +98,6 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
     const normalized = normalizeSuggestQuery(debouncedQuery, type);
     const minChars = suggestMinChars(type);
 
-
     if (!normalized || normalized.length < minChars) {
       setPatientSuggestions([]);
       setSuggestOpen(false);
@@ -159,9 +167,11 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
     return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${dateStr} (${timeStr})`;
   };
 
-  if (!open) return null;
-
   const canContinue = selectedPatient !== null;
+
+  const handleOpenChange = (next) => {
+    if (!next) onClose();
+  };
 
   const dropdownContent = open && suggestOpen && dropdownPosition && (
     <div
@@ -224,19 +234,16 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
 
   return (
     <>
-      <div className="appointment-step1-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
-        <div className="appointment-step1-modal" onClick={(e) => e.stopPropagation()}>
-          <div className="appointment-step1-header">
+      <ModalRoot open={open} onOpenChange={handleOpenChange}>
+        <ModalContent size="md" className="appointment-step1-modal">
+          <ModalHeader className="appointment-step1-header">
             <div>
-              <div className="appointment-step1-slot">{formatSlotHeader()}</div>
-              <strong>Novo Agendamento</strong>
+              <ModalDescription className="appointment-step1-slot">{formatSlotHeader()}</ModalDescription>
+              <ModalTitle>Novo Agendamento</ModalTitle>
             </div>
-            <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar">
-              ✕
-            </button>
-          </div>
+          </ModalHeader>
 
-          <div className="appointment-step1-body">
+          <ModalBody className="appointment-step1-body">
             <div className="appointment-step1-search" ref={suggestWrapRef}>
               <label>
                 Nome do Paciente
@@ -254,18 +261,18 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
                 />
               </label>
             </div>
-          </div>
+          </ModalBody>
 
-          <div className="appointment-step1-footer">
+          <ModalFooter className="appointment-step1-footer">
             <button type="button" className="button secondary" onClick={onClose}>
               Fechar
             </button>
             <button type="button" className="button primary" onClick={handleContinue} disabled={!canContinue}>
               Prosseguir
             </button>
-          </div>
-        </div>
-      </div>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
 
       {dropdownContent && createPortal(dropdownContent, document.body)}
     </>

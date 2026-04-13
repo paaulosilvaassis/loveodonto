@@ -20,6 +20,15 @@ import {
   getReceivableChargesByReceivable,
 } from '../services/receivablesService.js';
 import { Plus, Eye, DollarSign, FileText, X } from 'lucide-react';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+  ModalDescription,
+} from '../components/ui/Modal.jsx';
 
 const STATUS_LABELS = {
   [RECEIVABLE_STATUS.PENDING]: 'Pendente',
@@ -385,21 +394,7 @@ export default function FinanceReceivablesPage() {
   return (
     <div className="finance-receivables-page">
       {toast && (
-        <div
-          className={`toast finance-toast ${toast.type}`}
-          role="status"
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 10001,
-            padding: '12px 20px',
-            borderRadius: 12,
-            background: toast.type === 'success' ? '#10b981' : '#ef4444',
-            color: '#fff',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-          }}
-        >
+        <div className={`toast ${toast.type}`} role="status">
           {toast.message}
         </div>
       )}
@@ -743,14 +738,13 @@ export default function FinanceReceivablesPage() {
         </>
       )}
 
-      {modal?.type === 'create' && (
-        <div className="modal-backdrop">
-          <div className="modal-content finance-receivables-modal">
-            <div className="modal-header finance-receivables-modal-header">
-              <h3>Novo recebimento</h3>
-            </div>
-            <form onSubmit={handleSubmitCreate} className="finance-receivables-form modal-form">
-              <div className="modal-body finance-receivables-modal-body">
+      <ModalRoot open={modal?.type === 'create'} onOpenChange={(next) => { if (!next) setModal(null); }}>
+        <ModalContent size="lg" className="finance-receivables-modal" onInteractOutside={(e) => e.preventDefault()}>
+          <ModalHeader className="finance-receivables-modal-header">
+            <ModalTitle>Novo recebimento</ModalTitle>
+          </ModalHeader>
+          <ModalBody className="finance-receivables-modal-body">
+            <form onSubmit={handleSubmitCreate} id="receivable-create-form" className="finance-receivables-form">
                 {/* BLOCO 1 - DADOS BÁSICOS */}
                 <div className="finance-receivables-form-block">
                   <label>
@@ -898,28 +892,28 @@ export default function FinanceReceivablesPage() {
                     </span>
                   </label>
                 </div>
-              </div>
-              <div className="modal-footer finance-receivables-modal-footer">
-                <button type="button" className="button secondary" onClick={() => setModal(null)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="button primary">
-                  Salvar
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter className="finance-receivables-modal-footer">
+            <button type="button" className="button secondary" onClick={() => setModal(null)}>
+              Cancelar
+            </button>
+            <button type="submit" form="receivable-create-form" className="button primary">
+              Salvar
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
 
-      {modal?.type === 'charge' && modal.receivable && (
-        <div className="modal-backdrop" onClick={() => setModal(null)}>
-          <div className="modal-content finance-receivables-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header finance-receivables-modal-header">
-              <h3>Gerar cobrança</h3>
-            </div>
+      <ModalRoot open={modal?.type === 'charge' && !!modal?.receivable} onOpenChange={(next) => { if (!next) setModal(null); }}>
+        <ModalContent size="md" className="finance-receivables-modal">
+          <ModalHeader className="finance-receivables-modal-header">
+            <ModalTitle>Gerar cobrança</ModalTitle>
+          </ModalHeader>
+          <ModalBody className="finance-receivables-modal-body">
             <form
-              className="finance-receivables-form modal-form"
+              className="finance-receivables-form"
+              id="receivable-charge-form"
               onSubmit={(e) => {
                 e.preventDefault();
                 const form = e.target;
@@ -930,7 +924,7 @@ export default function FinanceReceivablesPage() {
                 const notes = form.notes.value || '';
                 try {
                   createReceivableCharge(user, {
-                    receivable_id: modal.receivable.id,
+                    receivable_id: modal?.receivable?.id,
                     charge_type: chargeType,
                     status: RECEIVABLE_CHARGE_STATUS.GENERATED,
                     sent_at: null,
@@ -949,18 +943,17 @@ export default function FinanceReceivablesPage() {
                 }
               }}
             >
-              <div className="modal-body finance-receivables-modal-body">
                 <div className="finance-receivables-form-block">
-                  <strong>{modal.receivable.description}</strong>
+                  <strong>{modal?.receivable?.description}</strong>
                   <span>
                     Paciente:{' '}
-                    {(patients.find((p) => p.id === modal.receivable.patient_id)?.full_name)
-                      || (patients.find((p) => p.id === modal.receivable.patient_id)?.name)
+                    {(patients.find((p) => p.id === modal?.receivable?.patient_id)?.full_name)
+                      || (patients.find((p) => p.id === modal?.receivable?.patient_id)?.name)
                       || '—'}
                   </span>
-                  <span>Valor em aberto: {formatCurrency(modal.receivable.remaining_amount)}</span>
-                  <span>Vencimento: {formatDate(modal.receivable.due_date)}</span>
-                  <span>Forma prevista: {modal.receivable.payment_method_expected || '—'}</span>
+                  <span>Valor em aberto: {formatCurrency(modal?.receivable?.remaining_amount)}</span>
+                  <span>Vencimento: {formatDate(modal?.receivable?.due_date)}</span>
+                  <span>Forma prevista: {modal?.receivable?.payment_method_expected || '—'}</span>
                 </div>
                 <div className="finance-receivables-form-block">
                   <label>
@@ -988,31 +981,31 @@ export default function FinanceReceivablesPage() {
                     <textarea name="notes" rows={2} placeholder="Observações internas (opcional)" />
                   </label>
                 </div>
-              </div>
-              <div className="modal-footer finance-receivables-modal-footer">
-                <button type="button" className="button secondary" onClick={() => setModal(null)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="button primary">
-                  Gerar cobrança
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter className="finance-receivables-modal-footer">
+            <button type="button" className="button secondary" onClick={() => setModal(null)}>
+              Cancelar
+            </button>
+            <button type="submit" form="receivable-charge-form" className="button primary">
+              Gerar cobrança
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
 
-      {modal?.type === 'register_payment' && modal.receivable && (
-        <div className="modal-backdrop" onClick={() => setModal(null)}>
-          <div className="modal-content finance-receivables-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header finance-receivables-modal-header">
-              <h3>Registrar recebimento</h3>
-              <p className="finance-receivables-modal-desc">
-                {modal.receivable.description} — {formatCurrency(modal.receivable.net_amount)}
-              </p>
+      <ModalRoot open={modal?.type === 'register_payment' && !!modal?.receivable} onOpenChange={(next) => { if (!next) setModal(null); }}>
+        <ModalContent size="md" className="finance-receivables-modal">
+          <ModalHeader className="finance-receivables-modal-header">
+            <div>
+              <ModalTitle>Registrar recebimento</ModalTitle>
+              <ModalDescription className="finance-receivables-modal-desc">
+                {modal?.receivable?.description} — {formatCurrency(modal?.receivable?.net_amount)}
+              </ModalDescription>
             </div>
-            <form onSubmit={handleSubmitPayment} className="finance-receivables-form modal-form">
-              <div className="modal-body finance-receivables-modal-body">
+          </ModalHeader>
+          <ModalBody className="finance-receivables-modal-body">
+            <form onSubmit={handleSubmitPayment} id="receivable-payment-form" className="finance-receivables-form">
                 <div className="finance-receivables-form-block">
                   <label>
                     Data do recebimento *
@@ -1060,7 +1053,7 @@ export default function FinanceReceivablesPage() {
                   </label>
                   <label>
                     Forma recebida
-                    <select name="payment_method" defaultValue={modal.receivable.payment_method_expected || 'dinheiro'}>
+                    <select name="payment_method" defaultValue={modal?.receivable?.payment_method_expected || 'dinheiro'}>
                       {RECEIVABLE_PAYMENT_METHODS.map((pm) => (
                         <option key={pm.value} value={pm.value}>{pm.label}</option>
                       ))}
@@ -1071,37 +1064,35 @@ export default function FinanceReceivablesPage() {
                     <textarea name="notes" rows={3} placeholder="Opcional" />
                   </label>
                 </div>
-              </div>
-              <div className="modal-footer finance-receivables-modal-footer">
-                <button type="button" className="button secondary" onClick={() => setModal(null)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="button primary">
-                  Confirmar
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter className="finance-receivables-modal-footer">
+            <button type="button" className="button secondary" onClick={() => setModal(null)}>
+              Cancelar
+            </button>
+            <button type="submit" form="receivable-payment-form" className="button primary">
+              Confirmar
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
 
-      {modal?.type === 'details' && modal.receivable && (
-        <div className="modal-backdrop" onClick={() => { setModal(null); setDetailsPayments([]); setDetailsInstallments([]); }}>
-          <div className="modal-content finance-receivables-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header finance-receivables-modal-header">
-              <h3>Detalhes do título</h3>
-            </div>
-            <div className="modal-body finance-receivables-modal-body">
+      <ModalRoot open={modal?.type === 'details' && !!modal?.receivable} onOpenChange={(next) => { if (!next) { setModal(null); setDetailsPayments([]); setDetailsInstallments([]); } }}>
+        <ModalContent size="lg" className="finance-receivables-modal">
+          <ModalHeader className="finance-receivables-modal-header">
+            <ModalTitle>Detalhes do título</ModalTitle>
+          </ModalHeader>
+          <ModalBody className="finance-receivables-modal-body">
               <div className="finance-receivables-form-block">
-                <strong>{modal.receivable.description}</strong>
-                <span>Paciente: {(patients.find((p) => p.id === modal.receivable.patient_id)?.full_name) || (patients.find((p) => p.id === modal.receivable.patient_id)?.name) || '—'}</span>
-                <span>Parcela: {Number(modal.receivable.total_installments || 1) > 1 ? `${modal.receivable.installment_number}/${modal.receivable.total_installments}` : '—'}</span>
-                <span>Emissão: {formatDate(modal.receivable.issue_date)}</span>
-                <span>Vencimento: {formatDate(modal.receivable.due_date)}</span>
-                <span>Valor original: {formatCurrency(modal.receivable.original_amount)}</span>
-                <span>Valor líquido: {formatCurrency(modal.receivable.net_amount)}</span>
-                <span>Recebido: {formatCurrency(modal.receivable.received_amount)}</span>
-                <span>Em aberto: {formatCurrency(modal.receivable.remaining_amount)}</span>
+                <strong>{modal?.receivable?.description}</strong>
+                <span>Paciente: {(patients.find((p) => p.id === modal?.receivable?.patient_id)?.full_name) || (patients.find((p) => p.id === modal?.receivable?.patient_id)?.name) || '—'}</span>
+                <span>Parcela: {Number(modal?.receivable?.total_installments || 1) > 1 ? `${modal?.receivable?.installment_number}/${modal?.receivable?.total_installments}` : '—'}</span>
+                <span>Emissão: {formatDate(modal?.receivable?.issue_date)}</span>
+                <span>Vencimento: {formatDate(modal?.receivable?.due_date)}</span>
+                <span>Valor original: {formatCurrency(modal?.receivable?.original_amount)}</span>
+                <span>Valor líquido: {formatCurrency(modal?.receivable?.net_amount)}</span>
+                <span>Recebido: {formatCurrency(modal?.receivable?.received_amount)}</span>
+                <span>Em aberto: {formatCurrency(modal?.receivable?.remaining_amount)}</span>
               </div>
 
               <div className="finance-receivables-form-block">
@@ -1170,15 +1161,14 @@ export default function FinanceReceivablesPage() {
                 <h4>Histórico de cobranças</h4>
                 <span>Área reservada para histórico de cobranças (boletos, PIX, lembretes). Estrutura pronta para integração futura.</span>
               </div>
-            </div>
-            <div className="modal-footer finance-receivables-modal-footer">
-              <button type="button" className="button secondary" onClick={() => { setModal(null); setDetailsPayments([]); setDetailsInstallments([]); }}>
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter className="finance-receivables-modal-footer">
+            <button type="button" className="button secondary" onClick={() => { setModal(null); setDetailsPayments([]); setDetailsInstallments([]); }}>
+              Fechar
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
     </div>
   );
 }

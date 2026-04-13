@@ -10,6 +10,13 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
 import { normalizeText } from '../../services/helpers.js';
 import { onlyDigits } from '../../utils/validators.js';
 import { loadDb } from '../../db/index.js';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+} from '../ui/Modal.jsx';
 
 export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onReschedule, onUpdate }) => {
   const { user } = useAuth();
@@ -117,7 +124,7 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
   } else if (isEditing && draft.patientId) {
     // Buscar novo paciente se foi trocado
     const db = loadDb();
-    currentPatient = db.patients.find((p) => p.id === draft.patientId) || null;
+    currentPatient = (db.patients || []).find((p) => p.id === draft.patientId) || null;
   }
 
   const statusOptions = [
@@ -184,7 +191,7 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
     setShowChangePatient(false);
     // Buscar novo paciente para atualizar visualização imediata
     const db = loadDb();
-    const newPatientData = db.patients.find((p) => p.id === newPatient.id);
+    const newPatientData = (db.patients || []).find((p) => p.id === newPatient.id);
     const newPatientPhones = db.patientPhones.filter((p) => p.patient_id === newPatient.id);
     const newPrimaryPhone = newPatientPhones.find((p) => p.is_primary) || newPatientPhones[0];
     const newPatientRecord = db.patientRecords.find((r) => r.patient_id === newPatient.id);
@@ -226,7 +233,7 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
     try {
       recalcAndPersistPendingData(appointment.patientId);
       const db = loadDb();
-      const updatedPatient = db.patients.find((p) => p.id === appointment.patientId);
+      const updatedPatient = (db.patients || []).find((p) => p.id === appointment.patientId);
 
       if (updatedPatient?.hasPendingData) {
         setToast({
@@ -339,23 +346,23 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
 
   return (
     <>
-    <div className="appointment-details-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
+    <ModalRoot open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
       {toast ? (
-        <div className={`toast ${toast.type}`} role="status" style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 1000 }}>
+        <div className={`toast ${toast.type}`} role="status">
           {toast.message}
         </div>
       ) : null}
-      <div className="appointment-details-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="appointment-details-header">
+      <ModalContent className="appointment-details-modal">
+        <ModalHeader className="appointment-details-header">
           <div>
             <strong>Dados do Atendimento</strong>
           </div>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar">
             ✕
           </button>
-        </div>
+        </ModalHeader>
 
-        <div className="appointment-details-body">
+        <ModalBody className="appointment-details-body">
           {isLeadWithoutPatient && (
             <div
               className="appointment-details-alert-lead"
@@ -582,9 +589,9 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
               </div>
             </div>
           ) : null}
-        </div>
+        </ModalBody>
 
-        <div className="appointment-details-footer">
+        <ModalFooter className="appointment-details-footer">
           {isEditing ? (
             <>
               <button type="button" className="button secondary" onClick={() => {
@@ -647,9 +654,9 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
               )}
             </>
           )}
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
       <RegisterPatientFromLeadModal
         open={showRegisterFromLead}
         onClose={() => setShowRegisterFromLead(false)}

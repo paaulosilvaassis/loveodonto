@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useAuth } from '../auth/useAuth.js';
 import { Section } from '../components/Section.jsx';
+import OpenCashRegisterModal from '../components/finance/OpenCashRegisterModal.jsx';
 import { getCashSummaryForDate, getTodayCashRegister, openCashRegister } from '../services/cashRegisterService.js';
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -10,9 +11,6 @@ export default function FinanceCashRegisterPage() {
   const [selectedDate] = useState(todayIso());
   const [refreshKey, setRefreshKey] = useState(0);
   const [openModal, setOpenModal] = useState(false);
-  const [initialCash, setInitialCash] = useState('');
-  const [note, setNote] = useState('');
-  const [error, setError] = useState('');
 
   const summary = useMemo(
     () => getCashSummaryForDate(selectedDate),
@@ -22,18 +20,10 @@ export default function FinanceCashRegisterPage() {
   const todayRegister = useMemo(() => getTodayCashRegister(), [refreshKey]);
   const isOpen = Boolean(todayRegister && todayRegister.status === 'open');
 
-  const handleOpenCash = (event) => {
-    event.preventDefault();
-    setError('');
-    try {
-      openCashRegister(user, { initialCash: Number(initialCash || 0), note });
-      setOpenModal(false);
-      setInitialCash('');
-      setNote('');
-      setRefreshKey((k) => k + 1);
-    } catch (err) {
-      setError(err?.message || 'Erro ao abrir caixa.');
-    }
+  const handleOpenCash = ({ initialCash, note }) => {
+    openCashRegister(user, { initialCash, note });
+    setOpenModal(false);
+    setRefreshKey((k) => k + 1);
   };
 
   const formatCurrency = (value) =>
@@ -65,18 +55,10 @@ export default function FinanceCashRegisterPage() {
             <button
               type="button"
               className="button primary finance-cash-open-btn"
-              onClick={() => {
-                setError('');
-                setOpenModal(true);
-              }}
+              onClick={() => setOpenModal(true)}
             >
               Abrir Caixa
             </button>
-            {error && (
-              <p className="finance-cash-error" role="alert">
-                {error}
-              </p>
-            )}
           </div>
         ) : (
           <div className="finance-cash-summary-grid">
@@ -100,84 +82,13 @@ export default function FinanceCashRegisterPage() {
         )}
       </Section>
 
-      {openModal && (
-        <div
-          className="modal-backdrop"
-          onClick={() => {
-            setOpenModal(false);
-            setError('');
-          }}
-        >
-          <div
-            className="modal-content finance-cash-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3>Abertura de Caixa</h3>
-            <form className="finance-cash-form" onSubmit={handleOpenCash}>
-              <div className="form-row">
-                <label>
-                  Data
-                  <input type="date" value={selectedDate} readOnly />
-                </label>
-              </div>
-              <div className="form-row">
-                <label>
-                  Usuário responsável
-                  <input
-                    type="text"
-                    value={user?.name || 'Usuário'}
-                    readOnly
-                  />
-                </label>
-              </div>
-              <div className="form-row">
-                <label>
-                  Saldo inicial em dinheiro
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={initialCash}
-                    onChange={(e) => setInitialCash(e.target.value)}
-                    placeholder="0,00"
-                  />
-                </label>
-              </div>
-              <div className="form-row">
-                <label>
-                  Observação
-                  <textarea
-                    rows={3}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Opcional"
-                  />
-                </label>
-              </div>
-              {error && (
-                <p className="finance-cash-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <div className="finance-cash-modal-actions">
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => {
-                    setOpenModal(false);
-                    setError('');
-                  }}
-                >
-                  Cancelar
-                </button>
-                <button type="submit" className="button primary">
-                  Confirmar abertura
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <OpenCashRegisterModal
+        open={openModal}
+        onClose={() => setOpenModal(false)}
+        onConfirm={handleOpenCash}
+        selectedDate={selectedDate}
+        userName={user?.name || 'Usuário'}
+      />
     </div>
   );
 }

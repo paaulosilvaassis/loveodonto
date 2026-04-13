@@ -1,32 +1,36 @@
 import { useState, useEffect } from 'react';
-import { X, Send } from 'lucide-react';
-import { listTemplates } from '../../services/communicationService.js';
+import { Send } from 'lucide-react';
 import { loadDb } from '../../db/index.js';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../ui/Modal.jsx';
 
-export default function WhatsAppModal({ open, onClose, appointment, onSend, user }) {
+export default function WhatsAppModal({ open, onClose, appointment, onSend }) {
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState('');
   const [customMessage, setCustomMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      loadTemplates();
-    }
-  }, [open]);
-
-  const loadTemplates = () => {
+    if (!open) return;
     try {
       const db = loadDb();
       const whatsappTemplates = (db.messageTemplates || []).filter(
         (t) => t.channel === 'whatsapp' || !t.channel
       );
       setTemplates(whatsappTemplates);
-    } catch (error) {
-      console.error('Erro ao carregar templates:', error);
+    } catch {
       setTemplates([]);
     }
-  };
+    setSelectedTemplate('');
+    setCustomMessage('');
+    setLoading(false);
+  }, [open]);
 
   const handleSend = async () => {
     if (!selectedTemplate && !customMessage.trim()) {
@@ -36,7 +40,7 @@ export default function WhatsAppModal({ open, onClose, appointment, onSend, user
 
     setLoading(true);
     try {
-      const messageContent = selectedTemplate 
+      const messageContent = selectedTemplate
         ? templates.find((t) => t.id === selectedTemplate)?.content || customMessage
         : customMessage;
 
@@ -49,26 +53,20 @@ export default function WhatsAppModal({ open, onClose, appointment, onSend, user
 
       onClose();
     } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
       alert(error.message || 'Erro ao enviar mensagem');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Enviar Lembrete WhatsApp</h2>
-          <button type="button" className="modal-close" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
+    <ModalRoot open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+      <ModalContent size="md">
+        <ModalHeader>
+          <ModalTitle>Enviar Lembrete WhatsApp</ModalTitle>
+        </ModalHeader>
 
-        <div className="modal-body">
+        <ModalBody>
           <div className="form-field">
             <label>Template</label>
             <select
@@ -102,7 +100,7 @@ export default function WhatsAppModal({ open, onClose, appointment, onSend, user
             />
           </div>
 
-          {appointment.patient && (
+          {appointment?.patient && (
             <div className="whatsapp-modal-preview">
               <strong>Para:</strong> {appointment.patient.full_name || appointment.patient.nickname}
               {appointment.phone && (
@@ -113,9 +111,9 @@ export default function WhatsAppModal({ open, onClose, appointment, onSend, user
               )}
             </div>
           )}
-        </div>
+        </ModalBody>
 
-        <div className="modal-footer">
+        <ModalFooter>
           <button type="button" className="button secondary" onClick={onClose}>
             Cancelar
           </button>
@@ -128,8 +126,8 @@ export default function WhatsAppModal({ open, onClose, appointment, onSend, user
             <Send size={16} />
             {loading ? 'Enviando...' : 'Enviar'}
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 }

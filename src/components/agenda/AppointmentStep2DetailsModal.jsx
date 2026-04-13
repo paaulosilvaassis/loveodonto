@@ -3,6 +3,13 @@ import { getPatient } from '../../services/patientService.js';
 import { getProfessionalOptions } from '../../services/collaboratorService.js';
 import { loadDb } from '../../db/index.js';
 import { addMinutesToTime } from '../../utils/agendaUtils.js';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+} from '../ui/Modal.jsx';
 
 export const AppointmentStep2DetailsModal = ({
   open,
@@ -91,12 +98,6 @@ export const AppointmentStep2DetailsModal = ({
     onSubmit(draft);
   };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const date = new Date(`${dateStr}T00:00:00`);
-    return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-  };
-
   const formatBirthDate = (dateStr) => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
@@ -108,18 +109,18 @@ export const AppointmentStep2DetailsModal = ({
   if (!open || !step1Data) return null;
 
   return (
-    <div className="appointment-step2-backdrop" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="appointment-step2-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="appointment-step2-header">
+    <ModalRoot open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
+      <ModalContent className="appointment-step2-modal">
+        <ModalHeader className="appointment-step2-header">
           <div>
             <strong>Novo Agendamento</strong>
           </div>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar">
             ✕
           </button>
-        </div>
+        </ModalHeader>
 
-        <div className="appointment-step2-body">
+        <ModalBody className="appointment-step2-body">
           {error && <div className="alert error" style={{ marginBottom: '1rem' }}>{error}</div>}
 
           {step1Data.appointmentType === 'consulta' && patientData && (
@@ -291,9 +292,9 @@ export const AppointmentStep2DetailsModal = ({
               />
             </label>
           </div>
-        </div>
+        </ModalBody>
 
-        <div className="appointment-step2-footer">
+        <ModalFooter className="appointment-step2-footer">
           <button type="button" className="button secondary" onClick={onClose}>
             Fechar
           </button>
@@ -305,8 +306,8 @@ export const AppointmentStep2DetailsModal = ({
           >
             Salvar Agendamento
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 };

@@ -77,21 +77,7 @@ export default function CrmPipelinePage() {
       description="Funil visual Kanban. Arraste os cards entre colunas para alterar o estágio."
     >
       {toast && (
-        <div
-          className="toast error"
-          role="alert"
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            zIndex: 1000,
-            padding: '12px 16px',
-            borderRadius: '8px',
-            backgroundColor: '#ef4444',
-            color: '#fff',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          }}
-        >
+        <div className="toast error" role="alert">
           {toast.message}
         </div>
       )}

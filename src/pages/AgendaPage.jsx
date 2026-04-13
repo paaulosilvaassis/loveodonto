@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { addDays, endOfMonth, endOfWeek, startOfMonth, startOfWeek, eachDayOfInterval } from 'date-fns';
 import { useAuth } from '../auth/useAuth.js';
-import { loadDb } from '../db/index.js';
+import { loadDb, loadDbAsync } from '../db/index.js';
 import {
   APPOINTMENT_STATUS,
   cancelAppointment,
@@ -38,6 +38,23 @@ import { onlyDigits } from '../utils/validators.js';
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 const WEEKDAY_LABELS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+/** Garante arrays do DB mesmo com snapshot parcial ou legado (evita crash na agenda). */
+function mergeSafeAgendaSnapshot(raw) {
+  const base = loadDb();
+  if (!raw || typeof raw !== 'object') return base;
+  const arr = (v, fallback) => (Array.isArray(v) ? v : fallback);
+  return {
+    ...base,
+    ...raw,
+    patients: arr(raw.patients, base.patients),
+    patientPhones: arr(raw.patientPhones, base.patientPhones),
+    users: arr(raw.users, base.users),
+    rooms: arr(raw.rooms, base.rooms),
+    collaborators: arr(raw.collaborators, base.collaborators),
+    collaboratorWorkHours: arr(raw.collaboratorWorkHours, base.collaboratorWorkHours ?? []),
+  };
+}
+
 const MONTH_LABELS = [
   'JAN',
   'FEV',
@@ -57,8 +74,7 @@ export default function AgendaPage() {
   const { user } = useAuth();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [dbSnapshot, setDbSnapshot] = useState(() => {
-  });
+  const [dbSnapshot, setDbSnapshot] = useState(() => loadDb());
 
   const [view, setView] = useState('semana');
   const [timelineInitialized, setTimelineInitialized] = useState(false);
@@ -109,15 +125,21 @@ export default function AgendaPage() {
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  const patients = dbSnapshot.patients;
-  const patientPhones = dbSnapshot.patientPhones;
+  const safeDb = useMemo(() => mergeSafeAgendaSnapshot(dbSnapshot), [dbSnapshot]);
+
+  const patients = safeDb.patients;
+  const patientPhones = safeDb.patientPhones;
   const professionals = useMemo(() => {
-    const collaborators = getProfessionalOptions();
-    if (collaborators.length) return collaborators;
-    return dbSnapshot.users
+    try {
+      const collaborators = getProfessionalOptions();
+      if (collaborators.length) return collaborators;
+    } catch (e) {
+      console.warn('[AgendaPage] getProfessionalOptions', e);
+    }
+    return safeDb.users
       .filter((item) => item.role === 'profissional')
       .map((item) => ({ id: item.id, name: item.name, specialty: '', avatarUrl: '' }));
-  }, [dbSnapshot.users, dbSnapshot.collaborators]);
+  }, [safeDb]);
 
   // Validar e limpar seleção se profissional não existir mais
   useEffect(() => {
@@ -163,7 +185,16 @@ export default function AgendaPage() {
 
     conflictStateAppliedRef.current = true;
   }, [location?.state]);
-  const rooms = dbSnapshot.rooms;
+  const rooms = safeDb.rooms;
+
+  const statusOptions = useMemo(
+    () =>
+      Object.entries(AGENDA_CONFIG.status).map(([value, cfg]) => ({
+        value,
+        label: cfg.label,
+      })),
+    [],
+  );
 
   const patientPhonesMap = useMemo(() => {
     return patientPhones.reduce((acc, phone) => {
@@ -202,10 +233,10 @@ export default function AgendaPage() {
 
   const selectedWorkHours = useMemo(() => {
     if (!selectedProfessionalId) return [];
-    return (dbSnapshot.collaboratorWorkHours || []).filter(
+    return (safeDb.collaboratorWorkHours || []).filter(
       (item) => item.collaboratorId === selectedProfessionalId
     );
-  }, [dbSnapshot.collaboratorWorkHours, selectedProfessionalId]);
+  }, [safeDb.collaboratorWorkHours, selectedProfessionalId]);
 
   const workHoursConfig = useMemo(() => {
     const activeDays = new Set(selectedWorkHours.filter((item) => item.ativo).map((item) => item.diaSemana));
@@ -287,6 +318,17 @@ export default function AgendaPage() {
   useEffect(() => {
     refresh();
     refreshDb();
+    let cancelled = false;
+    loadDbAsync()
+      .then((db) => {
+        if (!cancelled) setDbSnapshot(db);
+      })
+      .catch(() => {
+        if (!cancelled) refreshDb();
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {

@@ -4,6 +4,14 @@ import { Section } from '../components/Section.jsx';
 import { Field } from '../components/Field.jsx';
 import Button from '../components/Button.jsx';
 import UsuarioMemberModal from '../components/configuracoes/UsuarioMemberModal.jsx';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../components/ui/Modal.jsx';
 import { getDefaultTenant } from '../services/tenantService.js';
 import {
   listMembers,
@@ -266,11 +274,7 @@ export default function ConfiguracoesUsuariosPage() {
       >
         {error && <div className="error">{error}</div>}
         {toast && (
-          <div
-            className={`toast ${toast.type}`}
-            role="status"
-            style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 4000, margin: 0 }}
-          >
+          <div className={`toast ${toast.type}`} role="status">
             {toast.message}
           </div>
         )}
@@ -426,11 +430,13 @@ export default function ConfiguracoesUsuariosPage() {
         )}
       </Section>
 
-      {modalInvite && (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal card" style={{ maxWidth: '400px' }}>
-            <h3 style={{ marginBottom: '1rem' }}>Convidar usuário</h3>
-            <form onSubmit={handleInvite} className="stack">
+      <ModalRoot open={modalInvite} onOpenChange={(next) => { if (!next) { setModalInvite(false); setError(''); } }}>
+        <ModalContent size="sm" onInteractOutside={(e) => e.preventDefault()}>
+          <ModalHeader>
+            <ModalTitle>Convidar usuário</ModalTitle>
+          </ModalHeader>
+          <form onSubmit={handleInvite} id="invite-form">
+            <ModalBody className="stack">
               <Field label="E-mail">
                 <input
                   type="email"
@@ -453,24 +459,26 @@ export default function ConfiguracoesUsuariosPage() {
                   {' '}Ativo
                 </label>
               </Field>
-              <div className="flex gap-sm" style={{ marginTop: '1rem' }}>
-                <Button type="submit" variant="primary" disabled={saving}>
-                  {saving ? 'Criando…' : 'Criar convite'}
-                </Button>
-                <Button type="button" variant="secondary" onClick={() => { setModalInvite(false); setError(''); }}>
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </ModalBody>
+          </form>
+          <ModalFooter>
+            <Button type="submit" form="invite-form" variant="primary" disabled={saving}>
+              {saving ? 'Criando…' : 'Criar convite'}
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => { setModalInvite(false); setError(''); }}>
+              Cancelar
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
 
-      {modalCreateUser && (
-        <div className="modal-overlay" role="dialog" aria-modal="true">
-          <div className="modal card" style={{ maxWidth: '440px' }}>
-            <h3 style={{ marginBottom: '1rem' }}>Novo usuário</h3>
-            <form onSubmit={handleCreateUser} className="stack">
+      <ModalRoot open={modalCreateUser} onOpenChange={(next) => { if (!next) { setModalCreateUser(false); setError(''); } }}>
+        <ModalContent size="sm" onInteractOutside={(e) => e.preventDefault()}>
+          <ModalHeader>
+            <ModalTitle>Novo usuário</ModalTitle>
+          </ModalHeader>
+          <form onSubmit={handleCreateUser} id="create-user-form">
+            <ModalBody className="stack">
               <Field label="Nome">
                 <input
                   value={newUserName}
@@ -512,26 +520,26 @@ export default function ConfiguracoesUsuariosPage() {
                   <option value="inactive">Inativo</option>
                 </select>
               </Field>
-              <div className="flex gap-sm" style={{ marginTop: '1rem' }}>
-                <Button type="submit" variant="primary" disabled={creatingUser}>
-                  {creatingUser ? 'Criando…' : 'Criar usuário'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    setModalCreateUser(false);
-                    setError('');
-                  }}
-                  disabled={creatingUser}
-                >
-                  Cancelar
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </ModalBody>
+          </form>
+          <ModalFooter>
+            <Button type="submit" form="create-user-form" variant="primary" disabled={creatingUser}>
+              {creatingUser ? 'Criando…' : 'Criar usuário'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setModalCreateUser(false);
+                setError('');
+              }}
+              disabled={creatingUser}
+            >
+              Cancelar
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
 
       {memberModal.open && memberModal.member ? (
         <UsuarioMemberModal

@@ -650,7 +650,7 @@ export const updateCollaboratorFinance = (user, collaboratorId, payload) => {
 
 export const getProfessionalOptions = () => {
   const db = loadDb();
-  const collaborators = db.collaborators
+  const collaborators = (db.collaborators ?? [])
     .filter((item) => item.status === 'ativo')
     .filter((item) => isAgendaProfessional(item));
   return collaborators.map((item) => ({

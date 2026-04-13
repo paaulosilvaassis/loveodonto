@@ -22,6 +22,15 @@ import {
 import { listSuppliers } from '../services/suppliersService.js';
 import SupplierFormModal from '../components/SupplierFormModal.jsx';
 import { Plus, Edit2, Trash2, DollarSign } from 'lucide-react';
+import {
+  ModalBody,
+  ModalContent,
+  ModalDescription,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../components/ui/Modal.jsx';
 
 const STATUS_LABELS = {
   [PAYABLE_STATUS.PENDING]: 'Pendente',
@@ -281,21 +290,7 @@ export default function FinancePayablesPage() {
   return (
     <div className="finance-payables-page">
       {toast && (
-        <div
-          className={`toast finance-toast ${toast.type}`}
-          role="status"
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 10001,
-            padding: '12px 20px',
-            borderRadius: 12,
-            background: toast.type === 'success' ? '#10b981' : '#ef4444',
-            color: '#fff',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-          }}
-        >
+        <div className={`toast ${toast.type}`} role="status">
           {toast.message}
         </div>
       )}
@@ -516,44 +511,41 @@ export default function FinancePayablesPage() {
         )}
       </div>
 
-      {modal?.type === 'create_avulso' && (
-        <div className="modal-backdrop" onClick={() => setModal(null)}>
-          <div className="modal-content finance-payables-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header finance-payables-modal-header">
-              <h3>Novo pagamento avulso</h3>
-            </div>
-            <form onSubmit={handleCreateAvulso} className="finance-payables-form modal-form">
-              <div className="modal-body finance-payables-modal-body">
-                <label>Descrição *</label>
-                <input type="text" name="description" required placeholder="Ex: Despesa pontual" />
+      <ModalRoot open={modal?.type === 'create_avulso'} onOpenChange={(next) => { if (!next) setModal(null); }}>
+        <ModalContent size="sm" className="finance-payables-modal">
+          <ModalHeader className="finance-payables-modal-header">
+            <ModalTitle>Novo pagamento avulso</ModalTitle>
+          </ModalHeader>
+          <ModalBody className="finance-payables-modal-body">
+            <form onSubmit={handleCreateAvulso} id="payable-avulso-form" className="finance-payables-form">
+              <label>Descrição *</label>
+              <input type="text" name="description" required placeholder="Ex: Despesa pontual" />
 
-                <label>Valor *</label>
-                <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0,00" />
+              <label>Valor *</label>
+              <input type="number" name="amount" step="0.01" min="0.01" required placeholder="0,00" />
 
-                <label>Data *</label>
-                <input type="date" name="date" required defaultValue={todayIso()} />
-              </div>
-              <div className="modal-footer finance-payables-modal-footer">
-                <button type="button" className="button secondary" onClick={() => setModal(null)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="button primary">
-                  Registrar
-                </button>
-              </div>
+              <label>Data *</label>
+              <input type="date" name="date" required defaultValue={todayIso()} />
             </form>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter className="finance-payables-modal-footer">
+            <button type="button" className="button secondary" onClick={() => setModal(null)}>
+              Cancelar
+            </button>
+            <button type="submit" form="payable-avulso-form" className="button primary">
+              Registrar
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
 
-      {modal?.type === 'create' && (
-        <div className="modal-backdrop" onClick={() => { setModal(null); setSelectedSupplierId(''); }}>
-          <div className="modal-content finance-payables-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header finance-payables-modal-header">
-              <h3>{activeTab === PAYABLES_TABS.TITULOS_AVULSOS ? 'Novo título avulso' : activeTab === PAYABLES_TABS.DESPESAS_FIXAS ? 'Nova despesa fixa' : activeTab === PAYABLES_TABS.DESPESAS_VARIAVEIS ? 'Nova despesa variável' : 'Nova despesa'}</h3>
-            </div>
-            <form onSubmit={handleCreate} className="finance-payables-form modal-form">
-              <div className="modal-body finance-payables-modal-body">
+      <ModalRoot open={modal?.type === 'create'} onOpenChange={(next) => { if (!next) { setModal(null); setSelectedSupplierId(''); } }}>
+        <ModalContent size="lg" className="finance-payables-modal" onInteractOutside={(e) => e.preventDefault()}>
+          <ModalHeader className="finance-payables-modal-header">
+            <ModalTitle>{activeTab === PAYABLES_TABS.TITULOS_AVULSOS ? 'Novo título avulso' : activeTab === PAYABLES_TABS.DESPESAS_FIXAS ? 'Nova despesa fixa' : activeTab === PAYABLES_TABS.DESPESAS_VARIAVEIS ? 'Nova despesa variável' : 'Nova despesa'}</ModalTitle>
+          </ModalHeader>
+          <ModalBody className="finance-payables-modal-body">
+            <form onSubmit={handleCreate} id="payable-create-form" className="finance-payables-form">
                 <div className="finance-payables-form-block">
                   <label>Descrição *</label>
                   <input type="text" name="description" required placeholder="Ex: Aluguel mensal" />
@@ -662,19 +654,18 @@ export default function FinancePayablesPage() {
                     </div>
                   )}
                 </div>
-              </div>
-              <div className="modal-footer finance-payables-modal-footer">
-                <button type="button" className="button secondary" onClick={() => { setModal(null); setSelectedSupplierId(''); }}>
-                  Cancelar
-                </button>
-                <button type="submit" className="button primary">
-                  Salvar
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter className="finance-payables-modal-footer">
+            <button type="button" className="button secondary" onClick={() => { setModal(null); setSelectedSupplierId(''); }}>
+              Cancelar
+            </button>
+            <button type="submit" form="payable-create-form" className="button primary">
+              Salvar
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
 
       {supplierModalOpen && (
         <SupplierFormModal
@@ -686,14 +677,13 @@ export default function FinancePayablesPage() {
         />
       )}
 
-      {modal?.type === 'edit' && modal.payable && (
-        <div className="modal-backdrop" onClick={() => setModal(null)}>
-          <div className="modal-content finance-payables-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header finance-payables-modal-header">
-              <h3>Editar despesa</h3>
-            </div>
-            <form onSubmit={handleUpdate(modal.payable.id)} className="finance-payables-form modal-form">
-              <div className="modal-body finance-payables-modal-body">
+      <ModalRoot open={modal?.type === 'edit' && !!modal?.payable} onOpenChange={(next) => { if (!next) setModal(null); }}>
+        <ModalContent size="lg" className="finance-payables-modal" onInteractOutside={(e) => e.preventDefault()}>
+          <ModalHeader className="finance-payables-modal-header">
+            <ModalTitle>Editar despesa</ModalTitle>
+          </ModalHeader>
+          <ModalBody className="finance-payables-modal-body">
+            <form onSubmit={handleUpdate(modal?.payable?.id)} id="payable-edit-form" className="finance-payables-form">
                 <div className="finance-payables-form-block">
                   <label>Descrição *</label>
                   <input type="text" name="description" defaultValue={modal.payable.description} required />
@@ -710,7 +700,7 @@ export default function FinancePayablesPage() {
                   )}
 
                   <label>Fornecedor</label>
-                  <select name="supplierId" defaultValue={modal.payable.supplierId || ''}>
+                  <select name="supplierId" defaultValue={modal?.payable?.supplierId || ''}>
                     <option value="">Selecione</option>
                     {suppliers.map((s) => (
                       <option key={s.id} value={s.id}>{s.trade_name || s.name || '—'}</option>
@@ -718,25 +708,25 @@ export default function FinancePayablesPage() {
                   </select>
 
                   <label>Valor *</label>
-                  <input type="number" name="amount" step="0.01" min="0.01" required defaultValue={modal.payable.amount} />
+                  <input type="number" name="amount" step="0.01" min="0.01" required defaultValue={modal?.payable?.amount} />
 
                   <label>Data de vencimento *</label>
-                  <input type="date" name="dueDate" required defaultValue={modal.payable.dueDate} />
+                  <input type="date" name="dueDate" required defaultValue={modal?.payable?.dueDate} />
 
                   <label>Forma de pagamento *</label>
-                  <select name="paymentMethod" required defaultValue={modal.payable.paymentMethod || 'outros'}>
+                  <select name="paymentMethod" required defaultValue={modal?.payable?.paymentMethod || 'outros'}>
                     {PAYMENT_METHODS.map((pm) => (
                       <option key={pm.value} value={pm.value}>{pm.label}</option>
                     ))}
                   </select>
 
                   <label>Conta de origem</label>
-                  <input type="text" name="originAccount" defaultValue={modal.payable.originAccount || ''} placeholder="Opcional" />
+                  <input type="text" name="originAccount" defaultValue={modal?.payable?.originAccount || ''} placeholder="Opcional" />
                 </div>
 
                 <div className="finance-payables-form-block finance-payables-form-block--final">
                   <label>Observação</label>
-                  <textarea name="note" rows={4} defaultValue={modal.payable.note || ''} placeholder="Opcional" className="finance-payables-note" />
+                  <textarea name="note" rows={4} defaultValue={modal?.payable?.note || ''} placeholder="Opcional" className="finance-payables-note" />
                 </div>
 
                 <div className="finance-payables-form-block finance-payables-form-block--classification">
@@ -785,7 +775,7 @@ export default function FinancePayablesPage() {
                   {isRecurring && expenseType !== EXPENSE_TYPE.ONE_TIME_TITLE && (
                     <div className="finance-payables-recurrence">
                       <label>Frequência</label>
-                      <select name="recurrenceFrequency" defaultValue={modal.payable.recurrenceFrequency || 'mensal'}>
+                      <select name="recurrenceFrequency" defaultValue={modal?.payable?.recurrenceFrequency || 'mensal'}>
                         {RECURRENCE_FREQUENCY.map((r) => (
                           <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
@@ -793,61 +783,61 @@ export default function FinancePayablesPage() {
                     </div>
                   )}
                 </div>
-              </div>
-              <div className="modal-footer finance-payables-modal-footer">
-                <button type="button" className="button secondary" onClick={() => setModal(null)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="button primary">
-                  Salvar alterações
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter className="finance-payables-modal-footer">
+            <button type="button" className="button secondary" onClick={() => setModal(null)}>
+              Cancelar
+            </button>
+            <button type="submit" form="payable-edit-form" className="button primary">
+              Salvar alterações
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
 
-      {modal?.type === 'pay' && modal.payable && (
-        <div className="modal-backdrop" onClick={() => setModal(null)}>
-          <div className="modal-content finance-payables-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header finance-payables-modal-header">
-              <h3>Registrar pagamento</h3>
-              <p className="finance-payables-modal-desc">{modal.payable.description} — {formatCurrency(modal.payable.amount)}</p>
+      <ModalRoot open={modal?.type === 'pay' && !!modal?.payable} onOpenChange={(next) => { if (!next) setModal(null); }}>
+        <ModalContent size="md" className="finance-payables-modal">
+          <ModalHeader className="finance-payables-modal-header">
+            <div>
+              <ModalTitle>Registrar pagamento</ModalTitle>
+              <ModalDescription className="finance-payables-modal-desc">
+                {modal?.payable?.description} — {formatCurrency(modal?.payable?.amount)}
+              </ModalDescription>
             </div>
-            <form onSubmit={handlePay(modal.payable.id)} className="finance-payables-form modal-form">
-              <div className="modal-body finance-payables-modal-body">
+          </ModalHeader>
+          <ModalBody className="finance-payables-modal-body">
+            <form onSubmit={handlePay(modal?.payable?.id)} id="payable-pay-form" className="finance-payables-form">
               <label>Data de pagamento *</label>
               <input type="date" name="paidDate" required defaultValue={todayIso()} />
 
               <label>Forma de pagamento *</label>
-              <select name="paymentMethod" required defaultValue={modal.payable.paymentMethod || 'pix'}>
+              <select name="paymentMethod" required defaultValue={modal?.payable?.paymentMethod || 'pix'}>
                 {PAYMENT_METHODS.map((pm) => (
                   <option key={pm.value} value={pm.value}>{pm.label}</option>
                 ))}
               </select>
 
               <label>Conta utilizada</label>
-              <input type="text" name="originAccount" defaultValue={modal.payable.originAccount || ''} placeholder="Opcional" />
+              <input type="text" name="originAccount" defaultValue={modal?.payable?.originAccount || ''} placeholder="Opcional" />
 
               <label>Valor pago *</label>
-              <input type="number" name="amountPaid" step="0.01" min="0.01" required defaultValue={modal.payable.amount} placeholder="0,00" />
+              <input type="number" name="amountPaid" step="0.01" min="0.01" required defaultValue={modal?.payable?.amount} placeholder="0,00" />
 
               <label>Observação</label>
               <textarea name="note" rows={3} placeholder="Opcional" className="finance-payables-note" />
-              </div>
-
-              <div className="modal-footer finance-payables-modal-footer">
-                <button type="button" className="button secondary" onClick={() => setModal(null)}>
-                  Cancelar
-                </button>
-                <button type="submit" className="button primary">
-                  Confirmar pagamento
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+          </ModalBody>
+          <ModalFooter className="finance-payables-modal-footer">
+            <button type="button" className="button secondary" onClick={() => setModal(null)}>
+              Cancelar
+            </button>
+            <button type="submit" form="payable-pay-form" className="button primary">
+              Confirmar pagamento
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
     </div>
   );
 }

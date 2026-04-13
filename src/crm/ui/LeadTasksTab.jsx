@@ -6,9 +6,15 @@ import {
   Trash2,
   MessageCircle,
   Calendar,
-  ChevronDown,
-  X,
 } from 'lucide-react';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../../components/ui/Modal.jsx';
 import {
   listTasks,
   groupTasksByStatus,
@@ -250,25 +256,18 @@ function CreateTaskModal({ open, onClose, lead, user, onSuccess, editTask }) {
     }
   }, [open, isEdit, editTask?.id, user?.id]);
 
-  if (!open) return null;
+  const handleOpenChange = (next) => {
+    if (!next) onClose();
+  };
 
   return (
-    <div
-      className="appointment-step2-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="create-task-title"
-      onClick={onClose}
-    >
-      <div className="appointment-step2-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="appointment-step2-header">
-          <strong id="create-task-title">{isEdit ? 'Editar tarefa' : 'Nova tarefa'}</strong>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar">
-            <X size={18} />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="appointment-step2-modal-form">
-          <div className="appointment-step2-body">
+    <ModalRoot open={open} onOpenChange={handleOpenChange}>
+      <ModalContent size="md" className="appointment-step2-modal" onInteractOutside={(e) => e.preventDefault()}>
+        <ModalHeader className="appointment-step2-header">
+          <ModalTitle>{isEdit ? 'Editar tarefa' : 'Nova tarefa'}</ModalTitle>
+        </ModalHeader>
+        <form onSubmit={handleSubmit} id="create-task-form">
+          <ModalBody>
           <div className="form-field" style={{ marginBottom: '1rem' }}>
             <label htmlFor="task-type">Tipo *</label>
             <select
@@ -389,24 +388,30 @@ function CreateTaskModal({ open, onClose, lead, user, onSuccess, editTask }) {
               {error}
             </p>
           )}
-          </div>
-          <div className="appointment-step2-footer">
-            <button type="button" className="button secondary" onClick={onClose}>
-              Cancelar
-            </button>
-            <button type="submit" className="button primary" disabled={submitting}>
-              {submitting ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar tarefa'}
-            </button>
-          </div>
+          </ModalBody>
         </form>
-      </div>
-    </div>
+        <ModalFooter>
+          <button type="button" className="button secondary" onClick={onClose}>
+            Cancelar
+          </button>
+          <button type="submit" form="create-task-form" className="button primary" disabled={submitting}>
+            {submitting ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar tarefa'}
+          </button>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 }
 
 export function LeadTasksTab({ leadId, lead, user, onRefresh, onOpenSchedule }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [editTask, setEditTask] = useState(null);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const tasks = listTasks({ leadId });
   const { atrasadas, hoje, proximas, concluidas } = groupTasksByStatus(tasks);
@@ -417,15 +422,7 @@ export function LeadTasksTab({ leadId, lead, user, onRefresh, onOpenSchedule }) 
       completeTask(user, task.id);
       onRefresh?.();
     } catch (e) {
-      if (typeof document !== 'undefined') {
-        const toast = document.createElement('div');
-        toast.setAttribute('role', 'alert');
-        toast.className = 'toast error';
-        toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2000;padding:12px 16px;border-radius:8px;background:#ef4444;color:#fff;';
-        toast.textContent = e?.message || 'Erro ao concluir tarefa.';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-      }
+      showToast(e?.message || 'Erro ao concluir tarefa.');
     }
   };
 
@@ -440,15 +437,7 @@ export function LeadTasksTab({ leadId, lead, user, onRefresh, onOpenSchedule }) 
       deleteTask(user, task.id);
       onRefresh?.();
     } catch (e) {
-      if (typeof document !== 'undefined') {
-        const toast = document.createElement('div');
-        toast.setAttribute('role', 'alert');
-        toast.className = 'toast error';
-        toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2000;padding:12px 16px;border-radius:8px;background:#ef4444;color:#fff;';
-        toast.textContent = e?.message || 'Erro ao excluir tarefa.';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-      }
+      showToast(e?.message || 'Erro ao excluir tarefa.');
     }
   };
 
@@ -514,6 +503,12 @@ export function LeadTasksTab({ leadId, lead, user, onRefresh, onOpenSchedule }) 
         onSuccess={() => onRefresh?.()}
         editTask={editTask}
       />
+
+      {toast && (
+        <div className={`toast ${toast.type}`} role="alert">
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }

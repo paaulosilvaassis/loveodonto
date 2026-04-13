@@ -2192,22 +2192,7 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
       </SectionCard>
       
       {toast && (
-        <div
-          className={`toast ${toast.type}`}
-          role="status"
-          style={{
-            position: 'fixed',
-            bottom: '24px',
-            right: '24px',
-            zIndex: 10000,
-            padding: '12px 24px',
-            borderRadius: '8px',
-            backgroundColor: toast.type === 'success' ? '#10b981' : '#ef4444',
-            color: 'white',
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-            animation: 'slideIn 0.3s ease-out',
-          }}
-        >
+        <div className={`toast ${toast.type}`} role="status">
           {toast.message}
         </div>
       )}

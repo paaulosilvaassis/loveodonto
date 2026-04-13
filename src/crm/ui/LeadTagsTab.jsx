@@ -40,13 +40,6 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
   const syncLeadTagsState = () => {
     const nextLinkedTags = leadId ? listTagsByLead(leadId) : [];
     const nextAllTags = listTags();
-    console.debug('[LeadTagsTab] syncLeadTagsState', {
-      leadId,
-      renderedTagsSource: 'linkedTags(localState)',
-      leadTagList: lead?.tagList,
-      nextLinkedTags,
-      nextAllTagsCount: nextAllTags.length,
-    });
     setLinkedTags(nextLinkedTags);
     setAllTags(nextAllTags);
   };
@@ -126,28 +119,16 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
 
   const handleAddTag = async (tag) => {
     if (!leadId || linkedIds.has(tag.id)) return;
-    console.debug('[LeadTagsTab] handleAddTag:start', {
-      leadId,
-      payload: tag,
-      tagsBefore: linkedTags,
-    });
-
     setLinkedTags((prev) => [...prev, tag]);
     setOpen(false);
     setQuery('');
 
     try {
-      const result = await addTagToLead(leadId, tag.id);
-      console.debug('[LeadTagsTab] handleAddTag:backend-success', { result });
+      await addTagToLead(leadId, tag.id);
       syncLeadTagsState();
       onUpdate?.();
     } catch (error) {
       setLinkedTags((prev) => prev.filter((t) => t.id !== tag.id));
-      console.debug('[LeadTagsTab] handleAddTag:rollback', {
-        leadId,
-        payload: tag,
-      });
-      console.error('Erro ao adicionar tag no lead:', error);
     }
   };
 
@@ -155,28 +136,14 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
     if (!leadId) return;
     const removedTag = linkedTags.find((t) => t.id === tagId) || null;
     if (!removedTag) return;
-
-    console.debug('[LeadTagsTab] handleRemoveTag:start', {
-      leadId,
-      payload: removedTag,
-      tagId,
-      tagsBefore: linkedTags,
-    });
-
     setLinkedTags((prev) => prev.filter((t) => t.id !== tagId));
 
     try {
-      const result = await removeTagFromLead(leadId, tagId);
-      console.debug('[LeadTagsTab] handleRemoveTag:backend-success', { result });
+      await removeTagFromLead(leadId, tagId);
       syncLeadTagsState();
       onUpdate?.();
     } catch (error) {
       setLinkedTags((prev) => [...prev, removedTag]);
-      console.debug('[LeadTagsTab] handleRemoveTag:rollback', {
-        leadId,
-        payload: removedTag,
-      });
-      console.error('Erro ao remover tag do lead:', error);
     }
   };
 
@@ -189,7 +156,6 @@ export function LeadTagsTab({ leadId, lead, onUpdate }) {
         category: newCategory || 'Outros',
         color: newColor || DEFAULT_COLOR,
       });
-      console.debug('[LeadTagsTab] handleCreateTag:created', { payload: tag });
       await handleAddTag(tag);
       setNewName('');
       setNewCategory('');

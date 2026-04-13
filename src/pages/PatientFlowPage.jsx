@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Calendar, Search, Filter } from 'lucide-react';
+import { Search, Filter } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
 import { SectionCard } from '../components/SectionCard.jsx';
 import FlowPatientList from '../components/flow/FlowPatientList.jsx';
@@ -8,6 +8,7 @@ import FlowSidebar from '../components/flow/FlowSidebar.jsx';
 import FlowTopSummaryChips from '../components/flow/FlowTopSummaryChips.jsx';
 import WhatsAppModal from '../components/flow/WhatsAppModal.jsx';
 import CancelOrRescheduleModal from '../components/flow/CancelOrRescheduleModal.jsx';
+import CheckInModal from '../components/flow/CheckInModal.jsx';
 import {
   fetchAppointmentsByDate,
   updateAppointmentStatus,
@@ -49,7 +50,7 @@ export default function PatientFlowPage() {
   const [activeSidebarFilter, setActiveSidebarFilter] = useState('all');
   const [whatsAppModal, setWhatsAppModal] = useState({ open: false, appointment: null });
   const [cancelModal, setCancelModal] = useState({ open: false, appointment: null });
-  const [checkInModal, setCheckInModal] = useState({ open: false, query: '' });
+  const [checkInOpen, setCheckInOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -302,18 +303,6 @@ export default function PatientFlowPage() {
     navigate(`/gestao/agenda?appointmentId=${appointmentId}`);
   };
 
-  const checkInCandidates = useMemo(() => {
-    const base = appointments.filter((apt) =>
-      [APPOINTMENT_STATUS.AGENDADO, APPOINTMENT_STATUS.EM_CONFIRMACAO, APPOINTMENT_STATUS.CONFIRMADO].includes(apt.status)
-    );
-    if (!checkInModal.query.trim()) return base;
-    const q = checkInModal.query.toLowerCase();
-    return base.filter((apt) => {
-      const patientName = (apt.patient?.full_name || apt.patient?.nickname || '').toLowerCase();
-      const phone = apt.phone ? `${apt.phone.ddd}${apt.phone.number}` : '';
-      return patientName.includes(q) || phone.includes(q);
-    });
-  }, [appointments, checkInModal.query]);
 
   return (
     <div className="patient-flow-page">
@@ -343,7 +332,7 @@ export default function PatientFlowPage() {
               <button
                 type="button"
                 className="flow-compact-cta"
-                onClick={() => setCheckInModal({ open: true, query: '' })}
+                onClick={() => setCheckInOpen(true)}
               >
                 Registrar Chegada
               </button>
@@ -484,62 +473,12 @@ export default function PatientFlowPage() {
         user={user}
       />
 
-      {checkInModal.open ? (
-        <div className="modal-backdrop" onClick={() => setCheckInModal({ open: false, query: '' })}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Registrar Chegada</h2>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={() => setCheckInModal({ open: false, query: '' })}
-              >
-                ×
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="form-field">
-                <label>Buscar paciente</label>
-                <input
-                  type="text"
-                  value={checkInModal.query}
-                  onChange={(e) => setCheckInModal((prev) => ({ ...prev, query: e.target.value }))}
-                  placeholder="Nome ou telefone..."
-                />
-              </div>
-              <div className="flow-checkin-list">
-                {checkInCandidates.length === 0 ? (
-                  <div className="flow-checkin-empty">Nenhum agendamento elegível.</div>
-                ) : (
-                  checkInCandidates.map((apt) => (
-                    <button
-                      key={apt.id}
-                      type="button"
-                      className="flow-checkin-item"
-                      onClick={async () => {
-                        await handleCheckIn(apt.id);
-                        setCheckInModal({ open: false, query: '' });
-                      }}
-                    >
-                      <span>{apt.patient?.full_name || apt.patient?.nickname || 'Paciente'}</span>
-                      <span>{apt.startTime}</span>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => setCheckInModal({ open: false, query: '' })}
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <CheckInModal
+        open={checkInOpen}
+        onClose={() => setCheckInOpen(false)}
+        appointments={appointments}
+        onCheckIn={handleCheckIn}
+      />
     </div>
   );
 }

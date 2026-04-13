@@ -92,22 +92,14 @@ export default function ImportExportCard({ patientId, user, canUse }) {
 
       {toastImport && (
         <div
-          className="toast import-export-toast success"
+          className={`toast ${(toastImport.errors?.length > 0 || (toastImport.ignored ?? 0) > 0) ? 'error' : 'success'}`}
           role="status"
           style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 2000,
             maxWidth: 360,
-            padding: '12px 16px',
-            borderRadius: 12,
-            background: (toastImport.errors?.length > 0 || (toastImport.ignored ?? 0) > 0) ? '#f59e0b' : '#10b981',
-            color: '#fff',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
             display: 'flex',
             flexDirection: 'column',
             gap: 8,
+            background: (toastImport.errors?.length > 0 || (toastImport.ignored ?? 0) > 0) ? '#f59e0b' : undefined,
           }}
         >
           <strong>

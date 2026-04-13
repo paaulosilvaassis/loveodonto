@@ -2,6 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -73,7 +74,7 @@ export default defineConfig(({ mode }) => {
     'import.meta.env.VITE_SUPABASE_PLATFORM_URL': JSON.stringify(platformUrl),
     'import.meta.env.VITE_SUPABASE_PLATFORM_ANON_KEY': JSON.stringify(platformKey),
   },
-  plugins: [react()],
+  plugins: [tailwindcss(), react()],
   server: {
     /** Mesmo motivo que `console/vite.config.js`: bind IPv4 + IPv6 no Windows. */
     host: true,

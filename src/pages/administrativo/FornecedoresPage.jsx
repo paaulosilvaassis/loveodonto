@@ -75,21 +75,7 @@ export default function FornecedoresPage() {
   return (
     <div className="suppliers-page">
       {toast && (
-        <div
-          className={`toast suppliers-toast ${toast.type}`}
-          role="status"
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 10001,
-            padding: '12px 20px',
-            borderRadius: 12,
-            background: toast.type === 'success' ? '#10b981' : '#ef4444',
-            color: '#fff',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-          }}
-        >
+        <div className={`toast ${toast.type}`} role="status">
           {toast.message}
         </div>
       )}

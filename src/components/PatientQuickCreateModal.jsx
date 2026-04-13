@@ -4,6 +4,14 @@ import { X, UserPlus, User, Phone, CreditCard, Loader2 } from 'lucide-react';
 import { searchPatients } from '../services/patientService.js';
 import { loadDb } from '../db/index.js';
 import Button from './Button.jsx';
+import {
+  ModalBody,
+  ModalContent,
+  ModalDescription,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from './ui/Modal.jsx';
 
 export default function PatientQuickCreateModal({ isOpen, onClose }) {
   const navigate = useNavigate();
@@ -177,18 +185,19 @@ export default function PatientQuickCreateModal({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content patient-quick-create-modal" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="patient-quick-create-header">
-          <div className="patient-quick-create-header-icon">
-            <UserPlus size={24} />
-          </div>
-          <div className="patient-quick-create-header-text">
-            <h2 className="patient-quick-create-title">Pesquisar Cadastro</h2>
-            <p className="patient-quick-create-subtitle">
-              Antes de cadastrar, pesquise para evitar duplicidades
-            </p>
+    <ModalRoot open={isOpen} onOpenChange={(next) => (!next ? onClose() : null)}>
+      <ModalContent size="md" className="patient-quick-create-modal">
+        <ModalHeader className="patient-quick-create-header">
+          <div className="patient-quick-create-header-main">
+            <div className="patient-quick-create-header-icon">
+              <UserPlus size={24} />
+            </div>
+            <div className="patient-quick-create-header-text">
+              <ModalTitle className="patient-quick-create-title">Pesquisar Cadastro</ModalTitle>
+              <ModalDescription className="patient-quick-create-subtitle">
+                Antes de cadastrar, pesquise para evitar duplicidades
+              </ModalDescription>
+            </div>
           </div>
           <button
             type="button"
@@ -198,176 +207,173 @@ export default function PatientQuickCreateModal({ isOpen, onClose }) {
           >
             <X size={20} />
           </button>
-        </div>
+        </ModalHeader>
 
-        {/* Instrução */}
-        <div className="patient-quick-create-instruction">
-          <p>Escolha um Filtro</p>
-        </div>
-
-        {/* Filtros Radio */}
-        <div className="patient-quick-create-filters">
-          <label className="patient-quick-create-radio">
-            <input
-              type="radio"
-              name="searchType"
-              value="name"
-              checked={searchType === 'name'}
-              onChange={(e) => {
-                setSearchType(e.target.value);
-                setSearchQuery('');
-                setResults([]);
-                setHasSearched(false);
-                setIsLoading(false);
-                if (searchTimeoutRef.current) {
-                  clearTimeout(searchTimeoutRef.current);
-                }
-              }}
-            />
-            <span>Nome</span>
-          </label>
-          <label className="patient-quick-create-radio">
-            <input
-              type="radio"
-              name="searchType"
-              value="cpf"
-              checked={searchType === 'cpf'}
-              onChange={(e) => {
-                setSearchType(e.target.value);
-                setSearchQuery('');
-                setResults([]);
-                setHasSearched(false);
-                setIsLoading(false);
-                if (searchTimeoutRef.current) {
-                  clearTimeout(searchTimeoutRef.current);
-                }
-              }}
-            />
-            <span>CPF</span>
-          </label>
-          <label className="patient-quick-create-radio">
-            <input
-              type="radio"
-              name="searchType"
-              value="phone"
-              checked={searchType === 'phone'}
-              onChange={(e) => {
-                setSearchType(e.target.value);
-                setSearchQuery('');
-                setResults([]);
-                setHasSearched(false);
-                setIsLoading(false);
-                if (searchTimeoutRef.current) {
-                  clearTimeout(searchTimeoutRef.current);
-                }
-              }}
-            />
-            <span>Telefone</span>
-          </label>
-        </div>
-
-        {/* Campo de Busca */}
-        <div className="patient-quick-create-search">
-          <div className="patient-quick-create-input-wrapper">
-            <input
-              ref={inputRef}
-              type="text"
-              className="patient-quick-create-input-field"
-              value={formatSearchValue(searchQuery)}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={searchPlaceholder()}
-            />
+        <ModalBody className="patient-quick-create-body">
+          <div className="patient-quick-create-instruction">
+            <p>Escolha um Filtro</p>
           </div>
-        </div>
 
-        {/* Resultados - Mostrar enquanto digita ou após busca */}
-        {(isLoading || hasSearched || results.length > 0 || (searchQuery && normalizeText(searchQuery).length >= 3)) && (
-          <>
-            {isLoading ? (
-              <div className="patient-quick-create-loading">
-                <Loader2 size={24} className="animate-spin" />
-                <p>Carregando...</p>
-              </div>
-            ) : hasSearched && results.length === 0 ? (
-              <div className="patient-quick-create-empty">
-                <User size={48} />
-                <p>Nenhum paciente encontrado</p>
-                <Button
-                  variant="secondary"
-                  onClick={handleCreateNew}
-                  className="patient-quick-create-new-button"
-                >
-                  Cadastrar novo paciente
-                </Button>
-              </div>
-            ) : results.length > 0 ? (
-              <div className="patient-quick-create-results">
-                <p className="patient-quick-create-results-label">Paciente localizado</p>
-                <div className="patient-quick-create-results-list">
-                  {results.map((patient) => {
-                    const phone = getPatientPhone(patient.id);
-                    const cpf = patient.cpf ? maskCpf(patient.cpf) : '';
-                    return (
-                      <div
-                        key={patient.id}
-                        className="patient-quick-create-result-item"
-                        onClick={() => handleOpenPatient(patient.id)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleOpenPatient(patient.id);
-                          }
-                        }}
-                      >
-                        <div className="patient-quick-create-result-info">
-                          <div className="patient-quick-create-result-name">
-                            {patient.full_name || patient.nickname || 'Sem nome'}
-                          </div>
-                          <div className="patient-quick-create-result-details">
-                            {phone && (
-                              <span className="patient-quick-create-result-detail">
-                                <Phone size={14} />
-                                {phone}
-                              </span>
-                            )}
-                            {cpf && (
-                              <span className="patient-quick-create-result-detail">
-                                <CreditCard size={14} />
-                                {cpf}
-                              </span>
-                            )}
+          <div className="patient-quick-create-filters">
+            <label className="patient-quick-create-radio">
+              <input
+                type="radio"
+                name="searchType"
+                value="name"
+                checked={searchType === 'name'}
+                onChange={(e) => {
+                  setSearchType(e.target.value);
+                  setSearchQuery('');
+                  setResults([]);
+                  setHasSearched(false);
+                  setIsLoading(false);
+                  if (searchTimeoutRef.current) {
+                    clearTimeout(searchTimeoutRef.current);
+                  }
+                }}
+              />
+              <span>Nome</span>
+            </label>
+            <label className="patient-quick-create-radio">
+              <input
+                type="radio"
+                name="searchType"
+                value="cpf"
+                checked={searchType === 'cpf'}
+                onChange={(e) => {
+                  setSearchType(e.target.value);
+                  setSearchQuery('');
+                  setResults([]);
+                  setHasSearched(false);
+                  setIsLoading(false);
+                  if (searchTimeoutRef.current) {
+                    clearTimeout(searchTimeoutRef.current);
+                  }
+                }}
+              />
+              <span>CPF</span>
+            </label>
+            <label className="patient-quick-create-radio">
+              <input
+                type="radio"
+                name="searchType"
+                value="phone"
+                checked={searchType === 'phone'}
+                onChange={(e) => {
+                  setSearchType(e.target.value);
+                  setSearchQuery('');
+                  setResults([]);
+                  setHasSearched(false);
+                  setIsLoading(false);
+                  if (searchTimeoutRef.current) {
+                    clearTimeout(searchTimeoutRef.current);
+                  }
+                }}
+              />
+              <span>Telefone</span>
+            </label>
+          </div>
+
+          <div className="patient-quick-create-search">
+            <div className="patient-quick-create-input-wrapper">
+              <input
+                ref={inputRef}
+                type="text"
+                className="patient-quick-create-input-field"
+                value={formatSearchValue(searchQuery)}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={searchPlaceholder()}
+              />
+            </div>
+          </div>
+
+          {(isLoading || hasSearched || results.length > 0 || (searchQuery && normalizeText(searchQuery).length >= 3)) && (
+            <>
+              {isLoading ? (
+                <div className="patient-quick-create-loading">
+                  <Loader2 size={24} className="animate-spin" />
+                  <p>Carregando...</p>
+                </div>
+              ) : hasSearched && results.length === 0 ? (
+                <div className="patient-quick-create-empty">
+                  <User size={48} />
+                  <p>Nenhum paciente encontrado</p>
+                  <Button
+                    variant="secondary"
+                    onClick={handleCreateNew}
+                    className="patient-quick-create-new-button"
+                  >
+                    Cadastrar novo paciente
+                  </Button>
+                </div>
+              ) : results.length > 0 ? (
+                <div className="patient-quick-create-results">
+                  <p className="patient-quick-create-results-label">Paciente localizado</p>
+                  <div className="patient-quick-create-results-list">
+                    {results.map((patient) => {
+                      const phone = getPatientPhone(patient.id);
+                      const cpf = patient.cpf ? maskCpf(patient.cpf) : '';
+                      return (
+                        <div
+                          key={patient.id}
+                          className="patient-quick-create-result-item"
+                          onClick={() => handleOpenPatient(patient.id)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleOpenPatient(patient.id);
+                            }
+                          }}
+                        >
+                          <div className="patient-quick-create-result-info">
+                            <div className="patient-quick-create-result-name">
+                              {patient.full_name || patient.nickname || 'Sem nome'}
+                            </div>
+                            <div className="patient-quick-create-result-details">
+                              {phone && (
+                                <span className="patient-quick-create-result-detail">
+                                  <Phone size={14} />
+                                  {phone}
+                                </span>
+                              )}
+                              {cpf && (
+                                <span className="patient-quick-create-result-detail">
+                                  <CreditCard size={14} />
+                                  {cpf}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
+                  {results.length === 10 && (
+                    <p className="patient-quick-create-results-limit">
+                      Mostrando os primeiros 10 resultados
+                    </p>
+                  )}
                 </div>
-                {results.length === 10 && (
-                  <p className="patient-quick-create-results-limit">
-                    Mostrando os primeiros 10 resultados
-                  </p>
-                )}
-              </div>
-            ) : null}
-          </>
-        )}
+              ) : null}
+            </>
+          )}
 
-        {/* Botão CTA Secundário */}
-        {hasSearched && results.length > 0 && (
-          <div className="patient-quick-create-cta">
-            <Button
-              variant="secondary"
-              onClick={handleCreateNew}
-              className="patient-quick-create-new-button-full"
-            >
-              Cadastrar novo paciente
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
+          {hasSearched && results.length > 0 && (
+            <div className="patient-quick-create-cta">
+              <Button
+                variant="secondary"
+                onClick={handleCreateNew}
+                className="patient-quick-create-new-button-full"
+              >
+                Cadastrar novo paciente
+              </Button>
+            </div>
+          )}
+        </ModalBody>
+      </ModalContent>
+    </ModalRoot>
   );
 }

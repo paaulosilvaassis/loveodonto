@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import { getProfessionalOptions } from '../../services/collaboratorService.js';
 import { loadDb } from '../../db/index.js';
 import { getAvailableSlots, createAppointment } from '../../services/appointmentService.js';
+import {
+  ModalBody,
+  ModalContent,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../../components/ui/Modal.jsx';
 
 const DURATIONS = [15, 30, 45, 60];
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -23,6 +30,7 @@ export function ScheduleFromPatientModal({ open, onClose, patientId, patientName
   const [selectedSlot, setSelectedSlot] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     if (!open) return;
@@ -88,15 +96,8 @@ export function ScheduleFromPatientModal({ open, onClose, patientId, patientName
       });
       onSuccess?.();
       onClose();
-      if (typeof document !== 'undefined') {
-        const toast = document.createElement('div');
-        toast.setAttribute('role', 'status');
-        toast.className = 'toast success';
-        toast.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:2000;padding:12px 16px;border-radius:8px;background:#10b981;color:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
-        toast.textContent = 'Agendado com sucesso.';
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
-      }
+      setToast({ message: 'Agendado com sucesso.', type: 'success' });
+      setTimeout(() => setToast(null), 3000);
     } catch (e) {
       setError(e?.message || 'Falha ao confirmar agendamento. Tente outro horário.');
     } finally {
@@ -104,32 +105,32 @@ export function ScheduleFromPatientModal({ open, onClose, patientId, patientName
     }
   };
 
-  if (!open) return null;
+  const handleOpenChange = (next) => {
+    if (!next) onClose();
+  };
 
   return (
-    <div
-      className="appointment-step2-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="schedule-from-patient-title"
-      onClick={onClose}
-    >
-      <div className="appointment-step2-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="appointment-step2-header">
+    <>
+    {toast && (
+      <div className={`toast ${toast.type}`} role="status">
+        {toast.message}
+      </div>
+    )}
+
+    <ModalRoot open={open} onOpenChange={handleOpenChange}>
+      <ModalContent size="md" className="appointment-step2-modal" onInteractOutside={(e) => e.preventDefault()}>
+        <ModalHeader className="appointment-step2-header">
           <div>
-            <strong id="schedule-from-patient-title">Agendar na Agenda</strong>
+            <ModalTitle>Agendar na Agenda</ModalTitle>
             {patientName && (
               <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: '#64748b' }}>
                 Paciente: {patientName}
               </p>
             )}
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar">
-            ✕
-          </button>
-        </div>
+        </ModalHeader>
 
-        <div style={{ padding: '1rem', overflowY: 'auto' }}>
+        <ModalBody style={{ padding: '1rem' }}>
           <div className="form-field" style={{ marginBottom: '1rem' }}>
             <label htmlFor="schedule-patient-professional">Profissional *</label>
             <select
@@ -267,8 +268,9 @@ export function ScheduleFromPatientModal({ open, onClose, patientId, patientName
               Clique em &quot;Buscar horários&quot; para ver as opções.
             </p>
           )}
-        </div>
-      </div>
-    </div>
+        </ModalBody>
+      </ModalContent>
+    </ModalRoot>
+    </>
   );
 }

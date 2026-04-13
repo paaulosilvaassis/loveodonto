@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { createSupplier } from '../services/suppliersService.js';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import { formatCep } from '../utils/validators.js';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+  ModalDescription,
+} from './ui/Modal.jsx';
 
 const SUPPLIER_CATEGORIES = [
   'Material odontológico',
@@ -127,28 +136,25 @@ export default function SupplierFormModal({ open, onClose, onSuccess, user, nest
     }
   };
 
-  if (!open) return null;
-
-  const backdropClass = nested ? 'modal-backdrop modal-backdrop--nested' : 'modal-backdrop';
-  const contentClass = nested ? 'modal-content suppliers-modal suppliers-modal--nested' : 'modal-content suppliers-modal';
-
   return (
-    <div className={backdropClass} onClick={onClose}>
-      <div className={contentClass} onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header suppliers-modal-header">
-          <h3>Novo fornecedor</h3>
-          <p className="suppliers-modal-subtitle">
-            Cadastre fornecedores para utilizar no financeiro e contas a pagar.
-          </p>
+    <ModalRoot open={open} onOpenChange={(next) => { if (!next) onClose?.(); }}>
+      <ModalContent size="lg" className={`suppliers-modal ${nested ? 'suppliers-modal--nested' : ''}`} onInteractOutside={(e) => e.preventDefault()}>
+        <ModalHeader className="suppliers-modal-header">
+          <div>
+            <ModalTitle>Novo fornecedor</ModalTitle>
+            <ModalDescription className="suppliers-modal-subtitle">
+              Cadastre fornecedores para utilizar no financeiro e contas a pagar.
+            </ModalDescription>
+          </div>
           {error && (
             <p className="suppliers-error" role="alert">
               {error}
             </p>
           )}
-        </div>
+        </ModalHeader>
 
-        <form className="suppliers-form modal-form" onSubmit={handleSubmit}>
-          <div className="modal-body suppliers-modal-body">
+        <ModalBody className="suppliers-modal-body">
+          <form className="suppliers-form" id="supplier-create-form" onSubmit={handleSubmit}>
             <section className="suppliers-form-block">
               <h4>Identificação</h4>
               <div className="suppliers-form-grid">
@@ -353,18 +359,18 @@ export default function SupplierFormModal({ open, onClose, onSuccess, user, nest
                 <textarea name="notes" rows={3} />
               </label>
             </section>
-          </div>
+          </form>
+        </ModalBody>
 
-          <div className="modal-footer suppliers-modal-footer">
-            <button type="button" className="button secondary" onClick={onClose}>
-              Cancelar
-            </button>
-            <button type="submit" className="button primary">
-              Salvar fornecedor
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <ModalFooter className="suppliers-modal-footer">
+          <button type="button" className="button secondary" onClick={onClose}>
+            Cancelar
+          </button>
+          <button type="submit" form="supplier-create-form" className="button primary">
+            Salvar fornecedor
+          </button>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 }

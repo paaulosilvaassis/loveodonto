@@ -221,22 +221,7 @@ export default function SupportPage() {
       />
 
       {toast && (
-        <div
-          className={`toast support-toast ${toast.type}`}
-          role="status"
-          style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            zIndex: 10000,
-            maxWidth: 360,
-            padding: '12px 16px',
-            borderRadius: 12,
-            background: toast.type === 'success' ? '#10b981' : '#ef4444',
-            color: '#fff',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          }}
-        >
+        <div className={`toast ${toast.type}`} role="status">
           {toast.message}
         </div>
       )}

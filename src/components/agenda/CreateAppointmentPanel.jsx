@@ -5,6 +5,15 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
 import { createPatientQuick, searchPatients, suggestPatients } from '../../services/patientService.js';
 import { normalizeText } from '../../services/helpers.js';
 import { formatCpf, isCpfValid, onlyDigits } from '../../utils/validators.js';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+  ModalDescription,
+} from '../ui/Modal.jsx';
 
 const buildDraft = (data) => ({
   patientId: '',
@@ -240,7 +249,6 @@ export const CreateAppointmentPanel = ({
   };
 
   const handleSave = (confirmAfter) => {
-    // Validar campos obrigatórios
     if (!draft.patientId) {
       setSuggestError('Selecione um paciente para continuar.');
       return;
@@ -265,21 +273,20 @@ export const CreateAppointmentPanel = ({
     onSubmit?.({ ...draft, confirmAfter });
   };
 
-  if (!open) return null;
+  const handleOpenChange = (next) => {
+    if (!next) onClose();
+  };
 
   return (
-    <div className="agenda-panel-backdrop" role="dialog" aria-modal="true">
-      <div className="agenda-panel">
-        <div className="agenda-panel-header">
+    <ModalRoot open={open} onOpenChange={handleOpenChange}>
+      <ModalContent size="lg" className="agenda-panel" onInteractOutside={(e) => e.preventDefault()}>
+        <ModalHeader className="agenda-panel-header">
           <div>
-            <strong>{mode === 'edit' ? 'Editar agendamento' : 'Novo agendamento'}</strong>
-            <p className="muted">Cadastro rápido, sem sair da agenda.</p>
+            <ModalTitle>{mode === 'edit' ? 'Editar agendamento' : 'Novo agendamento'}</ModalTitle>
+            <ModalDescription>Cadastro rápido, sem sair da agenda.</ModalDescription>
           </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar">
-            ✕
-          </button>
-        </div>
-        <div className="agenda-panel-body">
+        </ModalHeader>
+        <ModalBody className="agenda-panel-body">
           {(error || suggestError) && (
             <div className="alert error" style={{ marginBottom: '1rem' }}>
               {error || suggestError}
@@ -508,8 +515,8 @@ export const CreateAppointmentPanel = ({
               </div>
             </div>
           ) : null}
-        </div>
-        <div className="agenda-panel-footer">
+        </ModalBody>
+        <ModalFooter className="agenda-panel-footer">
           {draft.patientId ? (
             <button type="button" className="button secondary" onClick={() => navigate(`/prontuario/${draft.patientId}`)}>
               Acessar prontuário
@@ -524,8 +531,8 @@ export const CreateAppointmentPanel = ({
           <button type="button" className="button primary" onClick={() => handleSave(true)}>
             Salvar e confirmar
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 };

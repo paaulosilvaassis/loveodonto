@@ -21,6 +21,14 @@ import {
   PRICE_TABLE_TYPE,
 } from '../services/priceBaseService.js';
 import { Plus, Edit, Trash2, Copy, Upload, Search, X, Save, ArrowLeft } from 'lucide-react';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../components/ui/Modal.jsx';
 
 export default function PriceBaseTableDetailPage() {
   const { user } = useAuth();
@@ -523,11 +531,7 @@ export default function PriceBaseTableDetailPage() {
       )}
 
       {toast ? (
-        <div
-          className={`toast ${toast.type}`}
-          role="status"
-          style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 10000 }}
-        >
+        <div className={`toast ${toast.type}`} role="status">
           {toast.message}
         </div>
       ) : null}
@@ -538,12 +542,6 @@ export default function PriceBaseTableDetailPage() {
 function AddEditProcedureModal({ procedure, priceTableId, priceTables = [], onClose, onSave, user }) {
   const navigate = useNavigate();
   const priceBasePath = usePriceBaseBasePath();
-
-  if (!priceTableId) {
-    alert('Selecione uma tabela de preço antes de adicionar um procedimento');
-    onClose();
-    return null;
-  }
 
   const [activeTab, setActiveTab] = useState('dados');
   const [formData, setFormData] = useState({
@@ -566,6 +564,10 @@ function AddEditProcedureModal({ procedure, priceTableId, priceTables = [], onCl
   });
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
+
+  if (!priceTableId) {
+    return null;
+  }
 
   const validate = () => {
     const newErrors = {};
@@ -641,14 +643,11 @@ function AddEditProcedureModal({ procedure, priceTableId, priceTables = [], onCl
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content modal-content-large" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>{procedure ? 'Editar Procedimento' : 'Adicionar Procedimento'}</h2>
-          <button type="button" className="modal-close" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
+    <ModalRoot open onOpenChange={(next) => { if (!next) onClose(); }}>
+      <ModalContent size="lg" onInteractOutside={(e) => e.preventDefault()}>
+        <ModalHeader>
+          <ModalTitle>{procedure ? 'Editar Procedimento' : 'Adicionar Procedimento'}</ModalTitle>
+        </ModalHeader>
 
         {Object.keys(errors).length > 0 && (
           <div className="price-base-modal-errors">
@@ -677,7 +676,7 @@ function AddEditProcedureModal({ procedure, priceTableId, priceTables = [], onCl
           </button>
         </div>
 
-        <div className="modal-body">
+        <ModalBody>
           {activeTab === 'dados' && (
             <div className="price-base-modal-form">
               {priceTables.length > 0 && (
@@ -907,9 +906,9 @@ function AddEditProcedureModal({ procedure, priceTableId, priceTables = [], onCl
               )}
             </div>
           )}
-        </div>
+        </ModalBody>
 
-        <div className="modal-footer">
+        <ModalFooter>
           <button type="button" className="button secondary" onClick={onClose}>
             Cancelar
           </button>
@@ -917,9 +916,9 @@ function AddEditProcedureModal({ procedure, priceTableId, priceTables = [], onCl
             <Save size={16} />
             {saving ? 'Salvando...' : 'Salvar'}
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 }
 
@@ -945,15 +944,12 @@ function AddEditTableModal({ table, onClose, onSave, user }) {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" onClick={(event) => event.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Editar Tabela</h2>
-          <button type="button" className="modal-close" onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
-        <div className="modal-body">
+    <ModalRoot open onOpenChange={(next) => { if (!next) onClose(); }}>
+      <ModalContent size="md" onInteractOutside={(e) => e.preventDefault()}>
+        <ModalHeader>
+          <ModalTitle>Editar Tabela</ModalTitle>
+        </ModalHeader>
+        <ModalBody>
           <div className="form-field">
             <label>
               Nome da Tabela <span className="required">*</span>
@@ -999,8 +995,8 @@ function AddEditTableModal({ table, onClose, onSave, user }) {
               Definir como tabela padrão
             </label>
           </div>
-        </div>
-        <div className="modal-footer">
+        </ModalBody>
+        <ModalFooter>
           <button type="button" className="button secondary" onClick={onClose}>
             Cancelar
           </button>
@@ -1008,8 +1004,8 @@ function AddEditTableModal({ table, onClose, onSave, user }) {
             <Save size={16} />
             Salvar
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 }

@@ -150,15 +150,22 @@ export const listAppointments = () => {
 
 export const getAppointmentDetails = (appointmentId) => {
   const db = loadDb();
-  const appointment = normalizeWorkflow(db.appointments.find((item) => item.id === appointmentId));
+  const appointments = db.appointments || [];
+  const appointment = normalizeWorkflow(appointments.find((item) => item.id === appointmentId));
   if (!appointment) return null;
 
-  const patient = appointment.patientId ? db.patients.find((item) => item.id === appointment.patientId) : null;
-  const professional = appointment.professionalId ? db.collaborators.find((item) => item.id === appointment.professionalId) : null;
-  const room = appointment.roomId ? db.rooms.find((item) => item.id === appointment.roomId) : null;
-  const patientPhones = appointment.patientId ? db.patientPhones.filter((item) => item.patient_id === appointment.patientId) : [];
+  const patients = db.patients || [];
+  const collaborators = db.collaborators || [];
+  const rooms = db.rooms || [];
+  const patientPhonesAll = db.patientPhones || [];
+  const patientRecords = db.patientRecords || [];
+
+  const patient = appointment.patientId ? patients.find((item) => item.id === appointment.patientId) : null;
+  const professional = appointment.professionalId ? collaborators.find((item) => item.id === appointment.professionalId) : null;
+  const room = appointment.roomId ? rooms.find((item) => item.id === appointment.roomId) : null;
+  const patientPhones = appointment.patientId ? patientPhonesAll.filter((item) => item.patient_id === appointment.patientId) : [];
   const primaryPhone = patientPhones.find((item) => item.is_primary) || patientPhones[0];
-  const patientRecord = appointment.patientId ? db.patientRecords.find((item) => item.patient_id === appointment.patientId) : null;
+  const patientRecord = appointment.patientId ? patientRecords.find((item) => item.patient_id === appointment.patientId) : null;
 
   return {
     appointment,
@@ -170,7 +177,7 @@ export const getAppointmentDetails = (appointmentId) => {
     email: patient?.email || null,
   };
 };
-export const listBlocks = () => loadDb().appointmentBlocks;
+export const listBlocks = () => loadDb().appointmentBlocks || [];
 
 const SLOT_STEP_MINUTES = 15;
 const DEFAULT_WORK_START = '08:00';
