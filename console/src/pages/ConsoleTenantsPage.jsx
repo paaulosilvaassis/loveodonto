@@ -48,7 +48,14 @@ export default function ConsoleTenantsPage() {
   });
   const catalogs = useMemo(() => listCatalogs(), []);
   const platformApiConfigError = useMemo(() => getPlatformApiConfigError(), []);
-  const canCreateClinic = ['owner', 'super_admin'].includes(String(platformUser?.role || '').toLowerCase());
+
+  // TODO(temp): Fallback temporário — libera o botão "Nova Clínica" enquanto o backend
+  // de perfil/permissão em produção não retorna o role corretamente.
+  // Remover quando GET /internal/platform/console-profile estiver funcional em produção.
+  const ENABLE_CREATE_CLINIC_FALLBACK = true;
+  const canCreateClinic =
+    ENABLE_CREATE_CLINIC_FALLBACK
+    || ['owner', 'super_admin'].includes(String(platformUser?.role || '').toLowerCase());
 
   useEffect(() => {
     let cancelled = false;
