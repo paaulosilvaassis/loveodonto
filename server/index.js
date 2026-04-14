@@ -45,7 +45,7 @@ app.get('/health', (_req, res) => {
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PLATFORM_API_KEY = process.env.PLATFORM_API_KEY || process.env.ADMIN_API_KEY || '';
-const PORT = Number(process.env.ADMIN_API_PORT || 3001);
+const PORT = Number(process.env.PORT || process.env.ADMIN_API_PORT || 3001);
 
 function decodeJwtPayload(token) {
   const raw = String(token || '').trim();
