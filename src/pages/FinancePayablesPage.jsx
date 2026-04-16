@@ -677,167 +677,171 @@ export default function FinancePayablesPage() {
         />
       )}
 
-      <ModalRoot open={modal?.type === 'edit' && !!modal?.payable} onOpenChange={(next) => { if (!next) setModal(null); }}>
-        <ModalContent size="lg" className="finance-payables-modal" onInteractOutside={(e) => e.preventDefault()}>
-          <ModalHeader className="finance-payables-modal-header">
-            <ModalTitle>Editar despesa</ModalTitle>
-          </ModalHeader>
-          <ModalBody className="finance-payables-modal-body">
-            <form onSubmit={handleUpdate(modal?.payable?.id)} id="payable-edit-form" className="finance-payables-form">
-                <div className="finance-payables-form-block">
-                  <label>Descrição *</label>
-                  <input type="text" name="description" defaultValue={modal.payable.description} required />
+      {modal?.type === 'edit' && modal.payable && (
+        <ModalRoot open onOpenChange={(next) => { if (!next) setModal(null); }}>
+          <ModalContent size="lg" className="finance-payables-modal" onInteractOutside={(e) => e.preventDefault()}>
+            <ModalHeader className="finance-payables-modal-header">
+              <ModalTitle>Editar despesa</ModalTitle>
+            </ModalHeader>
+            <ModalBody className="finance-payables-modal-body">
+              <form onSubmit={handleUpdate(modal.payable.id)} id="payable-edit-form" className="finance-payables-form">
+                  <div className="finance-payables-form-block">
+                    <label>Descrição *</label>
+                    <input type="text" name="description" defaultValue={modal.payable.description} required />
 
-                  <label>Categoria *</label>
-                  <select name="categoryId" required defaultValue={modal.payable.categoryId || ''}>
-                    <option value="">Selecione</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  {categories.length === 0 && (
-                    <small className="finance-payables-category-empty">Não há categorias cadastradas.</small>
-                  )}
+                    <label>Categoria *</label>
+                    <select name="categoryId" required defaultValue={modal.payable.categoryId || ''}>
+                      <option value="">Selecione</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    {categories.length === 0 && (
+                      <small className="finance-payables-category-empty">Não há categorias cadastradas.</small>
+                    )}
 
-                  <label>Fornecedor</label>
-                  <select name="supplierId" defaultValue={modal?.payable?.supplierId || ''}>
-                    <option value="">Selecione</option>
-                    {suppliers.map((s) => (
-                      <option key={s.id} value={s.id}>{s.trade_name || s.name || '—'}</option>
-                    ))}
-                  </select>
+                    <label>Fornecedor</label>
+                    <select name="supplierId" defaultValue={modal.payable.supplierId || ''}>
+                      <option value="">Selecione</option>
+                      {suppliers.map((s) => (
+                        <option key={s.id} value={s.id}>{s.trade_name || s.name || '—'}</option>
+                      ))}
+                    </select>
 
-                  <label>Valor *</label>
-                  <input type="number" name="amount" step="0.01" min="0.01" required defaultValue={modal?.payable?.amount} />
+                    <label>Valor *</label>
+                    <input type="number" name="amount" step="0.01" min="0.01" required defaultValue={modal.payable.amount} />
 
-                  <label>Data de vencimento *</label>
-                  <input type="date" name="dueDate" required defaultValue={modal?.payable?.dueDate} />
+                    <label>Data de vencimento *</label>
+                    <input type="date" name="dueDate" required defaultValue={modal.payable.dueDate} />
 
-                  <label>Forma de pagamento *</label>
-                  <select name="paymentMethod" required defaultValue={modal?.payable?.paymentMethod || 'outros'}>
-                    {PAYMENT_METHODS.map((pm) => (
-                      <option key={pm.value} value={pm.value}>{pm.label}</option>
-                    ))}
-                  </select>
+                    <label>Forma de pagamento *</label>
+                    <select name="paymentMethod" required defaultValue={modal.payable.paymentMethod || 'outros'}>
+                      {PAYMENT_METHODS.map((pm) => (
+                        <option key={pm.value} value={pm.value}>{pm.label}</option>
+                      ))}
+                    </select>
 
-                  <label>Conta de origem</label>
-                  <input type="text" name="originAccount" defaultValue={modal?.payable?.originAccount || ''} placeholder="Opcional" />
-                </div>
-
-                <div className="finance-payables-form-block finance-payables-form-block--final">
-                  <label>Observação</label>
-                  <textarea name="note" rows={4} defaultValue={modal?.payable?.note || ''} placeholder="Opcional" className="finance-payables-note" />
-                </div>
-
-                <div className="finance-payables-form-block finance-payables-form-block--classification">
-                  <h4 className="finance-payables-classification-title">Classificação da despesa</h4>
-
-                  <div className="finance-payables-type-group">
-                    <label className="finance-payables-type-label">Tipo da despesa</label>
-                    <div className="finance-payables-type-options">
-                      <button
-                        type="button"
-                        className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.FIXED ? 'active' : ''}`}
-                        onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.FIXED)}
-                      >
-                        <span className="finance-payables-type-radio" />
-                        Despesa fixa
-                      </button>
-                      <button
-                        type="button"
-                        className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.VARIABLE ? 'active' : ''}`}
-                        onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.VARIABLE)}
-                      >
-                        <span className="finance-payables-type-radio" />
-                        Despesa variável
-                      </button>
-                      <button
-                        type="button"
-                        className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.ONE_TIME_TITLE ? 'active' : ''}`}
-                        onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.ONE_TIME_TITLE)}
-                      >
-                        <span className="finance-payables-type-radio" />
-                        Título avulso
-                      </button>
-                    </div>
+                    <label>Conta de origem</label>
+                    <input type="text" name="originAccount" defaultValue={modal.payable.originAccount || ''} placeholder="Opcional" />
                   </div>
 
-                  <label className="finance-payables-check">
-                    <input
-                      type="checkbox"
-                      checked={isRecurring}
-                      onChange={(e) => handleRecurringChange(e.target.checked)}
-                      disabled={expenseType === EXPENSE_TYPE.ONE_TIME_TITLE}
-                    />
-                    <span>Conta recorrente</span>
-                  </label>
+                  <div className="finance-payables-form-block finance-payables-form-block--final">
+                    <label>Observação</label>
+                    <textarea name="note" rows={4} defaultValue={modal.payable.note || ''} placeholder="Opcional" className="finance-payables-note" />
+                  </div>
 
-                  {isRecurring && expenseType !== EXPENSE_TYPE.ONE_TIME_TITLE && (
-                    <div className="finance-payables-recurrence">
-                      <label>Frequência</label>
-                      <select name="recurrenceFrequency" defaultValue={modal?.payable?.recurrenceFrequency || 'mensal'}>
-                        {RECURRENCE_FREQUENCY.map((r) => (
-                          <option key={r.value} value={r.value}>{r.label}</option>
-                        ))}
-                      </select>
+                  <div className="finance-payables-form-block finance-payables-form-block--classification">
+                    <h4 className="finance-payables-classification-title">Classificação da despesa</h4>
+
+                    <div className="finance-payables-type-group">
+                      <label className="finance-payables-type-label">Tipo da despesa</label>
+                      <div className="finance-payables-type-options">
+                        <button
+                          type="button"
+                          className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.FIXED ? 'active' : ''}`}
+                          onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.FIXED)}
+                        >
+                          <span className="finance-payables-type-radio" />
+                          Despesa fixa
+                        </button>
+                        <button
+                          type="button"
+                          className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.VARIABLE ? 'active' : ''}`}
+                          onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.VARIABLE)}
+                        >
+                          <span className="finance-payables-type-radio" />
+                          Despesa variável
+                        </button>
+                        <button
+                          type="button"
+                          className={`finance-payables-type-card ${expenseType === EXPENSE_TYPE.ONE_TIME_TITLE ? 'active' : ''}`}
+                          onClick={() => handleExpenseTypeChange(EXPENSE_TYPE.ONE_TIME_TITLE)}
+                        >
+                          <span className="finance-payables-type-radio" />
+                          Título avulso
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
-            </form>
-          </ModalBody>
-          <ModalFooter className="finance-payables-modal-footer">
-            <button type="button" className="button secondary" onClick={() => setModal(null)}>
-              Cancelar
-            </button>
-            <button type="submit" form="payable-edit-form" className="button primary">
-              Salvar alterações
-            </button>
-          </ModalFooter>
-        </ModalContent>
-      </ModalRoot>
 
-      <ModalRoot open={modal?.type === 'pay' && !!modal?.payable} onOpenChange={(next) => { if (!next) setModal(null); }}>
-        <ModalContent size="md" className="finance-payables-modal">
-          <ModalHeader className="finance-payables-modal-header">
-            <div>
-              <ModalTitle>Registrar pagamento</ModalTitle>
-              <ModalDescription className="finance-payables-modal-desc">
-                {modal?.payable?.description} — {formatCurrency(modal?.payable?.amount)}
-              </ModalDescription>
-            </div>
-          </ModalHeader>
-          <ModalBody className="finance-payables-modal-body">
-            <form onSubmit={handlePay(modal?.payable?.id)} id="payable-pay-form" className="finance-payables-form">
-              <label>Data de pagamento *</label>
-              <input type="date" name="paidDate" required defaultValue={todayIso()} />
+                    <label className="finance-payables-check">
+                      <input
+                        type="checkbox"
+                        checked={isRecurring}
+                        onChange={(e) => handleRecurringChange(e.target.checked)}
+                        disabled={expenseType === EXPENSE_TYPE.ONE_TIME_TITLE}
+                      />
+                      <span>Conta recorrente</span>
+                    </label>
 
-              <label>Forma de pagamento *</label>
-              <select name="paymentMethod" required defaultValue={modal?.payable?.paymentMethod || 'pix'}>
-                {PAYMENT_METHODS.map((pm) => (
-                  <option key={pm.value} value={pm.value}>{pm.label}</option>
-                ))}
-              </select>
+                    {isRecurring && expenseType !== EXPENSE_TYPE.ONE_TIME_TITLE && (
+                      <div className="finance-payables-recurrence">
+                        <label>Frequência</label>
+                        <select name="recurrenceFrequency" defaultValue={modal.payable.recurrenceFrequency || 'mensal'}>
+                          {RECURRENCE_FREQUENCY.map((r) => (
+                            <option key={r.value} value={r.value}>{r.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+              </form>
+            </ModalBody>
+            <ModalFooter className="finance-payables-modal-footer">
+              <button type="button" className="button secondary" onClick={() => setModal(null)}>
+                Cancelar
+              </button>
+              <button type="submit" form="payable-edit-form" className="button primary">
+                Salvar alterações
+              </button>
+            </ModalFooter>
+          </ModalContent>
+        </ModalRoot>
+      )}
 
-              <label>Conta utilizada</label>
-              <input type="text" name="originAccount" defaultValue={modal?.payable?.originAccount || ''} placeholder="Opcional" />
+      {modal?.type === 'pay' && modal.payable && (
+        <ModalRoot open onOpenChange={(next) => { if (!next) setModal(null); }}>
+          <ModalContent size="md" className="finance-payables-modal">
+            <ModalHeader className="finance-payables-modal-header">
+              <div>
+                <ModalTitle>Registrar pagamento</ModalTitle>
+                <ModalDescription className="finance-payables-modal-desc">
+                  {modal.payable.description} — {formatCurrency(modal.payable.amount)}
+                </ModalDescription>
+              </div>
+            </ModalHeader>
+            <ModalBody className="finance-payables-modal-body">
+              <form onSubmit={handlePay(modal.payable.id)} id="payable-pay-form" className="finance-payables-form">
+                <label>Data de pagamento *</label>
+                <input type="date" name="paidDate" required defaultValue={todayIso()} />
 
-              <label>Valor pago *</label>
-              <input type="number" name="amountPaid" step="0.01" min="0.01" required defaultValue={modal?.payable?.amount} placeholder="0,00" />
+                <label>Forma de pagamento *</label>
+                <select name="paymentMethod" required defaultValue={modal.payable.paymentMethod || 'pix'}>
+                  {PAYMENT_METHODS.map((pm) => (
+                    <option key={pm.value} value={pm.value}>{pm.label}</option>
+                  ))}
+                </select>
 
-              <label>Observação</label>
-              <textarea name="note" rows={3} placeholder="Opcional" className="finance-payables-note" />
-            </form>
-          </ModalBody>
-          <ModalFooter className="finance-payables-modal-footer">
-            <button type="button" className="button secondary" onClick={() => setModal(null)}>
-              Cancelar
-            </button>
-            <button type="submit" form="payable-pay-form" className="button primary">
-              Confirmar pagamento
-            </button>
-          </ModalFooter>
-        </ModalContent>
-      </ModalRoot>
+                <label>Conta utilizada</label>
+                <input type="text" name="originAccount" defaultValue={modal.payable.originAccount || ''} placeholder="Opcional" />
+
+                <label>Valor pago *</label>
+                <input type="number" name="amountPaid" step="0.01" min="0.01" required defaultValue={modal.payable.amount} placeholder="0,00" />
+
+                <label>Observação</label>
+                <textarea name="note" rows={3} placeholder="Opcional" className="finance-payables-note" />
+              </form>
+            </ModalBody>
+            <ModalFooter className="finance-payables-modal-footer">
+              <button type="button" className="button secondary" onClick={() => setModal(null)}>
+                Cancelar
+              </button>
+              <button type="submit" form="payable-pay-form" className="button primary">
+                Confirmar pagamento
+              </button>
+            </ModalFooter>
+          </ModalContent>
+        </ModalRoot>
+      )}
     </div>
   );
 }
