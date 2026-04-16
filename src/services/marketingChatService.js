@@ -26,8 +26,17 @@ function assertCanWrite(user) {
   }
 }
 
+const SCOPE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function resolveScope(db, user) {
-  const tenantId = user?.tenantId || db.tenants?.[0]?.id || 'tenant-1';
+  const tenants = Array.isArray(db.tenants) ? db.tenants : [];
+  let tenantId = user?.tenantId || '';
+  if (tenantId && !SCOPE_UUID_RE.test(tenantId) && !tenants.some((t) => t.id === tenantId)) {
+    tenantId = '';
+  }
+  if (!tenantId) {
+    tenantId = tenants[0]?.id || 'tenant-1';
+  }
   const clinicId = db?.clinicProfile?.id || 'clinic-1';
   return { tenantId, clinicId };
 }

@@ -26,6 +26,7 @@ const normalizeTenantValue = (value) => {
   if (value === null || value === undefined) return '';
   return String(value).trim();
 };
+const IS_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const TENANT_GUARDED_COLLECTIONS = [
   'users_profile',
@@ -82,7 +83,12 @@ function validateTenantIntegrityOnWrite(previousDb, nextDb) {
       }
 
       if (currentTenant && tenants.size > 0 && !tenants.has(currentTenant)) {
+        if (IS_UUID.test(currentTenant)) continue;
+        if (!isNew && currentTenant === hadTenantBefore) continue;
         console.error(`[TENANT_GUARD] persistência bloqueada em "${collectionName}" com tenant_id órfão`, { collectionName, id: rowId, tenant_id: currentTenant });
+        try {
+          window.dispatchEvent(new CustomEvent('tenant:invalid', { detail: { tenantId: currentTenant, collection: collectionName } }));
+        } catch (_) { /* ignore */ }
         const error = new Error(`TENANT_INVALID: tenant_id "${currentTenant}" não existe em tenants.`);
         error.code = 'TENANT_INVALID';
         throw error;
