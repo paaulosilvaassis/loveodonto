@@ -168,7 +168,8 @@ export default function CollaboratorsPage() {
 
   /** Só atualiza a lista (sidebar); nunca reidrata o rascunho — evita apagar digitação ao clicar em Atualizar. */
   const refreshCollaboratorsListOnly = useCallback(() => {
-    setCollaborators(listCollaborators());
+    const c = listCollaborators();
+    setCollaborators(c);
   }, []);
 
   /**

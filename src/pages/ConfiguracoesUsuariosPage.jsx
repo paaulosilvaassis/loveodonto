@@ -85,7 +85,8 @@ export default function ConfiguracoesUsuariosPage() {
 
   useEffect(() => {
     if (!tenantId) return;
-    setMembers(listMembers(tenantId));
+    const m = listMembers(tenantId);
+    setMembers(m);
     setInvitations(listInvitations(tenantId, true));
   }, [tenantId, refreshKey]);
 

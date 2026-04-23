@@ -17,6 +17,10 @@ export default class ErrorBoundary extends Component {
     }
   }
 
+  handleRetry = () => {
+    this.setState({ hasError: false, error: null });
+  };
+
   handleReset = () => {
     try {
       localStorage.removeItem('appgestaoodonto.db');
@@ -33,11 +37,16 @@ export default class ErrorBoundary extends Component {
     return (
       <div style={{ padding: '2rem', fontFamily: 'Inter, system-ui, sans-serif' }}>
         <h2>Ops, algo deu errado</h2>
-        <p>O app encontrou um erro inesperado. Você pode recarregar e resetar os dados locais.</p>
+        <p>O app encontrou um erro inesperado.</p>
         {error?.message ? <p style={{ color: '#991b1b' }}>{error.message}</p> : null}
-        <button type="button" onClick={this.handleReset} style={{ padding: '0.6rem 1rem', cursor: 'pointer' }}>
-          Recarregar e resetar
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
+          <button type="button" onClick={this.handleRetry} style={{ padding: '0.6rem 1rem', cursor: 'pointer' }}>
+            Tentar novamente
+          </button>
+          <button type="button" onClick={this.handleReset} style={{ padding: '0.6rem 1rem', cursor: 'pointer', opacity: 0.7 }}>
+            Recarregar e resetar dados
+          </button>
+        </div>
       </div>
     );
   }

@@ -12,6 +12,7 @@ import { fetchSaasAccessBootstrap, isSaasModeEnabled } from '../services/saasAut
 import { LOGOUT_REASON_KEY } from './logoutReason.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
 import { AuthContext } from './authContext.js';
+import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
 
 /** Evita RequireAuth preso em "Carregando…" se getSession/RPC não retornarem. */
 const AUTH_SAAS_HYDRATE_TIMEOUT_MS = 32000;
@@ -129,6 +130,7 @@ export const AuthProvider = ({ children }) => {
               };
               localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
               if (!cancelled) {
+                try { ensureSaasUserInLocalDb(resolved); } catch (_) { /* non-blocking */ }
                 setUser(resolved);
                 setSession((prev) => {
                   if (
@@ -145,8 +147,9 @@ export const AuthProvider = ({ children }) => {
             AUTH_SAAS_HYDRATE_TIMEOUT_MS,
             '__AUTH_SAAS_HYDRATE_TIMEOUT__',
           );
-        } catch (e) {
-          if (!cancelled) clearSaasSession();
+        } catch (_hydrationErr) {
+          // Supabase pode ter sessão válida mas bootstrap falhou (rede, timeout, API offline).
+          // NÃO limpar sessão: user permanece undefined → RequireAuth exibe recovery manual.
         }
       })();
       return () => {
@@ -188,12 +191,19 @@ export const AuthProvider = ({ children }) => {
       const stored = getStoredSession();
       if (!stored || stored.authMode !== 'saas') return;
       if (event === 'INITIAL_SESSION') return;
-      if (!authSession?.user?.id) {
+
+      if (event === 'SIGNED_OUT') {
         localStorage.removeItem(SESSION_KEY);
+        try { localStorage.removeItem('appgestaoodonto-platform-auth'); } catch (_) { /* ignore */ }
         setSession(null);
         setUser(null);
         return;
       }
+
+      if (!authSession?.user?.id) {
+        return;
+      }
+
       try {
         const resolved = await raceWithTimeout(
           resolveSaasUserFromSession(authSession),
@@ -201,13 +211,6 @@ export const AuthProvider = ({ children }) => {
           '__AUTH_SAAS_ONAUTH_TIMEOUT__',
         );
         if (!resolved?.tenantId) {
-          try {
-            localStorage.removeItem(SESSION_KEY);
-          } catch (_) {
-            /* ignore */
-          }
-          setSession(null);
-          setUser(null);
           return;
         }
         const nextStored = {
@@ -216,16 +219,11 @@ export const AuthProvider = ({ children }) => {
           tenantId: resolved.tenantId,
         };
         localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
+        try { ensureSaasUserInLocalDb(resolved); } catch (_) { /* non-blocking */ }
         setSession(nextStored);
         setUser(resolved);
       } catch {
-        try {
-          localStorage.removeItem(SESSION_KEY);
-        } catch (_) {
-          /* ignore */
-        }
-        setSession(null);
-        setUser(null);
+        // Falha transitória (rede, timeout, API indisponível): mantém sessão atual
       }
     });
     return () => subscription.unsubscribe();
@@ -252,6 +250,7 @@ export const AuthProvider = ({ children }) => {
         tenantId: resolved.tenantId,
       };
       localStorage.setItem(SESSION_KEY, JSON.stringify(next));
+      try { ensureSaasUserInLocalDb(resolved); } catch (_) { /* non-blocking */ }
       setSession(next);
       setUser(resolved);
       return resolved;
@@ -283,6 +282,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
+    try { localStorage.removeItem('appgestaoodonto-platform-auth'); } catch (_) { /* ignore */ }
     if (session?.authMode === 'saas' && supabasePlatformClient) {
       supabasePlatformClient.auth.signOut().catch(() => {});
     }

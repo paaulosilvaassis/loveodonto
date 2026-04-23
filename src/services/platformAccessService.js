@@ -21,6 +21,7 @@ export async function readTenantAccessSnapshot(tenantId) {
     billingStatus,
     isTenantBlocked: BLOCKED_STATUSES.has(tenantStatus),
     isOverdue: billingStatus === 'overdue' || billingStatus === 'past_due',
+    currentUser: context?.currentUser || null,
   };
 }
 

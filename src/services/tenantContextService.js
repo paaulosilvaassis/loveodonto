@@ -303,6 +303,7 @@ export async function getTenantContext(tenantId) {
       limits: apiContext.limits || {},
       subscription: apiContext.subscription || null,
       warnings: Array.isArray(apiContext.warnings) ? apiContext.warnings : [],
+      currentUser: apiContext.currentUser || null,
     };
   }
 

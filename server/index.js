@@ -394,6 +394,82 @@ async function createAuthUserAndTenantLink({
   };
 }
 
+async function findAuthUserByEmail(email) {
+  const target = normalizeEmail(email);
+  let page = 1;
+  const perPage = 200;
+
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const users = Array.isArray(data?.users) ? data.users : [];
+    const match = users.find((u) => normalizeEmail(u?.email) === target);
+    if (match) return match;
+    if (users.length < perPage) break;
+    page += 1;
+  }
+  return null;
+}
+
+async function ensureConsoleAdminCredentials({
+  email = 'admin@loveodonto.com',
+  password = 'admin123',
+  fullName = 'Admin Love Odonto',
+}) {
+  const emailNorm = normalizeEmail(email);
+  let authUser = await findAuthUserByEmail(emailNorm);
+
+  if (!authUser?.id) {
+    const { data, error } = await supabase.auth.admin.createUser({
+      email: emailNorm,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName },
+    });
+    if (error || !data?.user?.id) {
+      throw error || new Error('Falha ao criar usuário admin da Console.');
+    }
+    authUser = data.user;
+  } else {
+    const { data, error } = await supabase.auth.admin.updateUserById(authUser.id, {
+      email: emailNorm,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        ...(authUser.user_metadata || {}),
+        full_name: fullName,
+      },
+    });
+    if (error || !data?.user?.id) {
+      throw error || new Error('Falha ao atualizar senha do admin da Console.');
+    }
+    authUser = data.user;
+  }
+
+  const { error: profileError } = await supabase
+    .from('platform_admin_users')
+    .upsert(
+      {
+        id: authUser.id,
+        email: emailNorm,
+        full_name: fullName,
+        role_slug: 'super_admin',
+        is_active: true,
+      },
+      { onConflict: 'id' },
+    );
+  if (profileError) throw profileError;
+
+  return {
+    id: authUser.id,
+    email: emailNorm,
+    full_name: fullName,
+    role_slug: 'super_admin',
+    is_active: true,
+  };
+}
+
+
 async function insertAuditLog({ actor, action, targetType, targetId, tenantId = null, metadata = {} }) {
   const payload = {
     actor_admin_id: actor?.id || null,
@@ -544,7 +620,7 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
     const authUserId = req.appAuthUser.id;
     const { data: tenantUser, error: tenantUserError } = await supabase
       .from('tenant_users')
-      .select('tenant_id, role, role_slug, is_active, status')
+      .select('tenant_id, user_id, full_name, email, role, role_slug, is_active, status')
       .eq('user_id', authUserId)
       .order('created_at', { ascending: true })
       .limit(1)
@@ -615,6 +691,13 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         role: tenantUser.role || tenantUser.role_slug || 'atendimento',
         isActive: tenantUser.is_active ?? tenantUser.status === 'active',
       },
+      currentUser: {
+        id: authUserId,
+        fullName: tenantUser.full_name || req.appAuthUser.user_metadata?.full_name || '',
+        email: tenantUser.email || req.appAuthUser.email || '',
+        role: tenantUser.role || tenantUser.role_slug || 'atendimento',
+        isActive: tenantUser.is_active ?? true,
+      },
     });
   } catch (err) {
     console.error('[tenant-context]', err);
@@ -671,6 +754,42 @@ app.post('/internal/platform/provision-user', requireConsoleAccess, async (req, 
     });
     res.status(400).json({
       error: normalizeDatabaseError(err, 'Falha ao provisionar usuário da clínica.'),
+    });
+  }
+});
+
+app.post('/internal/platform/dev/reset-console-admin', async (req, res) => {
+  try {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(403).json({ error: 'Endpoint disponível apenas em ambiente local.' });
+    }
+    const platformKey = normalizeText(req.headers['x-platform-key']);
+    if (!PLATFORM_API_KEY || platformKey !== PLATFORM_API_KEY) {
+      return res.status(401).json({ error: 'Chave de plataforma inválida.' });
+    }
+
+    const email = normalizeEmail(req.body?.email || 'admin@loveodonto.com');
+    const password = normalizeText(req.body?.password || 'admin123');
+    const fullName = normalizeText(req.body?.full_name || 'Admin Love Odonto');
+
+    if (!email) return res.status(400).json({ error: 'email é obrigatório.' });
+    if (!password || password.length < 8) {
+      return res.status(400).json({ error: 'password deve ter pelo menos 8 caracteres.' });
+    }
+
+    const user = await ensureConsoleAdminCredentials({ email, password, fullName });
+    // #region agent log
+    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0c61a'},body:JSON.stringify({sessionId:'e0c61a',runId:'console-login',hypothesisId:'D4',location:'server/index.js:resetConsoleAdmin',message:'Reset console admin succeeded',data:{userIdPrefix:user?.id?.slice(0,8)||null,emailMasked:String(user?.email||'').replace(/^(.{2}).*(@.*)$/,'$1***$2')},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return res.json({
+      success: true,
+      user,
+      password,
+    });
+  } catch (err) {
+    console.error('[reset-console-admin]', err?.message || err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao resetar admin da Console.'),
     });
   }
 });
