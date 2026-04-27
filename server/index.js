@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.join(__dirname, '..');
+
 /**
  * 1) `server/.env` — valores base.
  * 2) `.env` e `.env.local` na **raiz do repositório** com `override: true` — um único sítio para
@@ -45,6 +46,7 @@ app.get('/health', (_req, res) => {
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const PLATFORM_API_KEY = process.env.PLATFORM_API_KEY || process.env.ADMIN_API_KEY || '';
+const APP_INVITE_REDIRECT_TO = normalizeText(process.env.APP_INVITE_REDIRECT_TO);
 const PORT = Number(process.env.PORT || process.env.ADMIN_API_PORT || 3001);
 
 function decodeJwtPayload(token) {
@@ -97,11 +99,27 @@ function isOptionalTenantLimitsError(error) {
 function normalizeDatabaseError(error, fallbackMessage) {
   const raw = String(error?.message || error || '').trim();
   const lower = raw.toLowerCase();
+  if (lower.includes('column tenant_users.has_system_access does not exist')) {
+    return (
+      'A coluna tenant_users.has_system_access não existe no banco atual. '
+      + 'Aplique a migration `005_app_collaborator_access_invites.sql` no mesmo projeto Supabase do backend.'
+    );
+  }
   if (lower.includes('stack depth limit exceeded')) {
     return (
       'O banco retornou "stack depth limit exceeded". '
       + 'Isso normalmente indica que o backend NÃO está usando a service role key correta '
       + 'e entrou em recursão de RLS no Supabase. Verifique SUPABASE_SERVICE_ROLE_KEY.'
+    );
+  }
+  if (
+    lower.includes('collaborator_id')
+    && lower.includes('tenant_users')
+    && lower.includes('schema cache')
+  ) {
+    return (
+      'Migration pendente: a coluna tenant_users.collaborator_id não existe no banco atual. '
+      + 'Aplique a migration `005_app_collaborator_access_invites.sql` no mesmo projeto Supabase do backend.'
     );
   }
   return raw || fallbackMessage;
@@ -291,6 +309,177 @@ function normalizePlanCode(value) {
   return PLAN_CONFIG[raw] ? raw : '';
 }
 
+function normalizeRoleValue(value, fallback = 'atendimento') {
+  const role = String(value || '').trim().toLowerCase();
+  if (!role) return fallback;
+  return role;
+}
+
+function normalizeInvitationStatus(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return 'none';
+  if (['pending', 'sent', 'accepted', 'expired', 'revoked', 'none'].includes(raw)) return raw;
+  return 'none';
+}
+
+function maskEmail(value) {
+  const email = String(value || '').trim().toLowerCase();
+  const at = email.indexOf('@');
+  if (at <= 1) return email ? '***' : '';
+  return `${email.slice(0, 2)}***${email.slice(at)}`;
+}
+
+function isTenantAdminRole(role) {
+  return ['owner', 'admin', 'master'].includes(normalizeRoleValue(role, ''));
+}
+
+function isMissingHasSystemAccessColumnError(error) {
+  const code = String(error?.code || '').trim();
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42703' && message.includes('has_system_access');
+}
+
+function isMissingInvitationStatusColumnError(error) {
+  const code = String(error?.code || '').trim();
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42703' && message.includes('invitation_status');
+}
+
+function isMissingCollaboratorIdColumnError(error) {
+  const code = String(error?.code || '').trim();
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    (code === '42703' && message.includes('collaborator_id'))
+    || (
+      message.includes('collaborator_id')
+      && message.includes('tenant_users')
+      && message.includes('schema cache')
+    )
+  );
+}
+
+function omitHasSystemAccess(payload = {}) {
+  const cloned = { ...(payload || {}) };
+  delete cloned.has_system_access;
+  return cloned;
+}
+
+function omitInvitationStatus(payload = {}) {
+  const cloned = { ...(payload || {}) };
+  delete cloned.invitation_status;
+  return cloned;
+}
+
+function omitCollaboratorId(payload = {}) {
+  const cloned = { ...(payload || {}) };
+  delete cloned.collaborator_id;
+  return cloned;
+}
+
+const TENANT_USER_SELECT_BASE = 'id, tenant_id, collaborator_id, user_id, full_name, email, role, role_slug, is_active, status';
+const TENANT_USER_SELECT_BASE_LEGACY = 'id, tenant_id, user_id, full_name, email, role, role_slug, is_active, status';
+const TENANT_USER_SELECT_WITH_ACCESS = `${TENANT_USER_SELECT_BASE}, has_system_access`;
+
+async function getTenantUserByAuthUserId(authUserId) {
+  const { data, error } = await supabase
+    .from('tenant_users')
+    .select('id, tenant_id, user_id, email, full_name, role, role_slug, is_active, status')
+    .eq('user_id', authUserId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data || null;
+}
+
+async function getTenantAdminActorOrThrow(authUserId, explicitTenantId = '') {
+  const actorTenantUser = await getTenantUserByAuthUserId(authUserId);
+  if (!actorTenantUser?.tenant_id) {
+    throw new Error('Usuário sem vínculo em tenant_users.');
+  }
+  if (explicitTenantId && explicitTenantId !== actorTenantUser.tenant_id) {
+    throw new Error('tenant_id inválido para o usuário autenticado.');
+  }
+  const actorRole = normalizeRoleValue(actorTenantUser.role || actorTenantUser.role_slug);
+  if (!isTenantAdminRole(actorRole)) {
+    throw new Error('Apenas administradores da clínica podem executar esta operação.');
+  }
+  return actorTenantUser;
+}
+
+function getInviteRedirectTo() {
+  if (APP_INVITE_REDIRECT_TO) return APP_INVITE_REDIRECT_TO;
+  return 'http://localhost:5176/login';
+}
+
+async function sendSupabaseInvite({ email, tenantId, role, collaboratorId, collaboratorName }) {
+  const invitePayload = {
+    data: {
+      tenant_id: tenantId,
+      role,
+      collaborator_id: collaboratorId || null,
+      collaborator_name: collaboratorName || '',
+    },
+    redirectTo: getInviteRedirectTo(),
+  };
+  const { error } = await supabase.auth.admin.inviteUserByEmail(email, invitePayload);
+  if (error) throw error;
+}
+
+async function upsertInvitationRecord({
+  tenantId,
+  tenantUserId,
+  collaboratorId,
+  email,
+  profileRole,
+  createdBy,
+  status = 'pending',
+  expiresAt,
+}) {
+  const normalizedStatus = normalizeInvitationStatus(status);
+  const { data: existing, error: existingError } = await supabase
+    .from('invitations')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('email', email)
+    .in('status', ['pending', 'sent'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (existingError) throw existingError;
+
+  const payload = {
+    tenant_id: tenantId,
+    tenant_user_id: tenantUserId || null,
+    collaborator_id: collaboratorId || null,
+    email,
+    profile_role: profileRole,
+    status: normalizedStatus,
+    expires_at: expiresAt,
+    sent_at: normalizedStatus === 'sent' ? new Date().toISOString() : null,
+    created_by: createdBy || null,
+  };
+
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from('invitations')
+      .update(payload)
+      .eq('id', existing.id)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
+  }
+
+  const { data, error } = await supabase
+    .from('invitations')
+    .insert(payload)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 function buildModuleMap(rows = []) {
   const map = {};
   for (const row of Array.isArray(rows) ? rows : []) {
@@ -409,6 +598,245 @@ async function findAuthUserByEmail(email) {
     page += 1;
   }
   return null;
+}
+
+async function upsertTenantUserAccess({
+  tenantId,
+  collaboratorId,
+  fullName,
+  email,
+  role,
+  hasSystemAccess = true,
+  invitationStatus = 'none',
+}) {
+  const roleSlug = normalizeRoleValue(role);
+  const normalizedInvitationStatus = normalizeInvitationStatus(invitationStatus);
+  const normalizedEmail = normalizeEmail(email);
+
+  const { data: existingTenantUser, error: existingTenantUserError } = await supabase
+    .from('tenant_users')
+    .select('id, user_id')
+    .eq('tenant_id', tenantId)
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+  if (existingTenantUserError) throw existingTenantUserError;
+
+  let authUserId = existingTenantUser?.user_id || null;
+  if (!authUserId) {
+    const authUser = await findAuthUserByEmail(normalizedEmail);
+    authUserId = authUser?.id || null;
+  }
+
+  const payload = {
+    tenant_id: tenantId,
+    collaborator_id: normalizeText(collaboratorId) || null,
+    full_name: normalizeText(fullName),
+    email: normalizedEmail,
+    user_id: authUserId,
+    role: roleSlug,
+    role_slug: roleSlug,
+    has_system_access: Boolean(hasSystemAccess),
+    is_active: Boolean(hasSystemAccess),
+    status: hasSystemAccess ? 'active' : 'inactive',
+    invitation_status: normalizedInvitationStatus,
+  };
+
+  const executeUpsert = async (nextPayload, includeAccessOnSelect, includeCollaboratorOnSelect = true) => {
+    let query;
+    if (existingTenantUser?.id) {
+      query = supabase.from('tenant_users').update(nextPayload).eq('id', existingTenantUser.id);
+    } else {
+      query = supabase.from('tenant_users').insert(nextPayload);
+    }
+    const { data, error } = await query
+      .select(
+        includeAccessOnSelect
+          ? (includeCollaboratorOnSelect ? TENANT_USER_SELECT_WITH_ACCESS : `${TENANT_USER_SELECT_BASE_LEGACY}, has_system_access`)
+          : (includeCollaboratorOnSelect ? TENANT_USER_SELECT_BASE : TENANT_USER_SELECT_BASE_LEGACY),
+      )
+      .single();
+    if (error) throw error;
+    return data;
+  };
+
+  try {
+    return await executeUpsert(payload, true);
+  } catch (error) {
+    if (
+      !isMissingHasSystemAccessColumnError(error)
+      && !isMissingInvitationStatusColumnError(error)
+      && !isMissingCollaboratorIdColumnError(error)
+    ) throw error;
+    return executeUpsert(
+      omitCollaboratorId(omitInvitationStatus(omitHasSystemAccess(payload))),
+      false,
+      false,
+    );
+  }
+}
+
+async function provisionCollaboratorAccess({
+  actorAuthUserId,
+  tenantId,
+  collaboratorId,
+  collaboratorFullName,
+  email,
+  profileRole,
+  sendInvite = true,
+}) {
+  const actorTenantUser = await getTenantAdminActorOrThrow(actorAuthUserId, tenantId);
+  const resolvedTenantId = actorTenantUser.tenant_id;
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedRole = normalizeRoleValue(profileRole);
+
+  if (!normalizedEmail) throw new Error('E-mail é obrigatório para criar acesso.');
+  if (!normalizedRole) throw new Error('Perfil de acesso é obrigatório.');
+
+  const tenantUser = await upsertTenantUserAccess({
+    tenantId: resolvedTenantId,
+    collaboratorId,
+    fullName: collaboratorFullName || normalizedEmail,
+    email: normalizedEmail,
+    role: normalizedRole,
+    hasSystemAccess: true,
+    invitationStatus: sendInvite ? 'pending' : 'none',
+  });
+
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  let invitation = await upsertInvitationRecord({
+    tenantId: resolvedTenantId,
+    tenantUserId: tenantUser.id,
+    collaboratorId,
+    email: normalizedEmail,
+    profileRole: normalizedRole,
+    createdBy: actorAuthUserId,
+    status: sendInvite ? 'pending' : 'pending',
+    expiresAt,
+  });
+
+  if (sendInvite) {
+    await sendSupabaseInvite({
+      email: normalizedEmail,
+      tenantId: resolvedTenantId,
+      role: normalizedRole,
+      collaboratorId,
+      collaboratorName: collaboratorFullName,
+    });
+
+    invitation = await upsertInvitationRecord({
+      tenantId: resolvedTenantId,
+      tenantUserId: tenantUser.id,
+      collaboratorId,
+      email: normalizedEmail,
+      profileRole: normalizedRole,
+      createdBy: actorAuthUserId,
+      status: 'sent',
+      expiresAt,
+    });
+
+    const { data: updatedTenantUser, error: updatedTenantUserError } = await supabase
+      .from('tenant_users')
+      .update({ invitation_status: 'sent' })
+      .eq('id', tenantUser.id)
+      .select(TENANT_USER_SELECT_BASE)
+      .single();
+    if (updatedTenantUserError) {
+      if (!isMissingInvitationStatusColumnError(updatedTenantUserError)) throw updatedTenantUserError;
+      return { tenantUser, invitation };
+    }
+    return { tenantUser: updatedTenantUser, invitation };
+  }
+
+  return { tenantUser, invitation };
+}
+
+async function createTenantUserFromApp({
+  actorAuthUserId,
+  tenantId,
+  collaboratorId,
+  fullName,
+  email,
+  password,
+  profileRole,
+  status = 'active',
+  sendInvite = false,
+}) {
+  const actorTenantUser = await getTenantAdminActorOrThrow(actorAuthUserId, tenantId);
+  const resolvedTenantId = actorTenantUser.tenant_id;
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedRole = normalizeRoleValue(profileRole);
+  const normalizedFullName = normalizeText(fullName);
+  const passwordRaw = normalizeText(password);
+  const isActive = String(status || 'active').toLowerCase() !== 'inactive';
+
+  if (!normalizedEmail) throw new Error('email é obrigatório.');
+  if (!passwordRaw || passwordRaw.length < 8) throw new Error('password deve ter pelo menos 8 caracteres.');
+  if (!normalizedRole) throw new Error('profile_role é obrigatório.');
+  if (!normalizedFullName) throw new Error('full_name é obrigatório.');
+
+  const { data: existingByTenantEmail, error: existingByTenantEmailError } = await supabase
+    .from('tenant_users')
+    .select('id, user_id')
+    .eq('tenant_id', resolvedTenantId)
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+  if (existingByTenantEmailError) throw existingByTenantEmailError;
+  if (existingByTenantEmail?.id) {
+    const duplicateErr = new Error('Este e-mail já possui acesso nesta clínica.');
+    duplicateErr.code = 'EMAIL_ALREADY_HAS_ACCESS';
+    throw duplicateErr;
+  }
+
+  let authUser = await findAuthUserByEmail(normalizedEmail);
+  if (!authUser?.id) {
+    const { data: authCreateData, error: authCreateError } = await supabase.auth.admin.createUser({
+      email: normalizedEmail,
+      password: passwordRaw,
+      email_confirm: true,
+      user_metadata: { full_name: normalizedFullName },
+      app_metadata: { tenant_id: resolvedTenantId, role: normalizedRole },
+    });
+    if (authCreateError || !authCreateData?.user?.id) {
+      throw authCreateError || new Error('Falha ao criar usuário no Supabase Auth.');
+    }
+    authUser = authCreateData.user;
+  }
+
+  const tenantUser = await upsertTenantUserAccess({
+    tenantId: resolvedTenantId,
+    collaboratorId: normalizeText(collaboratorId) || null,
+    fullName: normalizedFullName,
+    email: normalizedEmail,
+    role: normalizedRole,
+    hasSystemAccess: isActive,
+    invitationStatus: sendInvite ? 'pending' : 'none',
+  });
+
+  if (!tenantUser?.id) throw new Error('Falha ao criar vínculo do usuário no tenant.');
+
+  let invitation = null;
+  if (sendInvite) {
+    await sendSupabaseInvite({
+      email: normalizedEmail,
+      tenantId: resolvedTenantId,
+      role: normalizedRole,
+      collaboratorId: normalizeText(collaboratorId) || null,
+      collaboratorName: normalizedFullName,
+    });
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    invitation = await upsertInvitationRecord({
+      tenantId: resolvedTenantId,
+      tenantUserId: tenantUser.id,
+      collaboratorId: normalizeText(collaboratorId) || null,
+      email: normalizedEmail,
+      profileRole: normalizedRole,
+      createdBy: actorAuthUserId,
+      status: 'sent',
+      expiresAt,
+    });
+  }
+
+  return { tenantUser, invitation, authUserId: authUser.id };
 }
 
 async function ensureConsoleAdminCredentials({
@@ -690,6 +1118,7 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         tenantId,
         role: tenantUser.role || tenantUser.role_slug || 'atendimento',
         isActive: tenantUser.is_active ?? tenantUser.status === 'active',
+        invitationStatus: tenantUser.invitation_status || 'none',
       },
       currentUser: {
         id: authUserId,
@@ -709,6 +1138,519 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         : '';
     res.status(400).json({
       error: `${raw}${hint}`,
+    });
+  }
+});
+
+app.post('/internal/app/collaborators/provision', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const createSystemAccess = Boolean(req.body?.create_system_access);
+    const collaboratorId = normalizeText(req.body?.collaborator_id);
+    const collaboratorFullName = normalizeText(req.body?.collaborator_full_name);
+    const email = normalizeEmail(req.body?.email);
+    const profileRoleRaw = normalizeText(req.body?.profile_role);
+    const sendInvite = req.body?.send_invite !== false;
+
+    if (!createSystemAccess) {
+      return res.status(200).json({
+        success: true,
+        create_system_access: false,
+        message: 'Colaborador criado sem acesso ao sistema.',
+      });
+    }
+    if (!email) {
+      return res.status(400).json({ error: 'email é obrigatório quando create_system_access=true.' });
+    }
+    if (!profileRoleRaw) {
+      return res.status(400).json({ error: 'profile_role é obrigatório quando create_system_access=true.' });
+    }
+
+    const provisioned = await provisionCollaboratorAccess({
+      actorAuthUserId: req.appAuthUser.id,
+      tenantId: explicitTenantId,
+      collaboratorId,
+      collaboratorFullName,
+      email,
+      profileRole: normalizeRoleValue(profileRoleRaw),
+      sendInvite,
+    });
+
+    return res.status(200).json({
+      success: true,
+      create_system_access: true,
+      tenant_user: provisioned.tenantUser,
+      invitation: provisioned.invitation,
+    });
+  } catch (err) {
+    console.error('[app-collaborators-provision]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao provisionar acesso do colaborador.'),
+    });
+  }
+});
+
+/**
+ * Persistência canónica (SaaS): credenciais, perfil e overrides de permissão no Supabase Auth + tenant_users.
+ * Overrides ficam em app_metadata.permission_overrides (o JWT passa a refletir após refresh/login).
+ */
+app.post('/internal/app/collaborators/access-bundle', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const collaboratorId = normalizeText(req.body?.collaborator_id);
+    const targetUserId = normalizeText(req.body?.target_user_id);
+    const emailFromBody = normalizeEmail(req.body?.email);
+    const passwordRaw = normalizeText(req.body?.password);
+    const roleSlug = normalizeRoleValue(req.body?.role);
+    const hasSystemAccess = req.body?.has_system_access !== false;
+    const rawOverrides = req.body?.permission_overrides;
+    const permissionOverrides =
+      rawOverrides && typeof rawOverrides === 'object' && !Array.isArray(rawOverrides) ? rawOverrides : {};
+
+    if (!targetUserId) {
+      return res.status(400).json({ error: 'target_user_id é obrigatório.' });
+    }
+    if (passwordRaw && passwordRaw.length > 0 && passwordRaw.length < 8) {
+      return res.status(400).json({ error: 'password deve ter pelo menos 8 caracteres.' });
+    }
+
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+
+    const { data: tuRow, error: tuErr } = await supabase
+      .from('tenant_users')
+      .select('id, user_id, tenant_id, full_name, email, collaborator_id')
+      .eq('tenant_id', tenantId)
+      .eq('user_id', targetUserId)
+      .maybeSingle();
+    if (tuErr) throw tuErr;
+    if (!tuRow?.id) {
+      return res.status(404).json({
+        error: 'Usuário não encontrado em tenant_users para esta clínica. Vincule o acesso em /configuracoes/usuarios antes de editar credenciais.',
+      });
+    }
+
+    const email = emailFromBody || normalizeEmail(tuRow.email);
+    if (!email) {
+      return res.status(400).json({ error: 'email é obrigatório (informe no formulário ou em tenant_users).' });
+    }
+
+    const baseTenantUpdate = {
+      email,
+      role: roleSlug,
+      role_slug: roleSlug,
+      is_active: hasSystemAccess,
+      status: hasSystemAccess ? 'active' : 'inactive',
+    };
+    const tenantVariants = [];
+    const withAccess = { ...baseTenantUpdate, has_system_access: hasSystemAccess };
+    if (collaboratorId) {
+      tenantVariants.push({ ...withAccess, collaborator_id: collaboratorId });
+    }
+    tenantVariants.push({ ...withAccess });
+    if (collaboratorId) {
+      tenantVariants.push({ ...baseTenantUpdate, collaborator_id: collaboratorId });
+    }
+    tenantVariants.push({ ...baseTenantUpdate });
+
+    let lastTenantUpdErr = null;
+    for (const variant of tenantVariants) {
+      const { error: updErr } = await supabase
+        .from('tenant_users')
+        .update(variant)
+        .eq('id', tuRow.id)
+        .eq('tenant_id', tenantId);
+      if (!updErr) {
+        lastTenantUpdErr = null;
+        break;
+      }
+      lastTenantUpdErr = updErr;
+    }
+    if (lastTenantUpdErr) throw lastTenantUpdErr;
+
+    const { data: authData, error: authGetErr } = await supabase.auth.admin.getUserById(targetUserId);
+    if (authGetErr || !authData?.user?.id) {
+      throw authGetErr || new Error('Falha ao ler usuário no Auth.');
+    }
+    const prevMeta = authData.user.app_metadata && typeof authData.user.app_metadata === 'object'
+      ? authData.user.app_metadata
+      : {};
+    const nextMeta = {
+      ...prevMeta,
+      tenant_id: tenantId,
+      permission_overrides: permissionOverrides,
+    };
+    const authUpdate = { app_metadata: nextMeta };
+    const prevEmail = normalizeEmail(authData.user.email);
+    if (email && email !== prevEmail) {
+      authUpdate.email = email;
+    }
+    if (passwordRaw && passwordRaw.length >= 8) {
+      authUpdate.password = passwordRaw;
+    }
+    const { error: authUpdErr } = await supabase.auth.admin.updateUserById(targetUserId, authUpdate);
+    if (authUpdErr) throw authUpdErr;
+
+    return res.status(200).json({
+      success: true,
+      tenant_user_id: tuRow.id,
+      target_user_id: targetUserId,
+    });
+  } catch (err) {
+    console.error('[app-collaborators-access-bundle]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao salvar credenciais e permissões.'),
+    });
+  }
+});
+
+app.post('/internal/app/users/create', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const collaboratorId = normalizeText(req.body?.collaborator_id);
+    const fullName = normalizeText(req.body?.full_name);
+    const email = normalizeEmail(req.body?.email);
+    const password = normalizeText(req.body?.password);
+    const profileRoleRaw = normalizeText(req.body?.profile_role);
+    const status = normalizeText(req.body?.status || 'active');
+    const sendInvite = req.body?.send_invite === true;
+
+    const created = await createTenantUserFromApp({
+      actorAuthUserId: req.appAuthUser.id,
+      tenantId: explicitTenantId,
+      collaboratorId,
+      fullName,
+      email,
+      password,
+      profileRole: profileRoleRaw,
+      status,
+      sendInvite,
+    });
+
+    return res.status(201).json({
+      success: true,
+      tenant_user: created.tenantUser,
+      invitation: created.invitation,
+      auth_user_id: created.authUserId,
+    });
+  } catch (err) {
+    const normalizedError = normalizeDatabaseError(err, 'Falha ao criar usuário.');
+    const msg = String(normalizedError || '');
+    const lower = msg.toLowerCase();
+    if (lower.includes('já possui acesso')) {
+      return res.status(409).json({ error: 'Este e-mail já possui acesso.' });
+    }
+    return res.status(400).json({ error: normalizedError });
+  }
+});
+
+app.post('/internal/app/invitations/resend', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const targetEmail = normalizeEmail(req.body?.email);
+    const collaboratorId = normalizeText(req.body?.collaborator_id);
+
+    if (!targetEmail) {
+      return res.status(400).json({ error: 'email é obrigatório para reenviar convite.' });
+    }
+
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+
+    const { data: tenantUser, error: tenantUserError } = await supabase
+      .from('tenant_users')
+      .select('id, tenant_id, collaborator_id, user_id, full_name, email, role, role_slug')
+      .eq('tenant_id', tenantId)
+      .eq('email', targetEmail)
+      .maybeSingle();
+    if (tenantUserError) throw tenantUserError;
+    if (!tenantUser?.id) {
+      return res.status(404).json({ error: 'Usuário interno não encontrado para esse e-mail.' });
+    }
+
+    const role = normalizeRoleValue(tenantUser.role || tenantUser.role_slug || 'atendimento');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    await sendSupabaseInvite({
+      email: targetEmail,
+      tenantId,
+      role,
+      collaboratorId: collaboratorId || tenantUser.collaborator_id,
+      collaboratorName: tenantUser.full_name,
+    });
+
+    const invitation = await upsertInvitationRecord({
+      tenantId,
+      tenantUserId: tenantUser.id,
+      collaboratorId: collaboratorId || tenantUser.collaborator_id,
+      email: targetEmail,
+      profileRole: role,
+      createdBy: req.appAuthUser.id,
+      status: 'sent',
+      expiresAt,
+    });
+
+    const { data: updatedTenantUser, error: updateTenantUserError } = await supabase
+      .from('tenant_users')
+      .update({ invitation_status: 'sent' })
+      .eq('id', tenantUser.id)
+      .select(TENANT_USER_SELECT_BASE)
+      .single();
+    if (updateTenantUserError) {
+      if (!isMissingInvitationStatusColumnError(updateTenantUserError)) throw updateTenantUserError;
+      return res.status(200).json({
+        success: true,
+        tenant_user: tenantUser,
+        invitation,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      tenant_user: updatedTenantUser,
+      invitation,
+    });
+  } catch (err) {
+    console.error('[app-invitations-resend]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao reenviar convite.'),
+    });
+  }
+});
+
+app.post('/internal/app/invitations/reconcile', requireAppUser, async (req, res) => {
+  try {
+    const tenantUser = await getTenantUserByAuthUserId(req.appAuthUser.id);
+    if (!tenantUser?.tenant_id || !tenantUser?.email) {
+      return res.status(200).json({ success: true, updated: 0 });
+    }
+
+    const acceptedAt = new Date().toISOString();
+    const { data: invitationRows, error: invitationsError } = await supabase
+      .from('invitations')
+      .update({
+        status: 'accepted',
+        accepted_at: acceptedAt,
+      })
+      .eq('tenant_id', tenantUser.tenant_id)
+      .eq('email', normalizeEmail(tenantUser.email))
+      .in('status', ['pending', 'sent'])
+      .select('id');
+    if (invitationsError) throw invitationsError;
+
+    const { error: tenantUserUpdateError } = await supabase
+      .from('tenant_users')
+      .update({ invitation_status: 'accepted' })
+      .eq('tenant_id', tenantUser.tenant_id)
+      .eq('user_id', req.appAuthUser.id);
+    if (tenantUserUpdateError && !isMissingInvitationStatusColumnError(tenantUserUpdateError)) {
+      throw tenantUserUpdateError;
+    }
+
+    return res.status(200).json({
+      success: true,
+      updated: Array.isArray(invitationRows) ? invitationRows.length : 0,
+    });
+  } catch (err) {
+    console.error('[app-invitations-reconcile]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao reconciliar convite do primeiro acesso.'),
+    });
+  }
+});
+
+app.get('/internal/app/users/list', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.query?.tenant_id);
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+
+    const tenantUsersListSelects = [
+      'id, tenant_id, collaborator_id, user_id, full_name, email, role, role_slug, is_active, status, has_system_access, invitation_status, created_at, updated_at',
+      'id, tenant_id, user_id, full_name, email, role, role_slug, is_active, status, has_system_access, invitation_status, created_at, updated_at',
+      'id, tenant_id, user_id, full_name, email, role, role_slug, is_active, status, has_system_access, created_at, updated_at',
+      'id, tenant_id, user_id, full_name, email, role, role_slug, is_active, status, invitation_status, created_at, updated_at',
+      'id, tenant_id, user_id, full_name, email, role, role_slug, is_active, status, created_at, updated_at',
+    ];
+    let tenantUsers;
+    let lastTenantUsersError = null;
+    for (const sel of tenantUsersListSelects) {
+      const { data, error } = await supabase
+        .from('tenant_users')
+        .select(sel)
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: true });
+      if (!error) {
+        tenantUsers = data;
+        lastTenantUsersError = null;
+        break;
+      }
+      lastTenantUsersError = error;
+    }
+    if (lastTenantUsersError) throw lastTenantUsersError;
+
+    let invitations = [];
+    const invResult = await supabase
+      .from('invitations')
+      .select('id, tenant_id, tenant_user_id, collaborator_id, email, profile_role, status, expires_at, sent_at, accepted_at, created_at, updated_at')
+      .eq('tenant_id', tenantId)
+      .order('created_at', { ascending: false });
+    if (invResult.error) {
+      const invCode = String(invResult.error?.code || '').toUpperCase();
+      const invMsg = String(invResult.error?.message || '').toLowerCase();
+      if (
+        invCode === 'PGRST205'
+        || invCode === '42P01'
+        || (invMsg.includes('relation') && invMsg.includes('does not exist'))
+      ) {
+        invitations = [];
+      } else {
+        throw invResult.error;
+      }
+    } else {
+      invitations = invResult.data || [];
+    }
+
+    const latestInvitationByEmail = new Map();
+    for (const inv of invitations || []) {
+      const key = normalizeEmail(inv?.email);
+      if (!key || latestInvitationByEmail.has(key)) continue;
+      latestInvitationByEmail.set(key, inv);
+    }
+
+    const users = (tenantUsers || []).map((row) => {
+      const email = normalizeEmail(row?.email);
+      const invitation = latestInvitationByEmail.get(email) || null;
+      const role = normalizeRoleValue(row?.role || row?.role_slug || invitation?.profile_role || 'atendimento');
+      const hasSystemAccess = row?.has_system_access ?? row?.is_active ?? row?.status === 'active';
+      const invitationStatus = normalizeInvitationStatus(row?.invitation_status || invitation?.status || 'none');
+      return {
+        id: row.id,
+        tenant_id: row.tenant_id,
+        user_id: row.user_id || null,
+        collaborator_id: row.collaborator_id || null,
+        full_name: row.full_name || '',
+        email: email || '',
+        role,
+        is_active: Boolean(row?.is_active ?? row?.status === 'active'),
+        has_system_access: Boolean(hasSystemAccess),
+        status: String(row?.status || (hasSystemAccess ? 'active' : 'inactive')),
+        invitation_status: invitationStatus,
+        created_at: row?.created_at || null,
+        updated_at: row?.updated_at || null,
+        invitation,
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      tenant_id: tenantId,
+      users,
+    });
+  } catch (err) {
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao listar usuários da clínica.'),
+    });
+  }
+});
+
+app.patch('/internal/app/users/:tenantUserId/access', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const tenantUserId = normalizeText(req.params?.tenantUserId);
+    const hasSystemAccess = Boolean(req.body?.has_system_access);
+    if (!tenantUserId) return res.status(400).json({ error: 'tenantUserId é obrigatório.' });
+
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+
+    const payload = {
+      has_system_access: hasSystemAccess,
+      is_active: hasSystemAccess,
+      status: hasSystemAccess ? 'active' : 'inactive',
+    };
+    let result;
+    try {
+      result = await supabase
+        .from('tenant_users')
+        .update(payload)
+        .eq('id', tenantUserId)
+        .eq('tenant_id', tenantId)
+        .select(TENANT_USER_SELECT_WITH_ACCESS)
+        .single();
+      if (result.error) throw result.error;
+    } catch (error) {
+      if (!isMissingHasSystemAccessColumnError(error)) throw error;
+      result = await supabase
+        .from('tenant_users')
+        .update(omitHasSystemAccess(payload))
+        .eq('id', tenantUserId)
+        .eq('tenant_id', tenantId)
+        .select(TENANT_USER_SELECT_BASE)
+        .single();
+      if (result.error) throw result.error;
+    }
+
+    return res.status(200).json({ success: true, tenant_user: result.data });
+  } catch (err) {
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao atualizar status de acesso do usuário.'),
+    });
+  }
+});
+
+app.patch('/internal/app/collaborators/:collaboratorId/access', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const collaboratorId = normalizeText(req.params?.collaboratorId);
+    const hasSystemAccess = Boolean(req.body?.has_system_access);
+
+    if (!collaboratorId) {
+      return res.status(400).json({ error: 'collaboratorId é obrigatório.' });
+    }
+
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+
+    const updatePayload = {
+      has_system_access: hasSystemAccess,
+      is_active: hasSystemAccess,
+      status: hasSystemAccess ? 'active' : 'inactive',
+    };
+    let tenantUser;
+    try {
+      const result = await supabase
+        .from('tenant_users')
+        .update(updatePayload)
+        .eq('tenant_id', tenantId)
+        .eq('collaborator_id', collaboratorId)
+        .select(TENANT_USER_SELECT_WITH_ACCESS)
+        .maybeSingle();
+      if (result.error) throw result.error;
+      tenantUser = result.data;
+    } catch (error) {
+      if (!isMissingHasSystemAccessColumnError(error)) throw error;
+      const fallbackResult = await supabase
+        .from('tenant_users')
+        .update(omitHasSystemAccess(updatePayload))
+        .eq('tenant_id', tenantId)
+        .eq('collaborator_id', collaboratorId)
+        .select(TENANT_USER_SELECT_BASE)
+        .maybeSingle();
+      if (fallbackResult.error) throw fallbackResult.error;
+      tenantUser = fallbackResult.data;
+    }
+    if (!tenantUser?.id) {
+      return res.status(404).json({ error: 'Vínculo de acesso não encontrado para este colaborador.' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      tenant_user: tenantUser,
+    });
+  } catch (err) {
+    console.error('[app-collaborator-access-toggle]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao atualizar bloqueio de acesso do colaborador.'),
     });
   }
 });
@@ -778,9 +1720,6 @@ app.post('/internal/platform/dev/reset-console-admin', async (req, res) => {
     }
 
     const user = await ensureConsoleAdminCredentials({ email, password, fullName });
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0c61a'},body:JSON.stringify({sessionId:'e0c61a',runId:'console-login',hypothesisId:'D4',location:'server/index.js:resetConsoleAdmin',message:'Reset console admin succeeded',data:{userIdPrefix:user?.id?.slice(0,8)||null,emailMasked:String(user?.email||'').replace(/^(.{2}).*(@.*)$/,'$1***$2')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     return res.json({
       success: true,
       user,

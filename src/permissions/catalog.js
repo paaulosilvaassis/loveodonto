@@ -1,55 +1,158 @@
 /**
- * Catálogo de permissões (módulos + ações).
- * Base editável: módulos do app e ações (view, create, edit, delete, export, approve).
+ * Catálogo de permissões (módulos + bases/telas + ações).
+ * IDs seguem estáveis no formato perm-{module_key}-{action_key}.
  */
 
-export const ACTION_KEYS = ['view', 'create', 'edit', 'delete', 'export', 'approve'];
+export const ACTION_KEYS = [
+  'view',
+  'create',
+  'edit',
+  'delete',
+  'approve',
+  'export',
+  'send',
+  'configure',
+  'resend',
+  'cancel',
+  'move_stage',
+  'respond',
+  'toggle_active',
+  'conclude',
+  'sign',
+  'confirm',
+  'finish',
+  'deactivate',
+  'import',
+  'open',
+  'close',
+  'launch',
+  'reverse',
+  'issue',
+  'connect',
+  'disconnect',
+  'create_ticket',
+  'download',
+];
 
 export const ACTION_LABELS = {
   view: 'Ver',
   create: 'Criar',
   edit: 'Editar',
   delete: 'Excluir',
-  export: 'Exportar',
   approve: 'Aprovar',
+  export: 'Exportar',
+  send: 'Enviar',
+  configure: 'Configurar',
+  resend: 'Reenviar',
+  cancel: 'Cancelar',
+  move_stage: 'Mover',
+  respond: 'Responder',
+  toggle_active: 'Ativar/Desativar',
+  conclude: 'Concluir',
+  sign: 'Assinar',
+  confirm: 'Confirmar',
+  finish: 'Finalizar',
+  deactivate: 'Desativar',
+  import: 'Importar',
+  open: 'Abrir',
+  close: 'Fechar',
+  launch: 'Lançar',
+  reverse: 'Estornar',
+  issue: 'Emitir',
+  connect: 'Conectar',
+  disconnect: 'Desconectar',
+  create_ticket: 'Criar chamado',
+  download: 'Baixar',
 };
 
-/** Módulos do app com submódulos opcionais e ações aplicáveis */
+/**
+ * group_key/group_label: setor principal da matriz.
+ * key/label: base/tela/função.
+ */
 export const MODULES_SPEC = [
-  { key: 'dashboard', label: 'Dashboard', actions: ['view'] },
-  { key: 'patients', label: 'Pacientes (cadastro, prontuário)', actions: ['view', 'create', 'edit', 'delete', 'export'] },
   {
-    key: 'prontuario',
-    label: 'Prontuário',
+    key: 'comercial',
+    label: 'Gestão Comercial',
     children: [
-      { key: 'prontuario_atendimento', label: 'Atendimento / Evolução Clínica', actions: ['view', 'create', 'edit'] },
-      { key: 'prontuario_planejamento', label: 'Planejamento', actions: ['view', 'create', 'edit'] },
-      { key: 'prontuario_procedimentos', label: 'Procedimentos a Realizar', actions: ['view', 'create', 'edit'] },
-      { key: 'prontuario_orcamentos', label: 'Orçamentos', actions: ['view', 'create', 'edit', 'approve'] },
-      { key: 'prontuario_contratos', label: 'Contratos', actions: ['view', 'create', 'edit', 'approve'] },
-      { key: 'prontuario_documentos', label: 'Documentos', actions: ['view', 'create', 'edit', 'delete', 'export'] },
+      { key: 'comercial_captacao_leads', label: 'Captação de Leads', actions: ['view', 'create', 'edit', 'delete', 'export'] },
+      { key: 'pipeline_crm', label: 'Pipeline de Atendimento', actions: ['view', 'create', 'edit', 'move_stage', 'delete'] },
+      { key: 'comercial_leads', label: 'Leads', actions: ['view', 'create', 'edit', 'delete', 'export'] },
+      { key: 'comercial_historico_chats', label: 'Histórico de Chats', actions: ['view', 'export'] },
+      { key: 'comercial_mensagens_automaticas', label: 'Mensagens Automáticas', actions: ['view', 'create', 'edit'] },
+      { key: 'comercial_campanhas_broadcast', label: 'Campanhas/Broadcast', actions: ['view', 'create', 'send', 'cancel'] },
+      { key: 'comercial_relatorios', label: 'Relatórios Comerciais', actions: ['view', 'export'] },
+    ],
+  },
+  {
+    key: 'atendimento_prontuario',
+    label: 'Atendimento / Prontuário',
+    children: [
+      { key: 'patients', label: 'Pacientes', actions: ['view', 'create', 'edit', 'delete', 'export'] },
+      { key: 'prontuario_atendimento', label: 'Prontuário Clínico', actions: ['view', 'create', 'edit', 'delete'] },
+      { key: 'prontuario_evolucao_clinica', label: 'Evolução Clínica', actions: ['view', 'create', 'edit', 'delete'] },
+      { key: 'prontuario_odontograma', label: 'Odontograma', actions: ['view', 'create', 'edit'] },
+      { key: 'prontuario_planejamento', label: 'Planejamento', actions: ['view', 'create', 'edit', 'approve'] },
+      { key: 'prontuario_procedimentos', label: 'Procedimentos a Realizar', actions: ['view', 'create', 'edit', 'conclude'] },
+      { key: 'prontuario_orcamentos', label: 'Orçamentos', actions: ['view', 'create', 'edit', 'approve', 'delete'] },
+      { key: 'prontuario_contratos', label: 'Contratos', actions: ['view', 'create', 'edit', 'send', 'sign', 'delete'] },
+      { key: 'prontuario_consentimentos', label: 'Consentimentos', actions: ['view', 'create', 'edit', 'send'] },
+      { key: 'prontuario_documentos', label: 'Documentos do Paciente', actions: ['view', 'create', 'edit', 'delete', 'export'] },
+      { key: 'agenda', label: 'Agenda', actions: ['view', 'create', 'edit', 'cancel', 'confirm'] },
+      { key: 'atendimento_sala_espera', label: 'Sala de Espera / Check-in', actions: ['view', 'create', 'edit', 'finish'] },
       { key: 'prontuario_dados_clinicos', label: 'Dados Clínicos', actions: ['view', 'create', 'edit'] },
     ],
   },
-  { key: 'agenda', label: 'Agenda / Calendário', actions: ['view', 'create', 'edit', 'delete'] },
-  { key: 'pipeline_crm', label: 'Pipeline / CRM Clínico (Leads, tags, funil)', actions: ['view', 'create', 'edit', 'delete', 'export'] },
-  { key: 'comercial', label: 'Comercial (captação, follow-up, propostas)', actions: ['view', 'create', 'edit', 'export'] },
+  {
+    key: 'administrativo',
+    label: 'Administrativo',
+    children: [
+      { key: 'admin_dados_clinica', label: 'Dados da Clínica', actions: ['view', 'edit'] },
+      { key: 'equipe', label: 'Dados da Equipe', actions: ['view', 'create', 'edit', 'deactivate', 'delete'] },
+      { key: 'configuracoes_usuarios_acessos', label: 'Usuários e Acessos', actions: ['view', 'create', 'edit', 'deactivate', 'resend'] },
+      { key: 'admin_base_precos_procedimentos', label: 'Base de Preços e Procedimentos', actions: ['view', 'create', 'edit', 'delete', 'import', 'export'] },
+      { key: 'admin_contratos', label: 'Contratos', actions: ['view', 'create', 'edit', 'delete'] },
+      { key: 'admin_consentimentos', label: 'Consentimentos', actions: ['view', 'create', 'edit', 'delete'] },
+      { key: 'configuracoes', label: 'Configurações (Geral)', actions: ['view', 'edit'] },
+    ],
+  },
   {
     key: 'financeiro',
     label: 'Financeiro',
     children: [
-      { key: 'financeiro_contas_receber', label: 'Contas a receber', actions: ['view', 'create', 'edit', 'export'] },
-      { key: 'financeiro_contas_pagar', label: 'Contas a pagar', actions: ['view', 'create', 'edit', 'export'] },
-      { key: 'financeiro_caixa', label: 'Caixa / Conciliação', actions: ['view', 'create', 'edit'] },
-      { key: 'financeiro_boletos', label: 'Boletos e cobranças', actions: ['view', 'create', 'edit', 'export'] },
-      { key: 'financeiro_financiamentos', label: 'Financiamento próprio', actions: ['view', 'create', 'edit', 'approve', 'export'] },
-      { key: 'financeiro_relatorios', label: 'Relatórios', actions: ['view', 'export'] },
+      { key: 'financeiro_contas_receber', label: 'Contas a Receber', actions: ['view', 'create', 'edit', 'download', 'delete', 'export'] },
+      { key: 'financeiro_contas_pagar', label: 'Contas a Pagar', actions: ['view', 'create', 'edit', 'download', 'delete', 'export'] },
+      { key: 'financeiro_caixa', label: 'Caixa', actions: ['view', 'open', 'close', 'launch', 'reverse'] },
+      { key: 'financeiro_boletos', label: 'Boletos/Cobranças', actions: ['view', 'create', 'issue', 'cancel', 'resend'] },
+      { key: 'financeiro_financiamentos', label: 'Financiamentos', actions: ['view', 'create', 'edit', 'approve', 'cancel'] },
+      { key: 'financeiro_comissoes', label: 'Comissões', actions: ['view', 'create', 'edit', 'approve', 'export'] },
+      { key: 'financeiro_dre', label: 'DRE / Central de Análise', actions: ['view', 'export'] },
+      { key: 'financeiro_relatorios', label: 'Relatórios Financeiros', actions: ['view', 'export'] },
     ],
   },
-  { key: 'estoque', label: 'Estoque / Materiais', actions: ['view', 'create', 'edit', 'delete', 'export'] },
-  { key: 'equipe', label: 'Equipe / Colaboradores', actions: ['view', 'create', 'edit', 'delete'] },
-  { key: 'configuracoes', label: 'Configurações', actions: ['view', 'edit'] },
-  { key: 'relatorios', label: 'Relatórios / Exportações', actions: ['view', 'export'] },
+  {
+    key: 'dashboard_relatorios',
+    label: 'Dashboard / Relatórios',
+    children: [
+      { key: 'dashboard', label: 'Dashboard Geral', actions: ['view'] },
+      { key: 'dashboard_indicadores', label: 'Indicadores Principais', actions: ['view'] },
+      { key: 'relatorios_gerenciais', label: 'Relatórios Gerenciais', actions: ['view', 'export'] },
+      { key: 'relatorios_atendimento', label: 'Relatórios de Atendimento', actions: ['view', 'export'] },
+      { key: 'relatorios_comerciais', label: 'Relatórios Comerciais', actions: ['view', 'export'] },
+      { key: 'relatorios', label: 'Relatórios Financeiros', actions: ['view', 'export'] },
+    ],
+  },
+  {
+    key: 'config_sistema',
+    label: 'Configurações / Sistema',
+    children: [
+      { key: 'sistema_integracoes', label: 'Integrações', actions: ['view', 'configure'] },
+      { key: 'sistema_whatsapp', label: 'WhatsApp', actions: ['view', 'configure', 'connect', 'disconnect'] },
+      { key: 'sistema_suporte', label: 'Suporte', actions: ['view', 'create_ticket'] },
+      { key: 'sistema_logs_auditoria', label: 'Logs/Auditoria', actions: ['view', 'export'] },
+      { key: 'sistema_preferencias', label: 'Preferências do Sistema', actions: ['view', 'edit'] },
+      { key: 'estoque', label: 'Estoque / Materiais', actions: ['view', 'create', 'edit', 'delete', 'export'] },
+    ],
+  },
 ];
 
 /** ID estável para permissão (perm-{module_key}-{action_key}) */
@@ -63,28 +166,25 @@ export function permissionId(moduleKey, actionKey) {
  */
 export function buildPermissionsCatalog() {
   const out = [];
-  const add = (moduleKey, moduleLabel, actionKey) => {
+  const add = (groupKey, groupLabel, moduleKey, moduleLabel, actionKey) => {
     const id = permissionId(moduleKey, actionKey);
-    const desc = `${ACTION_LABELS[actionKey]}: ${moduleLabel}`;
+    const actionLabel = ACTION_LABELS[actionKey] || actionKey;
+    const desc = `${groupLabel} • ${moduleLabel} • ${actionLabel}`;
     out.push({
       id,
       module_key: moduleKey,
       module_label: moduleLabel,
+      module_group_key: groupKey,
+      module_group_label: groupLabel,
       action_key: actionKey,
       description: desc,
     });
   };
 
-  for (const mod of MODULES_SPEC) {
-    if (mod.children) {
-      for (const child of mod.children) {
-        for (const action of child.actions) {
-          add(child.key, child.label, action);
-        }
-      }
-    } else {
-      for (const action of mod.actions) {
-        add(mod.key, mod.label, action);
+  for (const group of MODULES_SPEC) {
+    for (const base of group.children || []) {
+      for (const action of base.actions || []) {
+        add(group.key, group.label, base.key, base.label, action);
       }
     }
   }
@@ -93,13 +193,9 @@ export function buildPermissionsCatalog() {
 
 /** Retorna todos os module_key únicos (incluindo filhos) para agrupamento */
 export function getModuleKeysForGrouping() {
-  const keys = [];
-  for (const mod of MODULES_SPEC) {
-    if (mod.children) {
-      keys.push({ key: mod.key, label: mod.label, children: mod.children.map((c) => ({ key: c.key, label: c.label })) });
-    } else {
-      keys.push({ key: mod.key, label: mod.label, children: [] });
-    }
-  }
-  return keys;
+  return MODULES_SPEC.map((group) => ({
+    key: group.key,
+    label: group.label,
+    children: (group.children || []).map((child) => ({ key: child.key, label: child.label })),
+  }));
 }

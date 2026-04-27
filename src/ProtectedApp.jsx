@@ -66,12 +66,13 @@ import MarketingChatOperationsPage from './pages/marketing/chatInteligente/Marke
 import MarketingChatIntegrationsPage from './pages/marketing/chatInteligente/MarketingChatIntegrationsPage.jsx';
 import MarketingChatSettingsPage from './pages/marketing/chatInteligente/MarketingChatSettingsPage.jsx';
 import MarketingChatReportsPage from './pages/marketing/chatInteligente/MarketingChatReportsPage.jsx';
+import StabilityHealthPage from './pages/StabilityHealthPage.jsx';
 import { routeAccessMap } from './navigation/menuConfig.js';
 import { getRequiredFeatureFlagForRoute, getRequiredModuleForRoute } from './tenant/tenantAccess.js';
 
 const routeRoles = routeAccessMap();
 const withRole = (route, element) => (
-  <RequireRole allowedRoles={routeRoles[route]}>
+  <RequireRole allowedRoles={routeRoles[route]} routePath={route}>
     <RequireModule moduleName={getRequiredModuleForRoute(route)}>
       <RequireFeatureFlag flagKey={getRequiredFeatureFlagForRoute(route)}>
         {element}
@@ -99,8 +100,8 @@ export default function ProtectedApp() {
         <Route path="/pacientes/busca" element={withRole('/pacientes/busca', <PatientsPage />)} />
         <Route path="/pacientes/cadastro" element={withRole('/pacientes/cadastro', <PatientCadastroPage />)} />
         <Route path="/pacientes/cadastro/:patientId" element={withRole('/pacientes/cadastro', <PatientCadastroPage />)} />
-        <Route path="/prontuario/:patientId" element={<RequireRole allowedRoles={['admin', 'master', 'gerente', 'recepcao', 'profissional']}><PatientChartPage /></RequireRole>} />
-        <Route path="/prontuario/:patientId/odontograma-v2" element={<RequireRole allowedRoles={['admin', 'master', 'gerente', 'recepcao', 'profissional']}><OdontogramV2Page /></RequireRole>} />
+        <Route path="/prontuario/:patientId" element={<RequireRole allowedRoles={['admin', 'master', 'gerente', 'recepcao', 'profissional']} routePath="/prontuario/:patientId"><PatientChartPage /></RequireRole>} />
+        <Route path="/prontuario/:patientId/odontograma-v2" element={<RequireRole allowedRoles={['admin', 'master', 'gerente', 'recepcao', 'profissional']} routePath="/prontuario/:patientId/odontograma-v2"><OdontogramV2Page /></RequireRole>} />
         <Route path="/gestao/dashboard" element={withRole('/gestao/dashboard', <DashboardPage />)} />
         <Route path="/suporte" element={withRole('/suporte', <SupportPage />)} />
         <Route path="/gestao/agenda" element={withRole('/gestao/agenda', <AgendaPage />)} />
@@ -124,8 +125,9 @@ export default function ProtectedApp() {
         <Route path="/gestao-comercial/fluxo-do-paciente" element={withRole('/gestao-comercial/fluxo-do-paciente', <PatientFlowPage />)} />
         <Route path="/gestao-comercial/base-de-preco" element={withRole('/gestao-comercial/base-de-preco', <PriceBasePage />)} />
         <Route path="/gestao-comercial/base-de-preco/tabelas/:priceTableId" element={withRole('/gestao-comercial/base-de-preco', <PriceBaseTableDetailPage />)} />
-        <Route path="/onboarding/clinica" element={<RequireRole allowedRoles={['admin', 'master']}><OnboardingClinicaPage /></RequireRole>} />
-        <Route path="/configuracoes/usuarios" element={<RequireRole allowedRoles={['admin', 'master']}><ConfiguracoesUsuariosPage /></RequireRole>} />
+        <Route path="/onboarding/clinica" element={<RequireRole allowedRoles={['admin', 'master']} routePath="/onboarding/clinica"><OnboardingClinicaPage /></RequireRole>} />
+        <Route path="/configuracoes/usuarios" element={<RequireRole allowedRoles={['admin', 'master']} routePath="/configuracoes/usuarios"><ConfiguracoesUsuariosPage /></RequireRole>} />
+        <Route path="/stability/health" element={<RequireRole allowedRoles={['admin', 'master', 'gerente']} routePath="/stability/health"><StabilityHealthPage /></RequireRole>} />
         <Route path="/master" element={<Navigate to="/gestao/dashboard" replace />} />
         <Route path="/admin" element={<Navigate to="/admin/dados-clinica" replace />} />
         <Route path="/admin/dados-clinica" element={withAdminGate(withRole('/admin/dados-clinica', <ClinicSettingsPage />))} />

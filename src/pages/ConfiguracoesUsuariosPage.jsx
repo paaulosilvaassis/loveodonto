@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/useAuth.js';
+import { useTenant } from '../tenant/useTenant.js';
 import { Section } from '../components/Section.jsx';
 import { Field } from '../components/Field.jsx';
 import Button from '../components/Button.jsx';
@@ -12,19 +13,13 @@ import {
   ModalRoot,
   ModalTitle,
 } from '../components/ui/Modal.jsx';
-import { getDefaultTenant } from '../services/tenantService.js';
 import {
-  listMembers,
-  setMemberSystemAccess,
-  removeMember,
-} from '../services/membershipService.js';
-import {
-  createInvitation,
-  listInvitations,
-  refreshInvitation,
-  findPendingInvitationByEmail,
-} from '../services/invitationService.js';
-import { createTenantUserWithPassword } from '../services/userAuthService.js';
+  createTenantUserAccess,
+  listTenantUsersAccess,
+  provisionCollaboratorSystemAccess,
+  resendCollaboratorInvite,
+  setTenantUserSystemAccess,
+} from '../services/collaboratorAccessProvisionService.js';
 import { MEMBERSHIP_ROLE_LABELS, INVITABLE_ROLES } from '../constants/tenantRoles.js';
 import { UserPlus, Copy, Trash2, Pencil, Eye, Power, Mail } from 'lucide-react';
 
@@ -41,9 +36,43 @@ function isMemberAccessActive(m) {
   return m.has_system_access !== false && m.user_active !== false;
 }
 
+function resolveInvitationStatus(invitation) {
+  if (!invitation) return 'sem_convite';
+  if (invitation.accepted_at) return 'aceito';
+  if (invitation.status === 'sent') return 'enviado';
+  if (invitation.status === 'accepted') return 'aceito';
+  if (invitation.expires_at && invitation.expires_at <= new Date().toISOString()) return 'expirado';
+  return 'pendente';
+}
+
+function normalizeUiAccessErrorMessage(message) {
+  const raw = String(message || '').trim();
+  const lower = raw.toLowerCase();
+  if (!raw) return 'Falha ao processar a solicitação.';
+  if (lower.includes('backend saas') || lower.includes('porta 3001')) {
+    return 'Não foi possível conectar ao backend SaaS.';
+  }
+  if (lower.includes('este e-mail já possui acesso')) {
+    return 'Este e-mail já possui acesso.';
+  }
+  if (lower.includes('convite') && lower.includes('sent')) {
+    return 'Convite já enviado para este e-mail.';
+  }
+  if (lower.includes('tenant') && (lower.includes('não encontrado') || lower.includes('obrigatório'))) {
+    return 'Tenant não encontrado.';
+  }
+  if (lower.includes('supabase da plataforma não configurado') || lower.includes('configurado')) {
+    return 'Configuração do backend ausente.';
+  }
+  if (lower.includes('collaborator_id') && lower.includes('tenant_users') && lower.includes('schema cache')) {
+    return 'Migration pendente: invitation_status/collaborator_id não existe no banco atual. Aplique a migration 005_app_collaborator_access_invites.sql no projeto Supabase do backend.';
+  }
+  return raw;
+}
+
 export default function ConfiguracoesUsuariosPage() {
   const { user } = useAuth();
-  const tenant = getDefaultTenant();
+  const { tenant } = useTenant();
   const [members, setMembers] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -85,10 +114,37 @@ export default function ConfiguracoesUsuariosPage() {
 
   useEffect(() => {
     if (!tenantId) return;
-    const m = listMembers(tenantId);
-    setMembers(m);
-    setInvitations(listInvitations(tenantId, true));
-  }, [tenantId, refreshKey]);
+    let active = true;
+    setSaving(true);
+    listTenantUsersAccess(tenantId)
+      .then((result) => {
+        if (!active) return;
+        const users = Array.isArray(result?.users) ? result.users : [];
+        setMembers(users.map((u) => ({
+          ...u,
+          name: u.full_name || '',
+          phone: u.phone || '',
+          internal_notes: u.internal_notes || '',
+          tenant_name: tenant?.trade_name || tenant?.name || 'Clínica',
+        })));
+        const invs = users
+          .map((u) => u?.invitation)
+          .filter(Boolean)
+          .sort((a, b) => String(b?.created_at || '').localeCompare(String(a?.created_at || '')));
+        setInvitations(invs);
+      })
+      .catch((err) => {
+        if (!active) return;
+        showError(normalizeUiAccessErrorMessage(err?.message || 'Erro ao carregar usuários.'));
+      })
+      .finally(() => {
+        if (!active) return;
+        setSaving(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [tenantId, refreshKey, tenant?.trade_name, tenant?.name]);
 
   const refresh = () => setRefreshKey((k) => k + 1);
 
@@ -101,7 +157,7 @@ export default function ConfiguracoesUsuariosPage() {
     setMemberModal({ open: true, member, mode });
   };
 
-  const handleInvite = (e) => {
+  const handleInvite = async (e) => {
     e.preventDefault();
     setError('');
     if (!inviteEmail.trim()) {
@@ -110,22 +166,22 @@ export default function ConfiguracoesUsuariosPage() {
     }
     setSaving(true);
     try {
-      const result = createInvitation(user, tenantId, {
-        email: inviteEmail.trim(),
-        role: inviteRole,
-        has_system_access: inviteAccess,
+      const email = inviteEmail.trim().toLowerCase();
+      await provisionCollaboratorSystemAccess({
+        tenant_id: tenantId,
+        create_system_access: inviteAccess,
+        email,
+        profile_role: inviteRole,
+        send_invite: true,
       });
-      pushToast('success', 'Convite criado. Link copiado.');
-      try {
-        if (result.invite_url) navigator.clipboard.writeText(result.invite_url);
-      } catch (_) {}
+      pushToast('success', 'Convite enviado por e-mail com sucesso.');
       setModalInvite(false);
       setInviteEmail('');
       setInviteRole('atendimento');
       setInviteAccess(true);
       refresh();
     } catch (err) {
-      showError(err?.message || 'Erro ao criar convite.');
+      showError(normalizeUiAccessErrorMessage(err?.message || 'Erro ao criar convite.'));
     } finally {
       setSaving(false);
     }
@@ -155,13 +211,14 @@ export default function ConfiguracoesUsuariosPage() {
 
     setCreatingUser(true);
     try {
-      await createTenantUserWithPassword(user, {
-        tenantId,
-        fullName: nameTrim,
+      await createTenantUserAccess({
+        tenant_id: tenantId,
+        full_name: nameTrim,
         email: emailTrim,
         password: newUserPassword,
-        role: newUserRole,
+        profile_role: newUserRole,
         status: newUserStatus,
+        send_invite: false,
       });
       pushToast('success', 'Usuário criado com sucesso e vinculado à clínica.');
       setModalCreateUser(false);
@@ -172,7 +229,7 @@ export default function ConfiguracoesUsuariosPage() {
       setNewUserStatus('active');
       refresh();
     } catch (err) {
-      showError(err?.message || 'Erro ao criar usuário.');
+      showError(normalizeUiAccessErrorMessage(err?.message || 'Erro ao criar usuário.'));
     } finally {
       setCreatingUser(false);
     }
@@ -187,23 +244,28 @@ export default function ConfiguracoesUsuariosPage() {
     }
   };
 
-  const handleRefreshInvite = (invitationId) => {
+  const handleRefreshInvite = async (invitationId) => {
     setSaving(true);
     try {
-      const result = refreshInvitation(user, tenantId, invitationId);
-      pushToast('success', 'Convite renovado. Novo link copiado.');
-      try {
-        if (result.invite_url) navigator.clipboard.writeText(result.invite_url);
-      } catch (_) {}
+      const invitation = invitations.find((inv) => inv.id === invitationId);
+      if (!invitation?.email) {
+        throw new Error('Convite não encontrado para reenviar.');
+      }
+      await resendCollaboratorInvite({
+        tenant_id: tenantId,
+        email: invitation.email,
+        collaborator_id: invitation.collaborator_id || null,
+      });
+      pushToast('success', 'Convite reenviado.');
       refresh();
     } catch (err) {
-      showError(err?.message || 'Erro ao renovar convite.');
+      showError(normalizeUiAccessErrorMessage(err?.message || 'Erro ao renovar convite.'));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleToggleAccessClick = (m) => {
+  const handleToggleAccessClick = async (m) => {
     if (m.user_id === user?.id) return;
     const active = isMemberAccessActive(m);
     const nextAccess = !active;
@@ -218,7 +280,7 @@ export default function ConfiguracoesUsuariosPage() {
     }
     setSaving(true);
     try {
-      setMemberSystemAccess(user, tenantId, m.user_id, nextAccess);
+      await setTenantUserSystemAccess(m.id, { tenant_id: tenantId, has_system_access: nextAccess });
       pushToast('success', nextAccess ? 'Acesso ativado.' : 'Acesso desativado.');
       refresh();
     } catch (err) {
@@ -228,27 +290,28 @@ export default function ConfiguracoesUsuariosPage() {
     }
   };
 
-  const handleResendInviteForMember = (m) => {
-    const pending = findPendingInvitationByEmail(tenantId, m.email);
-    if (!pending?.id) {
-      showError('Não há convite pendente para este e-mail.');
-      return;
+  const handleResendInviteForMember = async (m) => {
+    setSaving(true);
+    try {
+      await resendCollaboratorInvite({
+        tenant_id: tenantId,
+        email: m.email,
+        collaborator_id: m.collaborator_id || null,
+      });
+      pushToast('success', 'Convite reenviado por e-mail.');
+      refresh();
+    } catch (err) {
+      showError(normalizeUiAccessErrorMessage(err?.message || 'Não foi possível reenviar o convite.'));
+    } finally {
+      setSaving(false);
     }
-    handleRefreshInvite(pending.id);
   };
 
   const handleRemove = (memberUserId, memberName) => {
     if (!window.confirm(`Remover o vínculo de "${memberName}" com esta clínica? O usuário perderá o acesso mas o cadastro permanece.`)) return;
     setSaving(true);
-    try {
-      removeMember(user, tenantId, memberUserId);
-      pushToast('success', 'Vínculo removido.');
-      refresh();
-    } catch (err) {
-      showError(err?.message || 'Erro ao remover.');
-    } finally {
-      setSaving(false);
-    }
+    showError('Remoção de vínculo ainda não está habilitada no backend canônico.');
+    setSaving(false);
   };
 
   if (!tenantId) {
@@ -296,6 +359,7 @@ export default function ConfiguracoesUsuariosPage() {
                 <tr>
                   <th>Nome</th>
                   <th>E-mail</th>
+                  <th>Colaborador</th>
                   <th>Perfil</th>
                   <th>Status</th>
                   <th>Última atualização</th>
@@ -305,7 +369,7 @@ export default function ConfiguracoesUsuariosPage() {
               <tbody>
                 {members.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="muted" style={{ padding: '1.5rem', textAlign: 'center' }}>
+                    <td colSpan={7} className="muted" style={{ padding: '1.5rem', textAlign: 'center' }}>
                       Nenhum usuário vinculado. Use &quot;Convidar usuário&quot; para começar.
                     </td>
                   </tr>
@@ -313,7 +377,11 @@ export default function ConfiguracoesUsuariosPage() {
                   members.map((m) => {
                     const active = isMemberAccessActive(m);
                     const canManageRow = m.user_id !== user?.id;
-                    const hasPendingInvite = Boolean(findPendingInvitationByEmail(tenantId, m.email));
+                    const invitationForMember = invitations
+                      .filter((inv) => (inv.email || '').trim().toLowerCase() === (m.email || '').trim().toLowerCase())
+                      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0] || null;
+                    const inviteStatus = resolveInvitationStatus(invitationForMember);
+                    const canResendInvite = ['pendente', 'enviado', 'expirado'].includes(inviteStatus);
                     return (
                       <tr key={m.id}>
                         <td>
@@ -323,14 +391,19 @@ export default function ConfiguracoesUsuariosPage() {
                             style={{ fontWeight: 600, padding: 0, textAlign: 'left' }}
                             onClick={() => openMemberModal(m, 'view')}
                           >
-                            {m.name}
+                            {m.full_name || '—'}
                           </button>
                         </td>
-                        <td>{m.email}</td>
-                        <td>{MEMBERSHIP_ROLE_LABELS[m.role] || m.role}</td>
+                        <td>{m.email || '—'}</td>
+                        <td>{m.collaborator_id ? 'Vinculado' : 'Não vinculado'}</td>
+                        <td>{MEMBERSHIP_ROLE_LABELS[m.role] || m.role || '—'}</td>
                         <td>
                           <span className={active ? 'access-badge on' : 'access-badge off'}>
                             {active ? 'Ativo' : 'Inativo'}
+                          </span>
+                          {' '}
+                          <span className={`access-badge ${inviteStatus === 'aceito' ? 'on' : inviteStatus === 'sem_convite' ? 'off' : 'on'}`}>
+                            {inviteStatus === 'sem_convite' ? 'Sem convite' : inviteStatus}
                           </span>
                         </td>
                         <td className="muted" style={{ fontSize: '0.9rem' }}>{formatUpdatedAt(m.updated_at)}</td>
@@ -365,13 +438,13 @@ export default function ConfiguracoesUsuariosPage() {
                                 <Power size={14} /> {active ? 'Desativar' : 'Ativar'}
                               </button>
                             ) : null}
-                            {hasPendingInvite ? (
+                            {canResendInvite ? (
                               <button
                                 type="button"
                                 className="button secondary small"
                                 onClick={() => handleResendInviteForMember(m)}
                                 disabled={saving}
-                                title="Redefinir e copiar novo link do convite"
+                                title="Reenviar convite"
                               >
                                 <Mail size={14} /> Convite
                               </button>
@@ -380,7 +453,7 @@ export default function ConfiguracoesUsuariosPage() {
                               <button
                                 type="button"
                                 className="button secondary small"
-                                onClick={() => handleRemove(m.user_id, m.name)}
+                                onClick={() => handleRemove(m.user_id, m.full_name || m.email || 'Usuário')}
                                 disabled={saving}
                                 title="Remover vínculo com a clínica"
                               >
@@ -400,13 +473,15 @@ export default function ConfiguracoesUsuariosPage() {
 
         {invitations.length > 0 && (
           <div className="card" style={{ marginTop: '1.5rem' }}>
-            <h4 style={{ marginBottom: '0.75rem' }}>Convites pendentes</h4>
+            <h4 style={{ marginBottom: '0.75rem' }}>Convites</h4>
             <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>
               {invitations.map((inv) => (
                 <li key={inv.id} className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
                   <span>{inv.email}</span>
                   <span className="muted">({MEMBERSHIP_ROLE_LABELS[inv.role] || inv.role})</span>
-                  <span className="access-badge on">Pendente</span>
+                  <span className={`access-badge ${resolveInvitationStatus(inv) === 'aceito' ? 'on' : 'off'}`}>
+                    {resolveInvitationStatus(inv)}
+                  </span>
                   <button
                     type="button"
                     className="button secondary small"

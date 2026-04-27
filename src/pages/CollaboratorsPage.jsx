@@ -38,6 +38,7 @@ import { Eye, Pencil, UserCheck, UserX } from 'lucide-react';
 import { NewCollaboratorDialog } from '../components/collaborators/CollaboratorCreateModal.jsx';
 import { CollaboratorRhProfileFields } from '../components/collaborators/CollaboratorRhProfileFields.jsx';
 import { getAllCargosFlat } from '../constants/collaboratorRhCatalog.js';
+import { setCollaboratorSystemAccess } from '../services/collaboratorAccessProvisionService.js';
 
 const topTabs = [
   { value: 'cadastro', label: 'Dados Cadastrais' },
@@ -346,6 +347,30 @@ export default function CollaboratorsPage() {
     setSuccess('Colaborador cadastrado com sucesso.');
   };
 
+  const jumpToExistingCollaborator = useCallback(
+    ({ id, status }) => {
+      if (!id) return;
+      setOpenNewCollaborator(false);
+      const active = isCollaboratorActive({ status });
+      setDirectoryStatusTab(active ? 'ativo' : 'inativo');
+      setSearch('');
+      setFilter({ cargo: '' });
+      setSelectedId(id);
+      setActiveTab('cadastro');
+      setActiveSection('Dados Principais');
+      setEditingSection('');
+      setEditingTab('');
+      setError('');
+      setSuccess(
+        active
+          ? 'Abrimos o cadastro que já usa esse mesmo registro profissional (CRO).'
+          : 'Este colaborador está na lista de Inativos (mesmo CRO). Abrimos a ficha para você editar ou reativar.',
+      );
+      refreshCollaboratorDraft(id);
+    },
+    [refreshCollaboratorDraft],
+  );
+
   const selectCollaborator = (id) => {
     if (editingSection || editingTab) {
       if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
@@ -417,13 +442,19 @@ export default function CollaboratorsPage() {
     setEditingSection('Dados Principais');
   };
 
-  const handleToggleCollaboratorStatus = (collaborator) => {
+  const handleToggleCollaboratorStatus = async (collaborator) => {
     if (!isEditor) return;
     const nextStatus = isCollaboratorActive(collaborator) ? 'inativo' : 'ativo';
     const actionLabel = nextStatus === 'inativo' ? 'desativar' : 'ativar';
     if (!window.confirm(`Deseja ${actionLabel} este colaborador?`)) return;
     try {
       updateCollaborator(user, collaborator.id, { status: nextStatus });
+      if (draft?.access?.userId || draft?.profile?.user_id) {
+        await setCollaboratorSystemAccess(collaborator.id, {
+          tenant_id: user?.tenantId || '',
+          has_system_access: nextStatus === 'ativo',
+        }).catch(() => {});
+      }
       refreshCollaboratorsListOnly();
       if (selectedId === collaborator.id) {
         setDraft((prev) => ({
@@ -1302,6 +1333,8 @@ export default function CollaboratorsPage() {
       <AccessTab
         collaboratorId={selectedId}
         targetUserId={draft.access.userId || draft.profile?.user_id || null}
+        saasTenantId={user?.tenantId || ''}
+        linkedDisplayName={(draft.profile?.nomeCompleto || draft.profile?.apelido || '').trim()}
         currentUser={user}
         canEdit={canEditAcessos}
         onVincularUsuario={canAccess ? () => { setActiveTab('cadastro'); setActiveSection('Dados de Acesso'); startEdit('Dados de Acesso'); } : undefined}
@@ -1631,6 +1664,7 @@ export default function CollaboratorsPage() {
         user={user}
         onOpenChange={setOpenNewCollaborator}
         onSaved={handleCollaboratorCreated}
+        onOpenExistingCollaborator={jumpToExistingCollaborator}
       />
 
       {hoursConflictModal.open && (

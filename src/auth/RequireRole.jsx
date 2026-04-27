@@ -1,21 +1,20 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from './useAuth.js';
-
-const isAllowed = (role, allowedRoles) => {
-  if (!allowedRoles || allowedRoles.length === 0) return true;
-  if (allowedRoles.includes('*')) return true;
-  if (role === 'admin' || role === 'master' || role === 'gerente') return true;
-  return allowedRoles.includes(role);
-};
+import { can as canByPermission } from '../permissions/permissions.js';
+import { resolveRoutePermission } from '../navigation/routePermissionMap.js';
 
 export default function RequireRole({ allowedRoles, children }) {
   const { user } = useAuth();
+  const location = useLocation();
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  const allowed = isAllowed(user.role, allowedRoles);
+  const permission = resolveRoutePermission(location.pathname);
+  const permissionAllowed = permission ? canByPermission(user, permission) : false;
+  const isMaster = user.isMaster === true || String(user?.role || '').toLowerCase() === 'master';
+  const allowed = isMaster ? true : permissionAllowed;
   if (!allowed) {
-    return <Navigate to="/gestao/dashboard" replace />;
+    return <Navigate to="/gestao/dashboard" replace state={{ accessDeniedMessage: 'Você não tem permissão para acessar esta área.' }} />;
   }
   return children;
 }

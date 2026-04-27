@@ -49,6 +49,28 @@ function validateCollaboratorRhOrThrow(collab) {
 const normalizeCargo = (value) => normalizeText(value);
 const CANCELED_APPOINTMENT_STATUSES = new Set(['cancelado', 'desmarcou']);
 
+/** Comparação estável do CRO / registro profissional (evita falso “já cadastrado” por espaços ou maiúsculas). */
+function normalizeRegistroProfissionalKey(value) {
+  return String(value || '').trim().replace(/\s+/g, '').toUpperCase();
+}
+
+function collaboratorStatusLabel(status) {
+  const s = String(status || 'ativo').trim().toLowerCase();
+  return s === 'ativo' ? 'Ativo' : 'Inativo';
+}
+
+function findCollaboratorByRegistroKey(db, registroRaw, excludeCollaboratorId) {
+  const key = normalizeRegistroProfissionalKey(registroRaw);
+  if (!key) return null;
+  return (
+    (db.collaborators || []).find(
+      (item) =>
+        item.id !== excludeCollaboratorId
+        && normalizeRegistroProfissionalKey(item.registroProfissional) === key,
+    ) || null
+  );
+}
+
 const timeToMinutes = (time) => {
   if (!/^\d{2}:\d{2}$/.test(time || '')) return null;
   const [hour, minute] = time.split(':').map(Number);
@@ -217,16 +239,27 @@ const ensureUnique = (db, { cpf, email, registro, excludeCollaboratorId } = {}) 
     if (exists) throw new Error('CPF já cadastrado.');
   }
   if (email) {
+    const emailNorm = String(email || '').trim().toLowerCase();
     const exists = db.collaborators.some(
-      (item) => item.email === email && item.id !== excludeCollaboratorId
+      (item) => String(item.email || '').trim().toLowerCase() === emailNorm && item.id !== excludeCollaboratorId
     );
     if (exists) throw new Error('E-mail já cadastrado.');
   }
   if (registro) {
-    const exists = db.collaborators.some(
-      (item) => item.registroProfissional === registro && item.id !== excludeCollaboratorId
-    );
-    if (exists) throw new Error('Registro profissional já cadastrado.');
+    const existing = findCollaboratorByRegistroKey(db, registro, excludeCollaboratorId);
+    if (existing) {
+      const nome = (existing.nomeCompleto || existing.apelido || 'outro colaborador').trim();
+      const situacao = collaboratorStatusLabel(existing.status);
+      const err = new Error(
+        `Este número de registro profissional (CRO) já está cadastrado para "${nome}" (situação: ${situacao}). `
+        + 'Se for a mesma pessoa, abra o cadastro existente. Se estiver inativa, veja na aba Inativos.',
+      );
+      err.code = 'DUPLICATE_REGISTRO_PROFISSIONAL';
+      err.existingCollaboratorId = existing.id;
+      err.existingCollaboratorName = nome;
+      err.existingStatus = existing.status || 'ativo';
+      throw err;
+    }
   }
 };
 
@@ -293,7 +326,7 @@ export const createCollaborator = (user, payload) => {
     tipoVinculo: normalizeText(payload.tipoVinculo),
     setor: normalizeText(payload.setor),
     especialidades: espec,
-    registroProfissional: normalizeText(payload.registroProfissional),
+    registroProfissional: normalizeRegistroProfissionalKey(payload.registroProfissional),
     email: normalizeText(payload.email),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -348,7 +381,9 @@ export const updateCollaborator = (user, collaboratorId, payload) => {
       tipoVinculo: normalizeText(payload.tipoVinculo ?? prev.tipoVinculo),
       setor: normalizeText(payload.setor ?? prev.setor),
       especialidades: mergedEspecialidades,
-      registroProfissional: normalizeText(payload.registroProfissional ?? prev.registroProfissional),
+      registroProfissional: normalizeRegistroProfissionalKey(
+        payload.registroProfissional !== undefined ? payload.registroProfissional : prev.registroProfissional,
+      ),
       email: normalizeText(payload.email ?? prev.email),
       fotoUrl: payload.fotoUrl !== undefined ? payload.fotoUrl : prev.fotoUrl,
       status: payload.status !== undefined ? payload.status : prev.status,

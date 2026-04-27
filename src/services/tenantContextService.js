@@ -5,6 +5,7 @@ import {
   isModuleEnabled,
   normalizeModuleKey,
 } from '../tenant/tenantAccess.js';
+import { emitStabilityLog } from './stabilityLogService.js';
 
 function parseJsonSafe(value, fallback = {}) {
   if (!value) return fallback;
@@ -74,8 +75,7 @@ function isLikelyNetworkFetchFailure(error) {
   );
 }
 
-async function runLoggedQuery(label, hypothesisId, queryFactory, dataBuilder = null, runId = 'timeout-debug') {
-  const startedAt = Date.now();
+async function runQuery(queryFactory) {
   try {
     const result = await queryFactory();
     return result;
@@ -138,6 +138,11 @@ async function fetchTenantContextViaAdminApiAttempt() {
     json = {};
   }
   if (!response.ok) {
+    emitStabilityLog('BACKEND_FAILED', {
+      status: response.status,
+      url: primaryUrl,
+      backendBaseConfigured: Boolean(getAdminApiBaseUrl()),
+    });
     if (response.status === 401) {
       throw new Error(
         json?.error
@@ -160,6 +165,10 @@ async function fetchTenantContextViaAdminApiAttempt() {
     }
     throw new Error(json?.error || `Erro HTTP ${response.status} ao carregar contexto da clínica.`);
   }
+  emitStabilityLog('BACKEND_OK', {
+    url: primaryUrl,
+    backendBaseConfigured: Boolean(getAdminApiBaseUrl()),
+  });
   return json;
 }
 
@@ -276,18 +285,7 @@ export async function getTenantContext(tenantId) {
 
   let apiContext;
   try {
-    apiContext = await runLoggedQuery(
-      'admin_api_tenant_context',
-      'H12',
-      () => fetchTenantContextViaAdminApi(),
-      (result) => ({
-        tenantId: String(result?.tenant?.id || result?.access?.tenantId || ''),
-        tenantStatus: String(result?.tenant?.status || ''),
-        warningCount: Array.isArray(result?.warnings) ? result.warnings.length : 0,
-        moduleCount: result?.modules && typeof result.modules === 'object' ? Object.keys(result.modules).length : 0,
-      }),
-      'post-fix',
-    );
+    apiContext = await runQuery(() => fetchTenantContextViaAdminApi());
   } catch (err) {
     if (isDevAdminApiUnreachable(err)) {
       apiContext = null;
@@ -296,6 +294,10 @@ export async function getTenantContext(tenantId) {
     }
   }
   if (apiContext?.tenant) {
+    emitStabilityLog('TENANT_CONTEXT_OK', {
+      source: 'backend',
+      tenantId: String(apiContext?.tenant?.id || tenantId),
+    });
     return {
       tenant: apiContext.tenant || null,
       modules: apiContext.modules || createDefaultModuleMap(),
@@ -317,42 +319,12 @@ export async function getTenantContext(tenantId) {
     subscriptionResult,
     limitsRow,
   ] = await Promise.all([
-    runLoggedQuery(
-      'tenant',
-      'H7',
-      () => client.from('tenants').select('*').eq('id', tenantId).maybeSingle(),
-      (result) => ({ hasError: Boolean(result?.error), hasData: Boolean(result?.data), tenantId: String(tenantId || '') }),
-    ),
-    runLoggedQuery(
-      'tenant_modules',
-      'H7',
-      () => client.from('tenant_modules').select('*').eq('tenant_id', tenantId),
-      (result) => ({ hasError: Boolean(result?.error), rowCount: Array.isArray(result?.data) ? result.data.length : 0, tenantId: String(tenantId || '') }),
-    ),
-    runLoggedQuery(
-      'feature_flags_global',
-      'H8',
-      () => client.from('feature_flags').select('*').eq('scope_type', 'global'),
-      (result) => ({ hasError: Boolean(result?.error), rowCount: Array.isArray(result?.data) ? result.data.length : 0 }),
-    ),
-    runLoggedQuery(
-      'feature_flags_tenant',
-      'H8',
-      () => client.from('feature_flags').select('*').eq('scope_type', 'tenant').eq('scope_ref', tenantId),
-      (result) => ({ hasError: Boolean(result?.error), rowCount: Array.isArray(result?.data) ? result.data.length : 0, tenantId: String(tenantId || '') }),
-    ),
-    runLoggedQuery(
-      'tenant_subscriptions',
-      'H9',
-      () => client.from('tenant_subscriptions').select('*').eq('tenant_id', tenantId).order('updated_at', { ascending: false }).limit(1).maybeSingle(),
-      (result) => ({ hasError: Boolean(result?.error), hasData: Boolean(result?.data), tenantId: String(tenantId || '') }),
-    ),
-    runLoggedQuery(
-      'tenant_limits',
-      'H9',
-      () => fetchOptionalTenantLimits(tenantId),
-      (result) => ({ hasData: Boolean(result), tenantId: String(tenantId || '') }),
-    ),
+    runQuery(() => client.from('tenants').select('*').eq('id', tenantId).maybeSingle()),
+    runQuery(() => client.from('tenant_modules').select('*').eq('tenant_id', tenantId)),
+    runQuery(() => client.from('feature_flags').select('*').eq('scope_type', 'global')),
+    runQuery(() => client.from('feature_flags').select('*').eq('scope_type', 'tenant').eq('scope_ref', tenantId)),
+    runQuery(() => client.from('tenant_subscriptions').select('*').eq('tenant_id', tenantId).order('updated_at', { ascending: false }).limit(1).maybeSingle()),
+    runQuery(() => fetchOptionalTenantLimits(tenantId)),
   ]);
 
   if (tenantResult.error) throw tenantResult.error;

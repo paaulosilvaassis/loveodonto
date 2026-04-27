@@ -28,6 +28,7 @@ import { loadDbAsync } from '../db/index.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
 import { getTicketsByUser } from '../services/supportTicketService.js';
 import { getNomeUsuario } from '../services/userProfileService.js';
+import { can as canByPermission } from '../permissions/permissions.js';
 import SupportIcon from '../components/support/SupportIcon.jsx';
 
 function getSaudacaoAtual() {
@@ -258,6 +259,20 @@ export default function DashboardPage() {
     },
   ];
 
+  const quickActionPermissionMap = {
+    pacientes: 'patients:view',
+    agenda: 'agenda:view',
+    odontograma: 'prontuario_atendimento:view',
+    orcamentos: 'pipeline_crm:view',
+    financeiro: 'financeiro_relatorios:view',
+    relatorios: 'relatorios:view',
+  };
+  const visibleQuickActions = quickActions.filter((action) => {
+    const permission = quickActionPermissionMap[action.id];
+    if (!permission) return true;
+    return canByPermission(currentUser, permission);
+  });
+
   // KPIs principais conforme requisito
   const kpiCards = [
     {
@@ -351,7 +366,7 @@ export default function DashboardPage() {
       <section className="app-dashboard-section">
         <h2 className="app-dashboard-section-title">Ações Rápidas</h2>
         <div className="app-dashboard-actions-grid">
-          {quickActions.map((action) => {
+          {visibleQuickActions.map((action) => {
             const Icon = action.icon;
             return (
               <button

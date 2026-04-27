@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Button from '../Button.jsx';
 import { CollaboratorRhProfileFields } from './CollaboratorRhProfileFields.jsx';
 import { addCollaboratorPhone, createCollaborator } from '../../services/collaboratorService.js';
+import { provisionCollaboratorSystemAccess } from '../../services/collaboratorAccessProvisionService.js';
 import { onlyDigits, isPhoneValid } from '../../utils/validators.js';
 import {
   ModalBody,
@@ -33,14 +34,18 @@ const defaultForm = () => ({
   phoneTipo: 'Celular',
   phoneDdd: '',
   phoneNumero: '',
+  createSystemAccess: false,
+  accessProfileRole: 'atendimento',
+  sendInviteEmail: true,
 });
 
-export default function CollaboratorCreateModal({ open, user, onOpenChange, onSaved }) {
+export default function CollaboratorCreateModal({ open, user, onOpenChange, onSaved, onOpenExistingCollaborator }) {
   const formBodyRef = useRef(null);
   const [form, setForm] = useState(defaultForm);
   const [dirty, setDirty] = useState(false);
   const [localError, setLocalError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [duplicateRegistro, setDuplicateRegistro] = useState(null);
 
   const tryClose = useCallback(() => {
     if (dirty) {
@@ -56,6 +61,7 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
     setDirty(false);
     setLocalError('');
     setSubmitting(false);
+    setDuplicateRegistro(null);
   }, [open]);
 
   useEffect(() => {
@@ -85,6 +91,7 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
   const handleSubmit = (event) => {
     event.preventDefault();
     setLocalError('');
+    setDuplicateRegistro(null);
     const nomeCompleto = form.nomeCompleto.trim();
     const apelidoRaw = form.apelido.trim();
     const apelido =
@@ -100,6 +107,14 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
     }
     if (!apelido) {
       setLocalError('Informe um apelido ou um nome completo com pelo menos uma palavra.');
+      return;
+    }
+    if (form.createSystemAccess && !form.email.trim()) {
+      setLocalError('E-mail é obrigatório para criar acesso ao sistema.');
+      return;
+    }
+    if (form.createSystemAccess && !form.accessProfileRole.trim()) {
+      setLocalError('Perfil de acesso é obrigatório quando o acesso ao sistema está habilitado.');
       return;
     }
 
@@ -135,6 +150,21 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
           ddd: phone.ddd,
           numero: phone.numero,
           principal: true,
+        });
+      }
+      if (form.createSystemAccess) {
+        provisionCollaboratorSystemAccess({
+          tenant_id: user?.tenantId || '',
+          collaborator_id: created.id,
+          collaborator_full_name: nomeCompleto,
+          create_system_access: true,
+          email: form.email.trim().toLowerCase(),
+          profile_role: form.accessProfileRole,
+          send_invite: form.sendInviteEmail,
+        }).catch((err) => {
+          if (import.meta.env?.DEV) {
+            console.debug('[CollaboratorCreateModal] falha ao provisionar acesso no backend', err);
+          }
         });
       }
       setDirty(false);
@@ -184,6 +214,22 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
             {localError ? (
               <div className="collaborator-create-modal__alert" role="alert">
                 {localError}
+                {duplicateRegistro?.id && onOpenExistingCollaborator ? (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        onOpenExistingCollaborator({
+                          id: duplicateRegistro.id,
+                          status: duplicateRegistro.status,
+                        });
+                      }}
+                    >
+                      Ver cadastro existente
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -232,6 +278,50 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
                       placeholder="Somente números"
                     />
                   </div>
+                </div>
+              </section>
+
+              <section className="collaborator-create-modal__section">
+                <h3 className="collaborator-create-modal__section-title">Acesso ao sistema</h3>
+                <p className="collaborator-create-modal__section-description">
+                  Defina se este colaborador receberá acesso ao Love Odonto agora.
+                </p>
+                <div className="stack" style={{ gap: '0.75rem' }}>
+                  <label className="flex" style={{ gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={form.createSystemAccess}
+                      onChange={(e) => patchProfile({ createSystemAccess: e.target.checked })}
+                    />
+                    <span>Criar acesso para este colaborador</span>
+                  </label>
+                  {form.createSystemAccess ? (
+                    <>
+                      <div className="collaborator-create-modal__field">
+                        <label htmlFor="new-collab-access-role">Perfil de acesso</label>
+                        <select
+                          id="new-collab-access-role"
+                          className="collaborator-create-modal__control"
+                          value={form.accessProfileRole}
+                          onChange={(e) => patchProfile({ accessProfileRole: e.target.value })}
+                        >
+                          <option value="atendimento">Atendimento</option>
+                          <option value="dentista">Dentista</option>
+                          <option value="financeiro">Financeiro</option>
+                          <option value="gerente">Gerente</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      </div>
+                      <label className="flex" style={{ gap: '0.5rem', alignItems: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={form.sendInviteEmail}
+                          onChange={(e) => patchProfile({ sendInviteEmail: e.target.checked })}
+                        />
+                        <span>Enviar convite por e-mail</span>
+                      </label>
+                    </>
+                  ) : null}
                 </div>
               </section>
             </div>

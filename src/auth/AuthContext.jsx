@@ -13,6 +13,8 @@ import { LOGOUT_REASON_KEY } from './logoutReason.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
 import { AuthContext } from './authContext.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
+import { reconcileOwnInvitationAcceptance } from '../services/collaboratorAccessProvisionService.js';
+import { emitStabilityLog } from '../services/stabilityLogService.js';
 
 /** Evita RequireAuth preso em "Carregando…" se getSession/RPC não retornarem. */
 const AUTH_SAAS_HYDRATE_TIMEOUT_MS = 32000;
@@ -67,6 +69,11 @@ async function resolveSaasUserFromSession(session) {
   if (!persistedSession?.user?.id) return null;
   const bootstrap = await fetchSaasAccessBootstrap(supabasePlatformClient);
   if (!bootstrap?.tenantId) return null;
+  const rawOverrides = persistedSession.user?.app_metadata?.permission_overrides;
+  let permissionOverrides = {};
+  if (rawOverrides && typeof rawOverrides === 'object' && !Array.isArray(rawOverrides)) {
+    permissionOverrides = rawOverrides;
+  }
   return {
     id: persistedSession.user.id,
     name: persistedSession.user.user_metadata?.full_name || persistedSession.user.email || 'Usuário',
@@ -76,6 +83,7 @@ async function resolveSaasUserFromSession(session) {
     isMaster: bootstrap.role === 'admin',
     tenantId: bootstrap.tenantId,
     authMode: 'saas',
+    permissionOverrides,
   };
 }
 
@@ -131,6 +139,7 @@ export const AuthProvider = ({ children }) => {
               localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
               if (!cancelled) {
                 try { ensureSaasUserInLocalDb(resolved); } catch (_) { /* non-blocking */ }
+                reconcileOwnInvitationAcceptance().catch(() => {});
                 setUser(resolved);
                 setSession((prev) => {
                   if (
@@ -197,6 +206,7 @@ export const AuthProvider = ({ children }) => {
         try { localStorage.removeItem('appgestaoodonto-platform-auth'); } catch (_) { /* ignore */ }
         setSession(null);
         setUser(null);
+        emitStabilityLog('AUTH_FAILED', { reason: 'SIGNED_OUT_EVENT' });
         return;
       }
 
@@ -220,6 +230,7 @@ export const AuthProvider = ({ children }) => {
         };
         localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
         try { ensureSaasUserInLocalDb(resolved); } catch (_) { /* non-blocking */ }
+        reconcileOwnInvitationAcceptance().catch(() => {});
         setSession(nextStored);
         setUser(resolved);
       } catch {
@@ -251,8 +262,10 @@ export const AuthProvider = ({ children }) => {
       };
       localStorage.setItem(SESSION_KEY, JSON.stringify(next));
       try { ensureSaasUserInLocalDb(resolved); } catch (_) { /* non-blocking */ }
+      reconcileOwnInvitationAcceptance().catch(() => {});
       setSession(next);
       setUser(resolved);
+      emitStabilityLog('AUTH_OK', { mode: 'saas', tenantId: resolved.tenantId });
       return resolved;
     }
     const db = loadDb();
@@ -277,6 +290,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem(SESSION_KEY, JSON.stringify(next));
     setSession(next);
     logAction('auth:login', { userId: baseUser.id, tenantId: tenant.id });
+    emitStabilityLog('AUTH_OK', { mode: 'local', tenantId: tenant.id });
     return { ...baseUser, role: membership.role, has_system_access: membership.has_system_access, isMaster: membership.role === ROLE_MASTER };
   };
 
@@ -288,6 +302,7 @@ export const AuthProvider = ({ children }) => {
     }
     setSession(null);
     setUser(null);
+    emitStabilityLog('AUTH_FAILED', { reason: 'LOGOUT_MANUAL' });
   };
 
   const logoutWithReason = (reason) => {

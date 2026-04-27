@@ -560,8 +560,9 @@ a {
   display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  gap: 2px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
   padding: 4px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: var(--spacing-xs);
@@ -9433,6 +9434,8 @@ a.button {
 .access-tab-sector-actions {
   display: flex;
   gap: var(--spacing-xs);
+  margin-left: auto;
+  align-items: center;
 }
 
 .access-tab-sector-btn {
@@ -9468,6 +9471,85 @@ a.button {
   transition: max-height 0.35s ease-in;
 }
 
+.access-tab-matrix-wrap {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0 0.5rem;
+}
+
+.access-tab-matrix-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  background: var(--color-bg-card);
+}
+
+.access-tab-matrix-table th,
+.access-tab-matrix-table td {
+  border-bottom: 1px solid var(--color-border-light);
+  border-right: 1px solid var(--color-border-light);
+  padding: 0.5rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+.access-tab-matrix-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--color-bg-subtle, #f3f4f6);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.access-tab-matrix-table tr > *:first-child {
+  border-left: 1px solid var(--color-border-light);
+}
+
+.access-tab-matrix-table thead tr:first-child > * {
+  border-top: 1px solid var(--color-border-light);
+}
+
+.access-tab-matrix-base-col,
+.access-tab-matrix-base-cell {
+  min-width: 300px;
+  max-width: 300px;
+  text-align: left !important;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.access-tab-matrix-action-col,
+.access-tab-matrix-check-cell {
+  width: 82px;
+  min-width: 82px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.access-tab-matrix-check-cell input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.access-tab-matrix-check-cell input[type='checkbox']:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.access-tab-matrix-table tbody tr:hover {
+  background: color-mix(in srgb, var(--color-primary) 4%, transparent);
+}
+
 .access-tab-sector-content .access-tab-grid {
   padding: 0.75rem 1rem 1rem 2.5rem;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -9493,6 +9575,24 @@ a.button {
   text-align: center;
   color: var(--color-text-muted);
   font-size: 0.9375rem;
+}
+
+@media (max-width: 1100px) {
+  .access-tab-sector-header {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  .access-tab-sector-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .access-tab-matrix-base-col,
+  .access-tab-matrix-base-cell {
+    min-width: 260px;
+    max-width: 260px;
+  }
 }
 
 .access-tab-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }

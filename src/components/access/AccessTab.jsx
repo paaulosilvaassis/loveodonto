@@ -4,13 +4,14 @@ import {
   getUserAccess,
   getRoleDefaultPermissionIds,
   updateUserAccess,
+  ensureLocalUserForSaasAccess,
   canManageAccess,
   ROLES,
   ROLE_LABELS,
   ROLE_ADMIN,
 } from '../../services/accessService.js';
 import { getUserAuthByCollaborator, saveUserAuth } from '../../services/userAuthService.js';
-import { MODULES_SPEC, ACTION_LABELS } from '../../permissions/catalog.js';
+import { MODULES_SPEC, ACTION_KEYS, ACTION_LABELS } from '../../permissions/catalog.js';
 import { Field } from '../Field.jsx';
 import Button from '../Button.jsx';
 import {
@@ -21,41 +22,25 @@ import {
   CheckSquare,
   Square,
   Info,
+  Mail,
 } from 'lucide-react';
+import { getDefaultTenant } from '../../services/tenantService.js';
+import { findPendingInvitationByEmail, listInvitations, refreshInvitation } from '../../services/invitationService.js';
+import { isSaasModeEnabled } from '../../services/saasAuthService.js';
+import { saveCollaboratorAccessBundle } from '../../services/collaboratorAccessProvisionService.js';
 
 const MIN_PASSWORD_LENGTH = 8;
+const FIXED_MATRIX_ACTIONS = ['view', 'create', 'edit', 'delete', 'export', 'send', 'cancel'];
 
-/**
- * Mapeamento de setores para agrupar permissões (accordion).
- * Ajustado aos módulos reais do app conforme MODULES_SPEC.
- */
-const SECTORS = [
-  { key: 'dashboard', label: 'Dashboard', moduleKeys: ['dashboard'] },
-  { key: 'patients', label: 'Pacientes', moduleKeys: ['patients'] },
-  {
-    key: 'prontuario',
-    label: 'Prontuário',
-    moduleKeys: [
-      'prontuario_atendimento',
-      'prontuario_planejamento',
-      'prontuario_procedimentos',
-      'prontuario_orcamentos',
-      'prontuario_contratos',
-      'prontuario_documentos',
-      'prontuario_dados_clinicos',
-    ],
-  },
-  { key: 'agenda', label: 'Agenda', moduleKeys: ['agenda'] },
-  {
-    key: 'financeiro',
-    label: 'Financeiro',
-    moduleKeys: ['financeiro_contas_receber', 'financeiro_contas_pagar', 'financeiro_caixa', 'financeiro_relatorios'],
-  },
-  { key: 'crm', label: 'CRM', moduleKeys: ['pipeline_crm', 'comercial'] },
-  { key: 'estoque', label: 'Estoque', moduleKeys: ['estoque'] },
-  { key: 'administracao', label: 'Administração', moduleKeys: ['equipe', 'configuracoes'] },
-  { key: 'relatorios', label: 'Relatórios', moduleKeys: ['relatorios'] },
-];
+function resolveInvitationStatus(invitation) {
+  if (!invitation) return 'sem convite';
+  if (invitation.accepted_at || invitation.status === 'accepted') return 'aceito';
+  if (invitation.status === 'sent') return 'enviado';
+  if (invitation.expires_at && invitation.expires_at <= new Date().toISOString()) return 'expirado';
+  return 'pendente';
+}
+
+const DEFAULT_EXPANDED_SECTORS = MODULES_SPEC.slice(0, 3).map((sector) => sector.key);
 
 /**
  * Aba "Acessos" da Ficha do Colaborador: toggle acesso, perfil, permissões granulares, credenciais.
@@ -64,6 +49,8 @@ const SECTORS = [
 export default function AccessTab({
   collaboratorId,
   targetUserId,
+  saasTenantId,
+  linkedDisplayName,
   currentUser,
   canEdit,
   onSaveSuccess,
@@ -77,7 +64,7 @@ export default function AccessTab({
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState(null);
-  const [expandedSectors, setExpandedSectors] = useState(new Set(['dashboard', 'patients', 'prontuario']));
+  const [expandedSectors, setExpandedSectors] = useState(new Set(DEFAULT_EXPANDED_SECTORS));
 
   const [credEmail, setCredEmail] = useState('');
   const [credPassword, setCredPassword] = useState('');
@@ -132,9 +119,11 @@ export default function AccessTab({
   const setPermission = (permId, allowed) => {
     const base = roleDefaultIds.has(permId);
     if (allowed === base) {
-      const next = { ...overrides };
-      delete next[permId];
-      setOverrides(next);
+      setOverrides((prev) => {
+        const next = { ...prev };
+        delete next[permId];
+        return next;
+      });
     } else {
       setOverrides((prev) => ({ ...prev, [permId]: allowed }));
     }
@@ -152,18 +141,39 @@ export default function AccessTab({
 
   const sectorsWithPerms = useMemo(() => {
     const searchLower = (search || '').toLowerCase().trim();
-    return SECTORS.map((sector) => {
-      const allPerms = catalog.filter((p) => sector.moduleKeys.includes(p.module_key));
-      const perms = searchLower
-        ? allPerms.filter(
-            (p) =>
-              sector.label.toLowerCase().includes(searchLower) ||
-              p.description?.toLowerCase().includes(searchLower) ||
-              ACTION_LABELS[p.action_key]?.toLowerCase().includes(searchLower)
-          )
-        : allPerms;
-      return { ...sector, perms, allPerms };
-    }).filter((s) => s.perms.length > 0);
+    return MODULES_SPEC.map((sector) => {
+      const baseRows = (sector.children || []).map((base) => {
+        const perms = catalog.filter((p) => p.module_key === base.key);
+        const permByAction = perms.reduce((acc, perm) => {
+          acc[perm.action_key] = perm;
+          return acc;
+        }, {});
+        return {
+          key: base.key,
+          label: base.label,
+          actions: base.actions || [],
+          perms,
+          permByAction,
+        };
+      });
+      const filteredRows = searchLower
+        ? baseRows.filter((row) => {
+            if (row.label.toLowerCase().includes(searchLower)) return true;
+            if (sector.label.toLowerCase().includes(searchLower)) return true;
+            return row.actions.some((action) => (ACTION_LABELS[action] || action).toLowerCase().includes(searchLower));
+          })
+        : baseRows;
+      const allPerms = baseRows.flatMap((row) => row.perms);
+      const filteredPerms = filteredRows.flatMap((row) => row.perms);
+      return {
+        key: sector.key,
+        label: sector.label,
+        rows: filteredRows,
+        allRows: baseRows,
+        allPerms,
+        perms: filteredPerms,
+      };
+    }).filter((sector) => sector.rows.length > 0);
   }, [catalog, search]);
 
   const selectAllInSector = (sectorKey) => {
@@ -196,9 +206,9 @@ export default function AccessTab({
   };
 
   const sectorCount = (sectorKey) => {
-    const sector = SECTORS.find((s) => s.key === sectorKey);
+    const sector = sectorsWithPerms.find((s) => s.key === sectorKey);
     if (!sector) return { selected: 0, total: 0 };
-    const perms = catalog.filter((p) => sector.moduleKeys.includes(p.module_key));
+    const perms = sector.allPerms || [];
     const selected = perms.filter((p) => effectivePermission(p.id)).length;
     return { selected, total: perms.length };
   };
@@ -225,6 +235,30 @@ export default function AccessTab({
     }
     setSaving(true);
     try {
+      if (isSaasModeEnabled()) {
+        if (!saasTenantId) {
+          throw new Error('Clínica não identificada para salvar no servidor. Faça login novamente.');
+        }
+        await saveCollaboratorAccessBundle({
+          tenant_id: saasTenantId,
+          collaborator_id: collaboratorId || '',
+          target_user_id: targetUserId,
+          email: credEmail.trim().toLowerCase(),
+          password: credPassword || '',
+          role: role || 'atendimento',
+          has_system_access: hasSystemAccess,
+          permission_overrides: overrides || {},
+        });
+      }
+      if (isSaasModeEnabled() && !getUserAccess(targetUserId)) {
+        ensureLocalUserForSaasAccess(targetUserId, {
+          email: (credEmail || '').trim().toLowerCase(),
+          role: role || 'atendimento',
+          has_system_access: hasSystemAccess,
+          displayName: (linkedDisplayName || '').trim(),
+          tenantId: saasTenantId || '',
+        });
+      }
       updateUserAccess(currentUser, targetUserId, {
         has_system_access: hasSystemAccess,
         role: role || 'atendimento',
@@ -285,9 +319,35 @@ export default function AccessTab({
   const roleOptions = ROLES.filter((r) => r !== ROLE_ADMIN);
   const canManage = canManageAccess(currentUser);
   const readOnly = !canEdit || !canManage;
+  const tenantId = getDefaultTenant()?.id || '';
+  const inviteTargetEmail = (credEmail || '').trim().toLowerCase();
+  const invitationForEmail = useMemo(() => {
+    if (!tenantId || !inviteTargetEmail) return null;
+    const invitations = listInvitations(tenantId, false)
+      .filter((inv) => (inv.email || '').trim().toLowerCase() === inviteTargetEmail)
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+    return invitations[0] || null;
+  }, [tenantId, inviteTargetEmail]);
+  const inviteStatus = resolveInvitationStatus(invitationForEmail);
   const disabledTooltip = readOnly
     ? 'Você não tem permissão para editar acessos. Entre em contato com o administrador.'
     : null;
+  const canResendInvite = Boolean(tenantId && inviteTargetEmail && ['pendente', 'enviado', 'expirado'].includes(inviteStatus));
+
+  const handleResendInvite = () => {
+    if (!canResendInvite || !currentUser) return;
+    try {
+      const pending = findPendingInvitationByEmail(tenantId, inviteTargetEmail);
+      if (!pending?.id) {
+        onSaveError?.('Não há convite pendente para este usuário.');
+        return;
+      }
+      refreshInvitation(currentUser, tenantId, pending.id);
+      onSaveSuccess?.();
+    } catch (err) {
+      onSaveError?.(err?.message || 'Erro ao reenviar convite.');
+    }
+  };
 
   return (
     <div className="access-tab access-tab-v2">
@@ -350,6 +410,14 @@ export default function AccessTab({
             />
           </div>
           <div className="access-tab-header-actions">
+            <span className={`access-badge ${inviteStatus === 'aceito' ? 'on' : 'off'}`}>
+              Convite: {inviteStatus}
+            </span>
+            {canResendInvite ? (
+              <Button variant="ghost" icon={Mail} onClick={handleResendInvite} disabled={readOnly || saving}>
+                Reenviar convite
+              </Button>
+            ) : null}
             <Button variant="ghost" onClick={handleRevert} disabled={readOnly || !dirty} title={disabledTooltip}>
               Cancelar
             </Button>
@@ -476,7 +544,6 @@ export default function AccessTab({
         {sectorsWithPerms.map((sector) => {
           const { selected, total } = sectorCount(sector.key);
           const isExpanded = expandedSectors.has(sector.key);
-          const searchLower = (search || '').toLowerCase().trim();
 
           return (
             <div key={sector.key} className="access-tab-sector-card">
@@ -528,31 +595,48 @@ export default function AccessTab({
                 aria-labelledby={`access-sector-btn-${sector.key}`}
                 hidden={!isExpanded}
               >
-                <div className="access-tab-grid">
-                  {sector.perms.map((perm) => {
-                    const actionLabel = ACTION_LABELS[perm.action_key];
-                    const searchMatch =
-                      searchLower &&
-                      (actionLabel?.toLowerCase().includes(searchLower) ||
-                        perm.description?.toLowerCase().includes(searchLower));
-                    return (
-                      <label
-                        key={perm.id}
-                        className={`access-tab-perm-row ${searchMatch ? 'access-tab-perm-highlight' : ''}`}
-                        title={perm.description}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={effectivePermission(perm.id)}
-                          onChange={(e) => setPermission(perm.id, e.target.checked)}
-                          disabled={readOnly}
-                          aria-label={perm.description}
-                          title={disabledTooltip}
-                        />
-                        <span className="access-tab-perm-label">{actionLabel || perm.action_key}</span>
-                      </label>
-                    );
-                  })}
+                <div className="access-tab-matrix-wrap">
+                  <table className="access-tab-matrix-table">
+                    <thead>
+                      <tr>
+                        <th scope="col" className="access-tab-matrix-base-col">Base / Função</th>
+                        {FIXED_MATRIX_ACTIONS.map((actionKey) => (
+                          <th key={`${sector.key}-${actionKey}`} scope="col" className="access-tab-matrix-action-col">
+                            {ACTION_LABELS[actionKey] || actionKey}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sector.rows.map((row) => (
+                        <tr key={`${sector.key}-${row.key}`}>
+                          <th scope="row" className="access-tab-matrix-base-cell">
+                            {row.label}
+                          </th>
+                          {FIXED_MATRIX_ACTIONS.map((actionKey) => {
+                            const perm = row.permByAction[actionKey];
+                            const checkboxId = `perm-${row.key}-${actionKey}`;
+                            return (
+                              <td key={`${row.key}-${actionKey}`} className="access-tab-matrix-check-cell">
+                                <input
+                                  id={checkboxId}
+                                  type="checkbox"
+                                  checked={perm ? effectivePermission(perm.id) : false}
+                                  onChange={(e) => {
+                                    if (!perm) return;
+                                    setPermission(perm.id, e.target.checked);
+                                  }}
+                                  disabled={readOnly || !perm}
+                                  aria-label={`${row.label} - ${ACTION_LABELS[actionKey] || actionKey}`}
+                                  title={disabledTooltip || perm?.description || `${ACTION_LABELS[actionKey] || actionKey}: ação não aplicável para esta base`}
+                                />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

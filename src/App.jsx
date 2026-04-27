@@ -21,6 +21,7 @@ import PlatformProvidersPage from './pages/platform/PlatformProvidersPage.jsx';
 import PlatformTeamPage from './pages/platform/PlatformTeamPage.jsx';
 
 const ProtectedApp = lazy(() => import('./ProtectedApp.jsx'));
+const StabilityHealthPage = lazy(() => import('./pages/StabilityHealthPage.jsx'));
 const DevMigratePage = lazy(() => import('./pages/DevMigratePage.jsx'));
 const DevResetPage = lazy(() => import('./pages/DevResetPage.jsx'));
 const DevSeedPage = lazy(() => import('./pages/DevSeedPage.jsx'));
@@ -62,6 +63,16 @@ export default function App() {
               <Route path="providers" element={<PlatformProvidersPage />} />
               <Route path="team" element={<PlatformTeamPage />} />
             </Route>
+            <Route
+              path="/stability/health"
+              element={(
+                <RequireAuth>
+                  <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>Carregando…</div>}>
+                    <StabilityHealthPage />
+                  </Suspense>
+                </RequireAuth>
+              )}
+            />
             <Route
               path="/*"
               element={

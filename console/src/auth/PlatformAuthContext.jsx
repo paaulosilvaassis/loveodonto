@@ -414,9 +414,6 @@ export function PlatformAuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const emailNormalized = String(email || '').trim().toLowerCase();
     authLog('login:started', { email: emailNormalized });
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0c61a'},body:JSON.stringify({sessionId:'e0c61a',runId:'console-login',hypothesisId:'D1',location:'PlatformAuthContext.jsx:login:start',message:'Console login started',data:{emailMasked:emailNormalized.replace(/^(.{2}).*(@.*)$/,'$1***$2')},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (configError || !supabaseConsole) {
       throw new Error(configError || 'Supabase da Console não está configurado.');
     }
@@ -518,9 +515,6 @@ export function PlatformAuthProvider({ children }) {
     }
 
     const { data, error } = sdkResult;
-    // #region agent log
-    fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0c61a'},body:JSON.stringify({sessionId:'e0c61a',runId:'console-login',hypothesisId:'D2',location:'PlatformAuthContext.jsx:login:authResult',message:'Supabase auth result',data:{hasError:Boolean(error),errorCode:error?.code||null,errorStatus:error?.status||null,errorMsg:String(error?.message||''),hasUser:Boolean(data?.user),userIdPrefix:data?.user?.id?.slice(0,8)||null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     if (error) {
       authLog('login:supabaseError', { message: error.message });
       const invalidCreds =
@@ -531,17 +525,11 @@ export function PlatformAuthProvider({ children }) {
         && invalidCreds
         && emailNormalized === 'admin@loveodonto.com';
       if (shouldAutoResetDevAdmin) {
-        // #region agent log
-        fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0c61a'},body:JSON.stringify({sessionId:'e0c61a',runId:'console-login',hypothesisId:'D3',location:'PlatformAuthContext.jsx:login:autoReset:start',message:'Triggering auto reset for admin login',data:{emailMasked:'ad***@loveodonto.com'},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         await resetConsoleAdminDevCredentials();
         const retried = await supabaseConsole.auth.signInWithPassword({
           email: emailNormalized,
           password: 'admin123',
         });
-        // #region agent log
-        fetch('http://127.0.0.1:7670/ingest/eace1904-3925-4199-865e-1f5223af263b',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e0c61a'},body:JSON.stringify({sessionId:'e0c61a',runId:'console-login',hypothesisId:'D3',location:'PlatformAuthContext.jsx:login:retryAfterReset',message:'Retry auth after admin reset',data:{hasError:Boolean(retried?.error),errorCode:retried?.error?.code||null,errorStatus:retried?.error?.status||null,errorMsg:String(retried?.error?.message||''),hasUser:Boolean(retried?.data?.user),userIdPrefix:retried?.data?.user?.id?.slice(0,8)||null},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (retried?.error) throw retried.error;
         const retriedData = retried?.data;
         if (!retriedData?.user?.id) {

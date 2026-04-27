@@ -21,6 +21,40 @@ describe('Colaboradores', () => {
     await initDb();
   });
 
+  it('detecta duplicidade de CRO ignorando espaços e inclui metadados no erro', () => {
+    createCollaborator(admin, {
+      apelido: 'Dra. Ana',
+      nomeCompleto: 'Ana Souza',
+      rhCategoria: 'Corpo Clínico',
+      cargo: 'Clínico Geral',
+      tipoVinculo: 'CLT',
+      setor: 'Clínico',
+      conselhoNome: 'CRO',
+      conselhoUf: 'SP',
+      registroProfissional: '112233',
+      status: 'inativo',
+    });
+    try {
+      createCollaborator(admin, {
+        apelido: 'Juliana',
+        nomeCompleto: 'Juliana de Oliveira Freire',
+        rhCategoria: 'Corpo Clínico',
+        cargo: 'Clínico Geral',
+        tipoVinculo: 'CLT',
+        setor: 'Clínico',
+        conselhoNome: 'CRO',
+        conselhoUf: 'SP',
+        registroProfissional: ' 11 22 33 ',
+        status: 'ativo',
+      });
+      expect.fail('deveria lançar erro de duplicidade');
+    } catch (e) {
+      expect(e.code).toBe('DUPLICATE_REGISTRO_PROFISSIONAL');
+      expect(String(e.message)).toMatch(/registro profissional/i);
+      expect(String(e.message)).toMatch(/Inativos/i);
+    }
+  });
+
   it('cria e atualiza colaborador', () => {
     const collaborator = createCollaborator(admin, {
       apelido: 'Dra. Ana',

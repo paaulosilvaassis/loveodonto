@@ -7,6 +7,7 @@ import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { logAction } from './logService.js';
 import { buildPermissionsCatalog } from '../permissions/catalog.js';
+import { getDefaultTenant } from './tenantService.js';
 
 const ROLE_ADMIN = 'admin';
 /** Role de membership para admin (db.users.role=admin → membership.role=master) */
@@ -71,6 +72,13 @@ export function can(user, moduleKey, actionKey) {
 
   const rolePerms = (db.rolePermissions || []).filter((r) => r.role === u.role).map((r) => r.permission_id);
   const baseAllowed = rolePerms.includes(pid);
+  const saasOverrides = user?.permissionOverrides && typeof user.permissionOverrides === 'object' && !Array.isArray(user.permissionOverrides)
+    ? user.permissionOverrides
+    : null;
+  if (saasOverrides && Object.prototype.hasOwnProperty.call(saasOverrides, pid)) {
+    const overrideVal = saasOverrides[pid];
+    if (typeof overrideVal === 'boolean') return overrideVal;
+  }
   const userOverride = (db.userPermissions || []).find((x) => x.user_id === u.id && x.permission_id === pid);
   if (userOverride && typeof userOverride.allowed === 'boolean') return userOverride.allowed;
   return baseAllowed;
@@ -102,6 +110,72 @@ export function canByPermission(user, permission) {
 export function getRoleDefaultPermissionIds(role) {
   const db = loadDb();
   return (db.rolePermissions || []).filter((r) => r.role === role).map((r) => r.permission_id);
+}
+
+/**
+ * Compatibilidade SaaS: garante linha mínima no IndexedDB para user_id remoto
+ * antes de aplicar overrides locais de permissão.
+ */
+export function ensureLocalUserForSaasAccess(targetUserId, {
+  email = '',
+  role = 'atendimento',
+  has_system_access: hasSystemAccess = true,
+  displayName = '',
+  tenantId = '',
+} = {}) {
+  if (!targetUserId) return false;
+  const db = loadDb();
+  if (db.users?.some((u) => u.id === targetUserId)) return false;
+
+  const emailNorm = String(email || '').trim().toLowerCase();
+  const now = new Date().toISOString();
+  const tid = String(tenantId || '').trim() || String(getDefaultTenant()?.id || '').trim();
+  const roleNorm = String(role || '').trim().toLowerCase();
+  const appRole = ROLES.includes(roleNorm) ? roleNorm : 'atendimento';
+  const membershipRole = appRole === ROLE_ADMIN ? ROLE_MASTER : appRole;
+  const name = String(displayName || '').trim() || (emailNorm ? emailNorm.split('@')[0] : 'Usuário');
+
+  withDb((d) => {
+    d.users = d.users || [];
+    d.users.push({
+      id: targetUserId,
+      name,
+      email: emailNorm,
+      role: appRole,
+      active: true,
+      has_system_access: hasSystemAccess !== false,
+    });
+    d.users_profile = d.users_profile || [];
+    if (!d.users_profile.some((p) => p.id === targetUserId)) {
+      d.users_profile.push({
+        id: targetUserId,
+        full_name: name,
+        email: emailNorm,
+        phone: '',
+        tenant_id: tid || undefined,
+        created_at: now,
+        updated_at: now,
+      });
+    }
+    if (tid) {
+      d.memberships = d.memberships || [];
+      const exists = d.memberships.some((m) => m.tenant_id === tid && m.user_id === targetUserId);
+      if (!exists) {
+        d.memberships.push({
+          id: `memb-${crypto.randomUUID()}`,
+          tenant_id: tid,
+          user_id: targetUserId,
+          role: membershipRole,
+          has_system_access: hasSystemAccess !== false,
+          status: 'active',
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    }
+    return d;
+  });
+  return true;
 }
 
 /**

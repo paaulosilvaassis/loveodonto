@@ -5,6 +5,7 @@ import { subscribeTenantRealtimeChanges } from '../services/tenantContextService
 import { readTenantAccessSnapshot } from '../services/platformAccessService.js';
 import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
+import { emitStabilityLog } from '../services/stabilityLogService.js';
 
 const TENANT_SNAPSHOT_TIMEOUT_MS = 40000;
 
@@ -46,7 +47,13 @@ export function TenantProvider({ children }) {
       setTenantContext(context);
       hasLoadedOnce.current = true;
       if (!silent) setError('');
+      emitStabilityLog('TENANT_CONTEXT_OK', { tenantId: user.tenantId, source: silent ? 'background' : 'foreground' });
     } catch (err) {
+      emitStabilityLog('TENANT_CONTEXT_FAILED', {
+        tenantId: user?.tenantId || null,
+        source: silent ? 'background' : 'foreground',
+        reason: String(err?.message || err || ''),
+      });
       if (!silent) {
         setError(err?.message || 'Falha ao carregar contexto do tenant.');
       }

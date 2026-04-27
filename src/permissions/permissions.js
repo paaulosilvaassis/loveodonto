@@ -13,47 +13,15 @@ export const roles = {
   dentista: 'dentista',
 };
 
-const rolePermissions = {
-  [roles.admin]: ['*'],
-  [roles.gerente]: [
-    'agenda:read', 'agenda:write', 'patients:read', 'patients:write', 'finance:read', 'finance:write',
-    'communication:read', 'communication:write', 'team:read', 'team:write', 'inventory:read', 'inventory:write',
-    'reports:read', 'collaborators:read', 'collaborators:write', 'collaborators:finance', 'collaborators:access',
-    'patients:access', 'patients:status',
-  ],
-  [roles.recepcao]: [
-    'agenda:read', 'agenda:write', 'patients:read', 'patients:write', 'finance:read', 'finance:write',
-    'communication:read', 'communication:write', 'team:read', 'inventory:read', 'inventory:write', 'reports:read',
-    'collaborators:read',
-  ],
-  [roles.profissional]: [
-    'agenda:read', 'agenda:write', 'patients:read', 'communication:read', 'reports:read', 'collaborators:read',
-  ],
-  [roles.financeiro]: [
-    'finance:read', 'finance:write', 'reports:read', 'collaborators:read', 'collaborators:finance',
-  ],
-  [roles.comercial]: [
-    'communication:read', 'communication:write', 'agenda:read', 'reports:read',
-  ],
-};
-
 /**
- * Verifica permissão: primeiro RBAC (accessService), depois fallback em rolePermissions legado.
+ * Verifica permissão usando somente a fonte canônica RBAC (accessService).
  * permission pode ser "module_key:action_key" (ex: agenda:write) ou legado (ex: collaborators:access).
  * Multi-tenant: user.isMaster (MASTER) tem acesso total.
  */
 export const can = (user, permission) => {
   if (!user) return false;
   if (user.isMaster === true) return true;
-  if (canByPermission(user, permission)) return true;
-  /** Mesma convenção de RequireAdminGate / RequireRole — evita falha silenciosa se role vier capitalizado (ex.: "Admin"). */
-  const roleKey = String(user.role || '').toLowerCase();
-  const allowed =
-    rolePermissions[roleKey] ||
-    (roleKey === 'master' ? rolePermissions[roles.admin] : undefined) ||
-    [];
-  if (allowed.includes('*')) return true;
-  return allowed.includes(permission);
+  return canByPermission(user, permission);
 };
 
 /** Verificação granular RBAC: can(user, module_key, action_key). */

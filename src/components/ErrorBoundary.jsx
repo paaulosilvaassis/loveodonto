@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import { emitStabilityLog } from '../services/stabilityLogService.js';
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -11,6 +12,11 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
+    emitStabilityLog('ROUTE_ERROR', {
+      message: String(error?.message || error || ''),
+      route: window.location.pathname,
+      componentStack: String(info?.componentStack || ''),
+    });
     if (import.meta?.env?.DEV) {
       // eslint-disable-next-line no-console
       console.error('Erro de UI capturado:', error, info);
@@ -21,13 +27,7 @@ export default class ErrorBoundary extends Component {
     this.setState({ hasError: false, error: null });
   };
 
-  handleReset = () => {
-    try {
-      localStorage.removeItem('appgestaoodonto.db');
-      localStorage.removeItem('appgestaoodonto.session');
-    } catch {
-      // ignore
-    }
+  handleReloadPage = () => {
     window.location.reload();
   };
 
@@ -38,13 +38,14 @@ export default class ErrorBoundary extends Component {
       <div style={{ padding: '2rem', fontFamily: 'Inter, system-ui, sans-serif' }}>
         <h2>Ops, algo deu errado</h2>
         <p>O app encontrou um erro inesperado.</p>
+        <p className="muted">Sua sessão foi preservada. Você pode tentar novamente sem fazer logout.</p>
         {error?.message ? <p style={{ color: '#991b1b' }}>{error.message}</p> : null}
         <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
           <button type="button" onClick={this.handleRetry} style={{ padding: '0.6rem 1rem', cursor: 'pointer' }}>
             Tentar novamente
           </button>
-          <button type="button" onClick={this.handleReset} style={{ padding: '0.6rem 1rem', cursor: 'pointer', opacity: 0.7 }}>
-            Recarregar e resetar dados
+          <button type="button" onClick={this.handleReloadPage} style={{ padding: '0.6rem 1rem', cursor: 'pointer', opacity: 0.7 }}>
+            Recarregar página
           </button>
         </div>
       </div>

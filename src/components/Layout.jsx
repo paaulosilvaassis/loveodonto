@@ -6,7 +6,9 @@ import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
 import { useTenant } from '../tenant/useTenant.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
 import { navCategories, getActiveCategory, getActiveItem } from '../navigation/navCategories.js';
+import { resolveRoutePermission } from '../navigation/routePermissionMap.js';
 import { canAccessRoute } from '../tenant/tenantAccess.js';
+import { can as canByPermission } from '../permissions/permissions.js';
 import { logAction } from '../services/logService.js';
 import PatientQuickCreateModal from './PatientQuickCreateModal.jsx';
 import OpeningScreen, { shouldShowOpening } from './OpeningScreen.jsx';
@@ -34,8 +36,21 @@ const isAllowed = (user, allowedRoles) => {
   if (!user) return false;
   if (!allowedRoles || allowedRoles.length === 0) return true;
   if (allowedRoles.includes('*')) return true;
-  if (user.role === 'admin' || user.role === 'master' || user.role === 'gerente') return true;
+  if (user.role === 'master') return true;
   return allowedRoles.includes(user.role);
+};
+
+const canSeeNavItem = (user, item, modules, flags) => {
+  if (!user) return { allowed: false, roleAllowed: false, moduleAllowed: false, permissionAllowed: false };
+  const roleAllowed = isAllowed(user, item.rolesAllowed);
+  const moduleAllowed = canAccessRoute(item.route, modules, flags);
+  const permission = resolveRoutePermission(item.route);
+  const permissionAllowed = permission ? canByPermission(user, permission) : false;
+  const isMaster = user.isMaster === true || String(user.role || '').toLowerCase() === 'master';
+  const allowed = isMaster
+    ? moduleAllowed
+    : moduleAllowed && permissionAllowed;
+  return { allowed, roleAllowed, moduleAllowed, permissionAllowed };
 };
 
 export default function Layout({ children }) {
@@ -63,6 +78,7 @@ export default function Layout({ children }) {
 
   // Toast global (usado pelo rodapé de importação)
   const [globalToast, setGlobalToast] = useState(null);
+  const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
   const globalToastRef = useRef(null);
   const onImportToast = useCallback((message, type = 'success') => {
     if (globalToastRef.current) clearTimeout(globalToastRef.current);
@@ -111,10 +127,33 @@ export default function Layout({ children }) {
 
   // Filtra itens permitidos para o usuário atual
   const visibleItems = useMemo(() => {
-    return activeCategory.items.filter(
-      (item) => isAllowed(user, item.rolesAllowed) && canAccessRoute(item.route, tenant.modules, tenant.flags)
-    );
+    return activeCategory.items.filter((item) => canSeeNavItem(user, item, tenant.modules, tenant.flags).allowed);
   }, [activeCategory, user, tenant.modules, tenant.flags]);
+
+  const visibleCategories = useMemo(() => {
+    return navCategories.filter((category) => {
+      const allowedItems = category.items.filter((item) => canSeeNavItem(user, item, tenant.modules, tenant.flags).allowed);
+      return allowedItems.length > 0;
+    });
+  }, [user, tenant.modules, tenant.flags]);
+
+  useEffect(() => {
+    if (!visibleCategories.length) return;
+    if (!visibleCategories.some((c) => c.id === activeCategoryId)) {
+      const nextCategoryId = visibleCategories[0].id;
+      setActiveCategoryId(nextCategoryId);
+      writeLocal(ACTIVE_CATEGORY_KEY, nextCategoryId);
+    }
+  }, [visibleCategories, activeCategoryId, user, location.pathname]);
+
+  useEffect(() => {
+    const msg = String(location.state?.accessDeniedMessage || '').trim();
+    if (!msg) return;
+    setAccessDeniedMessage(msg);
+    navigate(location.pathname, { replace: true, state: {} });
+    const timer = setTimeout(() => setAccessDeniedMessage(''), 4500);
+    return () => clearTimeout(timer);
+  }, [location.pathname, location.state, navigate]);
 
   return (
     <ImportJobProvider onToast={onImportToast}>
@@ -136,14 +175,9 @@ export default function Layout({ children }) {
 
         {/* BASES PRINCIPAIS - ÍCONES HORIZONTAIS NO TOPO */}
         <div className="nav-bases-row">
-          {navCategories.map((category) => {
+          {visibleCategories.map((category) => {
             const CategoryIcon = category.icon;
             const isActive = category.id === activeCategoryId;
-            const hasAccess = category.items.some(
-              (item) => isAllowed(user, item.rolesAllowed) && canAccessRoute(item.route, tenant.modules, tenant.flags)
-            );
-
-            if (!hasAccess) return null;
 
             return (
               <button
@@ -242,6 +276,11 @@ export default function Layout({ children }) {
         {!tenant.loading && tenant.error ? (
           <div className="alert error" style={{ margin: '1rem 1rem 0' }}>
             Falha ao carregar contexto da clínica: {tenant.error}
+          </div>
+        ) : null}
+        {!tenant.loading && !tenant.error && accessDeniedMessage ? (
+          <div className="alert warning" style={{ margin: '1rem 1rem 0' }}>
+            {accessDeniedMessage}
           </div>
         ) : null}
         <header className="header">
