@@ -60,6 +60,8 @@ const emptyDraft = () => ({
     photo_url: '',
     created_at: '',
     created_by_user_id: '',
+    has_financial_responsible: false,
+    dependent_full_name: '',
   },
   documents: {
     rg: '',
@@ -171,6 +173,8 @@ const mapPatientToDraft = (patient, record) => {
       photo_url: patient.profile?.photo_url || '',
       created_at: patient.profile?.created_at || '',
       created_by_user_id: patient.profile?.created_by_user_id || '',
+      has_financial_responsible: Boolean(patient.profile?.has_financial_responsible),
+      dependent_full_name: patient.profile?.dependent_full_name || '',
     },
     documents: {
       ...emptyDraft().documents,
@@ -493,6 +497,8 @@ export default function PatientCadastroPage() {
         sex: draft.profile.sex,
         birth_date: draft.profile.birth_date,
         cpf: draft.profile.cpf,
+        has_financial_responsible: Boolean(draft.profile.has_financial_responsible),
+        dependent_full_name: draft.profile.dependent_full_name,
       };
       if (!payloadProfile.full_name || !payloadProfile.sex || !payloadProfile.birth_date || !payloadProfile.cpf) {
         setStatus({ error: 'Preencha os campos obrigatórios: Nome, Sexo, Data de nascimento e CPF.', success: '' });
@@ -510,6 +516,8 @@ export default function PatientCadastroPage() {
           cpf: payloadProfile.cpf,
           nickname: payloadProfile.nickname,
           social_name: payloadProfile.social_name,
+          has_financial_responsible: payloadProfile.has_financial_responsible,
+          dependent_full_name: payloadProfile.dependent_full_name,
         });
         nextPatientId = created.patientId || created.id;
         // Garantir que o paciente foi persistido antes de continuar
@@ -1242,6 +1250,30 @@ export default function PatientCadastroPage() {
                       value={draft.relationships.financial_responsible_relation}
                       onChange={(event) => updateDraft('relationships', 'financial_responsible_relation', event.target.value)}
                       disabled={!editMode}
+                    />
+                  </div>
+                  <div className="form-field full">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(draft.profile.has_financial_responsible)}
+                        onChange={(event) => updateDraft('profile', 'has_financial_responsible', event.target.checked)}
+                        disabled={!editMode}
+                      />
+                      Responsável financeiro (contrato — bloco &quot;Das partes&quot;)
+                    </label>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1">
+                      Se marcado, informe o nome completo do dependente/paciente atendido abaixo.
+                    </p>
+                  </div>
+                  <div className="form-field full">
+                    <label>Nome completo do dependente (contrato)</label>
+                    <input
+                      type="text"
+                      value={draft.profile.dependent_full_name || ''}
+                      onChange={(event) => updateDraft('profile', 'dependent_full_name', event.target.value)}
+                      disabled={!editMode || !draft.profile.has_financial_responsible}
+                      placeholder="Obrigatório se houver responsável financeiro"
                     />
                   </div>
                   <div className="form-field full">

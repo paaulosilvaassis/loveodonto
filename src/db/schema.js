@@ -1,4 +1,4 @@
-export const DB_VERSION = 46;
+export const DB_VERSION = 47;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -312,6 +312,16 @@ export const defaultDbState = () => ({
   importExportLogs: [],
   /** Chamados de suporte Love Odonto */
   supportTickets: [],
+  /** Modelos de contrato (padrão do sistema ou personalizado da clínica) */
+  contractTemplates: [],
+  /** Cláusulas/blocos do contrato padrão vinculadas a template */
+  contractBlocks: [],
+  /** Contratos gerados (snapshot imutável após finalização) */
+  generatedContracts: [],
+  /** Auditoria de ações em contratos e modelos */
+  contractAuditLogs: [],
+  /** Contador sequencial por clínica para número de contrato (ex.: { \"clinic-1\": 12 }) */
+  contractSeqByClinic: {},
   /**
    * Sempre refletir a versão corrente do schema para novas bases.
    * Migrações seguem necessárias apenas para bases legadas.

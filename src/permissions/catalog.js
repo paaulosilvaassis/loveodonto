@@ -32,6 +32,12 @@ export const ACTION_KEYS = [
   'disconnect',
   'create_ticket',
   'download',
+  'update_template',
+  'generate',
+  'print',
+  'export_pdf',
+  'view_audit',
+  'edit_system_clause',
 ];
 
 export const ACTION_LABELS = {
@@ -63,6 +69,12 @@ export const ACTION_LABELS = {
   disconnect: 'Desconectar',
   create_ticket: 'Criar chamado',
   download: 'Baixar',
+  update_template: 'Editar modelo',
+  generate: 'Gerar contrato',
+  print: 'Imprimir',
+  export_pdf: 'Exportar PDF',
+  view_audit: 'Ver auditoria',
+  edit_system_clause: 'Editar cláusula padrão',
 };
 
 /**
@@ -110,7 +122,23 @@ export const MODULES_SPEC = [
       { key: 'equipe', label: 'Dados da Equipe', actions: ['view', 'create', 'edit', 'deactivate', 'delete'] },
       { key: 'configuracoes_usuarios_acessos', label: 'Usuários e Acessos', actions: ['view', 'create', 'edit', 'deactivate', 'resend'] },
       { key: 'admin_base_precos_procedimentos', label: 'Base de Preços e Procedimentos', actions: ['view', 'create', 'edit', 'delete', 'import', 'export'] },
-      { key: 'admin_contratos', label: 'Contratos', actions: ['view', 'create', 'edit', 'delete'] },
+      {
+        key: 'admin_contratos',
+        label: 'Contratos e Consentimentos',
+        actions: [
+          'view',
+          'create',
+          'edit',
+          'delete',
+          'update_template',
+          'generate',
+          'print',
+          'export_pdf',
+          'cancel',
+          'view_audit',
+          'edit_system_clause',
+        ],
+      },
       { key: 'admin_consentimentos', label: 'Consentimentos', actions: ['view', 'create', 'edit', 'delete'] },
       { key: 'configuracoes', label: 'Configurações (Geral)', actions: ['view', 'edit'] },
     ],

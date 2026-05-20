@@ -31,6 +31,7 @@ import PatientCadastroPage from './pages/PatientCadastroPage.jsx';
 import PatientChartPage from './pages/PatientChartPage.jsx';
 import OdontogramV2Page from './pages/OdontogramV2Page.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
+import AdminContratosConsentimentosPage from './pages/admin/AdminContratosConsentimentosPage.jsx';
 import PriceBasePage from './pages/PriceBasePage.jsx';
 import PriceBaseTableDetailPage from './pages/PriceBaseTableDetailPage.jsx';
 import ReportsPage from './pages/ReportsPage.jsx';
@@ -138,8 +139,8 @@ export default function ProtectedApp() {
         <Route path="/admin/base-precos" element={withAdminGate(withRole('/admin/base-precos', <PriceBasePage />))} />
         <Route path="/admin/base-precos/tabelas/:priceTableId" element={withAdminGate(withRole('/admin/base-precos', <PriceBaseTableDetailPage />))} />
         <Route path="/admin/procedimentos" element={<Navigate to="/admin/base-precos" replace />} />
-        <Route path="/admin/contratos" element={withAdminGate(withRole('/admin/contratos', <PlaceholderPage title="Contratos" description="Modelos e contratos com pacientes." />))} />
-        <Route path="/admin/consentimentos" element={withAdminGate(withRole('/admin/consentimentos', <PlaceholderPage title="Consentimentos" description="Termos e autorizações digitais." />))} />
+        <Route path="/admin/contratos" element={withAdminGate(withRole('/admin/contratos', <AdminContratosConsentimentosPage />))} />
+        <Route path="/admin/consentimentos" element={withAdminGate(withRole('/admin/consentimentos', <AdminContratosConsentimentosPage />))} />
         <Route path="/admin/fornecedores" element={withAdminGate(withRole('/admin/fornecedores', <FornecedoresPage />))} />
         <Route path="/administrativo/fornecedores" element={<Navigate to="/admin/fornecedores" replace />} />
         <Route path="/financeiro/contas-pagar" element={withRole('/financeiro/contas-pagar', <FinancePayablesPage />)} />

@@ -16,6 +16,9 @@ export function resolveRoutePermission(routePath) {
   if (path.startsWith('/financeiro')) return 'financeiro_relatorios:view';
   if (path.startsWith('/estoque')) return 'estoque:view';
   if (path.startsWith('/admin/colaboradores')) return 'equipe:view';
+  if (path.startsWith('/admin/contratos') || path.startsWith('/admin/consentimentos')) {
+    return 'admin_contratos:view';
+  }
   if (path.startsWith('/admin') || path.startsWith('/configuracoes')) return 'configuracoes:view';
   if (path.startsWith('/relatorios')) return 'relatorios:view';
 

@@ -1887,6 +1887,66 @@ app.post('/internal/platform/tenants/provision', requireConsoleAccess, async (re
   }
 });
 
+/** Espelha contrato gerado (IndexedDB → Postgres) quando a migration 006 existir. */
+app.post('/internal/app/contracts/generated', requireAppUser, async (req, res) => {
+  try {
+    const authUserId = req.appAuthUser.id;
+    const { data: tenantUser, error: tenantUserError } = await supabase
+      .from('tenant_users')
+      .select('tenant_id')
+      .eq('user_id', authUserId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (tenantUserError) throw tenantUserError;
+    if (!tenantUser?.tenant_id) {
+      return res.status(404).json({ error: 'Tenant não encontrado para o usuário autenticado.' });
+    }
+    const tenantId = tenantUser.tenant_id;
+    const rec = req.body?.record || {};
+    const id = normalizeText(rec.id);
+    if (!id) return res.status(400).json({ error: 'record.id é obrigatório.' });
+
+    const row = {
+      id,
+      tenant_id: tenantId,
+      patient_id: normalizeText(rec.patientId),
+      quote_id: normalizeText(rec.quoteId),
+      quote_source: normalizeText(rec.quoteSource),
+      template_id: normalizeText(rec.templateId) || null,
+      template_version: Number(rec.templateVersion) || 1,
+      contract_number: normalizeText(rec.contractNumber) || null,
+      final_content: String(rec.finalContent ?? ''),
+      rendered_html: String(rec.renderedHtml ?? ''),
+      pdf_url: rec.pdfUrl ? String(rec.pdfUrl) : null,
+      status: normalizeText(rec.status) || 'draft',
+      generated_by: authUserId,
+      generated_at: rec.generatedAt || new Date().toISOString(),
+      canceled_at: rec.canceledAt || null,
+      signed_at: rec.signedAt || null,
+      metadata: rec.metadata && typeof rec.metadata === 'object' ? rec.metadata : {},
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('generated_contracts').upsert(row, { onConflict: 'id' });
+    if (error) {
+      const msg = normalizeDatabaseError(error, '');
+      const lower = msg.toLowerCase();
+      if (lower.includes('generated_contracts') && (lower.includes('does not exist') || lower.includes('not exist'))) {
+        return res.status(501).json({
+          error:
+            'Tabela generated_contracts ausente. Aplique a migration supabase/migrations/006_app_contracts.sql no projeto Supabase do backend.',
+        });
+      }
+      throw error;
+    }
+    return res.json({ ok: true, id });
+  } catch (err) {
+    console.error('[contracts-generated]', err);
+    return res.status(400).json({ error: normalizeDatabaseError(err, 'Falha ao sincronizar contrato.') });
+  }
+});
+
 const httpServer = app.listen(PORT, () => {
   console.log(`[SaaS Admin API] rodando na porta ${PORT}`);
 });

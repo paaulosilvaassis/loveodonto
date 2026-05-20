@@ -14,7 +14,9 @@ import {
 import { listLeads } from '../../services/crmService.js';
 import { loadDb } from '../../db/index.js';
 import { SectionCard } from '../../components/SectionCard.jsx';
-import { Plus, Eye, Pencil, RefreshCw, Search, X, FileText, Clock, CheckCircle, XCircle, Percent } from 'lucide-react';
+import { Plus, Eye, Pencil, RefreshCw, Search, X, FileText, Clock, CheckCircle, XCircle, Percent, FileSignature } from 'lucide-react';
+import { can } from '../../permissions/permissions.js';
+import GenerateContractModal from '../../components/contracts/GenerateContractModal.jsx';
 
 const DEFAULT_MONTH_START = () => {
   const d = new Date();
@@ -105,6 +107,8 @@ export default function CrmOrcamentosPage() {
   const [createItems, setCreateItems] = useState([{ description: '', value: '' }]);
   /** Itens do modal Editar (repeatable UI) */
   const [editItems, setEditItems] = useState([]);
+  const [contractModalOpen, setContractModalOpen] = useState(false);
+  const [contractBudget, setContractBudget] = useState(null);
 
   const range = useMemo(
     () => ({
@@ -393,6 +397,19 @@ export default function CrmOrcamentosPage() {
                             <button type="button" className="button small primary" onClick={() => openChangeStatus(b)} title="Alterar status">
                               <RefreshCw size={14} />
                             </button>
+                            {b.status === BUDGET_STATUS.APROVADO && b.patientId && can(user, 'admin_contratos:generate') && (
+                              <button
+                                type="button"
+                                className="button small secondary"
+                                onClick={() => {
+                                  setContractBudget(b);
+                                  setContractModalOpen(true);
+                                }}
+                                title="Gerar contrato"
+                              >
+                                <FileSignature size={14} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -589,6 +606,19 @@ export default function CrmOrcamentosPage() {
           </form>
         )}
       </Modal>
+
+      <GenerateContractModal
+        open={contractModalOpen}
+        onOpenChange={(o) => {
+          setContractModalOpen(o);
+          if (!o) setContractBudget(null);
+        }}
+        user={user}
+        patientId={contractBudget?.patientId || ''}
+        quoteSource="crm_budget"
+        quoteId={contractBudget?.id || ''}
+        flow="crm"
+      />
     </CrmLayout>
   );
 }

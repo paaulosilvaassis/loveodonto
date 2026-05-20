@@ -215,6 +215,8 @@ export const createPatientQuick = (user, payload) => {
     created_by_user_id: user.id,
     updated_by_user_id: user.id,
     tenant_id: tenantId,
+    has_financial_responsible: Boolean(payload.has_financial_responsible),
+    dependent_full_name: normalizeText(payload.dependent_full_name),
   };
 
   assertRequired(patient.full_name, 'Nome completo é obrigatório.');
@@ -751,6 +753,14 @@ export const updatePatientProfile = (user, patientId, payload) => {
       photo_url: payload.photo_url ?? basePatient.photo_url,
       tags: payload.tags ?? basePatient.tags ?? [],
       lead_source: normalizeText(payload.lead_source ?? basePatient.lead_source),
+      has_financial_responsible:
+        payload.has_financial_responsible != null
+          ? Boolean(payload.has_financial_responsible)
+          : Boolean(basePatient.has_financial_responsible),
+      dependent_full_name:
+        payload.dependent_full_name != null
+          ? normalizeText(payload.dependent_full_name)
+          : normalizeText(basePatient.dependent_full_name),
       updated_at: new Date().toISOString(),
       updated_by_user_id: user.id,
     };

@@ -1,0 +1,66 @@
+/* Impressão / PDF — container do contrato renderizado */
+.contract-print-root {
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 1rem;
+  background: #fff;
+  color: #111;
+  font-size: 11pt;
+  line-height: 1.45;
+}
+
+.contract-print-root .contract-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ccc;
+}
+
+.contract-print-root .contract-signatures .sig-line {
+  border-bottom: 1px solid #333;
+  min-height: 2.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.contract-print-root .contract-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 10pt;
+}
+
+.contract-print-root .contract-table th,
+.contract-print-root .contract-table td {
+  border: 1px solid #ccc;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+
+.contract-print-root .contract-clause h2 {
+  font-size: 11pt;
+  margin: 1rem 0 0.35rem;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .contract-print-root--printing,
+  .contract-print-root--printing * {
+    visibility: visible;
+  }
+
+  .contract-print-root--printing {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 12mm;
+    background: #fff;
+  }
+}

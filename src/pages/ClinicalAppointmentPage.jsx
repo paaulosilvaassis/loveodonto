@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo, useRef, Component } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
+import { can } from '../permissions/permissions.js';
+import GenerateContractModal from '../components/contracts/GenerateContractModal.jsx';
 import { loadDb } from '../db/index.js';
 import { createId } from '../services/helpers.js';
 import { getAppointmentDetails, APPOINTMENT_STATUS } from '../services/appointmentService.js';
@@ -43,6 +45,7 @@ import {
   Edit,
   Trash2,
   FileText as FileTextIcon,
+  FileSignature,
   Clock,
   History,
   FileSignature
@@ -1205,6 +1208,7 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
   const [budget, setBudget] = useState(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [contractModalOpen, setContractModalOpen] = useState(false);
   const db = loadDb();
   const appointmentFromDb = db.appointments?.find(a => a.id === appointmentId);
   const appointment = appointmentProp ?? appointmentFromDb;
@@ -2099,6 +2103,17 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
             <CheckCircle2 size={16} />
             Aprovar
           </button>
+          {budget?.status === BUDGET_STATUS.APROVADO && patient?.id
+            && (can(user, 'prontuario_contratos:create') || can(user, 'admin_contratos:generate')) && (
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => setContractModalOpen(true)}
+            >
+              <FileSignature size={16} />
+              Gerar contrato
+            </button>
+          )}
         </div>
       }
     >
@@ -2190,7 +2205,17 @@ function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, p
         )}
       </div>
       </SectionCard>
-      
+
+      <GenerateContractModal
+        open={contractModalOpen}
+        onOpenChange={setContractModalOpen}
+        user={user}
+        patientId={patient?.id || ''}
+        quoteSource="clinical_budget"
+        quoteId={appointmentId}
+        flow="clinical"
+      />
+
       {toast && (
         <div className={`toast ${toast.type}`} role="status">
           {toast.message}

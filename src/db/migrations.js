@@ -1,7 +1,8 @@
 import { migrateLegacyCollaboratorRow } from '../constants/collaboratorRhCatalog.js';
 import { DB_VERSION, defaultDbState } from './schema.js';
-import { buildPermissionsCatalog } from '../permissions/catalog.js';
+import { buildPermissionsCatalog, permissionId } from '../permissions/catalog.js';
 import { ROLE_DEFAULT_PERMISSIONS, ROLES_FOR_SEED } from '../permissions/roleDefaults.js';
+import { seedDefaultContractsForDb } from '../contracts/defaultContractSeed.js';
 
 const migrations = {
   1: (db) => ({
@@ -1310,6 +1311,48 @@ const migrations = {
       tenantLimits: Array.isArray(db.tenantLimits) ? db.tenantLimits : [],
       version: 46,
     };
+  },
+  47: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 47 };
+    const patients = Array.isArray(db.patients)
+      ? db.patients.map((p) => ({
+          ...p,
+          has_financial_responsible: Boolean(p.has_financial_responsible),
+          dependent_full_name: String(p.dependent_full_name || '').trim(),
+        }))
+      : [];
+    const next = {
+      ...db,
+      patients,
+      contractTemplates: Array.isArray(db.contractTemplates) ? db.contractTemplates : [],
+      contractBlocks: Array.isArray(db.contractBlocks) ? db.contractBlocks : [],
+      generatedContracts: Array.isArray(db.generatedContracts) ? db.generatedContracts : [],
+      contractAuditLogs: Array.isArray(db.contractAuditLogs) ? db.contractAuditLogs : [],
+      contractSeqByClinic:
+        db.contractSeqByClinic && typeof db.contractSeqByClinic === 'object' ? db.contractSeqByClinic : {},
+      permissionsCatalog: buildPermissionsCatalog(),
+      version: 47,
+    };
+    seedDefaultContractsForDb(next);
+    const catalog = buildPermissionsCatalog();
+    const adminContractPermIds = catalog.filter((c) => c.module_key === 'admin_contratos').map((c) => c.id);
+    const generateId = permissionId('admin_contratos', 'generate');
+    const merged = Array.isArray(next.rolePermissions) ? [...next.rolePermissions] : [];
+    const rpSet = new Set(merged.map((r) => `${r.role}|${r.permission_id}`));
+    const pushIf = (role, pid) => {
+      const key = `${role}|${pid}`;
+      if (!rpSet.has(key)) {
+        merged.push({ role, permission_id: pid });
+        rpSet.add(key);
+      }
+    };
+    for (const pid of adminContractPermIds) {
+      pushIf('administrativo', pid);
+      pushIf('gerente', pid);
+    }
+    pushIf('comercial', generateId);
+    next.rolePermissions = merged;
+    return next;
   },
 };
 

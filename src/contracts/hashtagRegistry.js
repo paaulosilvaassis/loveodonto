@@ -1,0 +1,48 @@
+/** Hashtags suportadas no módulo de contratos (#tag) */
+export const CONTRACT_HASHTAG_DEFS = [
+  { tag: '#clausula', description: 'Referência genérica a cláusula (uso interno / numeração).' },
+  { tag: '#clinicaRazaoSocial', description: 'Razão social da clínica (cadastro).' },
+  { tag: '#clinicaCNPJCPF', description: 'CNPJ ou CPF da clínica (cadastro).' },
+  { tag: '#emissorCNPJCPF', description: 'CNPJ/CPF do emissor do documento (normalmente igual ao da clínica).' },
+  { tag: '#emissorNomeRazaoSocial', description: 'Nome ou razão social do emissor.' },
+  { tag: '#clinicaEndereco', description: 'Endereço completo da clínica.' },
+  { tag: '#clinicaCidadeEstado', description: 'Cidade e UF da clínica.' },
+  { tag: '#procedimentos', description: 'Tabela/lista HTML dos procedimentos do orçamento.' },
+  { tag: '#parcelas', description: 'Tabela/lista HTML de parcelas / títulos vinculados quando existirem.' },
+  { tag: '#manutencaoMeses', description: 'Periodicidade de manutenção ortodôntica (meses), se informada.' },
+  { tag: '#totalContrato', description: 'Valor total do contrato (procedimentos), formato numérico.' },
+  { tag: '#totalManutencoes', description: 'Valor total estimado de manutenções ortodônticas.' },
+  { tag: '#totalGeralContrato', description: 'Soma total (contrato + manutenções).' },
+  { tag: '#totalContratoExtenso', description: 'Valor total do contrato por extenso.' },
+  { tag: '#totalManutencoesExtenso', description: 'Total de manutenções por extenso.' },
+  { tag: '#totalGeralContratoExtenso', description: 'Total geral por extenso.' },
+  { tag: '#pacienteNomeCompleto', description: 'Nome completo do paciente ou responsável financeiro.' },
+  { tag: '#dependenteNomeCompleto', description: 'Nome do dependente (quando houver responsável financeiro).' },
+  { tag: '#pessoaCPF', description: 'CPF da pessoa referida no contexto (paciente ou responsável).' },
+  { tag: '#pessoaRG', description: 'RG da pessoa referida no contexto.' },
+  { tag: '#pacienteRG', description: 'RG do paciente cadastrado.' },
+  { tag: '#pacienteCPF', description: 'CPF do paciente cadastrado.' },
+  { tag: '#pacienteEndereco', description: 'Endereço do paciente.' },
+  { tag: '#dentistaNomeCompleto', description: 'Nome do profissional que gera/assina o documento.' },
+  { tag: '#dentistaConselhoNumero', description: 'Número do conselho (CRO) do profissional.' },
+  { tag: '#orcamentoObservacoes', description: 'Observações do orçamento.' },
+];
+
+const KNOWN = new Set(CONTRACT_HASHTAG_DEFS.map((d) => d.tag));
+
+/** Extrai hashtags #Palavra do texto */
+export function extractHashtags(text) {
+  const s = String(text || '');
+  const re = /#[a-zA-Z0-9_]+/g;
+  return s.match(re) || [];
+}
+
+/** Retorna tags desconhecidas (não no registry) */
+export function findUnknownHashtags(text) {
+  const found = new Set(extractHashtags(text));
+  return [...found].filter((t) => !KNOWN.has(t));
+}
+
+export function isKnownHashtag(tag) {
+  return KNOWN.has(String(tag || '').trim());
+}
