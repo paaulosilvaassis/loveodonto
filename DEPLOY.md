@@ -28,12 +28,15 @@ O app é um **frontend Vite + React** que usa **Supabase** (auth e banco). O dep
    - Em **Environment Variables** adicione:
      - `VITE_SUPABASE_APP_URL` = URL do projeto Supabase (ex.: `https://xxxx.supabase.co`)
      - `VITE_SUPABASE_APP_ANON_KEY` = chave anon/public do projeto  
-     Se usar o painel platform no mesmo deploy, opcional:
-     - `VITE_SUPABASE_PLATFORM_URL` e `VITE_SUPABASE_PLATFORM_ANON_KEY` (podem ser iguais ao app se for o mesmo projeto).
+     Para **login SaaS** (`VITE_ACCESS_SAAS_ENABLED=1` ou equivalente em produção):
+     - `VITE_SUPABASE_PLATFORM_URL` e `VITE_SUPABASE_PLATFORM_ANON_KEY` (mesmo projeto Supabase do backend)
+     - **`VITE_PLATFORM_API_BASE_URL`** = URL pública da Admin API (`server/`), **sem** `localhost` nem `127.0.0.1`  
+       (ex.: `https://love-odonto-api.up.railway.app`)  
+       Alias no app: `VITE_APP_ADMIN_API_BASE_URL` (mesmo valor).
 
 4. **Deploy:** clique em **Deploy**. O `vercel.json` na raiz já configura o roteamento SPA (todas as rotas caem no `index.html`).
 
-5. Acesse a URL gerada (ex.: `https://seu-app.vercel.app`). O app deve carregar e o login via Supabase deve funcionar se as redirect URLs estiverem configuradas.
+5. Acesse a URL gerada (ex.: `https://seu-app.vercel.app`). O login SaaS exige Supabase **e** a Admin API publicada com `VITE_PLATFORM_API_BASE_URL` configurada no build da Vercel.
 
 ---
 
@@ -47,7 +50,8 @@ Só é necessário se você usar o **Console** (painel platform) que chama a API
   - `SUPABASE_URL` – URL do projeto Supabase
   - `SUPABASE_SERVICE_ROLE_KEY` – service role key (Supabase → Settings → API)
   - Opcional: `PLATFORM_API_KEY` (ou use a mesma que `ADMIN_API_KEY`)
-- No Console, configure a URL da API deployada (ex.: `https://sua-api.railway.app`) e a mesma `ADMIN_API_KEY`.
+- No frontend (Vercel) e na Console, use a mesma URL pública: `VITE_PLATFORM_API_BASE_URL=https://sua-api.railway.app`.
+- No Console, configure também `VITE_PLATFORM_API_KEY` (igual a `PLATFORM_API_KEY` no server).
 
 ---
 
@@ -57,9 +61,12 @@ Só é necessário se você usar o **Console** (painel platform) que chama a API
 |----------|------|-------------|
 | `VITE_SUPABASE_APP_URL` | Frontend (Vercel) | Sim |
 | `VITE_SUPABASE_APP_ANON_KEY` | Frontend (Vercel) | Sim |
-| `VITE_SUPABASE_PLATFORM_URL` | Frontend | Só se usar /platform |
-| `VITE_SUPABASE_PLATFORM_ANON_KEY` | Frontend | Só se usar /platform |
-| `ADMIN_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Server | Só se usar a API admin |
+| `VITE_SUPABASE_PLATFORM_URL` | Frontend (Vercel) | Sim, para login SaaS |
+| `VITE_SUPABASE_PLATFORM_ANON_KEY` | Frontend (Vercel) | Sim, para login SaaS |
+| `VITE_PLATFORM_API_BASE_URL` | Frontend (Vercel) | **Sim em produção** — URL pública da Admin API |
+| `VITE_ACCESS_SAAS_ENABLED` | Frontend (Vercel) | `1` em produção para modo SaaS |
+| `ADMIN_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | Server (Railway/Render) | Obrigatório no backend |
+| `PLATFORM_API_KEY` | Server + Console | Para rotas `/internal/platform/*` |
 
 Use o `.env.example` como referência; não commite `.env` com valores reais.
 

@@ -1,14 +1,9 @@
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
-
-function getAdminApiBaseUrl() {
-  return String(import.meta.env?.VITE_APP_ADMIN_API_BASE_URL || '').trim().replace(/\/$/, '');
-}
-
-function buildUrl(path) {
-  const base = getAdminApiBaseUrl();
-  if (base) return `${base}${path}`;
-  return path;
-}
+import {
+  assertAdminApiFetchAllowed,
+  buildAdminApiUrl,
+  formatAdminApiNetworkError,
+} from '../config/adminApiBase.js';
 
 function normalizeProvisionErrorMessage(message) {
   const raw = String(message || '').trim();
@@ -19,7 +14,10 @@ function normalizeProvisionErrorMessage(message) {
     || lower.includes('fetch failed')
     || lower.includes('network request failed')
   ) {
-    return 'Não foi possível conectar ao backend SaaS (porta 3001). Inicie o backend e tente novamente.';
+    return formatAdminApiNetworkError();
+  }
+  if (lower.includes('backend saas não configurado') || lower.includes('vite_platform_api_base_url')) {
+    return raw;
   }
   if (lower.includes('token do app ausente') || lower.includes('token do app inválido')) {
     return 'Sua sessão expirou ou está inválida. Faça login novamente.';
@@ -50,10 +48,11 @@ async function getAccessTokenOrThrow() {
 }
 
 async function postJson(path, payload) {
+  assertAdminApiFetchAllowed();
   const token = await getAccessTokenOrThrow();
   let response;
   try {
-    response = await fetch(buildUrl(path), {
+    response = await fetch(buildAdminApiUrl(path), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -72,10 +71,11 @@ async function postJson(path, payload) {
 }
 
 async function getJson(path) {
+  assertAdminApiFetchAllowed();
   const token = await getAccessTokenOrThrow();
   let response;
   try {
-    response = await fetch(buildUrl(path), {
+    response = await fetch(buildAdminApiUrl(path), {
       method: 'GET',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -92,8 +92,9 @@ async function getJson(path) {
 }
 
 async function patchJson(path, payload) {
+  assertAdminApiFetchAllowed();
   const token = await getAccessTokenOrThrow();
-  const response = await fetch(buildUrl(path), {
+  const response = await fetch(buildAdminApiUrl(path), {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',

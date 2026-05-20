@@ -3,12 +3,7 @@
  */
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { isSaasModeEnabled } from './saasAuthService.js';
-
-function buildUrl(path) {
-  const base = String(import.meta.env?.VITE_APP_ADMIN_API_BASE_URL || '').trim().replace(/\/$/, '');
-  if (base) return `${base}${path}`;
-  return path;
-}
+import { assertAdminApiFetchAllowed, buildAdminApiUrl } from '../config/adminApiBase.js';
 
 async function getAccessTokenOrThrow() {
   if (!supabasePlatformClient) {
@@ -26,8 +21,9 @@ async function getAccessTokenOrThrow() {
  */
 export async function syncGeneratedContractToSaas(row) {
   if (!isSaasModeEnabled() || !row?.id) return { skipped: true };
+  assertAdminApiFetchAllowed();
   const token = await getAccessTokenOrThrow();
-  const response = await fetch(buildUrl('/internal/app/contracts/generated'), {
+  const response = await fetch(buildAdminApiUrl('/internal/app/contracts/generated'), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

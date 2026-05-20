@@ -1,4 +1,5 @@
 import { emitStabilityLog } from '../services/stabilityLogService.js';
+import { getAdminApiBaseConfigError, getConfiguredAdminApiBaseUrl } from './adminApiBase.js';
 
 function toTrimmed(value) {
   return String(value || '').trim();
@@ -23,7 +24,7 @@ export function collectEnvSnapshot() {
   const appAnonKey = toTrimmed(import.meta.env.VITE_SUPABASE_APP_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY);
   const platformUrl = toTrimmed(import.meta.env.VITE_SUPABASE_PLATFORM_URL);
   const platformAnonKey = toTrimmed(import.meta.env.VITE_SUPABASE_PLATFORM_ANON_KEY);
-  const backendUrl = toTrimmed(import.meta.env.VITE_APP_ADMIN_API_BASE_URL);
+  const backendUrl = getConfiguredAdminApiBaseUrl();
   const consoleUrl = toTrimmed(import.meta.env.VITE_CONSOLE_SUPABASE_URL);
   const consoleAnonKey = toTrimmed(import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY);
 
@@ -57,6 +58,11 @@ export function validateCriticalEnv() {
   }
   if (env.hosts.console && env.hosts.platform && env.hosts.console !== env.hosts.platform) {
     issues.push('Supabase da plataforma e Console apontam para hosts diferentes.');
+  }
+
+  const backendConfigError = getAdminApiBaseConfigError();
+  if (import.meta.env.PROD && backendConfigError) {
+    issues.push(backendConfigError);
   }
 
   const ok = issues.length === 0;

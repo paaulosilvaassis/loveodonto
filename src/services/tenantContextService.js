@@ -6,6 +6,14 @@ import {
   normalizeModuleKey,
 } from '../tenant/tenantAccess.js';
 import { emitStabilityLog } from './stabilityLogService.js';
+import {
+  assertAdminApiFetchAllowed,
+  buildAdminApiUrl,
+  formatAdminApiNetworkError,
+  formatAdminApiServerError,
+  getConfiguredAdminApiBaseUrl,
+  getDevDirectAdminApiUrl,
+} from '../config/adminApiBase.js';
 
 function parseJsonSafe(value, fallback = {}) {
   if (!value) return fallback;
@@ -49,17 +57,8 @@ function buildFeatureFlags(globalRows = [], tenantRows = []) {
   return map;
 }
 
-/** Base da Admin API (ex.: http://127.0.0.1:3001). Vazio = usa o proxy do Vite em /internal/app. */
-function getAdminApiBaseUrl() {
-  return String(import.meta.env?.VITE_APP_ADMIN_API_BASE_URL || '').trim().replace(/\/$/, '');
-}
-
 function getTenantContextRequestUrl() {
-  const base = getAdminApiBaseUrl();
-  if (base) {
-    return `${base}/internal/app/tenant-context`;
-  }
-  return '/internal/app/tenant-context';
+  return buildAdminApiUrl('/internal/app/tenant-context');
 }
 
 function isLikelyNetworkFetchFailure(error) {
@@ -85,6 +84,7 @@ async function runQuery(queryFactory) {
 }
 
 async function fetchTenantContextViaAdminApiAttempt() {
+  assertAdminApiFetchAllowed();
   const { data: sessionData, error: sessionError } = await supabasePlatformClient.auth.getSession();
   if (sessionError) {
     throw new Error(sessionError.message || 'Falha ao obter sessão SaaS.');
@@ -107,23 +107,19 @@ async function fetchTenantContextViaAdminApiAttempt() {
   } catch (error) {
     const devDirectFallback =
       import.meta.env.DEV
-      && !getAdminApiBaseUrl()
+      && !getConfiguredAdminApiBaseUrl()
       && primaryUrl.startsWith('/')
       && isLikelyNetworkFetchFailure(error);
     if (devDirectFallback) {
       try {
-        response = await fetch('http://127.0.0.1:3001/internal/app/tenant-context', fetchOpts);
+        response = await fetch(getDevDirectAdminApiUrl('/internal/app/tenant-context'), fetchOpts);
       } catch {
         /* segue */
       }
     }
     if (!response) {
       if (isLikelyNetworkFetchFailure(error)) {
-        throw new Error(
-          'Não foi possível conectar ao backend SaaS em http://127.0.0.1:3001. '
-            + 'Na raiz: `npm run server:restart` ou `npm run console:stack` (API + Console). '
-            + 'O app (5176) usa o proxy `/internal/app` → 3001; o backend precisa estar ativo.',
-        );
+        throw new Error(formatAdminApiNetworkError({ primaryUrl }));
       }
       throw error;
     }
@@ -141,7 +137,7 @@ async function fetchTenantContextViaAdminApiAttempt() {
     emitStabilityLog('BACKEND_FAILED', {
       status: response.status,
       url: primaryUrl,
-      backendBaseConfigured: Boolean(getAdminApiBaseUrl()),
+      backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
     });
     if (response.status === 401) {
       throw new Error(
@@ -158,16 +154,13 @@ async function fetchTenantContextViaAdminApiAttempt() {
       );
     }
     if (response.status === 502 || response.status === 503 || response.status === 504 || response.status >= 500) {
-      throw new Error(
-        json?.error
-        || 'O backend SaaS (porta 3001) não respondeu. Na raiz: `npm run server:restart` ou `npm run stack:start`.',
-      );
+      throw new Error(json?.error || formatAdminApiServerError(response.status));
     }
     throw new Error(json?.error || `Erro HTTP ${response.status} ao carregar contexto da clínica.`);
   }
   emitStabilityLog('BACKEND_OK', {
     url: primaryUrl,
-    backendBaseConfigured: Boolean(getAdminApiBaseUrl()),
+    backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
   });
   return json;
 }

@@ -13,7 +13,29 @@ import {
   INTEGRATION_KEYS,
 } from './platformConsoleConstants.js';
 
-const DEFAULT_PLATFORM_API_BASE_URL = 'http://localhost:3001';
+const DEV_DEFAULT_PLATFORM_API_BASE_URL = 'http://127.0.0.1:3001';
+
+const PROD_BACKEND_MISCONFIGURED_MSG =
+  'Backend SaaS não configurado em produção. Configure VITE_PLATFORM_API_BASE_URL com a URL pública do backend.';
+
+function isLocalhostBackendUrl(url) {
+  const raw = normalizeEnvString(url);
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  } catch {
+    return /localhost|127\.0\.0\.1/i.test(raw);
+  }
+}
+
+function resolvePlatformApiBaseUrl() {
+  const configured = normalizeEnvString(import.meta.env.VITE_PLATFORM_API_BASE_URL);
+  if (import.meta.env.PROD) {
+    return configured;
+  }
+  return configured || DEV_DEFAULT_PLATFORM_API_BASE_URL;
+}
 
 function normalizeEnvString(value) {
   return String(value ?? '').trim();
@@ -29,9 +51,7 @@ function isValidHttpUrl(value) {
 }
 
 function resolvePlatformApiUrl(path) {
-  const baseUrl = normalizeEnvString(
-    import.meta.env.VITE_PLATFORM_API_BASE_URL || DEFAULT_PLATFORM_API_BASE_URL,
-  );
+  const baseUrl = resolvePlatformApiBaseUrl();
   const normalizedPath = String(path || '').trim();
   if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
   const base = baseUrl.replace(/\/+$/, '');
@@ -40,20 +60,30 @@ function resolvePlatformApiUrl(path) {
 }
 
 export function getPlatformApiConfigError() {
-  const baseUrl = normalizeEnvString(
-    import.meta.env.VITE_PLATFORM_API_BASE_URL || DEFAULT_PLATFORM_API_BASE_URL,
-  );
+  const baseUrl = resolvePlatformApiBaseUrl();
   const platformApiKey = normalizeEnvString(import.meta.env.VITE_PLATFORM_API_KEY);
-  if (!baseUrl) {
-    return 'VITE_PLATFORM_API_BASE_URL está vazio. Configure com o backend local (ex.: http://localhost:3001).';
+  if (import.meta.env.PROD) {
+    if (!normalizeEnvString(import.meta.env.VITE_PLATFORM_API_BASE_URL)) {
+      return (
+        'Variável de ambiente do backend não configurada. '
+        + 'Defina VITE_PLATFORM_API_BASE_URL com a URL pública da Admin API.'
+      );
+    }
+    if (isLocalhostBackendUrl(baseUrl)) {
+      return PROD_BACKEND_MISCONFIGURED_MSG;
+    }
+  } else if (!baseUrl) {
+    return 'VITE_PLATFORM_API_BASE_URL está vazio. Em dev, use http://127.0.0.1:3001 ou o proxy do Vite.';
   }
   if (!isValidHttpUrl(baseUrl)) {
-    return 'VITE_PLATFORM_API_BASE_URL deve ser uma URL http(s) válida (ex.: http://localhost:3001).';
+    return 'VITE_PLATFORM_API_BASE_URL deve ser uma URL http(s) válida.';
   }
   if (!platformApiKey) {
     return (
       'VITE_PLATFORM_API_KEY não foi definido na Console. '
-      + 'Sem essa chave a Console não pode provisionar clínicas no backend local.'
+      + (import.meta.env.PROD
+        ? 'Configure a chave no deploy da Console (mesmo valor que PLATFORM_API_KEY no server).'
+        : 'Sem essa chave a Console não pode provisionar clínicas no backend local.')
     );
   }
   return null;
@@ -128,7 +158,10 @@ async function callPlatformApi(path, { method = 'POST', body } = {}) {
   try {
     response = await fetch(resolvePlatformApiUrl(path), init);
   } catch (error) {
-    throw new Error(mapPlatformApiErrorMessage(error) || 'Falha ao chamar o backend local.');
+    const fallback = import.meta.env.PROD
+      ? 'Falha ao conectar à Admin API. Verifique VITE_PLATFORM_API_BASE_URL.'
+      : 'Falha ao chamar o backend local.';
+    throw new Error(mapPlatformApiErrorMessage(error) || fallback);
   }
   const text = await response.text();
   let json = {};

@@ -48,7 +48,6 @@ import {
   FileSignature,
   Clock,
   History,
-  FileSignature
 } from 'lucide-react';
 import ProcedureSelectorModal from '../components/ProcedureSelectorModal.jsx';
 import DocumentsSection from '../components/clinical/DocumentsSection.jsx';

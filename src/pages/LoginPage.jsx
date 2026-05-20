@@ -5,6 +5,7 @@ import { useAuth } from '../auth/useAuth.js';
 import { consumeLogoutReason } from '../auth/logoutReason.js';
 import { authenticateByEmailPassword } from '../services/userAuthService.js';
 import { isSaasModeEnabled, signInSaasWithPassword } from '../services/saasAuthService.js';
+import { getAdminApiBaseConfigError } from '../config/adminApiBase.js';
 import { seedAdminCredentialsIfEmpty, forceSeedAdminCredentials } from '../db/index.js';
 import Button from '../components/Button.jsx';
 import appLogo from '../assets/love-odonto-logo.png';
@@ -25,14 +26,27 @@ function formatLoginErrorMessage(error) {
     return 'A conexão foi interrompida ao validar o acesso. Tente entrar novamente.';
   }
   if (
+    lower.includes('backend saas não configurado')
+    || lower.includes('vite_platform_api_base_url')
+    || lower.includes('variável de ambiente do backend')
+  ) {
+    return raw;
+  }
+  if (
     lower.includes('failed to fetch')
     || lower.includes('networkerror')
     || lower.includes('network request failed')
     || lower.includes('fetch failed')
   ) {
+    const backendConfigError = getAdminApiBaseConfigError();
+    if (backendConfigError) return backendConfigError;
+    if (import.meta.env.PROD) {
+      return (
+        'Erro de rede no login. Verifique Supabase e se VITE_PLATFORM_API_BASE_URL aponta para a Admin API publicada.'
+      );
+    }
     return (
-      'Erro de rede no login. Verifique se o Supabase está acessível e se o backend local '
-      + '(http://localhost:3001) está em execução.'
+      'Erro de rede no login. Verifique Supabase e se a Admin API local (porta 3001) está em execução.'
     );
   }
   if (

@@ -2,18 +2,14 @@ import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { collectEnvSnapshot, validateCriticalEnv } from '../config/envGuard.js';
 import { getTenantContext } from './tenantContextService.js';
 import { emitStabilityLog } from './stabilityLogService.js';
+import {
+  assertAdminApiFetchAllowed,
+  buildAdminApiUrl,
+  getAdminApiBaseConfigError,
+} from '../config/adminApiBase.js';
 
 function checkResult(id, ok, details, remediation = '') {
   return { id, ok, details, remediation };
-}
-
-function backendBaseUrl() {
-  return String(import.meta.env.VITE_APP_ADMIN_API_BASE_URL || '').trim().replace(/\/$/, '');
-}
-
-function endpoint(path) {
-  const base = backendBaseUrl();
-  return base ? `${base}${path}` : path;
 }
 
 function looksLikeMissingMigration(message) {
@@ -87,25 +83,57 @@ export async function runStabilityHealthCheck({ user, tenantId }) {
     ),
   );
 
+  const backendConfigError = getAdminApiBaseConfigError();
+  if (backendConfigError) {
+    results.push(
+      checkResult(
+        'backend-config',
+        false,
+        backendConfigError,
+        'Defina VITE_PLATFORM_API_BASE_URL na Vercel com a URL pública da Admin API.',
+      ),
+    );
+  }
+
   try {
-    const healthResponse = await fetch(endpoint('/health'));
+    if (backendConfigError) {
+      throw new Error(backendConfigError);
+    }
+    if (import.meta.env.PROD) {
+      assertAdminApiFetchAllowed();
+    }
+    const healthResponse = await fetch(buildAdminApiUrl('/health'));
     results.push(
       checkResult(
         'backend-health',
         healthResponse.ok,
         healthResponse.ok ? 'Backend respondeu /health.' : `Backend respondeu HTTP ${healthResponse.status}.`,
-        healthResponse.ok ? '' : 'Reiniciar backend (porta 3001) e validar proxy.',
+        healthResponse.ok
+          ? ''
+          : (import.meta.env.PROD
+            ? 'Verifique deploy da Admin API e CORS.'
+            : 'Inicie a Admin API local (porta 3001) ou configure a URL base.'),
       ),
     );
   } catch (error) {
     results.push(
-      checkResult('backend-health', false, String(error?.message || error), 'Backend indisponível. Reinicie a API.'),
+      checkResult(
+        'backend-health',
+        false,
+        String(error?.message || error),
+        import.meta.env.PROD
+          ? 'Configure VITE_PLATFORM_API_BASE_URL e publique o server/.'
+          : 'Backend indisponível. Inicie a Admin API local.',
+      ),
     );
   }
 
   if (session?.access_token) {
     try {
-      const response = await fetch(endpoint('/internal/app/tenant-context'), {
+      if (backendConfigError) {
+        throw new Error(backendConfigError);
+      }
+      const response = await fetch(buildAdminApiUrl('/internal/app/tenant-context'), {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       const json = await response.json().catch(() => ({}));
