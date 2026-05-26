@@ -1,0 +1,16 @@
+# Configuração Nixpacks usada pelo Railway quando Root Directory = "server".
+# Pina Node 20 LTS (compatível com Express 4 + @supabase/supabase-js 2.x).
+
+providers = ["node"]
+
+[variables]
+NIXPACKS_NODE_VERSION = "20"
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm ci --omit=dev"]
+
+[start]
+cmd = "node index.js"
