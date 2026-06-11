@@ -12,7 +12,7 @@ import { listBoletoCharges } from '../services/boletoChargesService.js';
 import { listFinancingInstallments } from '../services/financingInstallmentsService.js';
 import { listReceivableCharges } from '../services/receivablesService.js';
 
-const admin = { id: 'user-admin', role: 'admin' };
+const admin = { id: 'user-admin', role: 'admin', tenant_id: 'tenant-1' };
 
 describe('Fluxos operacionais de financiamento e boletos', () => {
   beforeEach(async () => {
@@ -21,7 +21,7 @@ describe('Fluxos operacionais de financiamento e boletos', () => {
     await initDb();
     withDb((db) => {
       db.patients = [
-        { id: 'patient-1', full_name: 'Paciente Fluxo', status: 'active' },
+        { id: 'patient-1', full_name: 'Paciente Fluxo', status: 'active', tenant_id: 'tenant-1' },
       ];
       return db;
     });

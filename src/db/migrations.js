@@ -1354,6 +1354,55 @@ const migrations = {
     next.rolePermissions = merged;
     return next;
   },
+  /**
+   * 48: Pipeline personalizável por tenant.
+   * Enriquece crmPipelineStages com isActive, stageType ('normal'|'conversion'|'lost') e tenant_id.
+   * Estágios legados sem tenant_id permanecem null (são adotados pelo tenant no primeiro acesso ao Pipeline).
+   */
+  48: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 48 };
+    const inferStageType = (key) => {
+      if (key === 'aprovado') return 'conversion';
+      if (key === 'perdido') return 'lost';
+      return 'normal';
+    };
+    const stages = (Array.isArray(db.crmPipelineStages) ? db.crmPipelineStages : []).map((s) => ({
+      ...s,
+      isActive: s.isActive !== false,
+      stageType: ['normal', 'conversion', 'lost'].includes(s.stageType) ? s.stageType : inferStageType(s.key),
+      tenant_id: s.tenant_id ?? null,
+    }));
+    return {
+      ...db,
+      crmPipelineStages: stages,
+      version: 48,
+    };
+  },
+  /**
+   * 49: Configurações administrativas CRM por tenant.
+   * Inicializa stores vazios; seeds ocorrem no primeiro acesso via ensureCrmSettingsForTenant.
+   */
+  49: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 49 };
+    const ensureArray = (key) => (Array.isArray(db[key]) ? db[key] : []);
+    const automations = ensureArray('crmAutomations').map((a) => ({
+      ...a,
+      tenant_id: a.tenant_id ?? null,
+    }));
+    return {
+      ...db,
+      crmLeadSources: ensureArray('crmLeadSources'),
+      crmLeadInterests: ensureArray('crmLeadInterests'),
+      crmCommercialTeam: ensureArray('crmCommercialTeam'),
+      crmCommercialGoals: ensureArray('crmCommercialGoals'),
+      crmFollowUpSettings: ensureArray('crmFollowUpSettings'),
+      crmLossReasons: ensureArray('crmLossReasons'),
+      crmWhatsAppSettings: ensureArray('crmWhatsAppSettings'),
+      crmConversionSettings: ensureArray('crmConversionSettings'),
+      crmAutomations: automations,
+      version: 49,
+    };
+  },
 };
 
 /** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */

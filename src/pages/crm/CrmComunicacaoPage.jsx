@@ -9,18 +9,8 @@ import {
   LEAD_SOURCE_LABELS,
 } from '../../services/crmService.js';
 import { useAuth } from '../../auth/useAuth.js';
+import { getWhatsAppTemplatesForTenant, ensureCrmSettingsForTenant } from '../../services/crmSettingsService.js';
 import { MessageCircle, Send, Search, ExternalLink } from 'lucide-react';
-
-/** Templates com texto padrão para preencher a mensagem. */
-const WHATSAPP_TEMPLATES = [
-  { id: 'primeiro-contato', label: 'Primeiro contato', text: 'Olá! Somos a clínica e gostaríamos de saber como podemos ajudar. Você demonstrou interesse em nossos serviços.' },
-  { id: 'confirmacao-avaliacao', label: 'Confirmação de avaliação', text: 'Olá! Confirmando sua avaliação agendada. Por favor, confirme se poderá comparecer.' },
-  { id: 'lembrete', label: 'Lembrete', text: 'Olá! Lembrete: você tem um compromisso em breve conosco. Qualquer dúvida, estamos à disposição.' },
-  { id: 'pos-avaliacao', label: 'Pós-avaliação', text: 'Olá! Esperamos que tenha tido uma ótima experiência na avaliação. Em breve enviaremos o orçamento combinado.' },
-  { id: 'followup-orcamento', label: 'Follow-up de orçamento', text: 'Olá! Passando para saber se teve oportunidade de analisar o orçamento que enviamos. Podemos tirar dúvidas.' },
-  { id: 'reativacao', label: 'Reativação de paciente', text: 'Olá! Sentimos sua falta. Gostaríamos de saber se há algo em que possamos ajudar. Estamos à disposição!' },
-  { id: 'pos-tratamento', label: 'Pós-tratamento', text: 'Olá! Obrigado por confiar em nós. Como está se sentindo após o tratamento? Qualquer necessidade, estamos aqui.' },
-];
 
 function formatDate(iso) {
   if (!iso) return '—';
@@ -30,11 +20,19 @@ function formatDate(iso) {
 
 export default function CrmComunicacaoPage() {
   const { user } = useAuth();
+  const tenantId = user?.tenantId || user?.tenant_id || '';
   const [search, setSearch] = useState('');
   const [selectedLeadId, setSelectedLeadId] = useState('');
   const [messageText, setMessageText] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [logsVersion, setLogsVersion] = useState(0);
+
+  const whatsappTemplates = useMemo(() => {
+    if (user && tenantId) {
+      try { ensureCrmSettingsForTenant(user); } catch { /* dev */ }
+    }
+    return getWhatsAppTemplatesForTenant(tenantId);
+  }, [user, tenantId]);
 
   const allLeads = useMemo(() => listLeads(), []);
   const filteredLeads = useMemo(() => {
@@ -59,7 +57,7 @@ export default function CrmComunicacaoPage() {
 
   const handleTemplateChange = (templateId) => {
     setSelectedTemplateId(templateId || '');
-    const t = WHATSAPP_TEMPLATES.find((x) => x.id === templateId);
+    const t = whatsappTemplates.find((x) => x.id === templateId);
     setMessageText(t ? t.text : '');
   };
 
@@ -152,7 +150,7 @@ export default function CrmComunicacaoPage() {
                   aria-label="Template de mensagem"
                 >
                   <option value="">Nenhum — mensagem livre</option>
-                  {WHATSAPP_TEMPLATES.map((t) => (
+                  {whatsappTemplates.map((t) => (
                     <option key={t.id} value={t.id}>{t.label}</option>
                   ))}
                 </select>

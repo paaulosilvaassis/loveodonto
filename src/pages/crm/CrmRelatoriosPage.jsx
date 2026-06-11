@@ -1,35 +1,39 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CrmLayout } from '../../crm/ui/CrmLayout.jsx';
-import { SectionCard } from '../../components/SectionCard.jsx';
 import {
-  getCrmKpis,
-  getCrmFunnel,
-  getCrmSpeedMetrics,
-  getCrmFollowupMetrics,
-  getCrmOwnerPerformance,
-  getCrmLossMetrics,
+  AlertTriangle,
+  BarChart3,
+  Clock,
+  DollarSign,
+  Filter,
+  Target,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
+import Button from '../../components/Button.jsx';
+import { CrmFunnelTable } from '../../crm/ui/CrmFunnelTable.jsx';
+import { CrmDashboardExportBar } from '../../crm/ui/CrmDashboardExport.jsx';
+import {
+  getCrmExecutiveDashboard,
+  getCrmCommercialGoals,
+  saveCrmCommercialGoals,
 } from '../../services/crmReportsService.js';
-import { CrmFunnelChart } from '../../crm/ui/CrmFunnelChart.jsx';
+import { LEAD_SOURCE_LABELS, LEAD_INTEREST_LABELS } from '../../services/crmService.js';
 import { listUsers } from '../../services/teamService.js';
 import { getProfessionalOptions } from '../../services/collaboratorService.js';
-import { LEAD_SOURCE_LABELS } from '../../services/crmService.js';
+import { listPipelineStagesForTenant } from '../../services/crmPipelineStageService.js';
+import { useAuth } from '../../auth/useAuth.js';
+import { formatCurrencyBRL } from '../../utils/currency.js';
 import { formatDurationHours } from '../../utils/formatDuration.js';
-
-const formatNumber = (n) =>
-  typeof n === 'number' && !Number.isNaN(n) ? new Intl.NumberFormat('pt-BR').format(n) : '—';
-import { PieChart, Pie, Legend, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import {
-  Users,
-  UserCheck,
-  Calendar,
-  FileText,
-  TrendingUp,
-  Clock,
-  AlertCircle,
-  Target,
-  Zap,
-} from 'lucide-react';
 
 const RANGE_OPTIONS = [
   { value: '7d', label: '7 dias' },
@@ -39,573 +43,535 @@ const RANGE_OPTIONS = [
 ];
 const RANGE_CUSTOM = 'custom';
 
+const LOSS_COLORS = ['#EF4444', '#F97316', '#EAB308', '#84CC16', '#6366F1', '#94A3B8'];
+const MEDALS = ['🥇', '🥈', '🥉'];
+
+function formatNumber(n) {
+  return typeof n === 'number' && !Number.isNaN(n) ? new Intl.NumberFormat('pt-BR').format(n) : '—';
+}
+
+function formatPercent(n) {
+  if (typeof n !== 'number' || Number.isNaN(n)) return '—';
+  return `${new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(n)}%`;
+}
+
 function getAssignableOptions() {
   const users = listUsers().filter((u) => u.active !== false);
   const pros = getProfessionalOptions();
   const seen = new Set();
   const options = [{ id: '', name: 'Todos' }];
   users.forEach((u) => {
-    if (!seen.has(u.id)) {
-      seen.add(u.id);
-      options.push({ id: u.id, name: u.name || 'Usuário' });
-    }
+    if (!seen.has(u.id)) { seen.add(u.id); options.push({ id: u.id, name: u.name || 'Usuário' }); }
   });
   pros.forEach((p) => {
-    if (!seen.has(p.id)) {
-      seen.add(p.id);
-      options.push({ id: p.id, name: p.name || 'Profissional' });
-    }
+    if (!seen.has(p.id)) { seen.add(p.id); options.push({ id: p.id, name: p.name || 'Profissional' }); }
   });
   return options;
 }
 
-const CHANNEL_OPTIONS = [
-  { value: '', label: 'Todos os canais' },
-  ...Object.entries(LEAD_SOURCE_LABELS).map(([k, v]) => ({ value: k, label: v })),
-];
-
-function KpiCard({ icon: Icon, value, label, sublabel, variant, onClick }) {
-  const isClickable = typeof onClick === 'function';
+function SectionHeader({ icon: Icon, title, subtitle }) {
   return (
-    <div
-      role={isClickable ? 'button' : undefined}
-      tabIndex={isClickable ? 0 : undefined}
-      className={`crm-report-kpi-card crm-report-kpi-${variant || 'default'} ${isClickable ? 'crm-report-kpi-clickable' : ''}`}
-      onClick={isClickable ? onClick : undefined}
-      onKeyDown={isClickable ? (e) => e.key === 'Enter' && onClick(e) : undefined}
-    >
-      <div className="crm-report-kpi-header">
-        {Icon && <Icon size={20} className="crm-report-kpi-icon" aria-hidden />}
+    <div className="crm-mgr-section-head">
+      <h2 className="crm-dash-section-title">
+        {Icon && <Icon size={18} />}
+        {title}
+      </h2>
+      {subtitle && <p className="crm-mgr-section-sub">{subtitle}</p>}
+    </div>
+  );
+}
+
+function ResumoCard({ label, value, variant }) {
+  return (
+    <div className={`crm-mgr-resumo-card crm-mgr-resumo-card--${variant || 'default'}`}>
+      <span className="crm-mgr-resumo-label">{label}</span>
+      <strong className="crm-mgr-resumo-value">{value}</strong>
+    </div>
+  );
+}
+
+function FinancialCard({ label, value, variant }) {
+  return (
+    <div className={`crm-mgr-money-card crm-mgr-money-card--${variant || 'default'}`}>
+      <span className="crm-mgr-money-label">{label}</span>
+      <strong className="crm-mgr-money-value">{value}</strong>
+    </div>
+  );
+}
+
+function GoalProgress({ label, current, goal, percent, format = 'number' }) {
+  const currentLabel = format === 'currency'
+    ? formatCurrencyBRL(current)
+    : format === 'percent'
+      ? formatPercent(current)
+      : formatNumber(current);
+  const goalLabel = format === 'currency'
+    ? formatCurrencyBRL(goal)
+    : format === 'percent'
+      ? formatPercent(goal)
+      : formatNumber(goal);
+
+  return (
+    <div className="crm-mgr-goal-block">
+      <div className="crm-mgr-goal-head">
+        <span>{label}</span>
+        <strong>{currentLabel} de {goalLabel}</strong>
       </div>
-      <div className="crm-report-kpi-value">{value}</div>
-      <div className="crm-report-kpi-label">{label}</div>
-      {sublabel && <div className="crm-report-kpi-sublabel">{sublabel}</div>}
+      <div className="crm-mgr-progress">
+        <div className="crm-mgr-progress-fill" style={{ width: `${Math.min(100, percent)}%` }} />
+      </div>
+      <span className="crm-mgr-progress-pct">{percent}%</span>
     </div>
   );
 }
 
 export default function CrmRelatoriosPage() {
   const navigate = useNavigate();
-  const [range, setRange] = useState('30d');
+  const { user } = useAuth();
+  const tenantId = user?.tenantId || user?.tenant_id || '';
+
+  const [range, setRange] = useState('current_month');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [channel, setChannel] = useState('');
   const [ownerId, setOwnerId] = useState('');
-  const [appliedFilters, setAppliedFilters] = useState({
-    range: '30d',
-    customStart: '',
-    customEnd: '',
-    channel: '',
-    ownerId: '',
-  });
+  const [interest, setInterest] = useState('');
+  const [stageKey, setStageKey] = useState('');
+  const [showFilters, setShowFilters] = useState(true);
   const [filterError, setFilterError] = useState('');
+  const [goalsEdit, setGoalsEdit] = useState(null);
+  const [goalsVersion, setGoalsVersion] = useState(0);
 
-  const validateCustomRange = useCallback(() => {
-    if (!customStart || !customEnd) {
-      return 'Selecione Data Inicial e Data Final para o período personalizado.';
-    }
-    if (new Date(customEnd).getTime() < new Date(customStart).getTime()) {
-      return 'Data Final não pode ser menor que a Data Inicial.';
-    }
-    return '';
-  }, [customStart, customEnd]);
+  const [applied, setApplied] = useState({
+    range: 'current_month', customStart: '', customEnd: '', channel: '', ownerId: '', interest: '', stageKey: '',
+  });
+
+  const assignableOptions = useMemo(() => getAssignableOptions(), []);
+  const stageOptions = useMemo(
+    () => listPipelineStagesForTenant(tenantId, { includeInactive: false }),
+    [tenantId]
+  );
 
   const applyFilters = useCallback(() => {
     if (range === RANGE_CUSTOM) {
-      const error = validateCustomRange();
-      if (error) {
-        setFilterError(error);
+      if (!customStart || !customEnd) {
+        setFilterError('Selecione Data Inicial e Data Final.');
+        return;
+      }
+      if (new Date(customEnd) < new Date(customStart)) {
+        setFilterError('Data Final não pode ser menor que a Data Inicial.');
         return;
       }
     }
-
     setFilterError('');
-    setAppliedFilters({
-      range,
-      customStart,
-      customEnd,
-      channel,
-      ownerId,
-    });
-  }, [range, customStart, customEnd, channel, ownerId, validateCustomRange]);
-
-  const handleRangeChange = useCallback((value) => {
-    setRange(value);
-    setFilterError('');
-  }, []);
+    setApplied({ range, customStart, customEnd, channel, ownerId, interest, stageKey });
+  }, [range, customStart, customEnd, channel, ownerId, interest, stageKey]);
 
   const opts = useMemo(
     () => ({
-      range: appliedFilters.range,
-      customStart: appliedFilters.range === RANGE_CUSTOM ? appliedFilters.customStart : undefined,
-      customEnd: appliedFilters.range === RANGE_CUSTOM ? appliedFilters.customEnd : undefined,
-      channel: appliedFilters.channel || undefined,
-      ownerId: appliedFilters.ownerId || undefined,
+      tenantId,
+      range: applied.range,
+      customStart: applied.range === RANGE_CUSTOM ? applied.customStart : undefined,
+      customEnd: applied.range === RANGE_CUSTOM ? applied.customEnd : undefined,
+      channel: applied.channel || undefined,
+      ownerId: applied.ownerId || undefined,
+      interest: applied.interest || undefined,
+      stageKey: applied.stageKey || undefined,
     }),
-    [appliedFilters]
+    [tenantId, applied, goalsVersion]
   );
 
-  const hasPendingChanges = useMemo(
-    () =>
-      appliedFilters.range !== range ||
-      appliedFilters.customStart !== customStart ||
-      appliedFilters.customEnd !== customEnd ||
-      appliedFilters.channel !== channel ||
-      appliedFilters.ownerId !== ownerId,
-    [appliedFilters, range, customStart, customEnd, channel, ownerId]
-  );
+  const dashboard = useMemo(() => getCrmExecutiveDashboard(opts), [opts]);
+  const { resumoComercial } = dashboard;
 
-  const customRangeInvalid = useMemo(() => {
-    if (range !== RANGE_CUSTOM) return false;
-    return Boolean(validateCustomRange());
-  }, [range, validateCustomRange]);
+  const handleStageClick = useCallback((key) => {
+    navigate('/crm/leads', { state: { filterStageKey: key } });
+  }, [navigate]);
 
-  const kpis = useMemo(() => getCrmKpis(opts), [opts]);
-  const funnel = useMemo(() => getCrmFunnel(opts), [opts]);
-  const speed = useMemo(() => getCrmSpeedMetrics(opts), [opts]);
-  const followup = useMemo(() => getCrmFollowupMetrics(opts), [opts]);
-  const ownerPerf = useMemo(() => getCrmOwnerPerformance(opts), [opts]);
-  const loss = useMemo(() => getCrmLossMetrics(opts), [opts]);
+  const handleAlertClick = useCallback((alert) => {
+    navigate(alert.route, { state: alert.state });
+  }, [navigate]);
 
-  const assignableOptions = useMemo(() => getAssignableOptions(), []);
+  const startGoalsEdit = () => {
+    const g = getCrmCommercialGoals(tenantId);
+    setGoalsEdit({
+      leadsGoal: g.leadsGoal,
+      revenueGoal: g.revenueGoal,
+      closingsGoal: g.closingsGoal,
+      conversionGoal: g.conversionGoal,
+    });
+  };
 
-  const lossPieData = useMemo(
-    () =>
-      loss.porMotivo?.map((m) => ({
-        name: m.motivo,
-        value: m.count,
-      })) || [],
-    [loss.porMotivo]
-  );
+  const saveGoals = () => {
+    if (!goalsEdit) return;
+    saveCrmCommercialGoals(user, goalsEdit);
+    setGoalsEdit(null);
+    setGoalsVersion((v) => v + 1);
+  };
 
-  const handleStageClick = useCallback(
-    (stageKey) => {
-      navigate('/crm/leads', { state: { filterStageKey: stageKey } });
-    },
-    [navigate]
-  );
-
-  const handleLeadClick = useCallback(
-    (id) => {
-      navigate(`/crm/leads/${id}`);
-    },
-    [navigate]
-  );
+  const lossBarData = dashboard.lossReasons.map((r, i) => ({
+    name: r.motivo,
+    percent: r.percent,
+    fill: LOSS_COLORS[i % LOSS_COLORS.length],
+  }));
 
   return (
-    <CrmLayout
-      title="Relatórios & Métricas"
-      description="Dashboard Comercial/CRM: KPIs, funil, conversões e performance."
-    >
-      <div className="crm-report-filters">
-        <div className="crm-report-filter-group">
-          <label>Período</label>
-          <select value={range} onChange={(e) => handleRangeChange(e.target.value)}>
-            {RANGE_OPTIONS.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.label}
-              </option>
-            ))}
-          </select>
+    <div className="crm-dash-page crm-mgr-page">
+      <header className="crm-dash-header">
+        <div className="crm-dash-header-text">
+          <h1>Dashboard Gerencial Comercial</h1>
+          <p>Visão rápida da saúde comercial — o que está acontecendo, onde agir e quanto dinheiro há no funil.</p>
         </div>
-        {range === RANGE_CUSTOM && (
-          <>
-            <div className="crm-report-filter-group">
-              <label>Início</label>
-              <input
-                type="date"
-                value={customStart}
-                onChange={(e) => {
-                  setCustomStart(e.target.value);
-                  setFilterError('');
-                }}
-              />
+        <div className="crm-dash-header-actions">
+          <Button type="button" variant="ghost" icon={Filter} onClick={() => setShowFilters((v) => !v)}>
+            Filtros
+          </Button>
+          <CrmDashboardExportBar dashboard={dashboard} clinicName="Love Odonto" />
+        </div>
+      </header>
+
+      {showFilters && (
+        <div className="crm-dash-filters">
+          <div className="crm-dash-filters-grid">
+            <div className="form-field">
+              <label htmlFor="dash-range">Período</label>
+              <select id="dash-range" value={range} onChange={(e) => { setRange(e.target.value); setFilterError(''); }}>
+                {RANGE_OPTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              </select>
             </div>
-            <div className="crm-report-filter-group">
-              <label>Fim</label>
-              <input
-                type="date"
-                value={customEnd}
-                onChange={(e) => {
-                  setCustomEnd(e.target.value);
-                  setFilterError('');
-                }}
-              />
-            </div>
-          </>
-        )}
-        <div className="crm-report-filter-group">
-          <label>Canal</label>
-          <select value={channel} onChange={(e) => { setChannel(e.target.value); setFilterError(''); }}>
-            {CHANNEL_OPTIONS.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="crm-report-filter-group">
-          <label>Responsável</label>
-          <select value={ownerId} onChange={(e) => { setOwnerId(e.target.value); setFilterError(''); }}>
-            {assignableOptions.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="crm-report-filter-group">
-          <label>&nbsp;</label>
-          <button
-            type="button"
-            className="button primary"
-            onClick={applyFilters}
-            disabled={!hasPendingChanges}
-            title={customRangeInvalid ? 'Preencha um intervalo de datas válido para aplicar.' : 'Aplicar filtros'}
-          >
-            Aplicar
-          </button>
-        </div>
-      </div>
-      {filterError && (
-        <p className="muted" style={{ marginTop: '-0.5rem', marginBottom: '1rem', color: '#b91c1c' }}>
-          {filterError}
-        </p>
-      )}
-
-      <section className="crm-report-section">
-        <h3 className="crm-report-section-title">KPIs</h3>
-        <div className="crm-report-kpis">
-          <KpiCard
-            icon={Users}
-            value={formatNumber(kpis.leadsNoPeriodo)}
-            label="Leads no período"
-            onClick={() => navigate('/crm/leads')}
-          />
-          <KpiCard
-            icon={Target}
-            value={formatNumber(kpis.leadsAtivos)}
-            label="Leads ativos"
-            onClick={() => navigate('/crm/leads')}
-          />
-          <KpiCard
-            icon={Calendar}
-            value={formatNumber(kpis.avaliacoesAgendadas)}
-            label="Avaliações agendadas"
-            onClick={() => navigate('/crm/leads', { state: { filterStageKey: 'avaliacao_agendada' } })}
-          />
-          <KpiCard
-            icon={UserCheck}
-            value={formatNumber(kpis.avaliacoesRealizadas)}
-            label="Avaliações realizadas"
-            onClick={() => navigate('/crm/leads', { state: { filterStageKey: 'avaliacao_realizada' } })}
-          />
-          <KpiCard
-            icon={FileText}
-            value={formatNumber(kpis.orcamentosEnviados)}
-            label="Orçamentos enviados"
-            onClick={() => navigate('/crm/leads', { state: { filterStageKey: 'orcamento_apresentado' } })}
-          />
-          <KpiCard
-            icon={TrendingUp}
-            value={formatNumber(kpis.fechadosGanhos)}
-            label="Fechados / Ganhos"
-            variant="success"
-            onClick={() => navigate('/crm/leads', { state: { filterStageKey: 'aprovado' } })}
-          />
-          <KpiCard
-            icon={Zap}
-            value={`${kpis.taxaConversaoGeral}%`}
-            label="Taxa de conversão"
-            variant="success"
-          />
-          <KpiCard
-            icon={Clock}
-            value={kpis.hasTempoMedioPrimeiroContatoData ? formatDurationHours(kpis.tempoMedioPrimeiroContato) : '—'}
-            label="Tempo médio 1º contato"
-            sublabel={kpis.hasTempoMedioPrimeiroContatoData ? undefined : 'Sem dados no período'}
-          />
-          <KpiCard
-            icon={AlertCircle}
-            value={formatNumber(kpis.followUpsAtrasados)}
-            label="Follow-ups atrasados"
-            variant="danger"
-            onClick={() => navigate('/comercial/follow-up')}
-          />
-        </div>
-      </section>
-
-      <section className="crm-report-section">
-        <h3 className="crm-report-section-title">Funil por estágio</h3>
-        <SectionCard>
-          <CrmFunnelChart
-            funnelSteps={funnel.funnelSteps}
-            maiorQuedaIndex={funnel.maiorQuedaIndex}
-            maiorQuedaStage={funnel.maiorQuedaStage}
-            onStageClick={handleStageClick}
-          />
-        </SectionCard>
-      </section>
-
-      <section className="crm-report-section">
-        <h3 className="crm-report-section-title">Conversão entre etapas</h3>
-        <SectionCard>
-          {funnel.conversionMatrix?.length === 0 ? (
-            <p className="muted" style={{ padding: '2rem', textAlign: 'center' }}>
-              Dados insuficientes para calcular conversões.
-            </p>
-          ) : (
-            <div className="table-wrapper crm-conversion-table-wrapper">
-              <table className="crm-conversion-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '20%' }}>De</th>
-                    <th style={{ width: '20%' }}>Para</th>
-                    <th style={{ width: '15%' }}>Origem</th>
-                    <th style={{ width: '15%' }}>Destino</th>
-                    <th style={{ width: '15%' }}>Taxa</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {funnel.conversionMatrix?.map((row, i) => {
-                    const rate = row.rate;
-                    const rateClass =
-                      rate > 100
-                        ? 'crm-conversion-rate-high'
-                        : rate === 100
-                          ? 'crm-conversion-rate-full'
-                          : rate === 0
-                            ? 'crm-conversion-rate-zero'
-                            : '';
-                    return (
-                      <tr key={i}>
-                        <td className="crm-conversion-col-de">{row.fromLabel}</td>
-                        <td className="crm-conversion-col-para">{row.toLabel}</td>
-                        <td>{row.fromCount}</td>
-                        <td>{row.toCount}</td>
-                        <td className={rateClass}>{rate}%</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </SectionCard>
-      </section>
-
-      <section className="crm-report-section">
-        <h3 className="crm-report-section-title">Velocidade do funil</h3>
-        <SectionCard>
-          <div className="crm-speed-kpi-card">
-            <span className="crm-speed-kpi-label">Tempo médio até 1º contato</span>
-            <span className="crm-speed-kpi-value">
-              {speed.hasTempoMedioPrimeiroContatoData
-                ? formatDurationHours(speed.tempoMedioPrimeiroContato)
-                : '—'}
-            </span>
-            <span className="crm-speed-kpi-sub">
-              {speed.hasTempoMedioPrimeiroContatoData ? 'no período selecionado' : 'Sem dados suficientes'}
-            </span>
-          </div>
-
-          {(() => {
-            const rows = speed.tempoMedioPorEtapa || [];
-            const gargalo = rows.reduce(
-              (acc, r, i) => (r.mediaHoras > (acc?.mediaHoras ?? 0) ? { ...r, index: i } : acc),
-              null
-            );
-            return (
+            {range === RANGE_CUSTOM && (
               <>
-                {gargalo && gargalo.mediaHoras > 0 && (
-                  <div className="crm-speed-gargalo-alert" role="status">
-                    Maior tempo médio: <strong>{gargalo.label}</strong> ({formatDurationHours(gargalo.mediaHoras)})
-                  </div>
-                )}
-                <div className="table-wrapper crm-speed-table-wrapper">
-                  <table className="crm-speed-table">
-                    <thead>
-                      <tr>
-                        <th style={{ width: '45%' }}>Etapa</th>
-                        <th style={{ width: '30%' }}>Média</th>
-                        <th style={{ width: '25%' }}>Leads</th>
-                        <th style={{ width: '80px' }} />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rows.map((row, i) => (
-                        <tr
-                          key={row.stageKey || i}
-                          className={gargalo?.index === i && gargalo.mediaHoras > 0 ? 'crm-speed-row-gargalo' : ''}
-                        >
-                          <td className="crm-speed-col-etapa">{row.label}</td>
-                          <td>{formatDurationHours(row.mediaHoras)}</td>
-                          <td>{row.count}</td>
-                          <td className="crm-speed-badge-cell">
-                            {gargalo?.index === i && gargalo.mediaHoras > 0 ? (
-                              <span className="crm-speed-badge-gargalo">Gargalo</span>
-                            ) : null}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="form-field">
+                  <label htmlFor="dash-from">De</label>
+                  <input id="dash-from" type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} />
+                </div>
+                <div className="form-field">
+                  <label htmlFor="dash-to">Até</label>
+                  <input id="dash-to" type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} />
                 </div>
               </>
-            );
-          })()}
-          <h4 style={{ marginBottom: '0.75rem', fontSize: '0.95rem' }}>Leads parados (sem atualização)</h4>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-            <div>
-              <strong>3 dias:</strong> {speed.leadsParados?.[3]?.length || 0}
-              {speed.leadsParados?.[3]?.length > 0 && (
-                <ul style={{ marginTop: '0.25rem', paddingLeft: '1.25rem', fontSize: '0.875rem' }}>
-                  {speed.leadsParados[3].slice(0, 5).map((l) => (
-                    <li key={l.id}>
-                      <button type="button" className="button-link" onClick={() => handleLeadClick(l.id)}>
-                        {l.name || l.id}
-                      </button>
-                    </li>
-                  ))}
-                  {speed.leadsParados[3].length > 5 && <li>... e mais {speed.leadsParados[3].length - 5}</li>}
-                </ul>
-              )}
-            </div>
-            <div>
-              <strong>7 dias:</strong> {speed.leadsParados?.[7]?.length || 0}
-            </div>
-            <div>
-              <strong>14 dias:</strong> {speed.leadsParados?.[14]?.length || 0}
-            </div>
-          </div>
-        </SectionCard>
-      </section>
-
-      <section className="crm-report-section">
-        <h3 className="crm-report-section-title">Follow-up</h3>
-        <SectionCard>
-          <div className="crm-report-followup-cards">
-            <div className="crm-report-followup-card atrasados">
-              <span className="crm-report-followup-value">{followup.atrasados}</span>
-              <span className="crm-report-followup-label">Atrasados</span>
-            </div>
-            <div className="crm-report-followup-card hoje">
-              <span className="crm-report-followup-value">{followup.hoje}</span>
-              <span className="crm-report-followup-label">Hoje</span>
-            </div>
-            <div className="crm-report-followup-card proximos">
-              <span className="crm-report-followup-value">{followup.proximos7}</span>
-              <span className="crm-report-followup-label">Próximos 7 dias</span>
-            </div>
-          </div>
-          <p style={{ marginTop: '1rem', fontSize: '0.9rem' }}>
-            <strong>Leads sem follow-up:</strong> {followup.leadsSemFollowUp?.length || 0}
-            {followup.leadsSemFollowUp?.length > 0 && (
-              <span style={{ marginLeft: '0.5rem' }}>
-                ({followup.leadsSemFollowUp.slice(0, 3).map((l) => l.name).join(', ')}
-                {followup.leadsSemFollowUp.length > 3 && ` e mais ${followup.leadsSemFollowUp.length - 3}`})
-              </span>
             )}
-          </p>
-        </SectionCard>
+            <div className="form-field">
+              <label htmlFor="dash-owner">Responsável</label>
+              <select id="dash-owner" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
+                {assignableOptions.map((o) => <option key={o.id || 'all'} value={o.id}>{o.name}</option>)}
+              </select>
+            </div>
+            <div className="form-field">
+              <label htmlFor="dash-source">Origem</label>
+              <select id="dash-source" value={channel} onChange={(e) => setChannel(e.target.value)}>
+                <option value="">Todas</option>
+                {Object.entries(LEAD_SOURCE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div className="form-field">
+              <label htmlFor="dash-interest">Tratamento</label>
+              <select id="dash-interest" value={interest} onChange={(e) => setInterest(e.target.value)}>
+                <option value="">Todos</option>
+                {Object.entries(LEAD_INTEREST_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </div>
+            <div className="form-field">
+              <label htmlFor="dash-stage">Estágio</label>
+              <select id="dash-stage" value={stageKey} onChange={(e) => setStageKey(e.target.value)}>
+                <option value="">Todos</option>
+                {stageOptions.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </select>
+            </div>
+          </div>
+          {filterError && <p className="crm-dash-filter-error" role="alert">{filterError}</p>}
+          <div className="crm-dash-filters-actions">
+            <Button type="button" variant="primary" onClick={applyFilters}>Aplicar filtros</Button>
+          </div>
+        </div>
+      )}
+
+      {/* SEÇÃO 1 — Resumo Comercial */}
+      <section className="crm-dash-section">
+        <SectionHeader icon={TrendingUp} title="Resumo Comercial" subtitle="Como estou?" />
+        <div className="crm-mgr-resumo-grid">
+          <ResumoCard label="Leads recebidos" value={formatNumber(resumoComercial.leads)} variant="primary" />
+          <ResumoCard label="Avaliações agendadas" value={formatNumber(resumoComercial.avaliacoes)} />
+          <ResumoCard label="Comparecimentos" value={formatNumber(resumoComercial.comparecimentos)} />
+          <ResumoCard label="Fechamentos" value={formatNumber(resumoComercial.fechamentos)} variant="success" />
+          <ResumoCard label="Conversão" value={formatPercent(resumoComercial.conversao)} variant="accent" />
+          <ResumoCard label="Receita gerada" value={formatCurrencyBRL(resumoComercial.receita)} variant="revenue" />
+        </div>
       </section>
 
-      <section className="crm-report-section">
-        <h3 className="crm-report-section-title">Performance por responsável</h3>
-        <SectionCard>
-          {ownerPerf.length === 0 ? (
-            <div className="crm-owner-empty">
-              <p className="crm-owner-empty-text">Sem dados de performance no período selecionado.</p>
-            </div>
-          ) : (
-            <div className="table-wrapper crm-owner-table-wrapper">
-              <table className="crm-owner-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '30%' }}>Responsável</th>
-                    <th style={{ width: '10%' }}>Leads</th>
-                    <th style={{ width: '10%' }}>Ganhos</th>
-                    <th style={{ width: '12%' }}>Taxa</th>
-                    <th style={{ width: '18%' }}>Tempo 1º contato</th>
-                    <th style={{ width: '20%' }}>Follow-ups atrasados</th>
+      {/* SEÇÃO 2 — Alertas e Prioridades */}
+      <section className="crm-dash-section crm-dash-section--card crm-mgr-alerts-section">
+        <SectionHeader icon={AlertTriangle} title="Precisam de atenção" subtitle="O que precisa ser feito hoje?" />
+        {dashboard.alerts.length === 0 ? (
+          <p className="crm-mgr-alerts-ok">✅ Nenhum alerta crítico no momento. Continue acompanhando o funil.</p>
+        ) : (
+          <ul className="crm-mgr-alerts-list">
+            {dashboard.alerts.map((alert) => (
+              <li key={alert.id} className="crm-mgr-alert-item">
+                <div className="crm-mgr-alert-text">
+                  <span className="crm-mgr-alert-icon" aria-hidden="true">⚠</span>
+                  <span>
+                    <strong>{alert.count}</strong>
+                    {' '}
+                    {alert.message.toLowerCase()}
+                  </span>
+                </div>
+                <Button type="button" variant="secondary" size="sm" onClick={() => handleAlertClick(alert)}>
+                  Ver lista
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* SEÇÃO 3 — Dinheiro no Funil */}
+      <section className="crm-dash-section">
+        <SectionHeader icon={DollarSign} title="Dinheiro no Funil" subtitle="Quanto dinheiro tenho?" />
+        <div className="crm-mgr-money-grid">
+          <FinancialCard label="Oportunidades abertas" value={formatCurrencyBRL(dashboard.financial.oportunidadesAbertas)} variant="primary" />
+          <FinancialCard label="Orçamentos enviados" value={formatCurrencyBRL(dashboard.financial.orcamentosEnviados)} />
+          <FinancialCard label="Valor em negociação" value={formatCurrencyBRL(dashboard.financial.valorNegociacao)} variant="accent" />
+          <FinancialCard label="Valor fechado" value={formatCurrencyBRL(dashboard.financial.valorFechado)} variant="success" />
+          <FinancialCard label="Valor perdido" value={formatCurrencyBRL(dashboard.financial.valorPerdido)} variant="danger" />
+        </div>
+      </section>
+
+      {/* SEÇÃO 4 — Funil Comercial */}
+      <section className="crm-dash-section crm-dash-section--card">
+        <SectionHeader icon={BarChart3} title="Funil Comercial" subtitle="Onde estou perdendo?" />
+        <CrmFunnelTable
+          funnelSteps={dashboard.funnel.funnelSteps}
+          gargalo={dashboard.funnel.gargalo}
+          onStageClick={handleStageClick}
+        />
+      </section>
+
+      {/* SEÇÃO 5 — Origem dos Pacientes */}
+      <section className="crm-dash-section crm-dash-section--card">
+        <SectionHeader title="Origem dos Pacientes" subtitle="De onde vem o melhor paciente?" />
+        {dashboard.sources.length === 0 ? (
+          <p className="crm-dash-empty">Sem leads por origem no período.</p>
+        ) : (
+          <div className="crm-dash-table-wrap">
+            <table className="crm-dash-table">
+              <thead>
+                <tr>
+                  <th>Origem</th>
+                  <th>Leads</th>
+                  <th>Fechamentos</th>
+                  <th>Conversão</th>
+                  <th>Receita</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboard.sources.map((s) => (
+                  <tr key={s.source}>
+                    <td className="crm-dash-table-name">{s.label}</td>
+                    <td>{s.leads}</td>
+                    <td>{s.fechamentos}</td>
+                    <td>{s.conversao}%</td>
+                    <td>{formatCurrencyBRL(s.receita)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {ownerPerf.map((row, i) => {
-                    const taxa = row.taxaConversao;
-                    const taxaBadgeClass =
-                      taxa >= 70 ? 'crm-owner-taxa-positive' : taxa >= 40 ? 'crm-owner-taxa-neutral' : 'crm-owner-taxa-alert';
-                    const followUpClass = row.followUpsAtrasados > 0 ? 'crm-owner-followup-alert' : 'crm-owner-followup-ok';
-                    return (
-                      <tr key={row.ownerId || i}>
-                        <td className="crm-owner-col-name">
-                          <span className="crm-owner-rank">#{i + 1}</span>
-                          {row.ownerName}
-                        </td>
-                        <td>{row.leadsAtribuidos}</td>
-                        <td>{row.ganhos}</td>
-                        <td>
-                          <span className={`crm-owner-taxa-badge ${taxaBadgeClass}`}>{taxa}%</span>
-                        </td>
-                        <td>
-                          {row.hasTempoMedioData
-                            ? formatDurationHours(row.tempoMedioPrimeiroContato)
-                            : '—'}
-                        </td>
-                        <td>
-                          <span className={`crm-owner-followup-badge ${followUpClass}`}>
-                            {row.followUpsAtrasados}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </SectionCard>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
-      <section className="crm-report-section">
-        <h3 className="crm-report-section-title">Perdas</h3>
-        <SectionCard>
-          {loss.totalPerdidos === 0 ? (
-            <p className="muted" style={{ padding: '2rem', textAlign: 'center' }}>
-              Nenhum lead perdido no período.
-            </p>
+      {/* SEÇÃO 6 — Tratamentos Mais Vendidos */}
+      <section className="crm-dash-section crm-dash-section--card">
+        <SectionHeader title="Tratamentos Mais Vendidos" subtitle="O que vende mais?" />
+        {dashboard.treatments.length === 0 ? (
+          <p className="crm-dash-empty">Sem interesse registrado no período.</p>
+        ) : (
+          <div className="crm-dash-table-wrap">
+            <table className="crm-dash-table">
+              <thead>
+                <tr>
+                  <th>Tratamento</th>
+                  <th>Interessados</th>
+                  <th>Orçamentos</th>
+                  <th>Fechamentos</th>
+                  <th>Receita</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboard.treatments.map((t) => (
+                  <tr key={t.key}>
+                    <td className="crm-dash-table-name">{t.label}</td>
+                    <td>{t.interessados}</td>
+                    <td>{t.orcamentos}</td>
+                    <td>{t.fechamentos}</td>
+                    <td>{formatCurrencyBRL(t.receita)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* SEÇÃO 7 — Desempenho da Equipe */}
+      <section className="crm-dash-section crm-dash-section--card">
+        <SectionHeader icon={Users} title="Desempenho da Equipe" subtitle="Quem vende mais?" />
+        {dashboard.owners.length === 0 ? (
+          <p className="crm-dash-empty">Sem dados de performance no período.</p>
+        ) : (
+          <div className="crm-dash-table-wrap">
+            <table className="crm-dash-table">
+              <thead>
+                <tr>
+                  <th>Posição</th>
+                  <th>Nome</th>
+                  <th>Leads</th>
+                  <th>Agendamentos</th>
+                  <th>Comparecimentos</th>
+                  <th>Fechamentos</th>
+                  <th>Conversão</th>
+                  <th>Receita</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboard.owners.map((row, i) => (
+                  <tr key={row.ownerId}>
+                    <td>
+                      <span className="crm-mgr-medal">
+                        {MEDALS[i] || <span className="crm-dash-rank">{i + 1}</span>}
+                      </span>
+                    </td>
+                    <td className="crm-dash-table-name">{row.ownerName}</td>
+                    <td>{row.leads}</td>
+                    <td>{row.agendamentos}</td>
+                    <td>{row.comparecimentos}</td>
+                    <td>{row.fechamentos}</td>
+                    <td><span className={`crm-dash-badge ${row.conversao >= 20 ? 'is-good' : ''}`}>{row.conversao}%</span></td>
+                    <td>{formatCurrencyBRL(row.receita)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <div className="crm-dash-two-col">
+        {/* SEÇÃO 8 — Tempo de Resposta */}
+        <section className="crm-dash-section crm-dash-section--card">
+          <SectionHeader icon={Clock} title="Tempo de Resposta" subtitle="Estamos rápidos?" />
+          <ul className="crm-mgr-time-list">
+            <li>
+              <span>Lead → Primeiro contato</span>
+              <strong>{formatDurationHours(dashboard.conversionTimes.leadParaPrimeiroContato)}</strong>
+            </li>
+            <li>
+              <span>Primeiro contato → Avaliação</span>
+              <strong>{formatDurationHours(dashboard.conversionTimes.contatoParaAvaliacao)}</strong>
+            </li>
+            <li>
+              <span>Avaliação → Orçamento</span>
+              <strong>{formatDurationHours(dashboard.conversionTimes.avaliacaoParaOrcamento)}</strong>
+            </li>
+            <li>
+              <span>Orçamento → Fechamento</span>
+              <strong>{formatDurationHours(dashboard.conversionTimes.orcamentoParaFechamento)}</strong>
+            </li>
+          </ul>
+        </section>
+
+        {/* SEÇÃO 9 — Motivos de Perda */}
+        <section className="crm-dash-section crm-dash-section--card">
+          <SectionHeader title="Motivos de Perda" subtitle="Por que perdemos?" />
+          {dashboard.lossReasons.length === 0 ? (
+            <p className="crm-dash-empty">Nenhum lead perdido no período.</p>
           ) : (
             <>
-              <p style={{ marginBottom: '1rem' }}>
-                <strong>Total perdidos:</strong> {loss.totalPerdidos}
-              </p>
-              {lossPieData.length > 0 && (
-                <div style={{ height: 260, marginBottom: '1rem' }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={lossPieData}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={90}
-                        label={(e) => `${e.name}: ${e.value}`}
-                      >
-                        {lossPieData.map((_, i) => (
-                          <Cell key={i} fill={['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'][i % 5]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
+              <div className="crm-dash-chart" style={{ height: 200 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={lossBarData} layout="vertical" margin={{ left: 8, right: 24 }}>
+                    <XAxis type="number" domain={[0, 100]} unit="%" tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={(v) => [`${v}%`, 'Participação']} />
+                    <Bar dataKey="percent" radius={[0, 4, 4, 0]}>
+                      {lossBarData.map((e) => <Cell key={e.name} fill={e.fill} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="crm-mgr-loss-list">
+                {dashboard.lossReasons.map((r) => (
+                  <li key={r.motivo}>
+                    <span>{r.motivo}</span>
+                    <strong>{r.percent}%</strong>
+                  </li>
+                ))}
+              </ul>
             </>
           )}
-        </SectionCard>
+        </section>
+      </div>
+
+      {/* SEÇÃO 10 — Metas */}
+      <section className="crm-dash-section crm-dash-section--card crm-mgr-goals-section">
+        <SectionHeader icon={Target} title="Metas" subtitle="Estamos chegando lá?" />
+        {goalsEdit ? (
+          <div className="crm-dash-goals-edit crm-mgr-goals-edit">
+            <div className="crm-mgr-goals-edit-grid">
+              <div className="form-field">
+                <label htmlFor="goal-leads">Meta de leads</label>
+                <input id="goal-leads" type="number" min="0" value={goalsEdit.leadsGoal} onChange={(e) => setGoalsEdit((g) => ({ ...g, leadsGoal: Number(e.target.value) }))} />
+              </div>
+              <div className="form-field">
+                <label htmlFor="goal-revenue">Meta financeira (R$)</label>
+                <input id="goal-revenue" type="number" min="0" step="1000" value={goalsEdit.revenueGoal} onChange={(e) => setGoalsEdit((g) => ({ ...g, revenueGoal: Number(e.target.value) }))} />
+              </div>
+              <div className="form-field">
+                <label htmlFor="goal-closings">Meta de fechamentos</label>
+                <input id="goal-closings" type="number" min="0" value={goalsEdit.closingsGoal} onChange={(e) => setGoalsEdit((g) => ({ ...g, closingsGoal: Number(e.target.value) }))} />
+              </div>
+              <div className="form-field">
+                <label htmlFor="goal-conversion">Meta de conversão (%)</label>
+                <input id="goal-conversion" type="number" min="0" max="100" value={goalsEdit.conversionGoal} onChange={(e) => setGoalsEdit((g) => ({ ...g, conversionGoal: Number(e.target.value) }))} />
+              </div>
+            </div>
+            <div className="crm-dash-goals-edit-actions">
+              <Button type="button" variant="primary" size="sm" onClick={saveGoals}>Salvar metas</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setGoalsEdit(null)}>Cancelar</Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <GoalProgress
+              label="Meta de leads"
+              current={dashboard.goals.leadsAtual}
+              goal={dashboard.goals.leadsGoal}
+              percent={dashboard.goals.leadsPercent}
+            />
+            <GoalProgress
+              label="Meta financeira"
+              current={dashboard.goals.receitaAtual}
+              goal={dashboard.goals.revenueGoal}
+              percent={dashboard.goals.receitaPercent}
+              format="currency"
+            />
+            <GoalProgress
+              label="Meta de fechamentos"
+              current={dashboard.goals.fechamentosAtual}
+              goal={dashboard.goals.closingsGoal}
+              percent={dashboard.goals.closingsPercent}
+            />
+            <GoalProgress
+              label="Meta de conversão"
+              current={dashboard.goals.conversaoAtual}
+              goal={dashboard.goals.conversionGoal}
+              percent={dashboard.goals.conversionPercent}
+              format="percent"
+            />
+            <Button type="button" variant="ghost" size="sm" onClick={startGoalsEdit}>Editar metas</Button>
+          </>
+        )}
       </section>
-    </CrmLayout>
+    </div>
   );
 }

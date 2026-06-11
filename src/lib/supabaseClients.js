@@ -15,13 +15,18 @@ const platformKey = import.meta.env.VITE_SUPABASE_PLATFORM_ANON_KEY;
 
 const envValidation = validateCriticalEnv();
 if (!envValidation.ok && import.meta.env?.DEV) {
-  // eslint-disable-next-line no-console
   console.warn('[STABILITY] Env crítico inválido', envValidation.issues);
 }
 
 export const supabaseAppClient =
   appUrl && appKey
-    ? createClient(appUrl, appKey)
+    ? createClient(appUrl, appKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+        },
+      })
     : null;
 
 export const supabasePlatformClient =
@@ -30,6 +35,8 @@ export const supabasePlatformClient =
         auth: {
           storageKey: 'appgestaoodonto-platform-auth',
           persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
         },
       })
     : null;

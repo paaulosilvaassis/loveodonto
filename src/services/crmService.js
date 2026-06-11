@@ -66,6 +66,21 @@ export const CRM_EVENT_TYPE = {
 
 // ─── CRUD Leads ────────────────────────────────────────────────────────────
 
+const parseEstimatedValue = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) && num >= 0 ? num : null;
+};
+
+/** Fases visíveis para o tenant do lead (inclui legadas sem tenant_id). */
+const stagesForLeadTenant = (db, tenantId) =>
+  (db.crmPipelineStages || []).filter((s) => s.tenant_id === tenantId || s.tenant_id == null);
+
+const isLostStageForLead = (db, lead, stageKey) => {
+  const stage = stagesForLeadTenant(db, lead.tenant_id).find((s) => s.key === stageKey);
+  return stage ? stage.stageType === 'lost' : stageKey === 'perdido';
+};
+
 /**
  * Cria um novo lead. Lead NÃO vira paciente automaticamente.
  */
@@ -82,10 +97,13 @@ export const createLead = (user, data) => {
       phone: (data.phone || '').replace(/\D/g, ''),
       source: data.source || LEAD_SOURCE.MANUAL,
       interest: data.interest || '',
+      bestContactTime: data.bestContactTime || '',
       notes: data.notes || '',
       assignedToUserId: data.assignedToUserId || user?.id || null,
       stageKey,
       patientId: null,
+      estimatedValue: parseEstimatedValue(data.estimatedValue),
+      priority: data.priority || '',
       tags: Array.isArray(data.tags) ? data.tags : [],
       lastContactAt: null,
       createdAt: now,
@@ -176,10 +194,22 @@ export const convertLeadToPatient = (user, leadId, patientId) => {
     const index = (db.crmLeads || []).findIndex((l) => l.id === leadId);
     if (index < 0) throw new Error('Lead não encontrado');
     const now = new Date().toISOString();
+    const lead = db.crmLeads[index];
+    const conversionStage = stagesForLeadTenant(db, lead.tenant_id).find(
+      (s) => s.stageType === 'conversion' && s.isActive !== false
+    );
+    const previousStageKey = lead.stageKey;
+    const nextStageKey = conversionStage?.key || 'aprovado';
+    if (nextStageKey !== previousStageKey) {
+      logLeadEvent(db, leadId, CRM_EVENT_TYPE.STATUS_CHANGE, user?.id, {
+        fromStage: previousStageKey,
+        toStage: nextStageKey,
+      });
+    }
     db.crmLeads[index] = {
-      ...db.crmLeads[index],
+      ...lead,
       patientId,
-      stageKey: 'aprovado',
+      stageKey: nextStageKey,
       updatedAt: now,
       updatedByUserId: user?.id || null,
     };
@@ -353,10 +383,14 @@ export const moveLeadToStage = (user, leadId, newStageKey, options = {}) => {
   return withDb((db) => {
     const lead = (db.crmLeads || []).find((l) => l.id === leadId);
     if (!lead) throw new Error('Lead não encontrado');
+    const tenantStages = stagesForLeadTenant(db, lead.tenant_id);
+    if (tenantStages.length > 0 && !tenantStages.some((s) => s.key === newStageKey)) {
+      throw new Error('Fase do pipeline não encontrada para esta clínica.');
+    }
     const fromStage = lead.stageKey;
     const now = new Date().toISOString();
     lead.stageKey = newStageKey;
-    if (newStageKey === 'perdido' && options.lossReason != null) {
+    if (isLostStageForLead(db, lead, newStageKey) && options.lossReason != null) {
       lead.lossReason = String(options.lossReason).trim() || null;
     }
     lead.lastContactAt = now;

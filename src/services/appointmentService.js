@@ -89,10 +89,19 @@ const normalizeSlotCapacity = (value) => {
   return Number(value) === 2 ? 2 : 1;
 };
 
+/**
+ * Bloqueio conflita quando atinge o recurso do candidato:
+ * - bloqueio sem profissional e sem sala = bloqueio geral (atinge tudo);
+ * - bloqueio de profissional atinge agendamentos desse profissional;
+ * - bloqueio de sala atinge qualquer agendamento naquela sala.
+ */
 const matchesResource = ({ professionalId, roomId }, item) => {
-  if (professionalId && item.professionalId !== professionalId) return false;
-  if (roomId) return item.roomId === roomId;
-  return true;
+  const blockProfessional = String(item.professionalId || '').trim();
+  const blockRoom = String(item.roomId || '').trim();
+  if (!blockProfessional && !blockRoom) return true;
+  if (blockProfessional && professionalId && blockProfessional === professionalId) return true;
+  if (blockRoom && roomId && blockRoom === roomId) return true;
+  return false;
 };
 
 export const hasConflict = ({
@@ -124,11 +133,20 @@ export const hasConflict = ({
 
   const placementResult = canPlaceEvent(validAppointments, candidate, appointmentId);
   const appointmentConflict = !placementResult.ok;
-  
 
-  // Verificar também conflitos com blocos
   const start = toMinutes(startTime);
   const end = toMinutes(endTime);
+
+  // Mesmo profissional em sala diferente no mesmo horário é sempre conflito
+  // (encaixe via slotCapacity só vale para a MESMA sala — canPlaceEvent acima).
+  const professionalDoubleBooked = Boolean(professionalId) && validAppointments.some((item) => {
+    if (appointmentId && item.id === appointmentId) return false;
+    if (item.professionalId !== professionalId) return false;
+    if ((item.roomId || null) === (roomId || null)) return false;
+    return start < toMinutes(item.endTime) && end > toMinutes(item.startTime);
+  });
+
+  // Verificar também conflitos com blocos
   const overlapsBlock = (item) => {
     if (item.date !== date) return false;
     const itemStart = toMinutes(item.startTime);
@@ -140,7 +158,7 @@ export const hasConflict = ({
     return matchesResource({ professionalId, roomId }, item);
   });
 
-  return appointmentConflict || blockConflict;
+  return appointmentConflict || professionalDoubleBooked || blockConflict;
 };
 
 export const listAppointments = () => {

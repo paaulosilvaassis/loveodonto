@@ -3,7 +3,7 @@ import { loadDb, initDb, resetDb } from '../db/index.js';
 import { createAppointment, createBlock, hasConflict } from '../services/appointmentService.js';
 import { resolveWorkSchedule } from '../utils/agendaUtils.js';
 
-const admin = { id: 'user-admin', role: 'admin' };
+const admin = { id: 'user-admin', role: 'admin', tenant_id: 'tenant-1' };
 
 describe('Agenda - conflitos', () => {
   beforeEach(async () => {

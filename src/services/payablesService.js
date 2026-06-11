@@ -402,6 +402,7 @@ export const createAvulsoPayment = (user, payload) => {
 
   const now = new Date().toISOString();
   const id = createId('cashtxn');
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
 
   const record = {
     id,
@@ -412,6 +413,7 @@ export const createAvulsoPayment = (user, payload) => {
     payable_id: null,
     is_avulso: true,
     created_at: now,
+    tenant_id: tenantId,
   };
 
   withDb((db) => {
@@ -483,6 +485,9 @@ export const payPayable = (user, id, payload) => {
         date: paidDate,
         payable_id: id,
         created_at: now,
+        // Herda o tenant do título pago; fallback para o tenant do usuário.
+        tenant_id: String(current.tenant_id || '').trim()
+          || resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId),
       });
     }
 

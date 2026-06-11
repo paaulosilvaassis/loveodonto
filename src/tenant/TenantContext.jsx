@@ -7,7 +7,8 @@ import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
 
-const TENANT_SNAPSHOT_TIMEOUT_MS = 40000;
+/** Curto o suficiente para não travar a tela; o erro oferece retry e volta ao login. */
+const TENANT_SNAPSHOT_TIMEOUT_MS = 15000;
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const EMPTY_CONTEXT = {

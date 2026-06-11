@@ -1,213 +1,123 @@
-import { useMemo, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { CrmLayout } from '../crm/ui/CrmLayout.jsx';
-import { SectionCard } from '../components/SectionCard.jsx';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  getDayKpis,
-  getDayFlow,
-  getAppointmentTypeLabel,
-  getAppointmentStatusLabel,
-  getPacientesAcompanhamento,
-  getAlertasOperacionais,
-  PRIORITY,
-} from '../services/gestaoAtendimentoService.js';
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Calendar,
+  Clock,
+  DollarSign,
+  Filter,
+  Minus,
+  Phone,
+  RefreshCw,
+  Scissors,
+  Stethoscope,
+  UserCheck,
+  Users,
+  UserX,
+  MessageCircle,
+  Activity,
+  TrendingUp,
+} from 'lucide-react';
+import Button from '../components/Button.jsx';
+import { getOperationalDashboard } from '../services/gestaoAtendimentoService.js';
 import { updateAppointmentStatus } from '../services/patientFlowService.js';
 import { markNoShow } from '../services/journeyEntryService.js';
 import { APPOINTMENT_STATUS } from '../services/appointmentService.js';
+import { buildWhatsAppLink } from '../services/crmService.js';
 import { useAuth } from '../auth/useAuth.js';
-import {
-  Users,
-  UserCheck,
-  UserX,
-  Stethoscope,
-  Scissors,
-  RotateCcw,
-  Calendar,
-  FileText,
-  ExternalLink,
-  MoreVertical,
-  Clock,
-  Eye,
-  MessageSquare,
-} from 'lucide-react';
+import { formatCurrencyBRL } from '../utils/currency.js';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
+const REFRESH_MS = 30000;
 
-function KpiCard({ icon: Icon, value, label, variant }) {
+const EXEC_KPI_CONFIG = [
+  { key: 'pacientesAgendados', label: 'Pacientes agendados', icon: Users, tone: 'primary' },
+  { key: 'confirmados', label: 'Confirmados', icon: UserCheck, tone: 'success' },
+  { key: 'aguardandoConfirmacao', label: 'Aguardando confirmação', icon: Clock, tone: 'warning' },
+  { key: 'faltas', label: 'Faltas', icon: UserX, tone: 'danger' },
+  { key: 'primeirasConsultas', label: 'Primeiras consultas', icon: Stethoscope, tone: 'accent' },
+  { key: 'retornos', label: 'Retornos', icon: RefreshCw, tone: 'neutral' },
+  { key: 'cirurgias', label: 'Cirurgias', icon: Scissors, tone: 'purple' },
+  { key: 'orcamentosPrevistos', label: 'Orçamentos previstos', icon: DollarSign, tone: 'revenue' },
+];
+
+function TrendBadge({ delta, direction }) {
+  if (direction === 'flat' || delta === 0) {
+    return <span className="op-trend op-trend--flat"><Minus size={12} /> 0%</span>;
+  }
+  const label = `${delta > 0 ? '+' : ''}${delta}%`;
+  return direction === 'up' ? (
+    <span className="op-trend op-trend--up"><ArrowUpRight size={12} /> {label}</span>
+  ) : (
+    <span className="op-trend op-trend--down"><ArrowDownRight size={12} /> {label}</span>
+  );
+}
+
+function ExecutiveKpiCard({ kpi, config }) {
+  const Icon = config.icon;
   return (
-    <div
-      className={`crm-report-kpi-card crm-report-kpi-${variant || 'default'}`}
-    >
-      <div className="crm-report-kpi-header">
-        {Icon && <Icon size={20} className="crm-report-kpi-icon" aria-hidden />}
+    <div className={`op-kpi op-kpi--${config.tone}`}>
+      <div className="op-kpi-head">
+        <span className="op-kpi-icon"><Icon size={18} /></span>
+        <TrendBadge delta={kpi.delta} direction={kpi.direction} />
       </div>
-      <div className="crm-report-kpi-value">{value}</div>
-      <div className="crm-report-kpi-label">{label}</div>
+      <strong className="op-kpi-value">{kpi.value}</strong>
+      <span className="op-kpi-label">{config.label}</span>
     </div>
   );
 }
 
-function PriorityDot({ priority }) {
-  const p = priority || PRIORITY.NORMAL;
+function StatusBadge({ displayStatus }) {
   return (
-    <span
-      className={`gestao-priority-dot gestao-priority-${p}`}
-      title={p === PRIORITY.ATRASADO ? 'Atrasado' : p === PRIORITY.ATENCAO ? 'Atenção' : 'Normal'}
-      aria-hidden
-    />
+    <span className={`op-status op-status--${displayStatus.tone}`}>
+      {displayStatus.emoji} {displayStatus.label}
+    </span>
   );
 }
 
-function AcompanhamentoCard({ title, count, children, emptyMessage = 'Nenhum' }) {
+function SectionTitle({ icon: Icon, title, subtitle }) {
   return (
-    <div className="gestao-acompanhamento-card">
-      <div className="gestao-acompanhamento-card-header">
-        <h4 className="gestao-acompanhamento-card-title">{title}</h4>
-        <span className="gestao-acompanhamento-card-badge">{count}</span>
-      </div>
-      <div className="gestao-acompanhamento-card-list">
-        {count === 0 ? (
-          <p className="gestao-acompanhamento-empty muted">{emptyMessage}</p>
-        ) : (
-          children
-        )}
-      </div>
-    </div>
-  );
-}
-
-function AcompanhamentoRow({
-  name,
-  subinfo,
-  priority,
-  onProntuario,
-  onAgenda,
-  onCrm,
-  hasPatient = true,
-  isLead = false,
-}) {
-  return (
-    <div className="gestao-acompanhamento-row">
-      <div className="gestao-acompanhamento-row-main">
-        <PriorityDot priority={priority} />
-        <div className="gestao-acompanhamento-row-text">
-          <span className="gestao-acompanhamento-row-name">{name}</span>
-          {subinfo && <span className="gestao-acompanhamento-row-subinfo">{subinfo}</span>}
-        </div>
-      </div>
-      <div className="gestao-acompanhamento-row-actions">
-        {hasPatient && onProntuario && (
-          <button
-            type="button"
-            className="gestao-acompanhamento-row-btn"
-            onClick={onProntuario}
-            title="Abrir prontuário"
-          >
-            <Eye size={14} />
-          </button>
-        )}
-        {hasPatient && onAgenda && (
-          <button
-            type="button"
-            className="gestao-acompanhamento-row-btn"
-            onClick={onAgenda}
-            title="Abrir agenda"
-          >
-            <Calendar size={14} />
-          </button>
-        )}
-        {(onCrm || isLead) && (
-          <button
-            type="button"
-            className="gestao-acompanhamento-row-btn"
-            onClick={onCrm}
-            title="Abrir CRM"
-          >
-            <MessageSquare size={14} />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function FlowRowActions({
-  appointment,
-  onConfirm,
-  onMarkNoShow,
-  onReschedule,
-  onOpenChart,
-  onOpenCrm,
-}) {
-  const [open, setOpen] = useState(false);
-  const isConfirmed = [APPOINTMENT_STATUS.CONFIRMADO, APPOINTMENT_STATUS.CHEGOU, APPOINTMENT_STATUS.EM_ESPERA, APPOINTMENT_STATUS.EM_ATENDIMENTO, APPOINTMENT_STATUS.FINALIZADO, APPOINTMENT_STATUS.ATENDIDO].includes(appointment?.status);
-  const isFalta = appointment?.status === APPOINTMENT_STATUS.FALTOU || appointment?.status === 'faltou';
-
-  return (
-    <div className="gestao-flow-actions-wrap">
-      <button
-        type="button"
-        className="gestao-flow-actions-trigger"
-        onClick={() => setOpen((p) => !p)}
-        title="Ações"
-        aria-expanded={open}
-      >
-        <MoreVertical size={18} />
-      </button>
-      {open && (
-        <>
-          <div className="gestao-flow-actions-backdrop" onClick={() => setOpen(false)} aria-hidden />
-          <div className="gestao-flow-actions-dropdown">
-            {!isConfirmed && !isFalta && (
-              <button type="button" className="gestao-flow-action-item" onClick={() => { onConfirm(appointment.id); setOpen(false); }}>
-                <UserCheck size={14} />
-                Confirmar
-              </button>
-            )}
-            {!isFalta && (
-              <button type="button" className="gestao-flow-action-item" onClick={() => { onMarkNoShow(appointment.id); setOpen(false); }}>
-                <UserX size={14} />
-                Marcar falta
-              </button>
-            )}
-            <button type="button" className="gestao-flow-action-item" onClick={() => { onReschedule(appointment.id); setOpen(false); }}>
-              <Calendar size={14} />
-              Reagendar
-            </button>
-            {appointment.patientId && (
-              <button type="button" className="gestao-flow-action-item" onClick={() => { onOpenChart(appointment.patientId); setOpen(false); }}>
-                <FileText size={14} />
-                Abrir prontuário
-              </button>
-            )}
-            <button type="button" className="gestao-flow-action-item" onClick={() => { onOpenCrm(appointment); setOpen(false); }}>
-              <ExternalLink size={14} />
-              Abrir CRM
-            </button>
-          </div>
-        </>
-      )}
+    <div className="op-section-head">
+      <h2 className="op-section-title">
+        {Icon && <Icon size={18} />}
+        {title}
+      </h2>
+      {subtitle && <p className="op-section-sub">{subtitle}</p>}
     </div>
   );
 }
 
 export default function GestaoAtendimentoPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(TODAY);
-  const [toast, setToast] = useState(null);
+  const [filters, setFilters] = useState({ professionalId: '', roomId: '', specialty: '', status: '' });
+  const [showFilters, setShowFilters] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [toast, setToast] = useState(null);
+  const [lastUpdate, setLastUpdate] = useState(new Date());
 
-  const dateForQuery = selectedDate || TODAY();
+  const dashboard = useMemo(
+    () => getOperationalDashboard(selectedDate, filters),
+    [selectedDate, filters, refreshKey]
+  );
 
-  const kpis = useMemo(() => getDayKpis(dateForQuery), [dateForQuery, refreshKey]);
-  const dayFlow = useMemo(() => getDayFlow(dateForQuery), [dateForQuery, refreshKey]);
-  const acompanhamento = useMemo(() => getPacientesAcompanhamento(), [refreshKey]);
-  const alertas = useMemo(() => getAlertasOperacionais(), [refreshKey]);
+  const refresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    setLastUpdate(new Date());
+  }, []);
 
-  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
+  useEffect(() => {
+    const timer = setInterval(refresh, REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [refresh]);
 
-  const handleConfirm = async (appointmentId) => {
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
+
+  const handleConfirm = (appointmentId) => {
     try {
       updateAppointmentStatus(user, appointmentId, APPOINTMENT_STATUS.CONFIRMADO);
       showToast('Agendamento confirmado');
@@ -227,289 +137,333 @@ export default function GestaoAtendimentoPage() {
     }
   };
 
-  const handleReschedule = (appointmentId) => {
-    navigate(`/gestao/agenda?appointmentId=${appointmentId}`);
-  };
-
-  const handleOpenChart = (patientId) => {
-    if (patientId) navigate(`/prontuario/${patientId}`);
-  };
-
-  const handleOpenCrm = (appointment) => {
-    if (appointment?.leadId) {
-      navigate(`/crm/leads/${appointment.leadId}`);
-    } else if (appointment?.patientId) {
-      navigate(`/crm/leads`, { state: { filterPatientId: appointment.patientId } });
-    } else {
-      navigate('/crm/leads');
+  const handleWhatsApp = (phone, name) => {
+    if (!phone) {
+      showToast('Telefone não cadastrado', 'error');
+      return;
     }
+    const link = buildWhatsAppLink(phone, `Olá ${name || ''}, confirmamos seu horário na clínica.`);
+    window.open(link, '_blank', 'noopener,noreferrer');
   };
 
-  function showToast(message, type = 'success') {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  }
-
-  const formatCurrency = (n) =>
-    typeof n === 'number' && !Number.isNaN(n)
-      ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n)
-      : '—';
-
-  const formatDateShort = (str) => {
-    if (!str) return '—';
-    try {
-      return new Date(str + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-    } catch {
-      return str;
+  const handleCall = (phone) => {
+    if (!phone) {
+      showToast('Telefone não cadastrado', 'error');
+      return;
     }
+    window.open(`tel:+55${phone}`, '_self');
   };
+
+  const setFilter = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
+  const clearFilters = () => setFilters({ professionalId: '', roomId: '', specialty: '', status: '' });
+  const hasFilters = Object.values(filters).some(Boolean);
+
+  const isToday = selectedDate === TODAY();
 
   return (
-    <>
-      {toast && (
-        <div className={`toast ${toast.type}`} role="status">
-          {toast.message}
+    <div className="op-central-page">
+      {toast && <div className={`toast ${toast.type}`} role="status">{toast.message}</div>}
+
+      <header className="op-central-header">
+        <div className="op-central-header-text">
+          <span className="op-central-badge"><Activity size={14} /> Central Operacional</span>
+          <h1>Gestão de Atendimento</h1>
+          <p>Visão completa da operação do dia — agenda, fila, produção e alertas em tempo real.</p>
+        </div>
+        <div className="op-central-header-actions">
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="op-date-picker"
+            aria-label="Data"
+          />
+          <Button type="button" variant="ghost" icon={Filter} onClick={() => setShowFilters((v) => !v)}>
+            Filtros{hasFilters ? ' •' : ''}
+          </Button>
+          <Button type="button" variant="ghost" icon={RefreshCw} onClick={refresh}>
+            Atualizar
+          </Button>
+        </div>
+      </header>
+
+      <p className="op-last-update">
+        Última atualização: {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+        {isToday && ' · atualização automática a cada 30s'}
+      </p>
+
+      {showFilters && (
+        <div className="op-filters">
+          <div className="op-filters-grid">
+            <div className="form-field">
+              <label htmlFor="op-prof">Profissional</label>
+              <select id="op-prof" value={filters.professionalId} onChange={(e) => setFilter('professionalId', e.target.value)}>
+                <option value="">Todos</option>
+                {dashboard.filterOptions.professionals.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field">
+              <label htmlFor="op-room">Sala</label>
+              <select id="op-room" value={filters.roomId} onChange={(e) => setFilter('roomId', e.target.value)}>
+                <option value="">Todas</option>
+                {dashboard.filterOptions.rooms.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field">
+              <label htmlFor="op-spec">Especialidade</label>
+              <select id="op-spec" value={filters.specialty} onChange={(e) => setFilter('specialty', e.target.value)}>
+                <option value="">Todas</option>
+                {dashboard.filterOptions.specialties.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-field">
+              <label htmlFor="op-status">Status</label>
+              <select id="op-status" value={filters.status} onChange={(e) => setFilter('status', e.target.value)}>
+                <option value="">Todos</option>
+                {dashboard.filterOptions.statuses.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          {hasFilters && (
+            <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>Limpar filtros</Button>
+          )}
         </div>
       )}
 
-      <CrmLayout
-        title="Gestão de Atendimento"
-        description="Central de comando do dia: visão do dia, fluxo, acompanhamento e alertas."
-        actions={
-          <input
-            type="date"
-            value={dateForQuery}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="gestao-date-picker"
-            aria-label="Data"
-          />
-        }
-      >
-        {/* Seção 1 – Visão do dia (KPIs) */}
-        <section className="crm-report-section">
-          <h3 className="crm-report-section-title">Visão do dia</h3>
-          <div className="crm-report-kpis">
-            <KpiCard icon={Users} value={kpis.pacientesHoje} label="Pacientes hoje" />
-            <KpiCard icon={UserCheck} value={kpis.confirmados} label="Confirmados" variant="success" />
-            <KpiCard icon={Clock} value={kpis.naoConfirmados} label="Não confirmados" variant="default" />
-            <KpiCard icon={UserX} value={kpis.faltas} label="Faltas" variant="danger" />
-            <KpiCard icon={Stethoscope} value={kpis.primeirasConsultas} label="Primeiras consultas" />
-            <KpiCard icon={Scissors} value={kpis.cirurgias} label="Cirurgias" />
-            <KpiCard icon={RotateCcw} value={kpis.retornos} label="Retornos" />
-          </div>
-        </section>
-
-        {/* Seção 2 – Fluxo do dia (Tabela) */}
-        <section className="crm-report-section">
-          <h3 className="crm-report-section-title">Fluxo do dia</h3>
-          <SectionCard>
-            <div className="crm-leads-table-wrap">
-              <table className="crm-leads-table gestao-flow-table">
-                <thead>
-                  <tr>
-                    <th>Horário</th>
-                    <th>Paciente</th>
-                    <th>Tipo</th>
-                    <th>Status</th>
-                    <th>Profissional</th>
-                    <th style={{ width: '80px' }}>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dayFlow.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="crm-leads-empty">
-                        Nenhum agendamento para esta data.
-                      </td>
-                    </tr>
-                  ) : (
-                    dayFlow.map((apt) => (
-                      <tr key={apt.id}>
-                        <td>{apt.startTime || '—'}</td>
-                        <td>{apt.patientName || apt.leadDisplayName || '—'}</td>
-                        <td>{getAppointmentTypeLabel(apt)}</td>
-                        <td>
-                          <span className={`gestao-status-badge gestao-status-${getAppointmentStatusLabel(apt).toLowerCase().replace(' ', '-')}`}>
-                            {getAppointmentStatusLabel(apt)}
-                          </span>
-                        </td>
-                        <td>{apt.professionalName || '—'}</td>
-                        <td>
-                          <FlowRowActions
-                            appointment={apt}
-                            onConfirm={handleConfirm}
-                            onMarkNoShow={handleMarkNoShow}
-                            onReschedule={handleReschedule}
-                            onOpenChart={handleOpenChart}
-                            onOpenCrm={handleOpenCrm}
-                          />
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+      {/* SEÇÃO 10 — Alertas (destaque no topo quando existem) */}
+      {dashboard.alerts.length > 0 && (
+        <section className="op-alerts-banner">
+          {dashboard.alerts.map((a) => (
+            <div key={a.id} className={`op-alert-chip op-alert-chip--${a.type}`}>
+              <AlertTriangle size={14} />
+              <span>{a.message}</span>
             </div>
-          </SectionCard>
+          ))}
         </section>
+      )}
 
-        {/* Seção 3 – Pacientes em acompanhamento */}
-        <section className="crm-report-section">
-          <h3 className="crm-report-section-title">Pacientes em acompanhamento</h3>
-          <div className="gestao-acompanhamento-grid gestao-acompanhamento-grid-cols2">
-            <AcompanhamentoCard
-              title="Pós-operatório ativo"
-              count={acompanhamento.posOperatorioAtivo.length}
-            >
-              {acompanhamento.posOperatorioAtivo.map((p) => (
-                <AcompanhamentoRow
-                  key={p.patientId}
-                  name={p.name}
-                  subinfo={p.subinfo}
-                  priority={p.priority}
-                  hasPatient
-                  onProntuario={() => handleOpenChart(p.patientId)}
-                  onAgenda={() => navigate('/gestao/agenda')}
-                  onCrm={() => navigate('/crm/leads', { state: { filterPatientId: p.patientId } })}
-                />
-              ))}
-            </AcompanhamentoCard>
-            <AcompanhamentoCard
-              title="Em tratamento"
-              count={acompanhamento.emTratamento.length}
-            >
-              {acompanhamento.emTratamento.map((p) => (
-                <AcompanhamentoRow
-                  key={p.patientId}
-                  name={p.name}
-                  subinfo={p.subinfo}
-                  priority={p.priority}
-                  hasPatient
-                  onProntuario={() => handleOpenChart(p.patientId)}
-                  onAgenda={() => navigate('/gestao/agenda')}
-                  onCrm={() => navigate('/crm/leads', { state: { filterPatientId: p.patientId } })}
-                />
-              ))}
-            </AcompanhamentoCard>
-            <AcompanhamentoCard
-              title="Aguardando retorno"
-              count={acompanhamento.aguardandoRetorno.length}
-            >
-              {acompanhamento.aguardandoRetorno.map((p) => (
-                <AcompanhamentoRow
-                  key={p.patientId}
-                  name={p.name}
-                  subinfo={p.subinfo}
-                  priority={p.priority}
-                  hasPatient
-                  onProntuario={() => handleOpenChart(p.patientId)}
-                  onAgenda={() => navigate('/gestao/agenda')}
-                  onCrm={() => navigate('/crm/leads', { state: { filterPatientId: p.patientId } })}
-                />
-              ))}
-            </AcompanhamentoCard>
-            <AcompanhamentoCard
-              title="Aguardando orçamento"
-              count={acompanhamento.aguardandoOrcamento.length}
-            >
-              {acompanhamento.aguardandoOrcamento.map((item) => (
-                <AcompanhamentoRow
-                  key={item.leadId}
-                  name={item.name}
-                  subinfo={item.subinfo}
-                  priority={item.priority}
-                  hasPatient={Boolean(item.patientId)}
-                  isLead
-                  onProntuario={item.patientId ? () => handleOpenChart(item.patientId) : undefined}
-                  onAgenda={item.patientId ? () => navigate('/gestao/agenda') : undefined}
-                  onCrm={() => navigate(`/crm/leads/${item.leadId}`)}
-                />
-              ))}
-            </AcompanhamentoCard>
-          </div>
-        </section>
+      {/* SEÇÃO 1 — Painel Executivo */}
+      <section className="op-section">
+        <SectionTitle icon={TrendingUp} title="Painel Executivo do Dia" subtitle="Como está meu dia?" />
+        <div className="op-kpi-grid">
+          {EXEC_KPI_CONFIG.map((cfg) => (
+            <ExecutiveKpiCard key={cfg.key} kpi={dashboard.executive[cfg.key]} config={cfg} />
+          ))}
+        </div>
+      </section>
 
-        {/* Seção 4 – Alertas operacionais */}
-        <section className="crm-report-section">
-          <h3 className="crm-report-section-title">Alertas operacionais</h3>
-          <div className="gestao-alertas-grid">
-            <SectionCard title="Pacientes não confirmados para amanhã">
-              {alertas.pacientesNaoConfirmadosAmanha.length === 0 ? (
-                <p className="muted">Nenhum</p>
+      <div className="op-main-grid">
+        <div className="op-main-col">
+          {/* SEÇÃO 2 — Agenda Timeline */}
+          <section className="op-section op-panel">
+            <SectionTitle icon={Calendar} title="Agenda Operacional" subtitle={`${dashboard.totalAppointments} atendimentos`} />
+            {dashboard.timeline.length === 0 ? (
+              <p className="op-empty">Nenhum agendamento para esta data.</p>
+            ) : (
+              <ul className="op-timeline">
+                {dashboard.timeline.map((item) => (
+                  <li key={item.id} className="op-timeline-item">
+                    <div className="op-timeline-time">{item.startTime || '—'}</div>
+                    <div className="op-timeline-body">
+                      <div className="op-timeline-top">
+                        <strong>{item.patientName}</strong>
+                        <StatusBadge displayStatus={item.displayStatus} />
+                      </div>
+                      <div className="op-timeline-meta">
+                        <span>{item.professionalName}</span>
+                        <span>·</span>
+                        <span>{item.procedureName}</span>
+                        {item.roomName !== '—' && <><span>·</span><span>{item.roomName}</span></>}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <div className="op-two-col">
+            {/* SEÇÃO 6 — Confirmações pendentes */}
+            <section className="op-section op-panel">
+              <SectionTitle title="Confirmações Pendentes" subtitle={`⚠ ${dashboard.pendingConfirmations.length} sem confirmação`} />
+              {dashboard.pendingConfirmations.length === 0 ? (
+                <p className="op-empty">Todos confirmados.</p>
               ) : (
-                <ul className="simple-list gestao-list">
-                  {alertas.pacientesNaoConfirmadosAmanha.map((a) => (
-                    <li key={a.appointmentId}>
-                      <span>{a.patientName}</span>
-                      <span className="gestao-alerta-meta">{a.startTime} · {a.professionalName}</span>
+                <ul className="op-quick-list">
+                  {dashboard.pendingConfirmations.map((p) => (
+                    <li key={p.appointmentId} className="op-quick-item">
+                      <div>
+                        <strong>{p.patientName}</strong>
+                        <span className="op-quick-meta">{p.startTime} · {p.professionalName}</span>
+                      </div>
+                      <div className="op-quick-actions">
+                        <button type="button" className="op-icon-btn" title="WhatsApp" onClick={() => handleWhatsApp(p.phone, p.patientName)}>
+                          <MessageCircle size={15} />
+                        </button>
+                        <button type="button" className="op-icon-btn" title="Ligar" onClick={() => handleCall(p.phone)}>
+                          <Phone size={15} />
+                        </button>
+                        <button type="button" className="op-mini-btn" onClick={() => handleConfirm(p.appointmentId)}>Confirmar</button>
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
-            </SectionCard>
-            <SectionCard title="Orçamentos aguardando resposta">
-              {alertas.orcamentosAguardandoResposta.length === 0 ? (
-                <p className="muted">Nenhum</p>
+            </section>
+
+            {/* SEÇÃO 7 — Faltas */}
+            <section className="op-section op-panel">
+              <SectionTitle title="Faltas do Dia" subtitle="Controle de perdas por ausência" />
+              {dashboard.noShows.length === 0 ? (
+                <p className="op-empty">Nenhuma falta registrada.</p>
               ) : (
-                <ul className="simple-list gestao-list">
-                  {alertas.orcamentosAguardandoResposta.map((b) => (
-                    <li key={b.budgetId}>
-                      <button
-                        type="button"
-                        className="gestao-list-link"
-                        onClick={() => navigate(`/crm/leads/${b.leadId}`)}
-                      >
-                        {b.leadName}
-                      </button>
-                      <span className="gestao-alerta-meta">{b.title} · {formatCurrency(b.totalValue)}</span>
+                <ul className="op-quick-list">
+                  {dashboard.noShows.map((n) => (
+                    <li key={n.appointmentId} className="op-quick-item">
+                      <div>
+                        <strong>{n.patientName}</strong>
+                        <span className="op-quick-meta">{n.procedureName} · {n.professionalName}</span>
+                        <span className="op-quick-meta">{formatCurrencyBRL(n.estimatedValue)} · {n.reason}</span>
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
-            </SectionCard>
-            <SectionCard title="Follow-ups atrasados">
-              {alertas.followUpsAtrasados.length === 0 ? (
-                <p className="muted">Nenhum</p>
-              ) : (
-                <ul className="simple-list gestao-list">
-                  {alertas.followUpsAtrasados.slice(0, 8).map((t) => (
-                    <li key={t.taskId}>
-                      <button
-                        type="button"
-                        className="gestao-list-link"
-                        onClick={() => t.leadId && navigate(`/crm/leads/${t.leadId}`)}
-                      >
-                        {t.title}
-                      </button>
-                      <span className="gestao-alerta-meta">{formatDateShort(t.dueAt?.slice(0, 10))}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SectionCard>
-            <SectionCard title="Parcelas vencidas">
-              {alertas.parcelasVencidas.length === 0 ? (
-                <p className="muted">Nenhuma</p>
-              ) : (
-                <ul className="simple-list gestao-list">
-                  {alertas.parcelasVencidas.slice(0, 8).map((p) => (
-                    <li key={p.id}>
-                      <button
-                        type="button"
-                        className="gestao-list-link"
-                        onClick={() => p.patientId && navigate(`/prontuario/${p.patientId}`)}
-                      >
-                        {formatCurrency(p.amount)}
-                      </button>
-                      <span className="gestao-alerta-meta">Venc. {formatDateShort(p.dueDate)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SectionCard>
+            </section>
           </div>
-        </section>
-      </CrmLayout>
-    </>
+
+          <div className="op-two-col">
+            {/* SEÇÃO 8 — Produção */}
+            <section className="op-section op-panel">
+              <SectionTitle title="Produção do Dia" />
+              <div className="op-prod-grid">
+                <div className="op-prod-item"><span>Consultas realizadas</span><strong>{dashboard.production.consultasRealizadas}</strong></div>
+                <div className="op-prod-item"><span>Avaliações realizadas</span><strong>{dashboard.production.avaliacoesRealizadas}</strong></div>
+                <div className="op-prod-item"><span>Orçamentos apresentados</span><strong>{dashboard.production.orcamentosApresentados}</strong></div>
+                <div className="op-prod-item"><span>Tratamentos fechados</span><strong>{dashboard.production.tratamentosFechados}</strong></div>
+                <div className="op-prod-item op-prod-item--wide"><span>Receita prevista</span><strong>{formatCurrencyBRL(dashboard.production.receitaPrevista)}</strong></div>
+                <div className="op-prod-item op-prod-item--wide"><span>Receita confirmada</span><strong>{formatCurrencyBRL(dashboard.production.receitaConfirmada)}</strong></div>
+              </div>
+            </section>
+
+            {/* SEÇÃO 9 — Ocupação */}
+            <section className="op-section op-panel">
+              <SectionTitle title="Ocupação dos Profissionais" />
+              {dashboard.occupancy.length === 0 ? (
+                <p className="op-empty">Sem dados de ocupação.</p>
+              ) : (
+                <ul className="op-occupancy-list">
+                  {dashboard.occupancy.map((o) => (
+                    <li key={o.professionalId} className="op-occupancy-row">
+                      <div className="op-occupancy-head">
+                        <strong>{o.name}</strong>
+                        <span>{o.percent}%</span>
+                      </div>
+                      <div className="op-occupancy-bar">
+                        <div className="op-occupancy-fill" style={{ width: `${o.percent}%` }} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+
+          {/* SEÇÃO 11 — Financeiro */}
+          <section className="op-section op-panel">
+            <SectionTitle icon={DollarSign} title="Resumo Financeiro do Dia" />
+            <div className="op-fin-grid">
+              <div className="op-fin-card"><span>Receita prevista</span><strong>{formatCurrencyBRL(dashboard.financial.receitaPrevista)}</strong></div>
+              <div className="op-fin-card op-fin-card--success"><span>Receita recebida</span><strong>{formatCurrencyBRL(dashboard.financial.receitaRecebida)}</strong></div>
+              <div className="op-fin-card"><span>Orçamentos emitidos</span><strong>{formatCurrencyBRL(dashboard.financial.orcamentosEmitidos)}</strong></div>
+              <div className="op-fin-card"><span>Em negociação</span><strong>{formatCurrencyBRL(dashboard.financial.valorNegociacao)}</strong></div>
+              <div className="op-fin-card op-fin-card--accent"><span>Fechamentos do dia</span><strong>{formatCurrencyBRL(dashboard.financial.fechamentosDia)}</strong></div>
+            </div>
+          </section>
+
+          {/* SEÇÃO 12 — Jornada */}
+          <section className="op-section">
+            <SectionTitle title="Jornada do Paciente" subtitle="Onde estão os pacientes agora?" />
+            <div className="op-journey-grid">
+              {dashboard.journey.map((j) => (
+                <div key={j.key} className={`op-journey-card op-journey-card--${j.tone}`}>
+                  <strong className="op-journey-count">{j.count}</strong>
+                  <span className="op-journey-label">{j.label}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <aside className="op-sidebar">
+          {/* SEÇÃO 3 — Aguardando */}
+          <section className="op-section op-panel op-panel--highlight">
+            <SectionTitle title="Pacientes Aguardando" subtitle={`${dashboard.waiting.length} na fila`} />
+            {dashboard.waiting.length === 0 ? (
+              <p className="op-empty">Ninguém aguardando.</p>
+            ) : (
+              <ul className="op-wait-list">
+                {dashboard.waiting.map((w) => (
+                  <li key={w.appointmentId} className={`op-wait-item ${w.isLongWait ? 'is-long' : ''}`}>
+                    <strong>{w.patientName}</strong>
+                    <span className={w.isLongWait ? 'op-wait-time is-danger' : 'op-wait-time'}>
+                      {w.waitLabel} aguardando
+                    </span>
+                    <span className="op-quick-meta">Chegada {w.arrivalTime} · {w.professionalName}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* SEÇÃO 4 — Em andamento */}
+          <section className="op-section op-panel">
+            <SectionTitle title="Em Atendimento" subtitle={`${dashboard.inProgress.length} agora`} />
+            {dashboard.inProgress.length === 0 ? (
+              <p className="op-empty">Nenhum atendimento em curso.</p>
+            ) : (
+              <ul className="op-progress-list">
+                {dashboard.inProgress.map((p) => (
+                  <li key={p.appointmentId} className="op-progress-item">
+                    <span className="op-progress-room">{p.roomName}</span>
+                    <strong>{p.patientName}</strong>
+                    <span className="op-quick-meta">{p.professionalName} · {p.procedureName}</span>
+                    <span className="op-progress-time">{p.minutesInService} min em atendimento</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* SEÇÃO 5 — Próximos */}
+          <section className="op-section op-panel">
+            <SectionTitle title="Próximos Atendimentos" />
+            {dashboard.upcoming.length === 0 ? (
+              <p className="op-empty">Sem próximos agendamentos.</p>
+            ) : (
+              <ul className="op-upcoming-list">
+                {dashboard.upcoming.map((u) => (
+                  <li key={u.appointmentId} className="op-upcoming-item">
+                    <span className="op-upcoming-time">{u.startTime}</span>
+                    <div>
+                      <strong>{u.patientName}</strong>
+                      <span className="op-quick-meta">{u.procedureName}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </aside>
+      </div>
+    </div>
   );
 }

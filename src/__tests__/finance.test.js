@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { loadDb, initDb, resetDb } from '../db/index.js';
 import { createInstallmentPlan, listTransactions } from '../services/financeService.js';
 
-const admin = { id: 'user-admin', role: 'admin' };
+const admin = { id: 'user-admin', role: 'admin', tenant_id: 'tenant-1' };
 
 describe('Financeiro - parcelas', () => {
   beforeEach(async () => {

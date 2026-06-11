@@ -8,22 +8,80 @@ import {
   getJourneyStageFromStatus,
   upsertJourneyEntryForAppointment,
 } from './journeyEntryService.js';
+import {
+  FLOW_COLUMN,
+  getFlowColumn,
+  getStatusForFlowColumn,
+} from './patientFlowColumns.js';
+
+export { FLOW_COLUMN, FLOW_COLUMN_META, getFlowColumn, getWaitColorClass } from './patientFlowColumns.js';
 
 /**
  * Busca agendamentos por data
  */
-export const fetchAppointmentsByDate = (date) => {
+function enrichWithJourney(db, apt, entry) {
+  const enriched = enrichAppointment(db, apt);
+  const flowColumn = getFlowColumn(enriched, entry);
+  return {
+    ...enriched,
+    journeyStage: entry?.stage || getJourneyStageFromStatus(apt.status),
+    journeyEntryId: entry?.id || null,
+    flowColumn,
+    flowColumnLabel: flowColumn,
+  };
+}
+
+export const fetchAppointmentsByDate = (date, { tenantId } = {}) => {
   return withDb((db) => {
     const { appointments, entriesByAppointmentId } = ensureJourneyEntriesForDate(db, date);
-    return appointments.map((apt) => {
-      const entry = entriesByAppointmentId.get(apt.id);
-      const enriched = enrichAppointment(db, apt);
-      return {
-        ...enriched,
-        journeyStage: entry?.stage || getJourneyStageFromStatus(apt.status),
-        journeyEntryId: entry?.id || null,
-      };
+    return appointments
+      .filter((apt) => !tenantId || !apt.tenant_id || apt.tenant_id === tenantId)
+      .map((apt) => enrichWithJourney(db, apt, entriesByAppointmentId.get(apt.id)));
+  });
+};
+
+/**
+ * Move paciente para coluna do Kanban operacional (drag-and-drop ou ação rápida).
+ */
+export const moveToFlowColumn = (user, appointmentId, targetColumn) => {
+  return withDb((db) => {
+    const index = db.appointments.findIndex((item) => item.id === appointmentId);
+    if (index < 0) throw new Error('Agendamento não encontrado');
+
+    const appointment = db.appointments[index];
+    const now = new Date().toISOString();
+    const newStatus = getStatusForFlowColumn(targetColumn);
+    const updates = { status: newStatus, updatedAt: now };
+
+    if ([FLOW_COLUMN.RECEPCAO, FLOW_COLUMN.SALA_ESPERA].includes(targetColumn) && !appointment.checkInAt) {
+      updates.checkInAt = now;
+    }
+    if ([FLOW_COLUMN.CONSULTORIO, FLOW_COLUMN.AVALIACAO_COMERCIAL, FLOW_COLUMN.FINANCEIRO].includes(targetColumn)) {
+      updates.calledAt = appointment.calledAt || now;
+      updates.startedAt = appointment.startedAt || now;
+    }
+    if (targetColumn === FLOW_COLUMN.FINALIZADO) {
+      updates.finishedAt = appointment.finishedAt || now;
+    }
+    if (targetColumn === FLOW_COLUMN.FALTA_CANCELADO && appointment.status !== APPOINTMENT_STATUS.CANCELADO) {
+      updates.status = APPOINTMENT_STATUS.FALTOU;
+    }
+
+    db.appointments[index] = { ...appointment, ...updates };
+    upsertJourneyEntryForAppointment(db, db.appointments[index], {
+      flowColumn: targetColumn,
+      stage: getJourneyStageFromStatus(db.appointments[index].status),
     });
+
+    logAction('flow:column_move', {
+      appointmentId,
+      targetColumn,
+      userId: user?.id,
+    });
+
+    return enrichWithJourney(db, db.appointments[index], db.patientJourneyEntries.find(
+      (e) => e.appointmentId === appointmentId && e.date === appointment.date
+    ));
   });
 };
 

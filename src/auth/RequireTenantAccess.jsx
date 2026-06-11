@@ -1,5 +1,6 @@
 import TenantAccessBlockedPage from '../pages/TenantAccessBlockedPage.jsx';
 import { useTenant } from '../tenant/useTenant.js';
+import { useAuth } from './useAuth.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
 
 function classifyTenantError(message) {
@@ -41,6 +42,7 @@ function classifyTenantError(message) {
 
 export default function RequireTenantAccess({ children }) {
   const { loading, error, isTenantBlocked, refreshTenantContext } = useTenant();
+  const { logoutWithReason } = useAuth();
 
   if (loading) {
     return (
@@ -74,6 +76,17 @@ export default function RequireTenantAccess({ children }) {
               onClick={() => window.location.assign('/stability/health')}
             >
               Abrir diagnóstico
+            </button>
+            <button
+              type="button"
+              className="button"
+              style={{ opacity: 0.7 }}
+              onClick={() => {
+                logoutWithReason('Não foi possível carregar os dados da clínica. Faça login novamente.');
+                window.location.assign('/login');
+              }}
+            >
+              Voltar ao login
             </button>
           </div>
         </div>

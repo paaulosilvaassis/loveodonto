@@ -1,256 +1,153 @@
-import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { CrmLayout } from '../../crm/ui/CrmLayout.jsx';
-import {
-  createLead,
-  listLeads,
-  LEAD_SOURCE,
-  LEAD_SOURCE_LABELS,
-  LEAD_INTEREST_LABELS,
-} from '../../services/crmService.js';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { CalendarDays, Clock3, Plus, UserCheck, Users } from 'lucide-react';
+import { createLead, listLeads, getPipelineStages } from '../../services/crmService.js';
 import { useAuth } from '../../auth/useAuth.js';
 import { loadDb } from '../../db/index.js';
-import { Inbox, UserPlus } from 'lucide-react';
+import GradientButton from '../../components/GradientButton.jsx';
+import { CaptacaoLeadForm } from '../../crm/ui/CaptacaoLeadForm.jsx';
+import { CaptacaoLeadList } from '../../crm/ui/CaptacaoLeadList.jsx';
+import { ConvertLeadToPatientModal } from '../../crm/ui/ConvertLeadToPatientModal.jsx';
+import { useCrmTenantLabels } from '../../crm/hooks/useCrmTenantLabels.js';
 
-const SOURCE_OPTIONS = [
-  LEAD_SOURCE.WHATSAPP,
-  LEAD_SOURCE.INSTAGRAM,
-  LEAD_SOURCE.SITE,
-  LEAD_SOURCE.GOOGLE_ADS,
-  LEAD_SOURCE.INDICACAO,
-  LEAD_SOURCE.TELEFONE,
-  LEAD_SOURCE.WALK_IN,
-  LEAD_SOURCE.MANUAL,
-];
+const RECENT_LEADS_LIMIT = 12;
+const TOAST_DURATION_MS = 4000;
 
-const INTEREST_OPTIONS = Object.keys(LEAD_INTEREST_LABELS);
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
-const initialForm = () => ({
-  name: '',
-  phone: '',
-  source: LEAD_SOURCE.MANUAL,
-  interest: '',
-  notes: '',
-  assignedToUserId: '',
-});
+/** Início da semana (segunda-feira, 00h). */
+const startOfWeek = () => {
+  const d = startOfToday();
+  const day = d.getDay();
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  return d;
+};
+
+const buildKpis = (leads) => {
+  const todayIso = startOfToday().toISOString();
+  const weekIso = startOfWeek().toISOString();
+  return {
+    today: leads.filter((l) => (l.createdAt || '') >= todayIso).length,
+    week: leads.filter((l) => (l.createdAt || '') >= weekIso).length,
+    waiting: leads.filter((l) => l.stageKey === 'novo_lead' && !l.patientId).length,
+    converted: leads.filter((l) => Boolean(l.patientId)).length,
+  };
+};
 
 export default function CrmCaptacaoPage() {
   const { user } = useAuth();
-  const [form, setForm] = useState(initialForm);
+  const tenantId = user?.tenantId || user?.tenant_id || '';
+  const { sourceLabels, interestLabels } = useCrmTenantLabels(user, tenantId);
   const [listVersion, setListVersion] = useState(0);
-  const [submitError, setSubmitError] = useState('');
-  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [leadToConvert, setLeadToConvert] = useState(null);
+  const nameInputRef = useRef(null);
 
   const users = useMemo(() => loadDb().users || [], []);
+  const stages = useMemo(() => getPipelineStages(), []);
   const leads = useMemo(() => listLeads(), [listVersion]);
-  const recentLeads = useMemo(() => leads.slice(0, 15), [leads]);
+  const recentLeads = useMemo(() => leads.slice(0, RECENT_LEADS_LIMIT), [leads]);
+  const kpis = useMemo(() => buildKpis(leads), [leads]);
 
-  const handleChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    setSubmitError('');
-    setSubmitSuccess(false);
-  };
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = setTimeout(() => setToast(null), TOAST_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setSubmitError('');
-    setSubmitSuccess(false);
-    const name = (form.name || '').trim();
-    if (!name) {
-      setSubmitError('Informe o nome do lead.');
-      return;
-    }
-    const phone = (form.phone || '').replace(/\D/g, '');
-    if (!phone) {
-      setSubmitError('Informe o telefone (com DDD).');
-      return;
-    }
+  const showToast = useCallback((type, message) => setToast({ type, message }), []);
+
+  const focusForm = useCallback(() => {
+    nameInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    nameInputRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const handleCreateLead = useCallback((payload) => {
     try {
-      createLead(user, {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        source: form.source || LEAD_SOURCE.MANUAL,
-        interest: (form.interest || '').trim() || undefined,
-        notes: (form.notes || '').trim() || undefined,
-        assignedToUserId: form.assignedToUserId || user?.id || undefined,
-      });
-      setForm(initialForm());
+      createLead(user, payload);
       setListVersion((v) => v + 1);
-      setSubmitSuccess(true);
+      showToast('success', 'Lead cadastrado com sucesso!');
+      return true;
     } catch (err) {
-      setSubmitError(err.message || 'Erro ao cadastrar lead.');
+      showToast('error', err?.message || 'Erro ao cadastrar lead.');
+      return false;
     }
-  };
+  }, [user, showToast]);
+
+  const handleConverted = useCallback((patientName) => {
+    setListVersion((v) => v + 1);
+    showToast('success', `Lead convertido em paciente${patientName ? `: ${patientName}` : ''}.`);
+  }, [showToast]);
+
+  const kpiCards = [
+    { id: 'today', label: 'Leads hoje', value: kpis.today, icon: Users, tone: 'primary' },
+    { id: 'week', label: 'Leads da semana', value: kpis.week, icon: CalendarDays, tone: 'accent' },
+    { id: 'waiting', label: 'Aguardando contato', value: kpis.waiting, icon: Clock3, tone: 'warning' },
+    { id: 'converted', label: 'Convertidos em paciente', value: kpis.converted, icon: UserCheck, tone: 'success' },
+  ];
 
   return (
-    <CrmLayout
-      title="Captação de Leads"
-      description="Cadastre novos leads manualmente. Origem e interesse configuráveis; lead não vira paciente automaticamente."
-    >
-      <div className="crm-captacao-layout">
-        <section className="crm-captacao-form-section card">
-          <h2 className="crm-captacao-form-title">
-            <UserPlus size={20} /> Novo lead
-          </h2>
-          <form onSubmit={handleSubmit} className="crm-captacao-form">
-            <div className="form-field">
-              <label htmlFor="captacao-name">Nome *</label>
-              <input
-                id="captacao-name"
-                type="text"
-                value={form.name}
-                onChange={(e) => handleChange('name', e.target.value)}
-                placeholder="Nome completo"
-                required
-              />
-            </div>
-            <div className="form-field">
-              <label htmlFor="captacao-phone">Telefone (DDD + número) *</label>
-              <input
-                id="captacao-phone"
-                type="tel"
-                value={form.phone}
-                onChange={(e) => handleChange('phone', e.target.value)}
-                placeholder="Ex.: 11 99999-9999"
-                required
-              />
-            </div>
-            <div className="crm-captacao-form-row">
-              <div className="form-field">
-                <label htmlFor="captacao-source">Origem</label>
-                <select
-                  id="captacao-source"
-                  value={form.source}
-                  onChange={(e) => handleChange('source', e.target.value)}
-                >
-                  {SOURCE_OPTIONS.map((key) => (
-                    <option key={key} value={key}>
-                      {LEAD_SOURCE_LABELS[key] || key}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-field">
-                <label htmlFor="captacao-interest">Interesse principal</label>
-                <select
-                  id="captacao-interest"
-                  value={form.interest}
-                  onChange={(e) => handleChange('interest', e.target.value)}
-                >
-                  <option value="">— Selecione —</option>
-                  {INTEREST_OPTIONS.map((key) => (
-                    <option key={key} value={key}>
-                      {LEAD_INTEREST_LABELS[key] || key}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="form-field">
-              <label htmlFor="captacao-notes">Observações</label>
-              <textarea
-                id="captacao-notes"
-                value={form.notes}
-                onChange={(e) => handleChange('notes', e.target.value)}
-                placeholder="Anotações sobre o lead..."
-                rows={2}
-              />
-            </div>
-            {users.length > 1 && (
-              <div className="form-field">
-                <label htmlFor="captacao-responsavel">Responsável</label>
-                <select
-                  id="captacao-responsavel"
-                  value={form.assignedToUserId}
-                  onChange={(e) => handleChange('assignedToUserId', e.target.value)}
-                >
-                  <option value="">Eu (usuário atual)</option>
-                  {users.filter((u) => u.active !== false).map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name || u.id}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            {submitError && (
-              <p className="crm-captacao-error" role="alert">
-                {submitError}
-              </p>
-            )}
-            {submitSuccess && (
-              <p className="crm-captacao-success" role="status">
-                Lead cadastrado com sucesso.
-              </p>
-            )}
-            <div className="crm-captacao-form-actions">
-              <button type="submit" className="button primary">
-                Cadastrar lead
-              </button>
-              <button
-                type="button"
-                className="button secondary"
-                onClick={() => {
-                  setForm(initialForm());
-                  setSubmitError('');
-                  setSubmitSuccess(false);
-                }}
-              >
-                Limpar
-              </button>
-            </div>
-          </form>
-        </section>
+    <div className="crm-captacao-page">
+      <header className="crm-captacao-header">
+        <div className="crm-captacao-header-text">
+          <h1>Captação de Leads</h1>
+          <p className="crm-captacao-subtitle">
+            Cadastre, acompanhe e organize novos interessados antes de virarem pacientes.
+          </p>
+        </div>
+        <GradientButton icon={Plus} onClick={focusForm} ariaLabel="Cadastrar novo lead">
+          Novo lead
+        </GradientButton>
+      </header>
 
-        <section className="crm-captacao-list-section card">
-          <h2 className="crm-captacao-list-title">
-            <Inbox size={20} /> Últimos leads captados
-          </h2>
-          <div className="crm-leads-table-wrap">
-            <table className="crm-leads-table">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Telefone</th>
-                  <th>Origem</th>
-                  <th>Interesse</th>
-                  <th>Estágio</th>
-                  <th>Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentLeads.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="crm-leads-empty">
-                      Nenhum lead cadastrado. Use o formulário ao lado para captar o primeiro.
-                    </td>
-                  </tr>
-                ) : (
-                  recentLeads.map((lead) => (
-                    <tr key={lead.id}>
-                      <td>{lead.name || '—'}</td>
-                      <td>{lead.phone || '—'}</td>
-                      <td>{LEAD_SOURCE_LABELS[lead.source] || lead.source || '—'}</td>
-                      <td>{LEAD_INTEREST_LABELS[lead.interest] || lead.interest || '—'}</td>
-                      <td><span className="crm-leads-stage">{lead.stageKey?.replace(/_/g, ' ')}</span></td>
-                      <td>
-                        <Link to={`/crm/leads/${lead.id}`} className="crm-leads-link">
-                          Ver perfil
-                        </Link>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+      <div className="crm-captacao-kpis">
+        {kpiCards.map(({ id, label, value, icon: Icon, tone }) => (
+          <div key={id} className={`crm-captacao-kpi-card crm-captacao-kpi-card--${tone}`}>
+            <span className="crm-captacao-kpi-icon" aria-hidden="true">
+              <Icon size={20} />
+            </span>
+            <div className="crm-captacao-kpi-text">
+              <strong className="crm-captacao-kpi-value">{value}</strong>
+              <span className="crm-captacao-kpi-label">{label}</span>
+            </div>
           </div>
-          {leads.length > 0 && (
-            <p className="crm-captacao-list-footer muted">
-              <Link to="/crm/leads">Ver todos os leads ({leads.length})</Link>
-            </p>
-          )}
-        </section>
+        ))}
       </div>
-    </CrmLayout>
+
+      <div className="crm-captacao-layout">
+        <CaptacaoLeadForm
+          users={users}
+          onCreate={handleCreateLead}
+          nameInputRef={nameInputRef}
+          sourceLabels={sourceLabels}
+          interestLabels={interestLabels}
+        />
+        <CaptacaoLeadList
+          leads={recentLeads}
+          totalCount={leads.length}
+          stages={stages}
+          users={users}
+          onConvert={setLeadToConvert}
+          onRegisterFirst={focusForm}
+        />
+      </div>
+
+      <ConvertLeadToPatientModal
+        open={Boolean(leadToConvert)}
+        onClose={() => setLeadToConvert(null)}
+        lead={leadToConvert}
+        user={user}
+        onSuccess={handleConverted}
+      />
+
+      {toast && (
+        <div className={`toast ${toast.type}`} role="status">
+          {toast.message}
+        </div>
+      )}
+    </div>
   );
 }

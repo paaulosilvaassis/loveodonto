@@ -1,484 +1,606 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Filter } from 'lucide-react';
+import {
+  Activity,
+  AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Calendar,
+  Clock,
+  DollarSign,
+  Minus,
+  RefreshCw,
+  Search,
+  Stethoscope,
+  Timer,
+  UserCheck,
+  Users,
+  UserX,
+} from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
-import { SectionCard } from '../components/SectionCard.jsx';
-import FlowPatientList from '../components/flow/FlowPatientList.jsx';
-import FlowSidebar from '../components/flow/FlowSidebar.jsx';
-import FlowTopSummaryChips from '../components/flow/FlowTopSummaryChips.jsx';
-import WhatsAppModal from '../components/flow/WhatsAppModal.jsx';
-import CancelOrRescheduleModal from '../components/flow/CancelOrRescheduleModal.jsx';
+import PatientFlowKanban from '../components/flow/PatientFlowKanban.jsx';
 import CheckInModal from '../components/flow/CheckInModal.jsx';
+import CancelOrRescheduleModal from '../components/flow/CancelOrRescheduleModal.jsx';
+import {
+  ModalRoot,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalTitle,
+} from '../components/ui/Modal.jsx';
 import {
   fetchAppointmentsByDate,
-  updateAppointmentStatus,
-  logWhatsAppMessage,
-  groupAppointmentsByCategory,
-  computeSidebarCounts,
-  getAppointmentCategory,
+  moveToFlowColumn,
+  FLOW_COLUMN,
+  FLOW_COLUMN_META,
 } from '../services/patientFlowService.js';
-import { APPOINTMENT_STATUS } from '../services/appointmentService.js';
+import { getPatientFlowDashboard } from '../services/patientFlowDashboardService.js';
 import {
-  JOURNEY_STAGE,
   confirmArrival,
-  sendToConsultingRoom,
   finishAppointment,
-  cancelAppointment,
   markNoShow,
-  getJourneyStageFromStatus,
+  sendToConsultingRoom,
 } from '../services/journeyEntryService.js';
-import { loadDb } from '../db/index.js';
-import { queueMessage } from '../services/communicationService.js';
+import { formatCurrencyBRL } from '../utils/currency.js';
 
-const todayIso = () => new Date().toISOString().slice(0, 10);
+const TODAY = () => new Date().toISOString().slice(0, 10);
+const REFRESH_MS = 30000;
+
+const SUMMARY_KPI_CONFIG = [
+  { key: 'agendadosHoje', label: 'Agendados Hoje', icon: Calendar, tone: 'primary', emoji: '📅' },
+  { key: 'presentesNaClinica', label: 'Presentes na Clínica', icon: Users, tone: 'info', emoji: '🏥' },
+  { key: 'emEspera', label: 'Em Espera', icon: Clock, tone: 'warning', emoji: '⏳' },
+  { key: 'emAtendimento', label: 'Em Atendimento', icon: Stethoscope, tone: 'orange', emoji: '🦷' },
+  { key: 'emAvaliacaoComercial', label: 'Em Avaliação Comercial', icon: Activity, tone: 'accent', emoji: '💰' },
+  { key: 'finalizados', label: 'Finalizados', icon: UserCheck, tone: 'success', emoji: '✅' },
+  { key: 'faltas', label: 'Faltas', icon: UserX, tone: 'danger', emoji: '❌' },
+  { key: 'retornos', label: 'Retornos', icon: RefreshCw, tone: 'neutral', emoji: '🔄' },
+];
+
+function TrendBadge({ delta, direction }) {
+  if (direction === 'flat' || delta === 0) {
+    return <span className="pf-trend pf-trend--flat"><Minus size={12} /> 0%</span>;
+  }
+  const label = `${delta > 0 ? '+' : ''}${delta}%`;
+  return direction === 'up' ? (
+    <span className="pf-trend pf-trend--up"><ArrowUpRight size={12} /> {label}</span>
+  ) : (
+    <span className="pf-trend pf-trend--down"><ArrowDownRight size={12} /> {label}</span>
+  );
+}
+
+function SummaryKpiCard({ kpi, config }) {
+  const Icon = config.icon;
+  return (
+    <div className={`pf-kpi pf-kpi--${config.tone}`}>
+      <div className="pf-kpi-head">
+        <span className="pf-kpi-emoji" aria-hidden="true">{config.emoji}</span>
+        <span className="pf-kpi-icon"><Icon size={16} /></span>
+        <TrendBadge delta={kpi.delta} direction={kpi.direction} />
+      </div>
+      <strong className="pf-kpi-value">{kpi.value}</strong>
+      <span className="pf-kpi-label">{config.label}</span>
+    </div>
+  );
+}
+
+function SectionTitle({ icon: Icon, title, subtitle }) {
+  return (
+    <div className="pf-section-head">
+      <h2 className="pf-section-title">
+        {Icon && <Icon size={18} />}
+        {title}
+      </h2>
+      {subtitle && <p className="pf-section-sub">{subtitle}</p>}
+    </div>
+  );
+}
 
 export default function PatientFlowPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  
-  const [selectedDate, setSelectedDate] = useState(() => {
-    return searchParams.get('date') || todayIso();
-  });
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState(null);
-  const [filterProfessional, setFilterProfessional] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('agendados');
-  const [activeSidebarFilter, setActiveSidebarFilter] = useState('all');
-  const [whatsAppModal, setWhatsAppModal] = useState({ open: false, appointment: null });
-  const [cancelModal, setCancelModal] = useState({ open: false, appointment: null });
-  const [checkInOpen, setCheckInOpen] = useState(false);
+  const tenantId = user?.tenantId || user?.tenant_id || '';
+
+  const [selectedDate, setSelectedDate] = useState(() => searchParams.get('date') || TODAY());
+  const [filters, setFilters] = useState({ professionalId: '', search: '' });
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [lastUpdate, setLastUpdate] = useState(new Date());
   const [toast, setToast] = useState(null);
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [moveModal, setMoveModal] = useState({ open: false, appointmentId: '', targetColumn: FLOW_COLUMN.SALA_ESPERA });
+  const [cancelModal, setCancelModal] = useState({ open: false, appointment: null });
+
+  const dashboard = useMemo(
+    () => getPatientFlowDashboard(selectedDate, { tenantId, filters }),
+    [selectedDate, tenantId, filters, refreshKey]
+  );
+
+  const appointments = useMemo(
+    () => fetchAppointmentsByDate(selectedDate, { tenantId }),
+    [selectedDate, tenantId, refreshKey]
+  );
+
+  const refresh = useCallback(() => {
+    setRefreshKey((k) => k + 1);
+    setLastUpdate(new Date());
+  }, []);
 
   useEffect(() => {
-    loadAppointments();
-  }, [selectedDate]);
+    const timer = setInterval(refresh, REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [refresh]);
 
+  const showToast = useCallback((message, type = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
 
-  useEffect(() => {
-    const dateParam = searchParams.get('date');
-    if (dateParam && dateParam !== selectedDate) {
-      setSelectedDate(dateParam);
-    }
-  }, [searchParams]);
-
-  const loadAppointments = () => {
-    setLoading(true);
+  const handleMoveColumn = async (appointmentId, targetColumn) => {
     try {
-      const data = fetchAppointmentsByDate(selectedDate);
-      setAppointments(data);
-    } catch (error) {
-      console.error('Erro ao carregar agendamentos:', error);
-      setAppointments([]);
-    } finally {
-      setLoading(false);
+      moveToFlowColumn(user, appointmentId, targetColumn);
+      showToast('Paciente movido com sucesso');
+      refresh();
+    } catch (e) {
+      showToast(e?.message || 'Erro ao mover paciente', 'error');
     }
   };
 
-  const getStage = (appointment) => {
-    return appointment?.journeyStage || getJourneyStageFromStatus(appointment?.status);
+  const handleQuickMove = async (targetColumn) => {
+    const apt = appointments.find((a) =>
+      [FLOW_COLUMN.RECEPCAO, FLOW_COLUMN.SALA_ESPERA].includes(a.flowColumn)
+    );
+    if (!apt) {
+      showToast('Nenhum paciente em espera para mover', 'error');
+      return;
+    }
+    await handleMoveColumn(apt.id, targetColumn);
   };
-
-  const filteredAppointments = useMemo(() => {
-    let filtered = [...appointments];
-
-    // Filtro por categoria
-    if (selectedCategory) {
-      const categories = groupAppointmentsByCategory(filtered);
-      const category = categories.find((c) => c.key === selectedCategory);
-      if (category) {
-        filtered = category.appointments;
-      }
-    }
-
-    // Filtro por tab
-    if (activeTab === 'agendados') {
-      filtered = filtered.filter((apt) => getStage(apt) === JOURNEY_STAGE.AGENDADOS);
-    } else if (activeTab === 'espera') {
-      filtered = filtered.filter((apt) => getStage(apt) === JOURNEY_STAGE.SALA_ESPERA);
-    } else if (activeTab === 'consultorios') {
-      filtered = filtered.filter((apt) => getStage(apt) === JOURNEY_STAGE.CONSULTORIO);
-    } else if (activeTab === 'finalizados') {
-      filtered = filtered.filter((apt) => getStage(apt) === JOURNEY_STAGE.FINALIZADO);
-    } else if (activeTab === 'cancelados') {
-      filtered = filtered.filter((apt) =>
-        [JOURNEY_STAGE.CANCELADOS, JOURNEY_STAGE.FALTAS].includes(getStage(apt))
-      );
-    }
-
-    // Filtro por sidebar
-    if (activeSidebarFilter.startsWith('category:')) {
-      const label = activeSidebarFilter.replace('category:', '');
-      filtered = filtered.filter((apt) => getAppointmentCategory(apt) === label);
-    } else if (activeSidebarFilter === 'desmarcados') {
-      filtered = filtered.filter((apt) =>
-        [APPOINTMENT_STATUS.CANCELADO, APPOINTMENT_STATUS.DESMARCOU].includes(apt.status)
-      );
-    } else if (activeSidebarFilter === 'pendencias') {
-      filtered = filtered.filter((apt) => apt.pendingTitlesCount || apt.alertSummary);
-    }
-
-    // Filtro por profissional
-    if (filterProfessional) {
-      filtered = filtered.filter((apt) => apt.professionalId === filterProfessional);
-    }
-
-    // Filtro por status
-    if (filterStatus) {
-      filtered = filtered.filter((apt) => apt.status === filterStatus);
-    }
-
-    // Busca por nome/telefone
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((apt) => {
-        const patientName = (apt.patient?.full_name || apt.patient?.nickname || '').toLowerCase();
-        const phone = apt.phone ? `${apt.phone.ddd}${apt.phone.number}` : '';
-        return patientName.includes(query) || phone.includes(query);
-      });
-    }
-
-    // Ordenar por horário
-    filtered.sort((a, b) => {
-      const timeA = a.startTime || '';
-      const timeB = b.startTime || '';
-      return timeA.localeCompare(timeB);
-    });
-
-    return filtered;
-  }, [
-    appointments,
-    selectedCategory,
-    filterProfessional,
-    filterStatus,
-    searchQuery,
-    activeTab,
-    activeSidebarFilter,
-  ]);
-
-  const professionals = useMemo(() => {
-    const db = loadDb();
-    const professionalIds = new Set(appointments.map((a) => a.professionalId).filter(Boolean));
-    return Array.from(professionalIds)
-      .map((id) => {
-        const collab = db.collaborators.find((c) => c.id === id);
-        return collab ? { id, name: collab.nomeCompleto || collab.name } : null;
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [appointments]);
-
-  const sidebarCounts = useMemo(() => computeSidebarCounts(appointments), [appointments]);
 
   const handleCheckIn = async (appointmentId) => {
     try {
       await confirmArrival(user, appointmentId);
-      showToast('Chegada confirmada com sucesso');
-      loadAppointments();
-    } catch (error) {
-      console.error('Erro ao confirmar chegada:', error);
-      showToast(error.message || 'Erro ao confirmar chegada', 'error');
+      moveToFlowColumn(user, appointmentId, FLOW_COLUMN.RECEPCAO);
+      showToast('Chegada registrada');
+      refresh();
+    } catch (e) {
+      showToast(e?.message || 'Erro ao registrar chegada', 'error');
     }
   };
 
-  const handleSendToConsultingRoom = async (appointmentId) => {
+  const handleStartService = async () => {
+    const apt = appointments.find((a) =>
+      [FLOW_COLUMN.RECEPCAO, FLOW_COLUMN.SALA_ESPERA].includes(a.flowColumn)
+    );
+    if (!apt) {
+      showToast('Nenhum paciente aguardando', 'error');
+      return;
+    }
     try {
-      const appointment = appointments.find((apt) => apt.id === appointmentId);
-      if (!appointment) {
-        throw new Error('Agendamento não encontrado');
+      await sendToConsultingRoom(user, apt.id, apt.consultorioId || apt.roomId || null);
+      moveToFlowColumn(user, apt.id, FLOW_COLUMN.CONSULTORIO);
+      showToast('Atendimento iniciado');
+      refresh();
+    } catch (e) {
+      showToast(e?.message || 'Erro ao iniciar atendimento', 'error');
+    }
+  };
+
+  const handleFinish = async () => {
+    const apt = appointments.find((a) =>
+      [FLOW_COLUMN.CONSULTORIO, FLOW_COLUMN.AVALIACAO_COMERCIAL, FLOW_COLUMN.FINANCEIRO].includes(a.flowColumn)
+    );
+    if (!apt) {
+      showToast('Nenhum atendimento em andamento', 'error');
+      return;
+    }
+    try {
+      if (apt.flowColumn === FLOW_COLUMN.CONSULTORIO) {
+        await finishAppointment(user, apt.id);
+      } else {
+        moveToFlowColumn(user, apt.id, FLOW_COLUMN.FINALIZADO);
       }
-      await sendToConsultingRoom(user, appointmentId, appointment?.consultorioId || appointment?.roomId || null);
-      showToast('Paciente enviado para o consultório');
-      loadAppointments();
-    } catch (error) {
-      console.error('Erro ao enviar para consultório:', error);
-      showToast(error.message || 'Erro ao enviar para consultório', 'error');
-    }
-  };
-
-  const handleWhatsAppReminder = (appointment) => {
-    setWhatsAppModal({ open: true, appointment });
-  };
-
-  const handleSendWhatsApp = async ({ appointmentId, patientId, templateId, messageContent }) => {
-    try {
-      // Registrar no log do CRM
-      await logWhatsAppMessage(user, patientId, appointmentId, templateId, messageContent);
-      
-      // Enfileirar mensagem
-      if (templateId) {
-        await queueMessage(user, {
-          patientId,
-          appointmentId,
-          templateId,
-          channel: 'whatsapp',
-        });
-      }
-
-      showToast('Mensagem WhatsApp enviada com sucesso');
-    } catch (error) {
-      console.error('Erro ao enviar WhatsApp:', error);
-      throw error;
-    }
-  };
-
-  const handleConfirm = async (appointmentId) => {
-    try {
-      await updateAppointmentStatus(user, appointmentId, APPOINTMENT_STATUS.CONFIRMADO);
-      showToast('Agendamento confirmado');
-      loadAppointments();
-    } catch (error) {
-      console.error('Erro ao confirmar:', error);
-      showToast(error.message || 'Erro ao confirmar agendamento', 'error');
-    }
-  };
-
-  const handleOpenChart = (patientId) => {
-    if (patientId) {
-      navigate(`/prontuario/${patientId}`);
-    }
-  };
-
-  const handleCancel = async ({ appointmentId, reason, rescheduleNow }) => {
-    try {
-      await cancelAppointment(user, appointmentId, reason, rescheduleNow);
-      showToast('Agendamento cancelado');
-      loadAppointments();
-    } catch (error) {
-      console.error('Erro ao cancelar:', error);
-      throw error;
-    }
-  };
-
-  const handleOpenWhatsApp = (patientId) => {
-    // Navegar para página de comunicação/CRM com thread do paciente
-    navigate(`/comercial/chats?patientId=${patientId}`);
-  };
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  const handleFinish = async (appointmentId) => {
-    try {
-      await finishAppointment(user, appointmentId);
       showToast('Atendimento finalizado');
-      loadAppointments();
-    } catch (error) {
-      console.error('Erro ao finalizar:', error);
-      showToast(error.message || 'Erro ao finalizar atendimento', 'error');
+      refresh();
+    } catch (e) {
+      showToast(e?.message || 'Erro ao finalizar', 'error');
     }
   };
 
-  const formatDate = (dateStr) => {
+  const handleNoShow = async () => {
+    const apt = appointments.find((a) => a.flowColumn === FLOW_COLUMN.AGENDADOS);
+    if (!apt) {
+      showToast('Selecione um agendamento via mover paciente', 'error');
+      return;
+    }
     try {
-      const date = new Date(dateStr + 'T00:00:00');
-      return date.toLocaleDateString('pt-BR', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
+      await markNoShow(user, apt.id);
+      moveToFlowColumn(user, apt.id, FLOW_COLUMN.FALTA_CANCELADO);
+      showToast('Falta registrada');
+      refresh();
+    } catch (e) {
+      showToast(e?.message || 'Erro ao registrar falta', 'error');
+    }
+  };
+
+  const handleOpenPatient = (card) => {
+    if (card?.patientId) navigate(`/prontuario/${card.patientId}`);
+    else if (card?.appointmentId) navigate(`/gestao/agenda?appointmentId=${card.appointmentId}`);
+  };
+
+  const formatDateLabel = (dateStr) => {
+    try {
+      return new Date(`${dateStr}T12:00:00`).toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
       });
     } catch {
       return dateStr;
     }
   };
 
-  const handleMarkNoShow = async (appointmentId) => {
-    try {
-      await markNoShow(user, appointmentId);
-      showToast('Falta registrada');
-      loadAppointments();
-    } catch (error) {
-      console.error('Erro ao marcar falta:', error);
-      showToast(error.message || 'Erro ao marcar falta', 'error');
-    }
-  };
-
-  const handleViewDetails = (appointmentId) => {
-    navigate(`/gestao/agenda?appointmentId=${appointmentId}`);
-  };
-
+  const movableAppointments = appointments.filter((a) =>
+    a.flowColumn !== FLOW_COLUMN.FALTA_CANCELADO
+  );
 
   return (
-    <div className="patient-flow-page">
+    <div className="pf-central-page">
       {toast && (
         <div className={`toast ${toast.type}`} role="status">
           {toast.message}
         </div>
       )}
 
-      <SectionCard>
-        <div className="flow-compact-container">
-          <div className="flow-compact-header">
-            <div>
-              <h1 className="flow-compact-title">Fluxo do Paciente</h1>
-              <p className="flow-compact-subtitle">Painel operacional do dia para recepção.</p>
-            </div>
-            <div className="flow-compact-actions">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => {
-                  setSelectedDate(e.target.value);
-                  setSearchParams({ date: e.target.value });
-                }}
-                className="flow-compact-date"
-              />
-              <button
-                type="button"
-                className="flow-compact-cta"
-                onClick={() => setCheckInOpen(true)}
-              >
-                Registrar Chegada
-              </button>
-            </div>
-          </div>
-
-          <div className="flow-compact-tabs">
-            <button
-              type="button"
-              className={`flow-compact-tab ${activeTab === 'agendados' ? 'active' : ''}`}
-              onClick={() => setActiveTab('agendados')}
-            >
-              Agendados Para Hoje
-            </button>
-            <button
-              type="button"
-              className={`flow-compact-tab ${activeTab === 'espera' ? 'active' : ''}`}
-              onClick={() => setActiveTab('espera')}
-            >
-              Na Sala de Espera
-            </button>
-            <button
-              type="button"
-              className={`flow-compact-tab ${activeTab === 'consultorios' ? 'active' : ''}`}
-              onClick={() => setActiveTab('consultorios')}
-            >
-              Nos Consultórios
-            </button>
-            <button
-              type="button"
-              className={`flow-compact-tab ${activeTab === 'finalizados' ? 'active' : ''}`}
-              onClick={() => setActiveTab('finalizados')}
-            >
-              Finalizados
-            </button>
-            <button
-              type="button"
-              className={`flow-compact-tab ${activeTab === 'cancelados' ? 'active' : ''}`}
-              onClick={() => setActiveTab('cancelados')}
-            >
-              Cancelados/Faltas
-            </button>
-          </div>
-
-          <div className="flow-compact-filters">
-            <div className="flow-filter-group flow-filter-search">
-              <label className="flow-filter-label">
-                <Search size={16} />
-                Buscar
-              </label>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Nome ou telefone..."
-                className="flow-filter-input"
-              />
-            </div>
-            <div className="flow-filter-group">
-              <label className="flow-filter-label">
-                <Filter size={16} />
-                Status
-              </label>
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="flow-filter-select"
-              >
-                <option value="">Todos</option>
-                <option value={APPOINTMENT_STATUS.AGENDADO}>Agendado</option>
-                <option value={APPOINTMENT_STATUS.CONFIRMADO}>Confirmado</option>
-                <option value={APPOINTMENT_STATUS.CHEGOU}>Chegou</option>
-                <option value={APPOINTMENT_STATUS.EM_ESPERA}>Em Espera</option>
-                <option value={APPOINTMENT_STATUS.EM_ATENDIMENTO}>Em Atendimento</option>
-                <option value={APPOINTMENT_STATUS.FINALIZADO}>Finalizado</option>
-              </select>
-            </div>
-          </div>
-
-          <FlowTopSummaryChips
-            appointments={appointments}
-            selectedCategory={selectedCategory}
-            onSelect={setSelectedCategory}
-          />
-
-          <div className="flow-compact-body">
-            <FlowSidebar
-              counts={sidebarCounts}
-              activeFilter={activeSidebarFilter}
-              onFilterChange={setActiveSidebarFilter}
-            />
-
-            <div className="flow-compact-list">
-              <div className="flow-list-header-compact">
-                <h3>Agendamentos — {formatDate(selectedDate)}</h3>
-                <span>{filteredAppointments.length} pacientes</span>
-              </div>
-
-              {loading ? (
-                <div className="flow-loading">Carregando agendamentos...</div>
-              ) : (
-                <FlowPatientList
-                  appointments={filteredAppointments}
-                  onCheckIn={handleCheckIn}
-                  onSendToConsultingRoom={handleSendToConsultingRoom}
-                  onReminder={handleWhatsAppReminder}
-                  onConfirm={handleConfirm}
-                  onOpenChart={handleOpenChart}
-                  onCancel={(appointment) => setCancelModal({ open: true, appointment })}
-                  onOpenWhatsApp={handleOpenWhatsApp}
-                  onFinish={handleFinish}
-                  onReschedule={(appointment) => setCancelModal({ open: true, appointment })}
-                  onNoShow={(appointment) => handleMarkNoShow(appointment.id)}
-                  onViewDetails={(appointment) => handleViewDetails(appointment.id)}
-                  user={user}
-                />
-              )}
-            </div>
-          </div>
+      <header className="pf-central-header">
+        <div className="pf-central-header-text">
+          <span className="pf-central-badge"><Activity size={12} /> Tempo real</span>
+          <h1>Fluxo do Paciente</h1>
+          <p>Central operacional da jornada — {formatDateLabel(selectedDate)}</p>
+          <p className="pf-last-update">
+            Atualizado às {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+          </p>
         </div>
-      </SectionCard>
+        <div className="pf-central-header-actions">
+          <input
+            type="date"
+            className="pf-date-picker"
+            value={selectedDate}
+            onChange={(e) => {
+              setSelectedDate(e.target.value);
+              setSearchParams({ date: e.target.value });
+            }}
+          />
+          <button type="button" className="pf-btn pf-btn--ghost" onClick={refresh}>
+            <RefreshCw size={16} /> Atualizar
+          </button>
+        </div>
+      </header>
 
-      {/* Modais */}
-      <WhatsAppModal
-        open={whatsAppModal.open}
-        onClose={() => setWhatsAppModal({ open: false, appointment: null })}
-        appointment={whatsAppModal.appointment}
-        onSend={handleSendWhatsApp}
-        user={user}
+      {/* Seção 11 — Ações rápidas */}
+      <div className="pf-quick-actions">
+        <button type="button" className="pf-btn pf-btn--primary" onClick={() => setCheckInOpen(true)}>
+          Registrar chegada
+        </button>
+        <button
+          type="button"
+          className="pf-btn"
+          onClick={() => setMoveModal({ open: true, appointmentId: '', targetColumn: FLOW_COLUMN.SALA_ESPERA })}
+        >
+          Mover paciente
+        </button>
+        <button type="button" className="pf-btn" onClick={handleStartService}>
+          Iniciar atendimento
+        </button>
+        <button type="button" className="pf-btn" onClick={handleFinish}>
+          Encerrar atendimento
+        </button>
+        <button type="button" className="pf-btn" onClick={() => handleQuickMove(FLOW_COLUMN.AVALIACAO_COMERCIAL)}>
+          Enviar p/ avaliação comercial
+        </button>
+        <button type="button" className="pf-btn" onClick={() => handleQuickMove(FLOW_COLUMN.FINANCEIRO)}>
+          Enviar p/ financeiro
+        </button>
+        <button type="button" className="pf-btn pf-btn--success" onClick={() => handleQuickMove(FLOW_COLUMN.FINALIZADO)}>
+          Finalizar atendimento
+        </button>
+        <button type="button" className="pf-btn pf-btn--danger" onClick={handleNoShow}>
+          Registrar falta
+        </button>
+      </div>
+
+      <div className="pf-filters">
+        <div className="pf-filters-grid">
+          <label className="pf-filter-field">
+            <Search size={14} />
+            <input
+              type="search"
+              placeholder="Buscar paciente..."
+              value={filters.search}
+              onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+            />
+          </label>
+          <label className="pf-filter-field">
+            Profissional
+            <select
+              value={filters.professionalId}
+              onChange={(e) => setFilters((f) => ({ ...f, professionalId: e.target.value }))}
+            >
+              <option value="">Todos</option>
+              {dashboard.filterOptions.professionals.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {/* Seção 10 — Alertas */}
+      {dashboard.alerts.length > 0 && (
+        <div className="pf-alerts-banner" role="status">
+          {dashboard.alerts.map((alert) => (
+            <span key={alert.id} className={`pf-alert-chip pf-alert-chip--${alert.type}`}>
+              <AlertTriangle size={14} />
+              {alert.message}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Seção 1 — Resumo operacional */}
+      <section className="pf-section">
+        <SectionTitle title="Resumo operacional do dia" subtitle="Comparação com o dia anterior" />
+        <div className="pf-kpi-grid">
+          {SUMMARY_KPI_CONFIG.map((cfg) => (
+            <SummaryKpiCard key={cfg.key} kpi={dashboard.summary[cfg.key]} config={cfg} />
+          ))}
+        </div>
+      </section>
+
+      {/* Seção 2 — Kanban */}
+      <section className="pf-section pf-section--kanban">
+        <SectionTitle
+          icon={Activity}
+          title="Jornada visual do paciente"
+          subtitle="Arraste os cards entre colunas para atualizar o fluxo"
+        />
+        <PatientFlowKanban
+          kanban={dashboard.kanban}
+          onMoveCard={handleMoveColumn}
+          onOpenPatient={handleOpenPatient}
+        />
+      </section>
+
+      <div className="pf-panels-grid">
+        {/* Seção 3 — Aguardando */}
+        <section className="pf-panel pf-panel--alert">
+          <SectionTitle icon={AlertTriangle} title="Pacientes aguardando" />
+          {dashboard.waiting.length === 0 ? (
+            <p className="pf-empty">Nenhum paciente aguardando.</p>
+          ) : (
+            <ul className="pf-wait-list">
+              {dashboard.waiting.map((w) => (
+                <li key={w.appointmentId} className={w.isAlert ? 'is-alert' : ''}>
+                  <strong>⚠ {w.patientName}</strong>
+                  <span>{w.waitLabel} aguardando</span>
+                  <span className="pf-muted">{w.professionalName}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Seção 4 — Em andamento */}
+        <section className="pf-panel">
+          <SectionTitle icon={Stethoscope} title="Atendimentos em andamento" />
+          {dashboard.inProgress.length === 0 ? (
+            <p className="pf-empty">Nenhum atendimento em andamento.</p>
+          ) : (
+            <ul className="pf-progress-list">
+              {dashboard.inProgress.map((item) => (
+                <li key={item.appointmentId}>
+                  <strong>{item.patientName}</strong>
+                  <span>{item.roomName}</span>
+                  <span>{item.procedureName}</span>
+                  <span className="pf-time-badge">{item.minutesInService} minutos</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Seção 5 — Próximos */}
+        <section className="pf-panel">
+          <SectionTitle icon={Clock} title="Próximos pacientes" subtitle="Próximas 2 horas" />
+          {dashboard.upcoming.length === 0 ? (
+            <p className="pf-empty">Nenhum agendamento nas próximas 2 horas.</p>
+          ) : (
+            <ul className="pf-upcoming-list">
+              {dashboard.upcoming.map((u) => (
+                <li key={u.appointmentId}>
+                  <span className="pf-upcoming-time">{u.startTime}</span>
+                  <span>{u.patientName}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <div className="pf-panels-grid pf-panels-grid--wide">
+        {/* Seção 6 — Faltas */}
+        <section className="pf-panel">
+          <SectionTitle icon={UserX} title="Faltas e cancelamentos" />
+          {dashboard.losses.length === 0 ? (
+            <p className="pf-empty">Nenhuma falta ou cancelamento hoje.</p>
+          ) : (
+            <div className="pf-table-wrap">
+              <table className="pf-table">
+                <thead>
+                  <tr>
+                    <th>Paciente</th>
+                    <th>Horário</th>
+                    <th>Procedimento</th>
+                    <th>Profissional</th>
+                    <th>Motivo</th>
+                    <th>Valor perdido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dashboard.losses.map((row) => (
+                    <tr key={row.appointmentId}>
+                      <td>{row.patientName}</td>
+                      <td>{row.startTime}</td>
+                      <td>{row.procedureName}</td>
+                      <td>{row.professionalName}</td>
+                      <td>{row.reason}</td>
+                      <td>{formatCurrencyBRL(row.estimatedValue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        {/* Seção 7 — Produção */}
+        <section className="pf-panel">
+          <SectionTitle icon={DollarSign} title="Produção do dia" />
+          <div className="pf-production-grid">
+            <div className="pf-stat"><strong>{dashboard.production.consultasRealizadas}</strong><span>Consultas realizadas</span></div>
+            <div className="pf-stat"><strong>{dashboard.production.avaliacoesRealizadas}</strong><span>Avaliações realizadas</span></div>
+            <div className="pf-stat"><strong>{dashboard.production.orcamentosApresentados}</strong><span>Orçamentos apresentados</span></div>
+            <div className="pf-stat"><strong>{dashboard.production.tratamentosFechados}</strong><span>Tratamentos fechados</span></div>
+            <div className="pf-stat pf-stat--wide">
+              <strong>{formatCurrencyBRL(dashboard.production.receitaPrevista)}</strong>
+              <span>Receita prevista</span>
+            </div>
+            <div className="pf-stat pf-stat--wide">
+              <strong>{formatCurrencyBRL(dashboard.production.receitaFechada)}</strong>
+              <span>Receita fechada</span>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <div className="pf-panels-grid">
+        {/* Seção 8 — Tempos médios */}
+        <section className="pf-panel">
+          <SectionTitle icon={Timer} title="Tempo médio de espera" />
+          <div className="pf-avg-grid">
+            <div className="pf-avg-item">
+              <strong>{dashboard.averageWait.recepcao} min</strong>
+              <span>Recepção</span>
+            </div>
+            <div className="pf-avg-item">
+              <strong>{dashboard.averageWait.salaEspera} min</strong>
+              <span>Sala de espera</span>
+            </div>
+            <div className="pf-avg-item">
+              <strong>{dashboard.averageWait.atendimento} min</strong>
+              <span>Em atendimento</span>
+            </div>
+            <div className="pf-avg-item">
+              <strong>{dashboard.averageWait.permanenciaTotal} min</strong>
+              <span>Permanência total</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Seção 9 — Ocupação */}
+        <section className="pf-panel">
+          <SectionTitle icon={Users} title="Ocupação dos profissionais" />
+          {dashboard.occupancy.length === 0 ? (
+            <p className="pf-empty">Sem dados de ocupação.</p>
+          ) : (
+            <ul className="pf-occupancy-list">
+              {dashboard.occupancy.map((o) => (
+                <li key={o.professionalId}>
+                  <div className="pf-occ-head">
+                    <span>{o.name}</span>
+                    <strong>{o.percent}%</strong>
+                  </div>
+                  <div className="pf-occ-bar">
+                    <div className="pf-occ-fill" style={{ width: `${o.percent}%` }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      <CheckInModal
+        open={checkInOpen}
+        onClose={() => setCheckInOpen(false)}
+        appointments={appointments.filter((a) => a.flowColumn === FLOW_COLUMN.AGENDADOS)}
+        onCheckIn={handleCheckIn}
       />
 
       <CancelOrRescheduleModal
         open={cancelModal.open}
         onClose={() => setCancelModal({ open: false, appointment: null })}
         appointment={cancelModal.appointment}
-        onCancel={handleCancel}
+        onCancel={() => {}}
         onReschedule={() => {}}
         user={user}
       />
 
-      <CheckInModal
-        open={checkInOpen}
-        onClose={() => setCheckInOpen(false)}
-        appointments={appointments}
-        onCheckIn={handleCheckIn}
-      />
+      <ModalRoot
+        open={moveModal.open}
+        onOpenChange={(next) => { if (!next) setMoveModal((m) => ({ ...m, open: false })); }}
+      >
+        <ModalContent size="md">
+          <ModalHeader>
+            <ModalTitle>Mover paciente</ModalTitle>
+          </ModalHeader>
+          <ModalBody>
+            <form id="pf-move-form" className="pf-move-form" onSubmit={(e) => {
+              e.preventDefault();
+              if (!moveModal.appointmentId) return;
+              handleMoveColumn(moveModal.appointmentId, moveModal.targetColumn);
+              setMoveModal((m) => ({ ...m, open: false }));
+            }}>
+              <label className="pf-form-field">
+                Paciente
+                <select
+                  required
+                  value={moveModal.appointmentId}
+                  onChange={(e) => setMoveModal((m) => ({ ...m, appointmentId: e.target.value }))}
+                >
+                  <option value="">Selecione...</option>
+                  {movableAppointments.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.patientName || 'Paciente'} — {a.startTime}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="pf-form-field">
+                Destino
+                <select
+                  value={moveModal.targetColumn}
+                  onChange={(e) => setMoveModal((m) => ({ ...m, targetColumn: e.target.value }))}
+                >
+                  {FLOW_COLUMN_META.map((col) => (
+                    <option key={col.id} value={col.id}>{col.emoji} {col.label}</option>
+                  ))}
+                </select>
+              </label>
+            </form>
+          </ModalBody>
+          <ModalFooter>
+            <button type="button" className="pf-btn pf-btn--ghost" onClick={() => setMoveModal((m) => ({ ...m, open: false }))}>
+              Cancelar
+            </button>
+            <button type="submit" form="pf-move-form" className="pf-btn pf-btn--primary">
+              Mover
+            </button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { loadDb, initDb, resetDb } from '../db/index.js';
 import { createPatientQuick } from '../services/patientService.js';
 import { importFromCsvOrXlsx, IMPORT_ROW_STATUS, buildImportReportCsv } from '../services/importPatientService.js';
 
-const admin = { id: 'user-admin', role: 'admin' };
+const admin = { id: 'user-admin', role: 'admin', tenant_id: 'tenant-1' };
 
 /** Gera CPF válido a partir de um base de 9 dígitos (evita repetição). */
 function validCpfFromSeed(seed) {

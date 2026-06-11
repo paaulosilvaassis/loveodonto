@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { loadDb, loadDbAsync, withDb } from '../db/index.js';
 import { roles } from '../permissions/permissions.js';
 import { logAction } from '../services/logService.js';
@@ -8,29 +8,26 @@ import { ROLE_MASTER } from '../constants/tenantRoles.js';
 import { assertTenantAllowed } from '../services/platformAccessService.js';
 import { resolveTrustedTenantId } from '../services/tenantIdentityService.js';
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
-import { fetchSaasAccessBootstrap, isSaasModeEnabled } from '../services/saasAuthService.js';
+import { isSaasModeEnabled } from '../services/saasAuthService.js';
 import { LOGOUT_REASON_KEY } from './logoutReason.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
 import { AuthContext } from './authContext.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
 import { reconcileOwnInvitationAcceptance } from '../services/collaboratorAccessProvisionService.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
+import {
+  authDebug,
+  readStoredSession,
+  writeStoredSession,
+  clearStoredSession,
+  sanitizeCachedUser,
+  isTransientAuthError,
+  getPlatformSession,
+  resolveSaasUser,
+} from './saasSessionResolver.js';
 
-/** Evita RequireAuth preso em "Carregando…" se getSession/RPC não retornarem. */
-const AUTH_SAAS_HYDRATE_TIMEOUT_MS = 32000;
-const AUTH_LOCAL_DB_TIMEOUT_MS = 45000;
-
-const SESSION_KEY = 'appgestaoodonto.session';
-
-const getStoredSession = () => {
-  const raw = localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-};
+const AUTH_LOCAL_DB_TIMEOUT_MS = 20000;
+const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
 
 function resolveUserFromSession(session, loadDbFn) {
   if (!session) return null;
@@ -50,137 +47,150 @@ function resolveUserFromSession(session, loadDbFn) {
   };
 }
 
-/**
- * Aceita sessão completa do Supabase Auth OU o objeto reduzido do localStorage;
- * nesse caso reidrata via supabasePlatformClient.auth.getSession() (storageKey próprio).
- */
-async function getPersistedSaasSession(session) {
-  if (!supabasePlatformClient) return null;
-  if (session?.user?.id) return session;
-  const { data, error } = await supabasePlatformClient.auth.getSession();
-  if (error) {
-    throw new Error(error.message || 'Falha ao obter sessão SaaS.');
-  }
-  return data?.session || null;
+/** Persiste sessão reduzida + cache de usuário e dispara sincronizações não bloqueantes. */
+function persistResolvedSaasUser(resolved) {
+  writeStoredSession({
+    authMode: 'saas',
+    userId: resolved.id,
+    tenantId: resolved.tenantId,
+    cachedUser: sanitizeCachedUser(resolved),
+  });
+  try { ensureSaasUserInLocalDb(resolved); } catch { /* non-blocking */ }
+  reconcileOwnInvitationAcceptance().catch(() => {});
 }
 
-async function resolveSaasUserFromSession(session) {
-  const persistedSession = await getPersistedSaasSession(session);
-  if (!persistedSession?.user?.id) return null;
-  const bootstrap = await fetchSaasAccessBootstrap(supabasePlatformClient);
-  if (!bootstrap?.tenantId) return null;
-  const rawOverrides = persistedSession.user?.app_metadata?.permission_overrides;
-  let permissionOverrides = {};
-  if (rawOverrides && typeof rawOverrides === 'object' && !Array.isArray(rawOverrides)) {
-    permissionOverrides = rawOverrides;
+/**
+ * Hidrata o usuário SaaS na inicialização/refresh.
+ * Garantia central: TODO caminho termina em onUser(user) ou onLogout(reason)
+ * — o loading inicial nunca fica preso.
+ */
+async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
+  authDebug('hydrate: início da validação de sessão');
+  if (!supabasePlatformClient) {
+    onLogout('Configuração do Supabase ausente. Contate o suporte.');
+    return;
   }
-  return {
-    id: persistedSession.user.id,
-    name: persistedSession.user.user_metadata?.full_name || persistedSession.user.email || 'Usuário',
-    email: persistedSession.user.email || '',
-    role: bootstrap.role,
-    has_system_access: bootstrap.isActive,
-    isMaster: bootstrap.role === 'admin',
-    tenantId: bootstrap.tenantId,
-    authMode: 'saas',
-    permissionOverrides,
-  };
+
+  let supaSession = null;
+  try {
+    supaSession = await getPlatformSession();
+  } catch (err) {
+    authDebug('hydrate: falha ao obter sessão Supabase —', err?.message);
+    const cached = stored.cachedUser;
+    if (isTransientAuthError(err) && cached?.id && cached.id === stored.userId) {
+      // Falha transitória com cache válido: libera o app; revalidação ocorre depois.
+      authDebug('hydrate: liberando com usuário em cache (rede instável)');
+      onUser(cached);
+      return;
+    }
+    onLogout('Não foi possível validar sua sessão. Faça login novamente.');
+    return;
+  }
+  if (isCancelled()) return;
+
+  if (!supaSession?.user?.id) {
+    authDebug('hydrate: nenhuma sessão Supabase encontrada → login');
+    onLogout(null);
+    return;
+  }
+  authDebug('hydrate: sessão encontrada para usuário', supaSession.user.id);
+
+  const cached = stored.cachedUser;
+  if (cached?.id === supaSession.user.id && cached?.tenantId) {
+    // Fast-path: libera o app imediatamente e revalida acesso em segundo plano.
+    authDebug('hydrate: fast-path (cache) — app liberado; revalidando em background');
+    onUser(cached);
+    try {
+      const fresh = await resolveSaasUser(supaSession);
+      if (isCancelled()) return;
+      if (!fresh?.tenantId) {
+        onLogout('Seu acesso à clínica foi revogado. Faça login novamente.');
+        return;
+      }
+      persistResolvedSaasUser(fresh);
+      onUser(fresh);
+      authDebug('hydrate: acesso revalidado em segundo plano');
+    } catch (err) {
+      if (isCancelled()) return;
+      if (isTransientAuthError(err)) {
+        authDebug('hydrate: revalidação adiada (erro transitório) —', err?.message);
+        return; // mantém cache; servidor continua sendo a autoridade nas APIs
+      }
+      onLogout('Não foi possível validar seu acesso. Faça login novamente.');
+    }
+    return;
+  }
+
+  // Caminho completo (primeiro acesso neste navegador ou cache ausente).
+  try {
+    const resolved = await resolveSaasUser(supaSession);
+    if (isCancelled()) return;
+    if (!resolved?.tenantId) {
+      onLogout('Seu usuário não está vinculado a nenhuma clínica ativa.');
+      return;
+    }
+    persistResolvedSaasUser(resolved);
+    onUser(resolved);
+    authDebug('hydrate: usuário e tenant resolvidos — fim do loading');
+  } catch (err) {
+    if (isCancelled()) return;
+    authDebug('hydrate: falha na resolução —', err?.message);
+    onLogout('Não foi possível validar sua sessão (rede ou serviço indisponível). Faça login novamente.');
+  }
 }
 
 export const AuthProvider = ({ children }) => {
-  const [session, setSession] = useState(() => getStoredSession());
+  const [session, setSession] = useState(() => readStoredSession());
   const [user, setUser] = useState(undefined);
+  const userRef = useRef(undefined);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     if (!session) {
       setUser(null);
-      return;
+      return undefined;
     }
     let cancelled = false;
+
     if (session.authMode === 'saas') {
-      (async () => {
-        const clearSaasSession = () => {
-          try {
-            localStorage.removeItem(SESSION_KEY);
-          } catch (_) {
-            /* ignore */
+      hydrateSaasUser({
+        stored: session,
+        isCancelled: () => cancelled,
+        onUser: (resolved) => {
+          if (!cancelled) setUser(resolved);
+        },
+        onLogout: (reason) => {
+          if (cancelled) return; // execução abortada não pode apagar sessão válida
+          clearStoredSession();
+          if (reason) {
+            try { sessionStorage.setItem(LOGOUT_REASON_KEY, reason); } catch { /* ignore */ }
+            emitStabilityLog('AUTH_FAILED', { reason });
           }
-          if (!cancelled) {
-            setSession(null);
-            setUser(null);
-          }
-        };
-        try {
-          if (!supabasePlatformClient) {
-            clearSaasSession();
-            return;
-          }
-          await raceWithTimeout(
-            (async () => {
-              const { data, error } = await supabasePlatformClient.auth.getSession();
-              if (cancelled) return;
-              if (error) throw error;
-              const supa = data?.session;
-              if (!supa?.user?.id) {
-                clearSaasSession();
-                return;
-              }
-              const resolved = await resolveSaasUserFromSession(supa);
-              if (cancelled) return;
-              if (!resolved?.tenantId) {
-                clearSaasSession();
-                return;
-              }
-              const nextStored = {
-                authMode: 'saas',
-                userId: supa.user.id,
-                tenantId: resolved.tenantId,
-              };
-              localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
-              if (!cancelled) {
-                try { ensureSaasUserInLocalDb(resolved); } catch (_) { /* non-blocking */ }
-                reconcileOwnInvitationAcceptance().catch(() => {});
-                setUser(resolved);
-                setSession((prev) => {
-                  if (
-                    prev?.authMode === 'saas'
-                    && prev.userId === nextStored.userId
-                    && prev.tenantId === nextStored.tenantId
-                  ) {
-                    return prev;
-                  }
-                  return nextStored;
-                });
-              }
-            })(),
-            AUTH_SAAS_HYDRATE_TIMEOUT_MS,
-            '__AUTH_SAAS_HYDRATE_TIMEOUT__',
-          );
-        } catch (_hydrationErr) {
-          // Supabase pode ter sessão válida mas bootstrap falhou (rede, timeout, API offline).
-          // NÃO limpar sessão: user permanece undefined → RequireAuth exibe recovery manual.
-        }
-      })();
+          setSession(null);
+          setUser(null);
+        },
+      });
       return () => {
         cancelled = true;
       };
     }
+
     const rafId = requestAnimationFrame(() => {
       if (cancelled) return;
       raceWithTimeout(loadDbAsync(), AUTH_LOCAL_DB_TIMEOUT_MS, '__AUTH_LOCAL_DB_TIMEOUT__')
         .then(() => {
           if (cancelled) return;
           const resolved = resolveUserFromSession(session, loadDb);
+          authDebug('hydrate(local): usuário', resolved ? 'encontrado' : 'não encontrado');
           if (!cancelled) setUser(resolved);
         })
         .catch((e) => {
           if (!cancelled) {
             if (String(e?.message || '') === '__AUTH_LOCAL_DB_TIMEOUT__') {
-              try {
-                localStorage.removeItem(SESSION_KEY);
-              } catch (_) {
-                /* ignore */
-              }
+              clearStoredSession();
               setSession(null);
             }
             setUser(null);
@@ -193,64 +203,45 @@ export const AuthProvider = ({ children }) => {
     };
   }, [session]);
 
-  /** Mantém user alinhado após refresh de token e logout do Supabase (modo SaaS). */
+  /**
+   * Eventos do Supabase Auth (modo SaaS).
+   * - SIGNED_OUT: limpa tudo.
+   * - TOKEN_REFRESHED/USER_UPDATED: o client já persiste o token; tenant/role não mudam — sem refetch.
+   * - SIGNED_IN de outro usuário (ex.: outra aba): re-hidrata via efeito de sessão.
+   * Callback síncrono (await em métodos auth dentro do callback pode causar deadlock no supabase-js).
+   */
   useEffect(() => {
     if (!supabasePlatformClient) return undefined;
-    const { data: { subscription } } = supabasePlatformClient.auth.onAuthStateChange(async (event, authSession) => {
-      const stored = getStoredSession();
+    const { data: { subscription } } = supabasePlatformClient.auth.onAuthStateChange((event, authSession) => {
+      const stored = readStoredSession();
       if (!stored || stored.authMode !== 'saas') return;
       if (event === 'INITIAL_SESSION') return;
 
       if (event === 'SIGNED_OUT') {
-        localStorage.removeItem(SESSION_KEY);
-        try { localStorage.removeItem('appgestaoodonto-platform-auth'); } catch (_) { /* ignore */ }
+        authDebug('onAuthStateChange: SIGNED_OUT');
+        clearStoredSession();
+        try { localStorage.removeItem(PLATFORM_AUTH_STORAGE_KEY); } catch { /* ignore */ }
         setSession(null);
         setUser(null);
         emitStabilityLog('AUTH_FAILED', { reason: 'SIGNED_OUT_EVENT' });
         return;
       }
 
-      if (!authSession?.user?.id) {
-        return;
-      }
-
-      try {
-        const resolved = await raceWithTimeout(
-          resolveSaasUserFromSession(authSession),
-          AUTH_SAAS_HYDRATE_TIMEOUT_MS,
-          '__AUTH_SAAS_ONAUTH_TIMEOUT__',
-        );
-        if (!resolved?.tenantId) {
-          return;
-        }
-        const nextStored = {
-          authMode: 'saas',
-          userId: authSession.user.id,
-          tenantId: resolved.tenantId,
-        };
-        localStorage.setItem(SESSION_KEY, JSON.stringify(nextStored));
-        try { ensureSaasUserInLocalDb(resolved); } catch (_) { /* non-blocking */ }
-        reconcileOwnInvitationAcceptance().catch(() => {});
-        setSession(nextStored);
-        setUser(resolved);
-      } catch {
-        // Falha transitória (rede, timeout, API indisponível): mantém sessão atual
-      }
+      if (event !== 'SIGNED_IN' || !authSession?.user?.id) return;
+      if (userRef.current?.id === authSession.user.id) return;
+      authDebug('onAuthStateChange: SIGNED_IN de novo usuário — re-hidratando');
+      setSession(readStoredSession());
     });
     return () => subscription.unsubscribe();
   }, []);
 
   const login = async ({ userId, tenantId: explicitTenantId }) => {
     if (isSaasModeEnabled()) {
-      const { data, error } = await supabasePlatformClient.auth.getSession();
-      if (error) {
-        throw new Error(error.message || 'Falha ao obter sessão SaaS.');
-      }
-      const currentSession = data?.session || null;
+      const currentSession = await getPlatformSession();
       if (!currentSession?.user?.id) {
         throw new Error('Sessão SaaS ausente. Faça login novamente.');
       }
-      const resolved = await resolveSaasUserFromSession(currentSession);
+      const resolved = await resolveSaasUser(currentSession);
       if (!resolved?.tenantId) {
         throw new Error('Usuário SaaS sem clínica vinculada.');
       }
@@ -259,9 +250,10 @@ export const AuthProvider = ({ children }) => {
         authMode: 'saas',
         userId: currentSession.user.id,
         tenantId: resolved.tenantId,
+        cachedUser: sanitizeCachedUser(resolved),
       };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(next));
-      try { ensureSaasUserInLocalDb(resolved); } catch (_) { /* non-blocking */ }
+      writeStoredSession(next);
+      try { ensureSaasUserInLocalDb(resolved); } catch { /* non-blocking */ }
       reconcileOwnInvitationAcceptance().catch(() => {});
       setSession(next);
       setUser(resolved);
@@ -287,7 +279,7 @@ export const AuthProvider = ({ children }) => {
     }
     await assertTenantAllowed(tenant.id);
     const next = { userId: baseUser.id, tenantId: tenant.id };
-    localStorage.setItem(SESSION_KEY, JSON.stringify(next));
+    writeStoredSession(next);
     setSession(next);
     logAction('auth:login', { userId: baseUser.id, tenantId: tenant.id });
     emitStabilityLog('AUTH_OK', { mode: 'local', tenantId: tenant.id });
@@ -295,8 +287,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    localStorage.removeItem(SESSION_KEY);
-    try { localStorage.removeItem('appgestaoodonto-platform-auth'); } catch (_) { /* ignore */ }
+    clearStoredSession();
+    try { localStorage.removeItem(PLATFORM_AUTH_STORAGE_KEY); } catch { /* ignore */ }
     if (session?.authMode === 'saas' && supabasePlatformClient) {
       supabasePlatformClient.auth.signOut().catch(() => {});
     }
@@ -331,7 +323,7 @@ export const AuthProvider = ({ children }) => {
     const db = loadDb();
     const u = db.users.find((item) => item.id === session.userId);
     if (u && u.has_system_access === false) {
-      localStorage.removeItem(SESSION_KEY);
+      clearStoredSession();
       setSession(null);
       setUser(null);
     }

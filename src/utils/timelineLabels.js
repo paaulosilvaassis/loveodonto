@@ -159,8 +159,6 @@ export function formatTimelineEvent(event) {
     }
   } else if (type === 'converted_to_patient' && data.patientId) {
     description = 'Lead vinculado ao prontuário do paciente.';
-  } else if ((type === 'task_created' || type === 'task_done') && data.description) {
-    description = data.description;
   } else if (type === 'task_created' && data.taskTitle && data.dueAt) {
     try {
       const d = new Date(data.dueAt);
@@ -172,8 +170,6 @@ export function formatTimelineEvent(event) {
     description = data.taskTitle;
   } else if (type === 'budget_rejected' && data.deniedReason) {
     description = `Motivo: ${data.deniedReason}`;
-  } else if ((type === 'budget_approved' || type === 'budget_em_analise_followup') && data.description) {
-    description = data.description;
   }
 
   return { title, description, badge, tone };

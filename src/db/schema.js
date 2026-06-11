@@ -1,4 +1,4 @@
-export const DB_VERSION = 47;
+export const DB_VERSION = 49;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -240,16 +240,16 @@ export const defaultDbState = () => ({
   // CRM Clínico (v16+): estágios padrão para Kanban (evita tela branca em DB novo)
   crmLeads: [],
   crmPipelineStages: [
-    { id: 'crm-stage-1', key: 'novo_lead', label: 'Novo Lead', order: 1, color: '#94a3b8' },
-    { id: 'crm-stage-2', key: 'contato_realizado', label: 'Contato Realizado', order: 2, color: '#60a5fa' },
-    { id: 'crm-stage-3', key: 'avaliacao_agendada', label: 'Avaliação Agendada', order: 3, color: '#a78bfa' },
-    { id: 'crm-stage-4', key: 'avaliacao_realizada', label: 'Avaliação Realizada', order: 4, color: '#c084fc' },
-    { id: 'crm-stage-5', key: 'orcamento_apresentado', label: 'Orçamento Apresentado', order: 5, color: '#f59e0b' },
-    { id: 'crm-stage-6', key: 'em_negociacao', label: 'Em Negociação', order: 6, color: '#fbbf24' },
-    { id: 'crm-stage-7', key: 'aprovado', label: 'Aprovado', order: 7, color: '#34d399' },
-    { id: 'crm-stage-8', key: 'em_tratamento', label: 'Em Tratamento', order: 8, color: '#22c55e' },
-    { id: 'crm-stage-9', key: 'finalizado', label: 'Finalizado', order: 9, color: '#10b981' },
-    { id: 'crm-stage-10', key: 'perdido', label: 'Perdido', order: 10, color: '#ef4444' },
+    { id: 'crm-stage-1', key: 'novo_lead', label: 'Novo Lead', order: 1, color: '#94a3b8', isActive: true, stageType: 'normal', tenant_id: null },
+    { id: 'crm-stage-2', key: 'contato_realizado', label: 'Contato Realizado', order: 2, color: '#60a5fa', isActive: true, stageType: 'normal', tenant_id: null },
+    { id: 'crm-stage-3', key: 'avaliacao_agendada', label: 'Avaliação Agendada', order: 3, color: '#a78bfa', isActive: true, stageType: 'normal', tenant_id: null },
+    { id: 'crm-stage-4', key: 'avaliacao_realizada', label: 'Avaliação Realizada', order: 4, color: '#c084fc', isActive: true, stageType: 'normal', tenant_id: null },
+    { id: 'crm-stage-5', key: 'orcamento_apresentado', label: 'Orçamento Apresentado', order: 5, color: '#f59e0b', isActive: true, stageType: 'normal', tenant_id: null },
+    { id: 'crm-stage-6', key: 'em_negociacao', label: 'Em Negociação', order: 6, color: '#fbbf24', isActive: true, stageType: 'normal', tenant_id: null },
+    { id: 'crm-stage-7', key: 'aprovado', label: 'Aprovado', order: 7, color: '#34d399', isActive: true, stageType: 'conversion', tenant_id: null },
+    { id: 'crm-stage-8', key: 'em_tratamento', label: 'Em Tratamento', order: 8, color: '#22c55e', isActive: true, stageType: 'normal', tenant_id: null },
+    { id: 'crm-stage-9', key: 'finalizado', label: 'Finalizado', order: 9, color: '#10b981', isActive: true, stageType: 'normal', tenant_id: null },
+    { id: 'crm-stage-10', key: 'perdido', label: 'Perdido', order: 10, color: '#ef4444', isActive: true, stageType: 'lost', tenant_id: null },
   ],
   crmLeadEvents: [],
   crmFollowUps: [],
@@ -266,6 +266,15 @@ export const defaultDbState = () => ({
   followUps: [],
   /** Tarefas/Follow-up do CRM (vinculadas a lead/patient/budget/appointment) */
   crmTasks: [],
+  /** Configurações administrativas CRM por tenant (v49+) */
+  crmLeadSources: [],
+  crmLeadInterests: [],
+  crmCommercialTeam: [],
+  crmCommercialGoals: [],
+  crmFollowUpSettings: [],
+  crmLossReasons: [],
+  crmWhatsAppSettings: [],
+  crmConversionSettings: [],
   /** Marketing > Chat Inteligente */
   marketingChatAccounts: [],
   marketingChatChannels: [],

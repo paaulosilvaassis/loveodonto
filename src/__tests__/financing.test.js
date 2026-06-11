@@ -10,7 +10,7 @@ import {
 import { listFinancingInstallments } from '../services/financingInstallmentsService.js';
 import { listBoletoCharges } from '../services/boletoChargesService.js';
 
-const admin = { id: 'user-admin', role: 'admin' };
+const admin = { id: 'user-admin', role: 'admin', tenant_id: 'tenant-1' };
 
 describe('Financiamentos e boletos (fase 1)', () => {
   beforeEach(async () => {
@@ -23,6 +23,7 @@ describe('Financiamentos e boletos (fase 1)', () => {
           id: 'patient-1',
           full_name: 'Paciente Teste',
           status: 'active',
+          tenant_id: 'tenant-1',
         },
       ];
       return db;

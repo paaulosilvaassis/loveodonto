@@ -501,9 +501,13 @@ export const registerReceivablePayment = (user, receivableId, payload) => {
 
   const now = new Date().toISOString();
   const paymentId = createId('rvpay');
+  // Pagamento herda o tenant do título; fallback para o tenant do usuário.
+  const tenantId = String(current.tenant_id || '').trim()
+    || resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
 
   const paymentRecord = {
     id: paymentId,
+    tenant_id: tenantId,
     receivable_id: receivableId,
     payment_date: paymentDate,
     amount_received: amountReceived,

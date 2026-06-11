@@ -55,7 +55,7 @@ import {
   FINANCIAL_PAYMENT_METHOD,
 } from '../services/auditEventCatalog.js';
 
-const admin = { id: 'user-admin', role: 'admin' };
+const admin = { id: 'user-admin', role: 'admin', tenant_id: 'tenant-1' };
 
 describe('Services de auditoria financeira', () => {
   beforeEach(async () => {
@@ -63,7 +63,7 @@ describe('Services de auditoria financeira', () => {
     resetDb();
     await initDb();
     withDb((db) => {
-      db.patients = [{ id: 'patient-1', full_name: 'Paciente Teste', status: 'active' }];
+      db.patients = [{ id: 'patient-1', full_name: 'Paciente Teste', status: 'active', tenant_id: 'tenant-1' }];
       return db;
     });
   });
@@ -293,6 +293,7 @@ describe('Services de auditoria financeira', () => {
       db.accountsReceivable = db.accountsReceivable || [];
       db.accountsReceivable.push({
         id: 'recv-invalid-test',
+        tenant_id: 'tenant-1',
         patient_id: 'patient-1',
         description: 'Teste',
         issue_date: '2026-09-01',
