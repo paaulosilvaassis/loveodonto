@@ -1,4 +1,4 @@
-export const DB_VERSION = 49;
+export const DB_VERSION = 50;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -160,6 +160,14 @@ export const defaultDbState = () => ({
   patientAddresses: [],
   patientRelationships: [],
   patientInsurances: [],
+  /** Convênios odontológicos — ciclo completo por tenant */
+  insuranceProviders: [],
+  insurancePlans: [],
+  insuranceAuthorizations: [],
+  insuranceGuides: [],
+  insuranceGlosas: [],
+  insuranceBillingBatches: [],
+  insuranceReceipts: [],
   patientAccess: [],
   patientActivitySummary: [],
   patientRecords: [],

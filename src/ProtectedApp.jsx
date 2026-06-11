@@ -68,6 +68,18 @@ import MarketingChatIntegrationsPage from './pages/marketing/chatInteligente/Mar
 import MarketingChatSettingsPage from './pages/marketing/chatInteligente/MarketingChatSettingsPage.jsx';
 import MarketingChatReportsPage from './pages/marketing/chatInteligente/MarketingChatReportsPage.jsx';
 import StabilityHealthPage from './pages/StabilityHealthPage.jsx';
+import ConveniosShellLayout from './convenios/ui/ConveniosShellLayout.jsx';
+import ConveniosDashboardPage from './pages/convenios/ConveniosDashboardPage.jsx';
+import ConveniosOperadorasPage from './pages/convenios/ConveniosOperadorasPage.jsx';
+import ConveniosPlanosPage from './pages/convenios/ConveniosPlanosPage.jsx';
+import ConveniosPacientesPage from './pages/convenios/ConveniosPacientesPage.jsx';
+import ConveniosAutorizacoesPage from './pages/convenios/ConveniosAutorizacoesPage.jsx';
+import ConveniosGuiasPage from './pages/convenios/ConveniosGuiasPage.jsx';
+import ConveniosProducaoPage from './pages/convenios/ConveniosProducaoPage.jsx';
+import ConveniosGlosasPage from './pages/convenios/ConveniosGlosasPage.jsx';
+import ConveniosFaturamentoPage from './pages/convenios/ConveniosFaturamentoPage.jsx';
+import ConveniosRecebimentosPage from './pages/convenios/ConveniosRecebimentosPage.jsx';
+import ConveniosRelatoriosPage from './pages/convenios/ConveniosRelatoriosPage.jsx';
 import { routeAccessMap } from './navigation/menuConfig.js';
 import { getRequiredFeatureFlagForRoute, getRequiredModuleForRoute } from './tenant/tenantAccess.js';
 
@@ -121,7 +133,19 @@ export default function ProtectedApp() {
           <Route path="automacoes" element={withRole('/crm/automacoes', <CrmAutomacoesPage />)} />
           <Route path="configuracoes" element={withRole('/crm/configuracoes', <CrmConfiguracoesPage />)} />
         </Route>
-        <Route path="/gestao/convenios" element={withRole('/gestao/convenios', <PlaceholderPage title="Convênios" description="Gestão de convênios e regras de atendimento." />)} />
+        <Route path="/gestao/convenios" element={withRole('/gestao/convenios', <ConveniosShellLayout />)}>
+          <Route index element={withRole('/gestao/convenios', <ConveniosDashboardPage />)} />
+          <Route path="operadoras" element={withRole('/gestao/convenios', <ConveniosOperadorasPage />)} />
+          <Route path="planos" element={withRole('/gestao/convenios', <ConveniosPlanosPage />)} />
+          <Route path="pacientes" element={withRole('/gestao/convenios', <ConveniosPacientesPage />)} />
+          <Route path="autorizacoes" element={withRole('/gestao/convenios', <ConveniosAutorizacoesPage />)} />
+          <Route path="guias" element={withRole('/gestao/convenios', <ConveniosGuiasPage />)} />
+          <Route path="producao" element={withRole('/gestao/convenios', <ConveniosProducaoPage />)} />
+          <Route path="glosas" element={withRole('/gestao/convenios', <ConveniosGlosasPage />)} />
+          <Route path="faturamento" element={withRole('/gestao/convenios', <ConveniosFaturamentoPage />)} />
+          <Route path="recebimentos" element={withRole('/gestao/convenios', <ConveniosRecebimentosPage />)} />
+          <Route path="relatorios" element={withRole('/gestao/convenios', <ConveniosRelatoriosPage />)} />
+        </Route>
         <Route path="/gestao-comercial/jornada-do-paciente" element={withRole('/gestao-comercial/jornada-do-paciente', <PatientJourneyPage />)} />
         <Route path="/gestao-comercial/fluxo-do-paciente" element={withRole('/gestao-comercial/fluxo-do-paciente', <PatientFlowPage />)} />
         <Route path="/gestao-comercial/base-de-preco" element={withRole('/gestao-comercial/base-de-preco', <PriceBasePage />)} />

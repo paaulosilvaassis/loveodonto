@@ -44,7 +44,7 @@ export const menuSections = [
       { id: 'agenda', label: 'Agenda da Clínica', route: '/gestao/agenda', icon: Calendar, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'], description: 'Calendário e gestão de consultas.' },
       { id: 'gestao-atendimento', label: 'Gestão de Atendimento', route: '/gestao-atendimento', icon: LayoutDashboard, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'], description: 'Central de operação da clínica (agenda, fluxo e acompanhamento).' },
       { id: 'crm', label: 'CRM (Kanban)', route: '/gestao/crm', icon: KanbanSquare, rolesAllowed: ['admin', 'gerente', 'recepcao', 'comercial'], description: 'Pipeline comercial e funil de leads.' },
-      { id: 'convenios', label: 'Convênios', route: '/gestao/convenios', icon: Handshake, rolesAllowed: ['admin', 'gerente', 'recepcao'], description: 'Convênios e regras de atendimento.' },
+      { id: 'convenios', label: 'Convênios', route: '/gestao/convenios', icon: Handshake, rolesAllowed: ['admin', 'gerente', 'recepcao'], description: 'Gestão completa de convênios — guias TISS, glosas, faturamento e rentabilidade.' },
     ],
   },
   {

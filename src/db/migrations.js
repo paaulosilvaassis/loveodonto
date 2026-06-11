@@ -1403,6 +1403,33 @@ const migrations = {
       version: 49,
     };
   },
+  /**
+   * 50: Módulo Convênios — operadoras, planos, guias TISS, glosas, faturamento.
+   */
+  50: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 50 };
+    const ensureArray = (key) => (Array.isArray(db[key]) ? db[key] : []);
+    const patientInsurances = ensureArray('patientInsurances').map((row) => ({
+      ...row,
+      tenant_id: row.tenant_id ?? null,
+      provider_id: row.provider_id ?? null,
+      plan_id: row.plan_id ?? null,
+      holder_cpf: row.holder_cpf ?? null,
+      status: row.status ?? 'ativo',
+    }));
+    return {
+      ...db,
+      patientInsurances,
+      insuranceProviders: ensureArray('insuranceProviders'),
+      insurancePlans: ensureArray('insurancePlans'),
+      insuranceAuthorizations: ensureArray('insuranceAuthorizations'),
+      insuranceGuides: ensureArray('insuranceGuides'),
+      insuranceGlosas: ensureArray('insuranceGlosas'),
+      insuranceBillingBatches: ensureArray('insuranceBillingBatches'),
+      insuranceReceipts: ensureArray('insuranceReceipts'),
+      version: 50,
+    };
+  },
 };
 
 /** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */

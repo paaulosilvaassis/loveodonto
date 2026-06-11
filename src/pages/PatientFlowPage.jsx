@@ -19,8 +19,10 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
 import PatientFlowKanban from '../components/flow/PatientFlowKanban.jsx';
+import PatientFlowActionBar from '../components/flow/PatientFlowActionBar.jsx';
 import CheckInModal from '../components/flow/CheckInModal.jsx';
 import CancelOrRescheduleModal from '../components/flow/CancelOrRescheduleModal.jsx';
+import Button from '../components/Button.jsx';
 import {
   ModalRoot,
   ModalContent,
@@ -266,65 +268,48 @@ export default function PatientFlowPage() {
         <div className="pf-central-header-actions">
           <input
             type="date"
-            className="pf-date-picker"
+            className="pf-control pf-date-picker"
             value={selectedDate}
             onChange={(e) => {
               setSelectedDate(e.target.value);
               setSearchParams({ date: e.target.value });
             }}
           />
-          <button type="button" className="pf-btn pf-btn--ghost" onClick={refresh}>
-            <RefreshCw size={16} /> Atualizar
-          </button>
+          <Button type="button" variant="secondary" size="sm" icon={RefreshCw} onClick={refresh}>
+            Atualizar
+          </Button>
         </div>
       </header>
 
-      {/* Seção 11 — Ações rápidas */}
-      <div className="pf-quick-actions">
-        <button type="button" className="pf-btn pf-btn--primary" onClick={() => setCheckInOpen(true)}>
-          Registrar chegada
-        </button>
-        <button
-          type="button"
-          className="pf-btn"
-          onClick={() => setMoveModal({ open: true, appointmentId: '', targetColumn: FLOW_COLUMN.SALA_ESPERA })}
-        >
-          Mover paciente
-        </button>
-        <button type="button" className="pf-btn" onClick={handleStartService}>
-          Iniciar atendimento
-        </button>
-        <button type="button" className="pf-btn" onClick={handleFinish}>
-          Encerrar atendimento
-        </button>
-        <button type="button" className="pf-btn" onClick={() => handleQuickMove(FLOW_COLUMN.AVALIACAO_COMERCIAL)}>
-          Enviar p/ avaliação comercial
-        </button>
-        <button type="button" className="pf-btn" onClick={() => handleQuickMove(FLOW_COLUMN.FINANCEIRO)}>
-          Enviar p/ financeiro
-        </button>
-        <button type="button" className="pf-btn pf-btn--success" onClick={() => handleQuickMove(FLOW_COLUMN.FINALIZADO)}>
-          Finalizar atendimento
-        </button>
-        <button type="button" className="pf-btn pf-btn--danger" onClick={handleNoShow}>
-          Registrar falta
-        </button>
-      </div>
+      <PatientFlowActionBar
+        handlers={{
+          checkin: () => setCheckInOpen(true),
+          move: () => setMoveModal({ open: true, appointmentId: '', targetColumn: FLOW_COLUMN.SALA_ESPERA }),
+          start: handleStartService,
+          end: handleFinish,
+          commercial: () => handleQuickMove(FLOW_COLUMN.AVALIACAO_COMERCIAL),
+          financial: () => handleQuickMove(FLOW_COLUMN.FINANCEIRO),
+          finalize: () => handleQuickMove(FLOW_COLUMN.FINALIZADO),
+          noshow: handleNoShow,
+        }}
+      />
 
       <div className="pf-filters">
         <div className="pf-filters-grid">
           <label className="pf-filter-field">
-            <Search size={14} />
+            <span className="pf-filter-label"><Search size={14} /> Buscar paciente</span>
             <input
               type="search"
-              placeholder="Buscar paciente..."
+              className="pf-control"
+              placeholder="Nome do paciente..."
               value={filters.search}
               onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
             />
           </label>
           <label className="pf-filter-field">
-            Profissional
+            <span className="pf-filter-label">Profissional</span>
             <select
+              className="pf-control"
               value={filters.professionalId}
               onChange={(e) => setFilters((f) => ({ ...f, professionalId: e.target.value }))}
             >
@@ -592,12 +577,12 @@ export default function PatientFlowPage() {
             </form>
           </ModalBody>
           <ModalFooter>
-            <button type="button" className="pf-btn pf-btn--ghost" onClick={() => setMoveModal((m) => ({ ...m, open: false }))}>
+            <Button type="button" variant="ghost" onClick={() => setMoveModal((m) => ({ ...m, open: false }))}>
               Cancelar
-            </button>
-            <button type="submit" form="pf-move-form" className="pf-btn pf-btn--primary">
+            </Button>
+            <Button type="submit" form="pf-move-form" variant="primary">
               Mover
-            </button>
+            </Button>
           </ModalFooter>
         </ModalContent>
       </ModalRoot>
