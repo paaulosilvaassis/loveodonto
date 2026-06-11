@@ -1430,6 +1430,47 @@ const migrations = {
       version: 50,
     };
   },
+  /**
+   * 51: Módulo Contratos & Consentimentos — assinaturas, eventos, anexos, configurações.
+   */
+  51: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 51 };
+    const ensureArray = (key) => (Array.isArray(db[key]) ? db[key] : []);
+    const templates = ensureArray('contractTemplates').map((t) => ({
+      ...t,
+      tenant_id: t.tenant_id ?? null,
+      category: t.category ?? 'servicos',
+      treatmentType: t.treatmentType ?? null,
+      isDefault: t.isDefault ?? (t.type === 'system_default'),
+    }));
+    const contracts = ensureArray('generatedContracts').map((c) => ({
+      ...c,
+      tenant_id: c.tenant_id ?? null,
+      title: c.title ?? null,
+      category: c.category ?? 'servicos',
+      treatmentType: c.treatmentType ?? null,
+      financialSnapshotJson: c.financialSnapshotJson ?? null,
+      clinicalSnapshotJson: c.clinicalSnapshotJson ?? null,
+      patientSnapshotJson: c.patientSnapshotJson ?? null,
+      clinicSnapshotJson: c.clinicSnapshotJson ?? null,
+      professionalSnapshotJson: c.professionalSnapshotJson ?? null,
+      totalValueSnapshot: c.totalValueSnapshot ?? null,
+      documentHash: c.documentHash ?? null,
+      replacedById: c.replacedById ?? null,
+      parentContractId: c.parentContractId ?? null,
+    }));
+    return {
+      ...db,
+      contractTemplates: templates,
+      generatedContracts: contracts,
+      contractSignatures: ensureArray('contractSignatures'),
+      contractEvents: ensureArray('contractEvents'),
+      contractAttachments: ensureArray('contractAttachments'),
+      contractSignLinks: ensureArray('contractSignLinks'),
+      contractSettings: ensureArray('contractSettings'),
+      version: 51,
+    };
+  },
 };
 
 /** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */

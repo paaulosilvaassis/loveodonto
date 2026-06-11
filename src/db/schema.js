@@ -1,4 +1,4 @@
-export const DB_VERSION = 50;
+export const DB_VERSION = 51;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -339,6 +339,16 @@ export const defaultDbState = () => ({
   contractAuditLogs: [],
   /** Contador sequencial por clínica para número de contrato (ex.: { \"clinic-1\": 12 }) */
   contractSeqByClinic: {},
+  /** Assinaturas vinculadas a contratos gerados */
+  contractSignatures: [],
+  /** Eventos de auditoria/timeline do contrato */
+  contractEvents: [],
+  /** Anexos (PDF assinado externamente, etc.) */
+  contractAttachments: [],
+  /** Links de assinatura remota com expiração */
+  contractSignLinks: [],
+  /** Configurações do módulo por clínica/tenant */
+  contractSettings: [],
   /**
    * Sempre refletir a versão corrente do schema para novas bases.
    * Migrações seguem necessárias apenas para bases legadas.

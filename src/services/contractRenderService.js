@@ -141,6 +141,44 @@ export function buildContractContext(params) {
   const totalMan = 0;
   const totalGeral = totalNum + totalMan;
 
+  const phones = patientBundle?.phones || [];
+  const mainPhone = phones.find((p) => p.is_primary) || phones[0];
+  const phoneStr = mainPhone
+    ? `(${mainPhone.ddd || ''}) ${mainPhone.number || ''}`.trim()
+    : '';
+
+  let orcNum = quoteId || '—';
+  let orcDate = '—';
+  let tratamentoNome = '';
+  let dentesStr = '—';
+  let entrada = 0;
+  let formaPag = '—';
+
+  if (crmBudget) {
+    orcNum = crmBudget.code || crmBudget.id || quoteId;
+    orcDate = crmBudget.createdAt
+      ? new Date(crmBudget.createdAt).toLocaleDateString('pt-BR')
+      : '—';
+    tratamentoNome = crmBudget.title || '';
+    entrada = Number(crmBudget.downPayment || crmBudget.entrada || 0);
+    formaPag = crmBudget.paymentMethod || crmBudget.formaPagamento || '—';
+    const teeth = crmBudget.teethJson || crmBudget.teeth || [];
+    if (Array.isArray(teeth) && teeth.length) dentesStr = teeth.join(', ');
+  } else if (clinicalBudget) {
+    orcDate = clinicalBudget.createdAt
+      ? new Date(clinicalBudget.createdAt).toLocaleDateString('pt-BR')
+      : '—';
+    tratamentoNome = clinicalBudget.title || '';
+    const teeth = clinicalBudget.teeth || [];
+    if (Array.isArray(teeth) && teeth.length) dentesStr = teeth.join(', ');
+  }
+
+  const respLegal = String(profile.guardian_full_name || profile.legal_guardian_name || '').trim();
+  const respCpf = String(profile.guardian_cpf || '').replace(/\D/g, '');
+  const profName = String(currentUser?.name || '').trim();
+  const profCro = String(doc.conselhoRegionalNumero || currentUser?.cro || '').trim();
+  const respTecnico = String(doc.responsavelTecnico || doc.responsavel_tecnico || '').trim();
+
   const map = {
     '#clausula': '',
     '#clinicaRazaoSocial': razao,
@@ -165,9 +203,30 @@ export function buildContractContext(params) {
     '#pacienteRG': pacRg,
     '#pacienteCPF': pacCpf,
     '#pacienteEndereco': pacEnd,
-    '#dentistaNomeCompleto': String(currentUser?.name || '').trim(),
-    '#dentistaConselhoNumero': String(doc.conselhoRegionalNumero || '').trim(),
+    '#dentistaNomeCompleto': profName,
+    '#dentistaConselhoNumero': profCro,
     '#orcamentoObservacoes': escapeHtml(obs).replace(/\n/g, '<br/>'),
+    '#clinica_nome': razao,
+    '#clinica_cnpj': cnpj,
+    '#clinica_endereco': clinEnd,
+    '#responsavel_tecnico': respTecnico,
+    '#cro_responsavel': profCro,
+    '#paciente_nome': pacNome,
+    '#paciente_cpf': pacCpf,
+    '#paciente_endereco': pacEnd,
+    '#paciente_telefone': phoneStr,
+    '#profissional_nome': profName,
+    '#profissional_cro': profCro,
+    '#orcamento_numero': String(orcNum),
+    '#orcamento_data': orcDate,
+    '#tratamento_nome': escapeHtml(tratamentoNome),
+    '#dentes': escapeHtml(dentesStr),
+    '#valor_total': totalNum.toFixed(2),
+    '#entrada': entrada.toFixed(2),
+    '#forma_pagamento': escapeHtml(String(formaPag)),
+    '#data_assinatura': new Date().toLocaleDateString('pt-BR'),
+    '#responsavel_legal': respLegal || '—',
+    '#responsavel_cpf': respCpf,
     __meta: { includeOrthodontics: includeOrtho, hasFinancialResponsible: hasFin },
   };
 

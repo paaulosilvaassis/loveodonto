@@ -45,6 +45,7 @@ export const menuSections = [
       { id: 'gestao-atendimento', label: 'Gestão de Atendimento', route: '/gestao-atendimento', icon: LayoutDashboard, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'], description: 'Central de operação da clínica (agenda, fluxo e acompanhamento).' },
       { id: 'crm', label: 'CRM (Kanban)', route: '/gestao/crm', icon: KanbanSquare, rolesAllowed: ['admin', 'gerente', 'recepcao', 'comercial'], description: 'Pipeline comercial e funil de leads.' },
       { id: 'convenios', label: 'Convênios', route: '/gestao/convenios', icon: Handshake, rolesAllowed: ['admin', 'gerente', 'recepcao'], description: 'Gestão completa de convênios — guias TISS, glosas, faturamento e rentabilidade.' },
+      { id: 'contratos', label: 'Contratos & Consentimentos', route: '/gestao/contratos', icon: FileSignature, rolesAllowed: ['admin', 'gerente', 'recepcao'], description: 'Contratos, termos, assinatura digital e histórico jurídico.' },
     ],
   },
   {
@@ -55,8 +56,6 @@ export const menuSections = [
       { id: 'colaboradores', label: 'Dados da Equipe', route: '/admin/colaboradores', icon: Users, rolesAllowed: ['admin', 'gerente'], description: 'Cadastro e gestão de colaboradores.' },
       { id: 'usuarios', label: 'Usuários', route: '/admin/usuarios', icon: UserCog, rolesAllowed: ['admin', 'master'], description: 'Usuários e convites de ativação.' },
       { id: 'base-preco-admin', label: 'Base de Preços e Procedimentos', route: '/admin/base-precos', icon: BadgeDollarSign, rolesAllowed: ['admin', 'gerente'], description: 'Tabelas de preço e cadastro de procedimentos por tabela.' },
-      { id: 'contratos', label: 'Contratos', route: '/admin/contratos', icon: FileSignature, rolesAllowed: ['admin', 'gerente'], description: 'Contratos de serviço e termos.' },
-      { id: 'consentimentos', label: 'Consentimentos', route: '/admin/consentimentos', icon: UserCog, rolesAllowed: ['admin', 'gerente'], description: 'Termos e autorizações dos pacientes.' },
       { id: 'fornecedores', label: 'Fornecedores', route: '/admin/fornecedores', icon: Landmark, rolesAllowed: ['admin', 'gerente'], description: 'Cadastro mestre de fornecedores da clínica.' },
     ],
   },

@@ -28,6 +28,7 @@ import {
 } from '../services/patientService.js';
 import { getPatientRecord, updatePatientRecord } from '../services/patientRecordService.js';
 import { formatCep, formatCpf, formatPhone, onlyDigits } from '../utils/validators.js';
+import PatientContractsPanel from '../components/contracts/PatientContractsPanel.jsx';
 
 /** Campos que não são obrigatórios; removidos da lista de pendências ao exibir (compatível com dados antigos). */
 const PENDING_OPTIONAL_KEYS = ['preferred_dentist', 'insurance_name'];
@@ -42,6 +43,7 @@ const TAB_CONFIG = [
   { id: 'enderecos', label: 'Endereços' },
   { id: 'relacionamentos', label: 'Relacionamentos' },
   { id: 'convenios', label: 'Convênios' },
+  { id: 'contratos', label: 'Contratos' },
   { id: 'acesso', label: 'Dados de Acesso' },
   { id: 'prontuario', label: 'Prontuário' },
   { id: 'situacao', label: 'Situação do Cadastro' },
@@ -1340,6 +1342,10 @@ export default function PatientCadastroPage() {
                   </div>
                 </div>
               </div>
+            ) : null}
+
+            {activeTab === 'contratos' ? (
+              <PatientContractsPanel patientId={patientId} />
             ) : null}
 
             {activeTab === 'acesso' ? (

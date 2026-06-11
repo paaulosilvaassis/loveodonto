@@ -110,7 +110,11 @@ export const AppointmentStep2DetailsModal = ({
 
   return (
     <ModalRoot open={open} onOpenChange={(next) => (!next ? onClose() : null)}>
-      <ModalContent className="appointment-step2-modal">
+      <ModalContent
+        className="appointment-step2-modal"
+        onInteractOutside={(event) => event.preventDefault()}
+        onPointerDownOutside={(event) => event.preventDefault()}
+      >
         <ModalHeader className="appointment-step2-header">
           <div>
             <strong>Novo Agendamento</strong>

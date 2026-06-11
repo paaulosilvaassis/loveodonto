@@ -31,7 +31,6 @@ import PatientCadastroPage from './pages/PatientCadastroPage.jsx';
 import PatientChartPage from './pages/PatientChartPage.jsx';
 import OdontogramV2Page from './pages/OdontogramV2Page.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
-import AdminContratosConsentimentosPage from './pages/admin/AdminContratosConsentimentosPage.jsx';
 import PriceBasePage from './pages/PriceBasePage.jsx';
 import PriceBaseTableDetailPage from './pages/PriceBaseTableDetailPage.jsx';
 import ReportsPage from './pages/ReportsPage.jsx';
@@ -80,6 +79,14 @@ import ConveniosGlosasPage from './pages/convenios/ConveniosGlosasPage.jsx';
 import ConveniosFaturamentoPage from './pages/convenios/ConveniosFaturamentoPage.jsx';
 import ConveniosRecebimentosPage from './pages/convenios/ConveniosRecebimentosPage.jsx';
 import ConveniosRelatoriosPage from './pages/convenios/ConveniosRelatoriosPage.jsx';
+import ContractsShellLayout from './contracts/ui/ContractsShellLayout.jsx';
+import ContractsDashboardPage from './pages/contratos/ContractsDashboardPage.jsx';
+import ContractsPendentesPage from './pages/contratos/ContractsPendentesPage.jsx';
+import ContractsAssinadosPage from './pages/contratos/ContractsAssinadosPage.jsx';
+import ContractsModelosPage from './pages/contratos/ContractsModelosPage.jsx';
+import ContractsTermosPage from './pages/contratos/ContractsTermosPage.jsx';
+import ContractsAssinaturasPage from './pages/contratos/ContractsAssinaturasPage.jsx';
+import ContractsConfigPage from './pages/contratos/ContractsConfigPage.jsx';
 import { routeAccessMap } from './navigation/menuConfig.js';
 import { getRequiredFeatureFlagForRoute, getRequiredModuleForRoute } from './tenant/tenantAccess.js';
 
@@ -146,6 +153,15 @@ export default function ProtectedApp() {
           <Route path="recebimentos" element={withRole('/gestao/convenios', <ConveniosRecebimentosPage />)} />
           <Route path="relatorios" element={withRole('/gestao/convenios', <ConveniosRelatoriosPage />)} />
         </Route>
+        <Route path="/gestao/contratos" element={withRole('/gestao/contratos', <ContractsShellLayout />)}>
+          <Route index element={withRole('/gestao/contratos', <ContractsDashboardPage />)} />
+          <Route path="pendentes" element={withRole('/gestao/contratos', <ContractsPendentesPage />)} />
+          <Route path="assinados" element={withRole('/gestao/contratos', <ContractsAssinadosPage />)} />
+          <Route path="modelos" element={withRole('/gestao/contratos', <ContractsModelosPage />)} />
+          <Route path="termos" element={withRole('/gestao/contratos', <ContractsTermosPage />)} />
+          <Route path="assinaturas" element={withRole('/gestao/contratos', <ContractsAssinaturasPage />)} />
+          <Route path="configuracoes" element={withRole('/gestao/contratos', <ContractsConfigPage />)} />
+        </Route>
         <Route path="/gestao-comercial/jornada-do-paciente" element={withRole('/gestao-comercial/jornada-do-paciente', <PatientJourneyPage />)} />
         <Route path="/gestao-comercial/fluxo-do-paciente" element={withRole('/gestao-comercial/fluxo-do-paciente', <PatientFlowPage />)} />
         <Route path="/gestao-comercial/base-de-preco" element={withRole('/gestao-comercial/base-de-preco', <PriceBasePage />)} />
@@ -163,8 +179,8 @@ export default function ProtectedApp() {
         <Route path="/admin/base-precos" element={withAdminGate(withRole('/admin/base-precos', <PriceBasePage />))} />
         <Route path="/admin/base-precos/tabelas/:priceTableId" element={withAdminGate(withRole('/admin/base-precos', <PriceBaseTableDetailPage />))} />
         <Route path="/admin/procedimentos" element={<Navigate to="/admin/base-precos" replace />} />
-        <Route path="/admin/contratos" element={withAdminGate(withRole('/admin/contratos', <AdminContratosConsentimentosPage />))} />
-        <Route path="/admin/consentimentos" element={withAdminGate(withRole('/admin/consentimentos', <AdminContratosConsentimentosPage />))} />
+        <Route path="/admin/contratos" element={<Navigate to="/gestao/contratos" replace />} />
+        <Route path="/admin/consentimentos" element={<Navigate to="/gestao/contratos/termos" replace />} />
         <Route path="/admin/fornecedores" element={withAdminGate(withRole('/admin/fornecedores', <FornecedoresPage />))} />
         <Route path="/administrativo/fornecedores" element={<Navigate to="/admin/fornecedores" replace />} />
         <Route path="/financeiro/contas-pagar" element={withRole('/financeiro/contas-pagar', <FinancePayablesPage />)} />

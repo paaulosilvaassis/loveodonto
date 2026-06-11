@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../auth/useAuth.js';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
 import { suggestPatients } from '../../services/patientService.js';
 import { normalizeText } from '../../services/helpers.js';
 import { onlyDigits } from '../../utils/validators.js';
+import {
+  getPatientSuggestId,
+  getPatientSuggestLabel,
+  handleModalInteractOutside,
+} from '../../utils/patientSuggestHelpers.js';
 import {
   ModalBody,
   ModalContent,
@@ -15,20 +20,21 @@ import {
   ModalDescription,
 } from '../ui/Modal.jsx';
 
-const PATIENT_SUGGEST_PORTAL_ID = 'appointment-step1-patient-suggest-portal';
+const PROCEED_ERROR = 'Selecione um paciente cadastrado na lista antes de prosseguir.';
 
 export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onContinue, selectedProfessionalId }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const tenantId = user?.tenant_id || user?.tenantId || null;
   const [patientQuery, setPatientQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientSuggestions, setPatientSuggestions] = useState([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [activeSuggestIndex, setActiveSuggestIndex] = useState(-1);
-  const [dropdownPosition, setDropdownPosition] = useState(null);
+  const [searchError, setSearchError] = useState('');
   const suggestWrapRef = useRef(null);
-  const inputRef = useRef(null);
-  const debouncedQuery = useDebouncedValue(patientQuery, 400);
+  const debouncedQuery = useDebouncedValue(patientQuery, 300);
 
   useEffect(() => {
     if (!open) {
@@ -36,44 +42,22 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
       setSelectedPatient(null);
       setPatientSuggestions([]);
       setSuggestOpen(false);
-      setDropdownPosition(null);
-      return;
+      setSearchError('');
+      setActiveSuggestIndex(-1);
     }
   }, [open]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (suggestWrapRef.current?.contains(event.target)) return;
-      if (event.target.closest(`[data-id="${PATIENT_SUGGEST_PORTAL_ID}"]`)) return;
-      setSuggestOpen(false);
-      setActiveSuggestIndex(-1);
+      if (!suggestWrapRef.current?.contains(event.target)) {
+        setSuggestOpen(false);
+        setActiveSuggestIndex(-1);
+      }
     };
+    if (!open) return undefined;
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    if (!suggestOpen || !open || !inputRef.current) {
-      setDropdownPosition(null);
-      return;
-    }
-    const updatePosition = () => {
-      if (!inputRef.current) return;
-      const rect = inputRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: rect.width,
-      });
-    };
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-    return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
-  }, [suggestOpen, open, patientSuggestions.length, suggestLoading]);
+  }, [open]);
 
   const detectSearchType = (value) => {
     const digits = onlyDigits(value);
@@ -93,14 +77,20 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
     return normalizeText(value);
   };
 
+  const searchType = detectSearchType(patientQuery);
+  const minChars = suggestMinChars(searchType);
+  const queryReady = normalizeSuggestQuery(patientQuery, searchType).length >= minChars;
+
   useEffect(() => {
+    if (!open) return;
+
     const type = detectSearchType(debouncedQuery);
     const normalized = normalizeSuggestQuery(debouncedQuery, type);
-    const minChars = suggestMinChars(type);
+    const min = suggestMinChars(type);
 
-    if (!normalized || normalized.length < minChars) {
+    if (!normalized || normalized.length < min) {
       setPatientSuggestions([]);
-      setSuggestOpen(false);
+      if (!selectedPatient) setSuggestOpen(false);
       setSuggestLoading(false);
       setActiveSuggestIndex(-1);
       return;
@@ -111,28 +101,61 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
     setActiveSuggestIndex(-1);
 
     try {
-      const { results } = suggestPatients(type, normalized, 10);
+      const { results } = suggestPatients(type, normalized, 10, tenantId);
       setPatientSuggestions(results);
-    } catch (err) {
+      setSearchError('');
+    } catch {
       setPatientSuggestions([]);
+      setSearchError('Não foi possível buscar pacientes. Tente novamente.');
     } finally {
       setSuggestLoading(false);
     }
-  }, [debouncedQuery]);
+  }, [debouncedQuery, tenantId, open, selectedPatient]);
 
   const handlePatientQueryChange = (value) => {
     setPatientQuery(value);
     setSelectedPatient(null);
+    setSearchError('');
+    const type = detectSearchType(value);
+    const normalized = normalizeSuggestQuery(value, type);
+    if (normalized.length >= suggestMinChars(type)) {
+      setSuggestOpen(true);
+    }
   };
 
   const handleSelectPatient = (patient) => {
-    setSelectedPatient(patient);
-    setPatientQuery(patient.name || patient.full_name || patient.nickname || patient.social_name || '');
+    const patientId = getPatientSuggestId(patient);
+    if (!patientId) {
+      setSearchError('Paciente inválido. Selecione outro resultado da lista.');
+      return;
+    }
+    const label = getPatientSuggestLabel(patient);
+    setSelectedPatient({
+      ...patient,
+      id: patientId,
+      name: label,
+      full_name: patient.full_name || label,
+    });
+    setPatientQuery(label);
     setSuggestOpen(false);
     setActiveSuggestIndex(-1);
+    setSearchError('');
   };
 
   const handleKeyDown = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      if (suggestOpen && activeSuggestIndex >= 0 && patientSuggestions[activeSuggestIndex]) {
+        handleSelectPatient(patientSuggestions[activeSuggestIndex]);
+        return;
+      }
+      if (selectedPatient && getPatientSuggestId(selectedPatient)) {
+        handleContinue();
+      } else {
+        setSearchError(PROCEED_ERROR);
+      }
+      return;
+    }
     if (!suggestOpen || patientSuggestions.length === 0) return;
     if (event.key === 'ArrowDown') {
       event.preventDefault();
@@ -140,9 +163,6 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       setActiveSuggestIndex((prev) => (prev > 0 ? prev - 1 : -1));
-    } else if (event.key === 'Enter' && activeSuggestIndex >= 0) {
-      event.preventDefault();
-      handleSelectPatient(patientSuggestions[activeSuggestIndex]);
     } else if (event.key === 'Escape') {
       setSuggestOpen(false);
       setActiveSuggestIndex(-1);
@@ -150,10 +170,15 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
   };
 
   const handleContinue = () => {
-    if (!selectedPatient) return;
+    const patientId = getPatientSuggestId(selectedPatient);
+    if (!patientId) {
+      setSearchError(PROCEED_ERROR);
+      return;
+    }
+    setSearchError('');
     onContinue({
       appointmentType: 'consulta',
-      patient: selectedPatient,
+      patient: { ...selectedPatient, id: patientId },
       slot,
     });
   };
@@ -163,118 +188,148 @@ export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onCont
     const date = new Date(`${slot.date}T00:00:00`);
     const weekday = date.toLocaleDateString('pt-BR', { weekday: 'long' });
     const dateStr = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const timeStr = slot.time;
-    return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${dateStr} (${timeStr})`;
+    return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)}, ${dateStr} (${slot.time})`;
   };
-
-  const canContinue = selectedPatient !== null;
 
   const handleOpenChange = (next) => {
     if (!next) onClose();
   };
 
-  const dropdownContent = open && suggestOpen && dropdownPosition && (
-    <div
-      data-id={PATIENT_SUGGEST_PORTAL_ID}
-      className="search-suggest-list search-suggest-list--portal"
-      role="listbox"
-      style={{
-        position: 'fixed',
-        top: dropdownPosition.top,
-        left: dropdownPosition.left,
-        width: dropdownPosition.width,
-        zIndex: 10000,
-      }}
-    >
-      {suggestLoading ? <div className="search-suggest-empty">Buscando...</div> : null}
-      {!suggestLoading && patientSuggestions.length === 0 && debouncedQuery.length >= 3 ? (
-        <div className="search-suggest-empty-container">
-          <div className="search-suggest-empty">Nenhum paciente encontrado</div>
-          <button
-            type="button"
-            className="button button-primary search-suggest-create-patient"
-            onClick={() => {
-              const params = new URLSearchParams({
-                prefillName: patientQuery,
-                returnTo: 'agenda',
-                slotDate: slot?.date || '',
-                startTime: slot?.time || '',
-                professionalId: selectedProfessionalId || '',
-              });
-              navigate(`/pacientes/cadastro?${params.toString()}`);
-              onClose();
-            }}
-          >
-            Cadastrar novo paciente
-          </button>
-        </div>
-      ) : null}
-      {!suggestLoading && patientSuggestions.length === 0 && debouncedQuery.length < 3 ? (
-        <div className="search-suggest-empty">Digite pelo menos 3 caracteres para buscar</div>
-      ) : null}
-      {!suggestLoading &&
-        patientSuggestions.map((item, index) => {
-          const patientName = item.name || item.full_name || item.nickname || item.social_name || 'Paciente';
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`search-suggest-item ${index === activeSuggestIndex ? 'active' : ''}`}
-              onClick={() => handleSelectPatient(item)}
-            >
-              <div className="search-suggest-title">{patientName}</div>
-              {item.cpfMasked || item.cpf ? (
-                <div className="search-suggest-meta">CPF: {item.cpfMasked || item.cpf}</div>
-              ) : null}
-            </button>
-          );
-        })}
-    </div>
-  );
+  const showDropdown = open && suggestOpen && queryReady;
+  const noResults = !suggestLoading && patientSuggestions.length === 0 && queryReady;
 
   return (
-    <>
-      <ModalRoot open={open} onOpenChange={handleOpenChange}>
-        <ModalContent size="md" className="appointment-step1-modal">
-          <ModalHeader className="appointment-step1-header">
-            <div>
-              <ModalDescription className="appointment-step1-slot">{formatSlotHeader()}</ModalDescription>
-              <ModalTitle>Novo Agendamento</ModalTitle>
+    <ModalRoot open={open} onOpenChange={handleOpenChange}>
+      <ModalContent
+        size="md"
+        className="appointment-step1-modal"
+        onInteractOutside={(event) => handleModalInteractOutside(event, null, true)}
+        onPointerDownOutside={(event) => handleModalInteractOutside(event, null, true)}
+      >
+        <ModalHeader className="appointment-step1-header">
+          <div>
+            <ModalDescription className="appointment-step1-slot">{formatSlotHeader()}</ModalDescription>
+            <ModalTitle>Novo Agendamento</ModalTitle>
+          </div>
+        </ModalHeader>
+
+        <ModalBody className="appointment-step1-body">
+          {searchError ? (
+            <div className="alert error" role="alert" style={{ marginBottom: '0.75rem' }}>
+              {searchError}
             </div>
-          </ModalHeader>
+          ) : null}
 
-          <ModalBody className="appointment-step1-body">
-            <div className="appointment-step1-search" ref={suggestWrapRef}>
-              <label>
-                Nome do Paciente
-                <input
-                  ref={inputRef}
-                  type="text"
-                  className="search-input"
-                  placeholder="Digite o nome do paciente"
-                  value={patientQuery}
-                  onChange={(event) => handlePatientQueryChange(event.target.value)}
-                  onKeyDown={handleKeyDown}
-                  onFocus={() => {
-                    if (patientSuggestions.length > 0) setSuggestOpen(true);
-                  }}
-                />
-              </label>
-            </div>
-          </ModalBody>
+          <div className="appointment-step1-search search-suggest-wrap" ref={suggestWrapRef}>
+            <label>
+              Nome do Paciente
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Buscar por nome, telefone ou CPF"
+                value={patientQuery}
+                onChange={(event) => handlePatientQueryChange(event.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={() => {
+                  if (queryReady) setSuggestOpen(true);
+                }}
+                autoComplete="off"
+                aria-autocomplete="list"
+                aria-expanded={showDropdown}
+                aria-controls="appointment-step1-suggest-list"
+              />
+            </label>
 
-          <ModalFooter className="appointment-step1-footer">
-            <button type="button" className="button secondary" onClick={onClose}>
-              Fechar
-            </button>
-            <button type="button" className="button primary" onClick={handleContinue} disabled={!canContinue}>
-              Prosseguir
-            </button>
-          </ModalFooter>
-        </ModalContent>
-      </ModalRoot>
+            {selectedPatient && getPatientSuggestId(selectedPatient) ? (
+              <p className="appointment-step1-selected" role="status">
+                Paciente selecionado: <strong>{getPatientSuggestLabel(selectedPatient)}</strong>
+              </p>
+            ) : (
+              <p className="appointment-step1-hint muted">
+                Digite pelo menos 2 letras e clique no paciente na lista.
+              </p>
+            )}
 
-      {dropdownContent && createPortal(dropdownContent, document.body)}
-    </>
+            {showDropdown ? (
+              <div
+                id="appointment-step1-suggest-list"
+                className="search-suggest-list"
+                role="listbox"
+              >
+                {suggestLoading ? (
+                  <div className="search-suggest-empty">Buscando...</div>
+                ) : null}
+
+                {!suggestLoading && noResults ? (
+                  <div className="search-suggest-empty-container">
+                    <div className="search-suggest-empty">Nenhum paciente encontrado</div>
+                    <button
+                      type="button"
+                      className="button button-primary search-suggest-create-patient"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => {
+                        const params = new URLSearchParams({
+                          prefillName: patientQuery,
+                          returnTo: 'agenda',
+                          slotDate: slot?.date || '',
+                          startTime: slot?.time || '',
+                          professionalId: selectedProfessionalId || '',
+                        });
+                        navigate(`/pacientes/cadastro?${params.toString()}`);
+                        onClose();
+                      }}
+                    >
+                      + Cadastrar novo paciente
+                    </button>
+                  </div>
+                ) : null}
+
+                {!suggestLoading
+                  ? patientSuggestions.map((item, index) => {
+                    const patientName = getPatientSuggestLabel(item);
+                    const patientKey = getPatientSuggestId(item) || `suggest-${index}`;
+                    const isSelected = getPatientSuggestId(selectedPatient) === getPatientSuggestId(item);
+                    return (
+                      <button
+                        key={patientKey}
+                        type="button"
+                        role="option"
+                        aria-selected={isSelected}
+                        className={`search-suggest-item ${index === activeSuggestIndex ? 'active' : ''} ${isSelected ? 'selected' : ''}`}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleSelectPatient(item);
+                        }}
+                      >
+                        <div className="search-suggest-title">{patientName}</div>
+                        <div className="search-suggest-meta">
+                          {item.phoneLabel ? <span>{item.phoneLabel}</span> : null}
+                          {item.phoneLabel && (item.cpfMasked || item.cpf) ? <span> • </span> : null}
+                          {item.cpfMasked || item.cpf ? (
+                            <span>CPF: {item.cpfMasked || item.cpf}</span>
+                          ) : (
+                            !item.phoneLabel ? <span>Sem telefone/CPF cadastrado</span> : null
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })
+                  : null}
+              </div>
+            ) : null}
+          </div>
+        </ModalBody>
+
+        <ModalFooter className="appointment-step1-footer">
+          <button type="button" className="button secondary" onClick={onClose}>
+            Fechar
+          </button>
+          <button type="button" className="button primary" onClick={handleContinue}>
+            Prosseguir
+          </button>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 };

@@ -172,6 +172,13 @@ export const navCategories = [
         route: '/gestao/convenios',
         rolesAllowed: ['admin', 'gerente', 'recepcao'],
       },
+      {
+        id: 'contratos',
+        label: 'Contratos & Consentimentos',
+        icon: FileSignature,
+        route: '/gestao/contratos',
+        rolesAllowed: ['admin', 'gerente', 'recepcao'],
+      },
     ],
   },
   {
@@ -206,20 +213,6 @@ export const navCategories = [
         label: 'Base de Preços e Procedimentos',
         icon: BadgeDollarSign,
         route: '/admin/base-precos',
-        rolesAllowed: ['admin', 'gerente'],
-      },
-      {
-        id: 'contratos',
-        label: 'Contratos',
-        icon: FileSignature,
-        route: '/admin/contratos',
-        rolesAllowed: ['admin', 'gerente'],
-      },
-      {
-        id: 'consentimentos',
-        label: 'Consentimentos',
-        icon: UserCog,
-        route: '/admin/consentimentos',
         rolesAllowed: ['admin', 'gerente'],
       },
       {
@@ -421,7 +414,7 @@ export const getActiveCategory = (pathname) => {
   
   // Fallback: detecta por prefixo de rota
   if (pathname.startsWith('/gestao/dashboard')) return 'dashboard';
-  if (pathname.startsWith('/gestao-atendimento') || pathname.startsWith('/pacientes') || pathname.startsWith('/gestao/agenda') || pathname.startsWith('/gestao/convenios') || pathname.startsWith('/gestao-comercial/fluxo-do-paciente')) return 'gestao-atendimento';
+  if (pathname.startsWith('/gestao-atendimento') || pathname.startsWith('/pacientes') || pathname.startsWith('/gestao/agenda') || pathname.startsWith('/gestao/convenios') || pathname.startsWith('/gestao/contratos') || pathname.startsWith('/gestao-comercial/fluxo-do-paciente')) return 'gestao-atendimento';
   if (pathname.startsWith('/crm')) return 'comercial';
   if (pathname.startsWith('/admin')) return 'administrativo';
   if (pathname.startsWith('/financeiro')) return 'financeiro';

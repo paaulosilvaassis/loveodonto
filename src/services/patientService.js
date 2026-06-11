@@ -72,70 +72,78 @@ const ensureCpfUnique = (db, cpf, ignorePatientId) => {
 
 export const listPatients = () => loadDb().patients;
 
-export const searchPatients = (type, query) => {
+function filterPatientsByTenant(patients, tenantId) {
+  const list = Array.isArray(patients) ? patients : [];
+  if (!tenantId) return list;
+  return list.filter((item) => !item.tenant_id || item.tenant_id === tenantId);
+}
+
+export const searchPatients = (type, query, tenantId = null) => {
   const db = loadDb();
+  const patients = filterPatientsByTenant(db.patients || [], tenantId);
+  const patientPhones = db.patientPhones || [];
   const q = normalizeText(query);
   if (!q) return { results: [], exactMatch: null };
 
   if (type === 'cpf') {
     const cpf = normalizeCpf(q);
-    const exact = db.patients.find((item) => normalizeCpf(item.cpf) === cpf);
+    const exact = patients.find((item) => normalizeCpf(item.cpf) === cpf);
     const results = exact ? [exact] : [];
     return { results, exactMatch: exact || null };
   }
 
   if (type === 'phone') {
     const digits = normalizePhoneDigits(q);
-    const phoneMatches = db.patientPhones.filter(
+    const phoneMatches = patientPhones.filter(
       (item) => normalizePhoneDigits(`${item.ddd}${item.number}`) === digits || normalizePhoneDigits(item.e164) === digits
     );
     const patientIds = Array.from(new Set(phoneMatches.map((item) => item.patient_id)));
-    const results = db.patients.filter((item) => patientIds.includes(item.id));
+    const results = patients.filter((item) => patientIds.includes(item.id));
     const exact = results[0] || null;
     return { results, exactMatch: exact };
   }
 
   const lower = q.toLowerCase();
-  const results = db.patients.filter((item) => {
-    return (
-      item.full_name?.toLowerCase().includes(lower) ||
-      item.nickname?.toLowerCase().includes(lower) ||
-      item.social_name?.toLowerCase().includes(lower)
-    );
-  });
+  const results = patients.filter((item) => (
+    item.full_name?.toLowerCase().includes(lower)
+    || item.nickname?.toLowerCase().includes(lower)
+    || item.social_name?.toLowerCase().includes(lower)
+  ));
   return { results, exactMatch: null };
 };
 
-export const suggestPatients = (type, query, limit = 10) => {
+export const suggestPatients = (type, query, limit = 10, tenantId = null) => {
   const q = normalizeText(query);
   if (!q) return { results: [] };
-  const cacheKey = `${type}:${q}:${limit}`;
+  const cacheKey = `${type}:${q}:${limit}:${tenantId || ''}`;
   const cached = suggestCache.get(cacheKey);
   if (cached && Date.now() - cached.at < SUGGEST_TTL_MS) {
     return cached.data;
   }
 
   const db = loadDb();
+  const patients = filterPatientsByTenant(db.patients || [], tenantId);
+  const patientPhones = db.patientPhones || [];
   let results = [];
 
   if (type === 'cpf') {
     const digits = normalizeCpf(q);
     if (digits.length === 11) {
-      results = db.patients.filter((item) => normalizeCpf(item.cpf) === digits);
+      results = patients.filter((item) => normalizeCpf(item.cpf) === digits);
     }
   } else if (type === 'phone') {
     const digits = normalizePhoneDigits(q);
     if (digits.length >= 4) {
-      const phoneMatches = db.patientPhones.filter((item) => {
+      const phoneMatches = patientPhones.filter((item) => {
         const full = normalizePhoneDigits(`${item.ddd}${item.number}`);
         return full.includes(digits) || normalizePhoneDigits(item.e164).includes(digits);
       });
       const patientIds = Array.from(new Set(phoneMatches.map((item) => item.patient_id)));
-      results = db.patients.filter((item) => patientIds.includes(item.id));
+      results = patients.filter((item) => patientIds.includes(item.id));
     }
   } else {
     const term = normalizeMatch(q);
-    results = db.patients
+    results = patients
       .map((item) => {
         const name = normalizeMatch(item.full_name);
         const nickname = normalizeMatch(item.nickname);
@@ -148,24 +156,25 @@ export const suggestPatients = (type, query, limit = 10) => {
         return { item, score };
       })
       .filter((entry) => entry.score > 0)
-      .sort((a, b) => b.score - a.score || a.item.full_name.localeCompare(b.item.full_name))
+      .sort((a, b) => b.score - a.score || (a.item.full_name || '').localeCompare(b.item.full_name || ''))
       .map((entry) => entry.item);
   }
 
   const payload = {
     results: results.slice(0, limit).map((patient) => {
-      const phones = db.patientPhones.filter((item) => item.patient_id === patient.id);
+      const phones = patientPhones.filter((item) => item.patient_id === patient.id);
       const primaryPhone = phones.find((item) => item.is_primary) || phones[0];
       const phoneLabel = primaryPhone ? `(${primaryPhone.ddd}) ${primaryPhone.number}` : '';
       return {
         id: patient.id,
-        name: patient.full_name,
+        name: patient.full_name || patient.nickname || patient.social_name || 'Paciente',
+        full_name: patient.full_name,
         cpfMasked: maskCpf(patient.cpf),
         phoneLabel,
         birthDate: patient.birth_date || '',
         status: patient.status,
       };
-    }),
+    }).filter((row) => row.id),
   };
 
   suggestCache.set(cacheKey, { at: Date.now(), data: payload });

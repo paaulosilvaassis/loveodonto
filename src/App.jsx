@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import ActivatePage from './pages/ActivatePage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ConvitePage from './pages/ConvitePage.jsx';
+import ContractSignPublicPage from './pages/contratos/ContractSignPublicPage.jsx';
 import { PlatformAuthProvider } from './auth/PlatformAuthContext.jsx';
 import RequirePlatformAuth from './auth/RequirePlatformAuth.jsx';
 import { TenantProvider } from './tenant/TenantContext.jsx';
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/activate" element={<ActivatePage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/convite" element={<ConvitePage />} />
+            <Route path="/assinatura/:token" element={<ContractSignPublicPage />} />
             <Route path="/platform/login" element={<PlatformLoginPage />} />
             <Route path="/platform" element={<RequirePlatformAuth><PlatformLayout /></RequirePlatformAuth>}>
               <Route index element={<Navigate to="/platform/dashboard" replace />} />

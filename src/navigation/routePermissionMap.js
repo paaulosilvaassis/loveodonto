@@ -9,6 +9,7 @@ export function resolveRoutePermission(routePath) {
   if (path.startsWith('/gestao/agenda')) return 'agenda:view';
   if (path.startsWith('/gestao-atendimento')) return 'agenda:view';
   if (path.startsWith('/gestao/convenios')) return 'agenda:view';
+  if (path.startsWith('/gestao/contratos')) return 'admin_contratos:view';
   if (path.startsWith('/gestao-comercial/fluxo-do-paciente')) return 'agenda:view';
   if (path.startsWith('/gestao-comercial/jornada-do-paciente')) return 'pipeline_crm:view';
   if (path.startsWith('/crm')) return 'pipeline_crm:view';

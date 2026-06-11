@@ -6,6 +6,11 @@ import { createPatientQuick, searchPatients, suggestPatients } from '../../servi
 import { normalizeText } from '../../services/helpers.js';
 import { formatCpf, isCpfValid, onlyDigits } from '../../utils/validators.js';
 import {
+  getPatientSuggestId,
+  getPatientSuggestLabel,
+  handleModalInteractOutside,
+} from '../../utils/patientSuggestHelpers.js';
+import {
   ModalBody,
   ModalContent,
   ModalFooter,
@@ -66,6 +71,7 @@ export const CreateAppointmentPanel = ({
     cpf: '',
   });
   const suggestWrapRef = useRef(null);
+  const tenantId = user?.tenant_id || user?.tenantId || null;
 
   useEffect(() => {
     setDraft(buildDraft(appointment));
@@ -134,7 +140,7 @@ export const CreateAppointmentPanel = ({
     setSuggestError('');
     setActiveSuggestIndex(-1);
     try {
-      const { results } = suggestPatients(type, normalized, 10);
+      const { results } = suggestPatients(type, normalized, 10, tenantId);
       setPatientSuggestions(results);
     } catch {
       setSuggestError('Falha ao buscar pacientes');
@@ -142,7 +148,7 @@ export const CreateAppointmentPanel = ({
     } finally {
       setSuggestLoading(false);
     }
-  }, [debouncedQuery]);
+  }, [debouncedQuery, tenantId]);
 
   const handleChange = (field, value) => {
     setDraft((prev) => ({ ...prev, [field]: value }));
@@ -157,10 +163,16 @@ export const CreateAppointmentPanel = ({
   };
 
   const handleSelectPatient = (patient) => {
-    setDraft((prev) => ({ ...prev, patientId: patient.id }));
-    setPatientQuery(patient.name);
+    const patientId = getPatientSuggestId(patient);
+    if (!patientId) {
+      setSuggestError('Paciente inválido. Selecione outro resultado da lista.');
+      return;
+    }
+    setDraft((prev) => ({ ...prev, patientId }));
+    setPatientQuery(getPatientSuggestLabel(patient));
     setSuggestOpen(false);
     setActiveSuggestIndex(-1);
+    setSuggestError('');
   };
 
   const handlePatientKeyDown = (event) => {
@@ -212,7 +224,7 @@ export const CreateAppointmentPanel = ({
       setQuickError('CPF inválido.');
       return;
     }
-    const { exactMatch } = searchPatients('cpf', payload.cpf);
+    const { exactMatch } = searchPatients('cpf', payload.cpf, tenantId);
     if (exactMatch) {
       setCpfDuplicate(exactMatch);
       setQuickError('⚠ Paciente já cadastrado');
@@ -228,7 +240,7 @@ export const CreateAppointmentPanel = ({
       setShowQuickCreate(false);
     } catch (err) {
       if (String(err?.message).includes('CPF já cadastrado')) {
-        const { exactMatch: existing } = searchPatients('cpf', payload.cpf);
+        const { exactMatch: existing } = searchPatients('cpf', payload.cpf, tenantId);
         if (existing) {
           setCpfDuplicate(existing);
           setQuickError('⚠ Paciente já cadastrado');
@@ -279,7 +291,12 @@ export const CreateAppointmentPanel = ({
 
   return (
     <ModalRoot open={open} onOpenChange={handleOpenChange}>
-      <ModalContent size="lg" className="agenda-panel" onInteractOutside={(e) => e.preventDefault()}>
+      <ModalContent
+        size="lg"
+        className="agenda-panel"
+        onInteractOutside={(event) => handleModalInteractOutside(event, null, true)}
+        onPointerDownOutside={(event) => handleModalInteractOutside(event, null, true)}
+      >
         <ModalHeader className="agenda-panel-header">
           <div>
             <ModalTitle>{mode === 'edit' ? 'Editar agendamento' : 'Novo agendamento'}</ModalTitle>
@@ -315,12 +332,16 @@ export const CreateAppointmentPanel = ({
                   {!suggestLoading && !suggestError
                     ? patientSuggestions.map((item, index) => (
                         <button
-                          key={item.id}
+                          key={getPatientSuggestId(item) || `suggest-${index}`}
                           type="button"
                           className={`search-suggest-item ${index === activeSuggestIndex ? 'active' : ''}`}
-                          onClick={() => handleSelectPatient(item)}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleSelectPatient(item);
+                          }}
                         >
-                          <div className="search-suggest-title">{item.name}</div>
+                          <div className="search-suggest-title">{getPatientSuggestLabel(item)}</div>
                           <div className="search-suggest-meta">
                             {item.phoneLabel || 'Telefone não informado'}
                             <span>•</span>
@@ -454,12 +475,11 @@ export const CreateAppointmentPanel = ({
                   <button
                     type="button"
                     className="button secondary"
-                    onClick={() =>
-                      handleSelectPatient({
-                        id: cpfDuplicate.id,
-                        name: cpfDuplicate.full_name,
-                      })
-                    }
+                    onClick={() => handleSelectPatient({
+                      id: cpfDuplicate.id,
+                      name: cpfDuplicate.full_name,
+                      full_name: cpfDuplicate.full_name,
+                    })}
                   >
                     Selecionar paciente existente
                   </button>

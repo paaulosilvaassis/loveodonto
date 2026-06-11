@@ -17,6 +17,8 @@ import { SectionCard } from '../../components/SectionCard.jsx';
 import { Plus, Eye, Pencil, RefreshCw, Search, X, FileText, Clock, CheckCircle, XCircle, Percent, FileSignature } from 'lucide-react';
 import { can } from '../../permissions/permissions.js';
 import GenerateContractModal from '../../components/contracts/GenerateContractModal.jsx';
+import { getContractStatusForQuote } from '../../services/contractModuleService.js';
+import { ContractStatusBadge } from '../../contracts/ui/ContractUi.jsx';
 
 const DEFAULT_MONTH_START = () => {
   const d = new Date();
@@ -240,7 +242,7 @@ export default function CrmOrcamentosPage() {
       }
       setSubmitting(true);
       try {
-        updateCrmBudgetStatus(user, {
+        const updated = updateCrmBudgetStatus(user, {
           budgetId: modalStatus.id,
           status,
           deniedReason: status === BUDGET_STATUS.NEGADO ? (reason || deniedReason).trim() : undefined,
@@ -248,6 +250,14 @@ export default function CrmOrcamentosPage() {
         setModalStatus(null);
         setDeniedReason('');
         setRefreshKey((k) => k + 1);
+        if (
+          status === BUDGET_STATUS.APROVADO
+          && updated?.patientId
+          && can(user, 'admin_contratos:generate')
+        ) {
+          setContractBudget(updated);
+          setContractModalOpen(true);
+        }
       } catch (err) {
         setError(err?.message || 'Erro ao alterar status.');
       } finally {
@@ -356,6 +366,7 @@ export default function CrmOrcamentosPage() {
                   <th>Título</th>
                   <th>Valor</th>
                   <th>Status</th>
+                  <th>Contrato</th>
                   <th>Data</th>
                   <th>Ações</th>
                 </tr>
@@ -363,7 +374,7 @@ export default function CrmOrcamentosPage() {
               <tbody>
                 {budgets.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="crm-leads-empty">
+                    <td colSpan={7} className="crm-leads-empty">
                       Sem orçamentos no período. Clique em &quot;Novo orçamento&quot; para criar.
                     </td>
                   </tr>
@@ -371,6 +382,7 @@ export default function CrmOrcamentosPage() {
                   budgets.map((b) => {
                     const lead = leadById[b.leadId];
                     const name = lead?.name || '—';
+                    const linkedContract = getContractStatusForQuote(b.id, 'crm_budget');
                     return (
                       <tr key={b.id}>
                         <td>
@@ -384,6 +396,13 @@ export default function CrmOrcamentosPage() {
                           <span className={statusBadgeClass(b.status)}>
                             {BUDGET_STATUS_LABELS[b.status] || b.status}
                           </span>
+                        </td>
+                        <td>
+                          {linkedContract ? (
+                            <ContractStatusBadge status={linkedContract.status} />
+                          ) : (
+                            <span className="text-xs text-[var(--color-text-muted)]">—</span>
+                          )}
                         </td>
                         <td>{formatDate(b.createdAt)}</td>
                         <td>

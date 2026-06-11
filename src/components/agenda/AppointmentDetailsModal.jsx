@@ -11,6 +11,11 @@ import { normalizeText } from '../../services/helpers.js';
 import { onlyDigits } from '../../utils/validators.js';
 import { loadDb } from '../../db/index.js';
 import {
+  getPatientSuggestId,
+  getPatientSuggestLabel,
+  handleModalInteractOutside,
+} from '../../utils/patientSuggestHelpers.js';
+import {
   ModalBody,
   ModalContent,
   ModalFooter,
@@ -32,8 +37,10 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
   const [suggestLoading, setSuggestLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [showRegisterFromLead, setShowRegisterFromLead] = useState(false);
+  const [patientSearchError, setPatientSearchError] = useState('');
   const suggestWrapRef = useRef(null);
   const debouncedQuery = useDebouncedValue(patientQuery, 400);
+  const tenantId = user?.tenant_id || user?.tenantId || null;
 
   useEffect(() => {
     if (open && appointmentId) {
@@ -101,14 +108,16 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
     setSuggestOpen(true);
 
     try {
-      const { results } = suggestPatients(type, normalized, 10);
+      const { results } = suggestPatients(type, normalized, 10, tenantId);
       setPatientSuggestions(results);
+      setPatientSearchError('');
     } catch {
       setPatientSuggestions([]);
+      setPatientSearchError('Não foi possível buscar pacientes.');
     } finally {
       setSuggestLoading(false);
     }
-  }, [debouncedQuery, showChangePatient]);
+  }, [debouncedQuery, showChangePatient, tenantId]);
 
   if (!open || !details) return null;
 
@@ -185,17 +194,22 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
   };
 
   const handleSelectNewPatient = (newPatient) => {
-    setDraft((prev) => ({ ...prev, patientId: newPatient.id }));
-    setPatientQuery(newPatient.name || newPatient.full_name || '');
+    const patientId = getPatientSuggestId(newPatient);
+    if (!patientId) {
+      setPatientSearchError('Paciente inválido. Selecione outro resultado da lista.');
+      return;
+    }
+    setDraft((prev) => ({ ...prev, patientId }));
+    setPatientQuery(getPatientSuggestLabel(newPatient));
     setSuggestOpen(false);
     setShowChangePatient(false);
-    // Buscar novo paciente para atualizar visualização imediata
+    setPatientSearchError('');
     const db = loadDb();
-    const newPatientData = (db.patients || []).find((p) => p.id === newPatient.id);
-    const newPatientPhones = db.patientPhones.filter((p) => p.patient_id === newPatient.id);
+    const newPatientData = (db.patients || []).find((p) => p.id === patientId);
+    const newPatientPhones = (db.patientPhones || []).filter((p) => p.patient_id === patientId);
     const newPrimaryPhone = newPatientPhones.find((p) => p.is_primary) || newPatientPhones[0];
-    const newPatientRecord = db.patientRecords.find((r) => r.patient_id === newPatient.id);
-    
+    const newPatientRecord = (db.patientRecords || []).find((r) => r.patient_id === patientId);
+
     if (newPatientData) {
       setDetails((prev) => ({
         ...prev,
@@ -352,7 +366,11 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
           {toast.message}
         </div>
       ) : null}
-      <ModalContent className="appointment-details-modal">
+      <ModalContent
+        className="appointment-details-modal"
+        onInteractOutside={(event) => handleModalInteractOutside(event, null, true)}
+        onPointerDownOutside={(event) => handleModalInteractOutside(event, null, true)}
+      >
         <ModalHeader className="appointment-details-header">
           <div>
             <strong>Dados do Atendimento</strong>
@@ -460,6 +478,11 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
 
             {showChangePatient && (
               <div className="appointment-change-patient" ref={suggestWrapRef}>
+                {patientSearchError ? (
+                  <div className="alert error" role="alert" style={{ marginBottom: '0.5rem' }}>
+                    {patientSearchError}
+                  </div>
+                ) : null}
                 <label>
                   Buscar paciente
                   <input
@@ -479,14 +502,18 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
                         <div className="search-suggest-empty">Nenhum paciente encontrado</div>
                       ) : null}
                       {!suggestLoading &&
-                        patientSuggestions.map((item) => {
-                          const patientName = item.name || item.full_name || item.nickname || item.social_name || 'Paciente';
+                        patientSuggestions.map((item, index) => {
+                          const patientName = getPatientSuggestLabel(item);
                           return (
                             <button
-                              key={item.id}
+                              key={getPatientSuggestId(item) || `suggest-${index}`}
                               type="button"
                               className="search-suggest-item"
-                              onClick={() => handleSelectNewPatient(item)}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleSelectNewPatient(item);
+                              }}
                             >
                               <div className="search-suggest-title">{patientName}</div>
                               {item.cpfMasked || item.cpf ? (

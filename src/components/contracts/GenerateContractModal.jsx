@@ -16,11 +16,11 @@ import { buildContractContext, applyHashtags } from '../../services/contractRend
 import {
   listContractTemplates,
   composeTemplateHtmlForContext,
-  createGeneratedContractDraft,
   finalizeGeneratedContract,
   updateDraftGeneratedContract,
   getGeneratedContract,
 } from '../../services/contractService.js';
+import { createContractDraft, ensureContractsModuleSeeded } from '../../services/contractModuleService.js';
 import {
   contractHtmlWithSignatures,
   printContractElement,
@@ -86,6 +86,7 @@ export default function GenerateContractModal({
   const allowed = useMemo(() => canGenerateContract(user, flow === 'clinical' ? 'clinical' : 'crm'), [user, flow]);
 
   const refreshTemplates = useCallback(() => {
+    ensureContractsModuleSeeded();
     const list = listContractTemplates();
     setTemplates(list);
     const sys = list.find((t) => t.type === 'system_default' && t.isActive !== false);
@@ -159,7 +160,7 @@ export default function GenerateContractModal({
     setBusy(true);
     setError('');
     try {
-      const row = createGeneratedContractDraft(user, {
+      const row = createContractDraft(user, {
         quoteSource,
         quoteId,
         patientId,
