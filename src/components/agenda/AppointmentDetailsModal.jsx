@@ -342,10 +342,22 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
     }
   };
 
-  const leadForRegister = appointment?.leadId ? getLeadById(appointment.leadId) : null;
+  const leadFromDb = appointment?.leadId ? getLeadById(appointment.leadId) : null;
+  const leadForRegister = appointment?.leadId
+    ? (leadFromDb || {
+        id: appointment.leadId,
+        name: appointment.leadDisplayName || 'Lead do CRM',
+        phone: '',
+        source: 'manual',
+        notes: appointment.notes || '',
+      })
+    : null;
 
+  const leadDisplayName =
+    leadFromDb?.name || appointment.leadDisplayName || (appointment.leadId ? 'Lead do CRM' : null);
 
   const handleRegisterFromLeadSuccess = () => {
+    setShowRegisterFromLead(false);
     const updatedData = getAppointmentDetails(appointmentId);
     if (updatedData) {
       setDetails(updatedData);
@@ -354,6 +366,8 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
         patientId: updatedData.appointment.patientId,
       });
     }
+    setToast({ type: 'success', message: 'Paciente cadastrado e vinculado ao agendamento.' });
+    setTimeout(() => setToast(null), 3000);
     if (onUpdate) onUpdate();
   };
 
@@ -401,15 +415,12 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
               Este paciente veio do Pipeline (CRM) e ainda não está vinculado ao cadastro. Cadastre o paciente abaixo para liberar edição do agendamento e confirmação de chegada.
             </div>
           )}
-          {isLeadWithoutPatient && leadForRegister && (
+          {isLeadWithoutPatient && (
             <div className="appointment-details-lead-actions" style={{ marginBottom: '1rem' }}>
               <button
                 type="button"
                 className="button primary"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowRegisterFromLead(true);
-                }}
+                onClick={() => setShowRegisterFromLead(true)}
               >
                 Cadastrar paciente
               </button>
@@ -458,6 +469,13 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
                         Trocar paciente
                       </button>
                     )}
+                  </>
+                ) : isLeadWithoutPatient && leadDisplayName ? (
+                  <>
+                    <span className="appointment-detail-value">{leadDisplayName}</span>
+                    <span className="appointment-detail-hint" style={{ fontSize: '0.8125rem', color: '#92400e' }}>
+                      (lead do CRM — cadastro pendente)
+                    </span>
                   </>
                 ) : (
                   <>
@@ -690,6 +708,7 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
         lead={leadForRegister}
         appointmentId={appointment?.id}
         user={user}
+        tenantId={tenantId}
         onSuccess={handleRegisterFromLeadSuccess}
       />
     </>

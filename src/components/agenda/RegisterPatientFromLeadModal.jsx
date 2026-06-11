@@ -1,59 +1,119 @@
-import { useState, useEffect, useRef } from 'react';
-import { createPatientQuick, addPatientPhone, searchPatients } from '../../services/patientService.js';
-import { convertLeadToPatient } from '../../services/crmService.js';
+import { useState, useEffect, useMemo } from 'react';
+import {
+  createPatientQuick,
+  addPatientPhone,
+  searchPatients,
+  updatePatientDocuments,
+  updatePatientRelationships,
+} from '../../services/patientService.js';
+import { convertLeadToPatient, LEAD_SOURCE_LABELS } from '../../services/crmService.js';
 import { updateAppointment } from '../../services/appointmentService.js';
 import { formatCpf, isCpfValid, onlyDigits } from '../../utils/validators.js';
 import { normalizeText } from '../../services/helpers.js';
+import {
+  ModalBody,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ModalRoot,
+  ModalTitle,
+} from '../ui/Modal.jsx';
+
+const FRIENDLY_ERROR = 'Não foi possível cadastrar/vincular o paciente. Tente novamente.';
 
 const parseLeadPhone = (digits) => {
   if (!digits || digits.length < 10) return { ddd: '', number: '' };
-  if (digits.length >= 10) {
-    return { ddd: digits.slice(0, 2), number: digits.slice(2, 11) };
-  }
-  return { ddd: '', number: digits };
+  return { ddd: digits.slice(0, 2), number: digits.slice(2, 11) };
 };
 
-export function RegisterPatientFromLeadModal({ open, onClose, lead, appointmentId, user, onSuccess }) {
+const formatLeadPhone = (phone) => {
+  const digits = onlyDigits(String(phone || ''));
+  if (digits.length < 10) return phone || '—';
+  const ddd = digits.slice(0, 2);
+  const rest = digits.slice(2);
+  if (rest.length === 9) return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
+  if (rest.length === 8) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  return `(${ddd}) ${rest}`;
+};
+
+const buildCrmObservation = (lead) => {
+  const parts = [];
+  const sourceLabel = LEAD_SOURCE_LABELS[lead?.source] || lead?.source;
+  if (sourceLabel) parts.push(`Origem CRM: ${sourceLabel}`);
+  if (lead?.notes?.trim()) parts.push(lead.notes.trim());
+  return parts.join('\n');
+};
+
+const linkPatientToLeadAppointment = (user, leadId, appointmentId, patientId) => {
+  convertLeadToPatient(user, leadId, patientId);
+  updateAppointment(user, appointmentId, { patientId });
+};
+
+export function RegisterPatientFromLeadModal({
+  open,
+  onClose,
+  lead,
+  appointmentId,
+  user,
+  tenantId,
+  onSuccess,
+}) {
   const [full_name, setFullName] = useState('');
   const [cpf, setCpf] = useState('');
   const [sex, setSex] = useState('');
   const [birth_date, setBirthDate] = useState('');
+  const [personal_email, setPersonalEmail] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [existingPatient, setExistingPatient] = useState(null);
-  const ignoreNextBackdropClick = useRef(false);
+
+  const crmObservation = useMemo(() => buildCrmObservation(lead), [lead]);
+  const leadPhoneDigits = lead?.phone ? onlyDigits(String(lead.phone)) : '';
 
   useEffect(() => {
-    if (open && lead) {
-      ignoreNextBackdropClick.current = true;
-      setFullName(normalizeText(lead.name) || '');
-      setCpf('');
-      setSex('');
-      setBirthDate('');
-      setError('');
-      setExistingPatient(null);
-    }
+    if (!open || !lead) return;
+    setFullName(normalizeText(lead.name) || '');
+    setCpf('');
+    setSex('');
+    setBirthDate('');
+    setPersonalEmail(normalizeText(lead.email) || '');
+    setError('');
+    setExistingPatient(null);
   }, [open, lead]);
 
   const handleLinkExisting = () => {
-    if (!existingPatient) return;
+    if (!existingPatient || !lead?.id || !appointmentId) return;
     setSubmitting(true);
     setError('');
     try {
-      convertLeadToPatient(user, lead.id, existingPatient.id);
-      updateAppointment(user, appointmentId, { patientId: existingPatient.id });
-      if (onSuccess) onSuccess();
+      linkPatientToLeadAppointment(user, lead.id, appointmentId, existingPatient.id);
+      onSuccess?.();
       onClose();
     } catch (err) {
-      setError(err?.message || 'Erro ao vincular paciente.');
+      if (import.meta.env?.DEV) console.debug('register-from-lead:link-existing', err);
+      setError(FRIENDLY_ERROR);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleSubmit = () => {
+  const findDuplicatePatient = (cpfDigits, phoneDigits) => {
+    if (cpfDigits?.length === 11) {
+      const { exactMatch } = searchPatients('cpf', cpfDigits, tenantId);
+      if (exactMatch) return exactMatch;
+    }
+    if (phoneDigits?.length >= 10) {
+      const { exactMatch } = searchPatients('phone', phoneDigits, tenantId);
+      if (exactMatch) return exactMatch;
+    }
+    return null;
+  };
+
+  const handleSubmit = (event) => {
+    event?.preventDefault?.();
     setError('');
     setExistingPatient(null);
+
     const fullNameTrim = normalizeText(full_name);
     const cpfDigits = onlyDigits(cpf);
 
@@ -78,10 +138,16 @@ export function RegisterPatientFromLeadModal({ open, onClose, lead, appointmentI
       return;
     }
 
-    const { exactMatch } = searchPatients('cpf', cpfDigits);
-    if (exactMatch) {
-      setExistingPatient(exactMatch);
-      setError('CPF já cadastrado. Você pode vincular este paciente ao agendamento e abrir o atendimento.');
+    const duplicate = findDuplicatePatient(cpfDigits, leadPhoneDigits);
+    if (duplicate) {
+      setExistingPatient(duplicate);
+      const byPhone = leadPhoneDigits.length >= 10
+        && searchPatients('phone', leadPhoneDigits, tenantId).exactMatch?.id === duplicate.id;
+      setError(
+        byPhone
+          ? 'Já existe um paciente com este telefone. Você pode vinculá-lo ao agendamento.'
+          : 'CPF já cadastrado. Você pode vincular este paciente ao agendamento.'
+      );
       return;
     }
 
@@ -92,77 +158,81 @@ export function RegisterPatientFromLeadModal({ open, onClose, lead, appointmentI
         sex: normalizeText(sex),
         birth_date: normalizeText(birth_date),
         cpf: cpfDigits,
+        lead_source: lead?.source || 'crm_pipeline',
+        tenant_id: tenantId,
       });
       const patientId = created.patientId || created.profile?.id;
       if (!patientId) throw new Error('ID do paciente inválido.');
 
-      const leadPhone = lead.phone ? onlyDigits(String(lead.phone)) : '';
-      if (leadPhone && leadPhone.length >= 10) {
-        try {
-          const { ddd, number } = parseLeadPhone(leadPhone);
-          if (ddd && number) {
-            addPatientPhone(user, patientId, {
-              ddd,
-              number,
-              is_primary: true,
-              is_whatsapp: true,
-            });
-          }
-        } catch (phoneErr) {
-          console.warn('Telefone do lead não adicionado:', phoneErr?.message);
+      if (leadPhoneDigits.length >= 10) {
+        const { ddd, number } = parseLeadPhone(leadPhoneDigits);
+        if (ddd && number) {
+          addPatientPhone(user, patientId, {
+            ddd,
+            number,
+            is_primary: true,
+            is_whatsapp: true,
+          });
         }
       }
 
-      convertLeadToPatient(user, lead.id, patientId);
-      updateAppointment(user, appointmentId, { patientId });
+      if (normalizeText(personal_email)) {
+        updatePatientDocuments(user, patientId, { personal_email });
+      }
 
-      if (onSuccess) onSuccess();
+      if (crmObservation) {
+        updatePatientRelationships(user, patientId, { notes: crmObservation });
+      }
+
+      linkPatientToLeadAppointment(user, lead.id, appointmentId, patientId);
+      onSuccess?.();
       onClose();
     } catch (err) {
-      const msg = err?.message || 'Falha ao cadastrar paciente.';
+      if (import.meta.env?.DEV) console.debug('register-from-lead:submit', err);
+      const msg = err?.message || '';
       if (String(msg).includes('CPF já cadastrado')) {
-        const { exactMatch: match } = searchPatients('cpf', onlyDigits(cpf));
+        const match = searchPatients('cpf', cpfDigits, tenantId).exactMatch;
         if (match) {
           setExistingPatient(match);
-          setError('CPF já cadastrado. Você pode vincular este paciente ao agendamento e abrir o atendimento.');
-        } else {
-          setError(msg);
+          setError('CPF já cadastrado. Você pode vincular este paciente ao agendamento.');
+          return;
         }
-      } else {
-        setError(msg);
       }
+      if (leadPhoneDigits.length >= 10) {
+        const match = searchPatients('phone', leadPhoneDigits, tenantId).exactMatch;
+        if (match) {
+          setExistingPatient(match);
+          setError('Já existe um paciente com este telefone. Você pode vinculá-lo ao agendamento.');
+          return;
+        }
+      }
+      setError(FRIENDLY_ERROR);
     } finally {
       setSubmitting(false);
     }
   };
 
-
-  const handleBackdropClick = (e) => {
-    if (e.target !== e.currentTarget) return;
-    if (ignoreNextBackdropClick.current) {
-      ignoreNextBackdropClick.current = false;
-      return;
-    }
-    onClose();
-  };
-
-  if (!open || !lead) return null;
-
   return (
-    <div className="appointment-details-backdrop register-from-lead-backdrop" role="dialog" aria-modal="true" onClick={handleBackdropClick} style={{ zIndex: 1300 }}>
-      <div className="appointment-details-modal register-from-lead-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="appointment-details-header">
-          <div>
-            <strong>Cadastrar paciente (agendamento do lead)</strong>
-          </div>
-          <button type="button" className="icon-button" onClick={onClose} aria-label="Fechar">
-            ✕
-          </button>
-        </div>
-        <div className="appointment-details-body register-from-lead-body">
+    <ModalRoot
+      open={open && Boolean(lead)}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      <ModalContent
+        size="md"
+        className="register-from-lead-modal"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <ModalHeader className="appointment-details-header">
+          <ModalTitle>Cadastrar paciente (agendamento do lead)</ModalTitle>
+        </ModalHeader>
+
+        <ModalBody className="appointment-details-body register-from-lead-body">
           <p className="register-from-lead-intro">
             Preencha os dados mínimos para vincular o lead ao cadastro de paciente e liberar edição e confirmação de chegada.
           </p>
+
           {error ? (
             <div className="register-from-lead-error" role="alert">
               {error}
@@ -180,7 +250,8 @@ export function RegisterPatientFromLeadModal({ open, onClose, lead, appointmentI
               ) : null}
             </div>
           ) : null}
-          <div className="register-from-lead-form">
+
+          <form id="register-from-lead-form" className="register-from-lead-form" onSubmit={handleSubmit}>
             <label className="register-from-lead-field">
               <span className="register-from-lead-label">Nome completo</span>
               <input
@@ -191,6 +262,42 @@ export function RegisterPatientFromLeadModal({ open, onClose, lead, appointmentI
                 className="register-from-lead-input"
               />
             </label>
+
+            <label className="register-from-lead-field">
+              <span className="register-from-lead-label">Telefone (do lead)</span>
+              <input
+                type="text"
+                value={formatLeadPhone(lead?.phone)}
+                readOnly
+                className="register-from-lead-input"
+                aria-readonly="true"
+              />
+            </label>
+
+            <label className="register-from-lead-field">
+              <span className="register-from-lead-label">E-mail</span>
+              <input
+                type="email"
+                value={personal_email}
+                onChange={(e) => setPersonalEmail(e.target.value)}
+                placeholder="E-mail do lead (opcional)"
+                className="register-from-lead-input"
+              />
+            </label>
+
+            {crmObservation ? (
+              <label className="register-from-lead-field">
+                <span className="register-from-lead-label">Observação / origem CRM</span>
+                <textarea
+                  value={crmObservation}
+                  readOnly
+                  rows={3}
+                  className="register-from-lead-input"
+                  aria-readonly="true"
+                />
+              </label>
+            ) : null}
+
             <label className="register-from-lead-field">
               <span className="register-from-lead-label">CPF</span>
               <input
@@ -205,6 +312,7 @@ export function RegisterPatientFromLeadModal({ open, onClose, lead, appointmentI
                 className="register-from-lead-input"
               />
             </label>
+
             <label className="register-from-lead-field">
               <span className="register-from-lead-label">Sexo</span>
               <select
@@ -218,6 +326,7 @@ export function RegisterPatientFromLeadModal({ open, onClose, lead, appointmentI
                 <option value="Outro">Outro</option>
               </select>
             </label>
+
             <label className="register-from-lead-field">
               <span className="register-from-lead-label">Data de nascimento</span>
               <input
@@ -227,22 +336,23 @@ export function RegisterPatientFromLeadModal({ open, onClose, lead, appointmentI
                 className="register-from-lead-input"
               />
             </label>
-          </div>
-        </div>
-        <div className="appointment-details-footer register-from-lead-footer">
+          </form>
+        </ModalBody>
+
+        <ModalFooter className="appointment-details-footer register-from-lead-footer">
           <button type="button" className="button secondary" onClick={onClose}>
             Cancelar
           </button>
           <button
-            type="button"
+            type="submit"
+            form="register-from-lead-form"
             className="button primary"
-            onClick={handleSubmit}
             disabled={submitting}
           >
             {submitting ? 'Salvando…' : 'Cadastrar e vincular ao agendamento'}
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 }
