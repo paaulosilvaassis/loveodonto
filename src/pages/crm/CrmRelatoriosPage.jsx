@@ -46,6 +46,35 @@ const RANGE_CUSTOM = 'custom';
 const LOSS_COLORS = ['#EF4444', '#F97316', '#EAB308', '#84CC16', '#6366F1', '#94A3B8'];
 const MEDALS = ['🥇', '🥈', '🥉'];
 
+/** Variantes de cor da borda superior — todas devem ter classe CSS correspondente. */
+const KPI_VARIANT = {
+  PRIMARY: 'primary',
+  INFO: 'info',
+  TEAL: 'teal',
+  SUCCESS: 'success',
+  ACCENT: 'accent',
+  REVENUE: 'revenue',
+  ORANGE: 'orange',
+  DANGER: 'danger',
+};
+
+const RESUMO_KPI_CONFIG = [
+  { key: 'leads', label: 'Leads recebidos', variant: KPI_VARIANT.PRIMARY, format: 'number' },
+  { key: 'avaliacoes', label: 'Avaliações agendadas', variant: KPI_VARIANT.INFO, format: 'number' },
+  { key: 'comparecimentos', label: 'Comparecimentos', variant: KPI_VARIANT.TEAL, format: 'number' },
+  { key: 'fechamentos', label: 'Fechamentos', variant: KPI_VARIANT.SUCCESS, format: 'number' },
+  { key: 'conversao', label: 'Conversão', variant: KPI_VARIANT.ACCENT, format: 'percent' },
+  { key: 'receita', label: 'Receita gerada', variant: KPI_VARIANT.REVENUE, format: 'currency' },
+];
+
+const MONEY_KPI_CONFIG = [
+  { key: 'oportunidadesAbertas', label: 'Oportunidades abertas', variant: KPI_VARIANT.PRIMARY, format: 'currency' },
+  { key: 'orcamentosEnviados', label: 'Orçamentos enviados', variant: KPI_VARIANT.ORANGE, format: 'currency' },
+  { key: 'valorNegociacao', label: 'Valor em negociação', variant: KPI_VARIANT.ACCENT, format: 'currency' },
+  { key: 'valorFechado', label: 'Valor fechado', variant: KPI_VARIANT.SUCCESS, format: 'currency' },
+  { key: 'valorPerdido', label: 'Valor perdido', variant: KPI_VARIANT.DANGER, format: 'currency' },
+];
+
 function formatNumber(n) {
   return typeof n === 'number' && !Number.isNaN(n) ? new Intl.NumberFormat('pt-BR').format(n) : '—';
 }
@@ -81,20 +110,17 @@ function SectionHeader({ icon: Icon, title, subtitle }) {
   );
 }
 
-function ResumoCard({ label, value, variant }) {
-  return (
-    <div className={`crm-mgr-resumo-card crm-mgr-resumo-card--${variant || 'default'}`}>
-      <span className="crm-mgr-resumo-label">{label}</span>
-      <strong className="crm-mgr-resumo-value">{value}</strong>
-    </div>
-  );
+function formatKpiValue(value, format) {
+  if (format === 'currency') return formatCurrencyBRL(value ?? 0);
+  if (format === 'percent') return formatPercent(value);
+  return formatNumber(value);
 }
 
-function FinancialCard({ label, value, variant }) {
+function CrmKpiCard({ label, value, variant }) {
   return (
-    <div className={`crm-mgr-money-card crm-mgr-money-card--${variant || 'default'}`}>
-      <span className="crm-mgr-money-label">{label}</span>
-      <strong className="crm-mgr-money-value">{value}</strong>
+    <div className={`crm-mgr-kpi-card crm-mgr-kpi-card--${variant}`}>
+      <span className="crm-mgr-kpi-label">{label}</span>
+      <strong className="crm-mgr-kpi-value">{value}</strong>
     </div>
   );
 }
@@ -289,13 +315,15 @@ export default function CrmRelatoriosPage() {
       {/* SEÇÃO 1 — Resumo Comercial */}
       <section className="crm-dash-section">
         <SectionHeader icon={TrendingUp} title="Resumo Comercial" subtitle="Como estou?" />
-        <div className="crm-mgr-resumo-grid">
-          <ResumoCard label="Leads recebidos" value={formatNumber(resumoComercial.leads)} variant="primary" />
-          <ResumoCard label="Avaliações agendadas" value={formatNumber(resumoComercial.avaliacoes)} />
-          <ResumoCard label="Comparecimentos" value={formatNumber(resumoComercial.comparecimentos)} />
-          <ResumoCard label="Fechamentos" value={formatNumber(resumoComercial.fechamentos)} variant="success" />
-          <ResumoCard label="Conversão" value={formatPercent(resumoComercial.conversao)} variant="accent" />
-          <ResumoCard label="Receita gerada" value={formatCurrencyBRL(resumoComercial.receita)} variant="revenue" />
+        <div className="crm-mgr-kpi-grid crm-mgr-kpi-grid--6">
+          {RESUMO_KPI_CONFIG.map((cfg) => (
+            <CrmKpiCard
+              key={cfg.key}
+              label={cfg.label}
+              value={formatKpiValue(resumoComercial[cfg.key], cfg.format)}
+              variant={cfg.variant}
+            />
+          ))}
         </div>
       </section>
 
@@ -328,12 +356,15 @@ export default function CrmRelatoriosPage() {
       {/* SEÇÃO 3 — Dinheiro no Funil */}
       <section className="crm-dash-section">
         <SectionHeader icon={DollarSign} title="Dinheiro no Funil" subtitle="Quanto dinheiro tenho?" />
-        <div className="crm-mgr-money-grid">
-          <FinancialCard label="Oportunidades abertas" value={formatCurrencyBRL(dashboard.financial.oportunidadesAbertas)} variant="primary" />
-          <FinancialCard label="Orçamentos enviados" value={formatCurrencyBRL(dashboard.financial.orcamentosEnviados)} />
-          <FinancialCard label="Valor em negociação" value={formatCurrencyBRL(dashboard.financial.valorNegociacao)} variant="accent" />
-          <FinancialCard label="Valor fechado" value={formatCurrencyBRL(dashboard.financial.valorFechado)} variant="success" />
-          <FinancialCard label="Valor perdido" value={formatCurrencyBRL(dashboard.financial.valorPerdido)} variant="danger" />
+        <div className="crm-mgr-kpi-grid crm-mgr-kpi-grid--5">
+          {MONEY_KPI_CONFIG.map((cfg) => (
+            <CrmKpiCard
+              key={cfg.key}
+              label={cfg.label}
+              value={formatKpiValue(dashboard.financial[cfg.key], cfg.format)}
+              variant={cfg.variant}
+            />
+          ))}
         </div>
       </section>
 
