@@ -640,9 +640,8 @@ export const callPatient = (user, appointmentId, consultorioId) => {
     
     
     logAction('journey:call', { appointmentId, userId: user.id, consultorioId: next.consultorioId, calledAt: now });
-    
-    
-    return savedAppointment;
+
+    return db.appointments[index];
   });
 };
 

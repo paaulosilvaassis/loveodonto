@@ -20,6 +20,7 @@ import {
   updateDraftGeneratedContract,
   getGeneratedContract,
 } from '../../services/contractService.js';
+import { composeProfessionalClinicalContractHtml } from '../clinical/contract/composeProfessionalClinicalContract.js';
 import { createContractDraft, ensureContractsModuleSeeded } from '../../services/contractModuleService.js';
 import {
   contractHtmlWithSignatures,
@@ -104,23 +105,33 @@ export default function GenerateContractModal({
   }, [open, refreshTemplates]);
 
   useEffect(() => {
-    if (!open || !selectedTemplateId || !patientId || !quoteId || !quoteSource) return;
+    if (!open || !patientId || !quoteId || !quoteSource) return;
+    if (flow !== 'clinical' && !selectedTemplateId) return;
     try {
-      const html = composeTemplateHtmlForContext(selectedTemplateId, {
-        quoteSource,
-        quoteId,
-        patientId,
-        currentUser: user,
-      });
+      const html = flow === 'clinical'
+        ? composeProfessionalClinicalContractHtml({
+          quoteId,
+          patientId,
+          contractStatus: 'draft',
+        })
+        : composeTemplateHtmlForContext(selectedTemplateId, {
+          quoteSource,
+          quoteId,
+          patientId,
+          currentUser: user,
+        });
       setHtmlBody(html);
       setEditorKey((k) => k + 1);
       setError('');
     } catch (e) {
       setError(e?.message || 'Falha ao montar modelo.');
     }
-  }, [open, selectedTemplateId, patientId, quoteId, quoteSource, user]);
+  }, [open, selectedTemplateId, patientId, quoteId, quoteSource, user, flow]);
 
   const previewHtml = useMemo(() => {
+    if (flow === 'clinical') {
+      return contractHtmlWithSignatures(htmlBody);
+    }
     try {
       const ctx = buildContractContext({
         quoteSource,
@@ -132,7 +143,7 @@ export default function GenerateContractModal({
     } catch {
       return contractHtmlWithSignatures(htmlBody);
     }
-  }, [htmlBody, quoteSource, quoteId, patientId, user]);
+  }, [htmlBody, quoteSource, quoteId, patientId, user, flow]);
 
   const unknownTags = useMemo(() => findUnknownHashtags(htmlBody), [htmlBody]);
 
@@ -153,7 +164,7 @@ export default function GenerateContractModal({
       setError('Sem permissão para gerar contrato.');
       return;
     }
-    if (unknownTags.length) {
+    if (flow !== 'clinical' && unknownTags.length) {
       setError(`Hashtags desconhecidas: ${unknownTags.join(', ')}`);
       return;
     }
@@ -164,8 +175,9 @@ export default function GenerateContractModal({
         quoteSource,
         quoteId,
         patientId,
-        templateId: selectedTemplateId,
+        templateId: selectedTemplateId || templates.find((t) => t.type === 'system_default')?.id,
         editedHtml: htmlBody,
+        skipHashtagValidation: flow === 'clinical',
       });
       await syncGeneratedContractToSaas(row);
       setDraftContract(row);
@@ -227,7 +239,9 @@ export default function GenerateContractModal({
         <ModalHeader>
           <ModalTitle>Gerar contrato</ModalTitle>
           <ModalDescription>
-            Orçamento vinculado: {quoteSource === 'crm_budget' ? 'CRM' : 'Clínico'} · Revise o texto e as hashtags antes de finalizar.
+            {flow === 'clinical'
+              ? 'Contrato de prestação de serviços odontológicos — documento jurídico formal gerado a partir do orçamento aprovado.'
+              : `Orçamento vinculado: ${quoteSource === 'crm_budget' ? 'CRM' : 'Clínico'} · Revise o texto e as hashtags antes de finalizar.`}
           </ModalDescription>
         </ModalHeader>
         <ModalBody className="space-y-4 max-h-[min(85vh,900px)] overflow-y-auto">
@@ -243,23 +257,29 @@ export default function GenerateContractModal({
 
           {step === 'edit' && (
             <>
-              <div className="form-field">
-                <label className="text-sm font-medium">Modelo</label>
-                <select
-                  className="w-full border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-bg-card)]"
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  disabled={!allowed}
-                >
-                  {templates
-                    .filter((t) => t.type === 'system_default' || (t.type === 'clinic_custom' && t.isActive !== false))
-                    .map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.type === 'system_default' ? 'Contrato padrão (sistema)' : t.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
+              {flow !== 'clinical' ? (
+                <div className="form-field">
+                  <label className="text-sm font-medium">Modelo</label>
+                  <select
+                    className="w-full border border-[var(--color-border)] rounded-md px-3 py-2 bg-[var(--color-bg-card)]"
+                    value={selectedTemplateId}
+                    onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    disabled={!allowed}
+                  >
+                    {templates
+                      .filter((t) => t.type === 'system_default' || (t.type === 'clinic_custom' && t.isActive !== false))
+                      .map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.type === 'system_default' ? 'Contrato padrão (sistema)' : t.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ) : (
+                <p className="text-sm text-[var(--color-text-muted)]">
+                  Modelo: <strong>Contrato de Prestação de Serviços Odontológicos</strong> (formato jurídico formal)
+                </p>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div>
@@ -271,6 +291,7 @@ export default function GenerateContractModal({
                     onChange={setHtmlBody}
                     editable={allowed}
                   />
+                  {flow !== 'clinical' ? (
                   <div className="mt-3 space-y-2">
                     <label className="text-xs font-medium text-[var(--color-text-muted)]">Inserir hashtag</label>
                     <input
@@ -293,15 +314,18 @@ export default function GenerateContractModal({
                       ))}
                     </div>
                   </div>
+                  ) : null}
                 </div>
                 <div>
-                  <h4 className="text-sm font-semibold mb-2">Preview (hashtags resolvidas)</h4>
+                  <h4 className="text-sm font-semibold mb-2">
+                    {flow === 'clinical' ? 'Preview do contrato profissional' : 'Preview (hashtags resolvidas)'}
+                  </h4>
                   <div
                     ref={printRef}
                     className="contract-print-root border border-[var(--color-border)] rounded-md min-h-[200px] overflow-auto text-sm"
                     dangerouslySetInnerHTML={{ __html: previewHtml }}
                   />
-                  {unknownTags.length > 0 && (
+                  {flow !== 'clinical' && unknownTags.length > 0 && (
                     <p className="text-xs text-[var(--color-warning)] mt-2">
                       Tags não reconhecidas (corrija antes de gerar): {unknownTags.join(', ')}
                     </p>
@@ -353,7 +377,7 @@ export default function GenerateContractModal({
             <button
               type="button"
               className="button primary"
-              disabled={busy || !allowed || !selectedTemplateId}
+              disabled={busy || !allowed || (flow !== 'clinical' && !selectedTemplateId)}
               onClick={handleCreateDraft}
             >
               {busy ? 'Gerando…' : 'Gerar rascunho'}

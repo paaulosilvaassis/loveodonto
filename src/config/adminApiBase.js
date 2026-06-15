@@ -6,6 +6,10 @@
 
 export const DEV_ADMIN_API_ORIGIN = 'http://127.0.0.1:3001';
 
+/** Mensagem padrão quando a Admin API local (:3001) não está acessível. */
+export const DEV_BACKEND_NOT_RUNNING_MSG =
+  'Backend local não está rodando. Abra outro terminal e rode cd server && npm start.';
+
 export const PROD_BACKEND_MISCONFIGURED_MSG =
   'Backend SaaS não configurado em produção. Configure VITE_PLATFORM_API_BASE_URL com a URL pública do backend.';
 
@@ -118,19 +122,36 @@ export function formatAdminApiNetworkError({ primaryUrl } = {}) {
     );
   }
 
-  const via = primaryUrl?.startsWith('http') ? primaryUrl : 'proxy /internal/app → 127.0.0.1:3001';
-  return (
-    `Não foi possível conectar ao backend SaaS (${via}). `
-    + 'Inicie a Admin API na porta 3001 (ex.: `npm run dev` com proxy ou API em execução).'
-  );
+  return DEV_BACKEND_NOT_RUNNING_MSG;
 }
 
 export function formatAdminApiServerError(status) {
   if (import.meta.env.PROD) {
     return `O backend SaaS não respondeu (HTTP ${status}). Verifique o deploy da Admin API.`;
   }
+  if (status === 502 || status === 503 || status === 504) {
+    return DEV_BACKEND_NOT_RUNNING_MSG;
+  }
   return (
-    'O backend SaaS (porta 3001) não respondeu. '
-    + 'Inicie a Admin API localmente e tente novamente.'
+    `O backend SaaS (porta 3001) não respondeu (HTTP ${status}). `
+    + DEV_BACKEND_NOT_RUNNING_MSG
+  );
+}
+
+/** Indica se o erro em dev é falha de conexão com a Admin API local. */
+export function isDevBackendUnreachableError(err) {
+  if (!import.meta.env.DEV) return false;
+  const m = String(err?.message || '').toLowerCase();
+  return (
+    m.includes('3001')
+    || m.includes('econnrefused')
+    || m.includes('failed to fetch')
+    || m.includes('network')
+    || m.includes('não foi possível conectar')
+    || m.includes('não respondeu')
+    || m.includes('backend saas')
+    || m.includes('backend local')
+    || m.includes('proxy /internal')
+    || m === DEV_BACKEND_NOT_RUNNING_MSG.toLowerCase()
   );
 }

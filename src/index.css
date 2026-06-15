@@ -1671,6 +1671,19 @@ a {
   flex: 1;
 }
 
+.page.page--clinical-focus {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.page--clinical-focus .clinical-appointment-page {
+  height: 100%;
+  min-height: 0;
+}
+
 /* Rodapé do sistema - logo Love Odonto à direita */
 .app-footer {
   display: flex;
@@ -19669,48 +19682,48 @@ a.button {
 .clinical-appointment-page {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  background: var(--color-bg);
-  overflow-y: auto;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: #f0f2f7;
 }
 
 /* Header Fixo */
 .clinical-appointment-header {
-  position: relative;
-  z-index: 100;
-  background: var(--color-bg-card);
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow-sm);
   flex-shrink: 0;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .clinical-appointment-header-content {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg) var(--spacing-xl);
-  max-width: 100%;
+  gap: 0.75rem;
+  padding: 0.625rem 1.25rem;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .clinical-appointment-back-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-card);
-  color: var(--color-text);
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #475569;
   cursor: pointer;
-  transition: all var(--transition-base);
+  transition: border-color 0.15s, color 0.15s;
   flex-shrink: 0;
 }
 
 .clinical-appointment-back-btn:hover {
-  background: var(--color-bg);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: #c4b5fd;
+  color: #6d28d9;
 }
 
 .clinical-appointment-header-info {
@@ -19719,20 +19732,30 @@ a.button {
 }
 
 .clinical-appointment-header-title {
-  font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-text);
-  margin: 0 0 var(--spacing-xs) 0;
-  line-height: 1.3;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .clinical-appointment-header-meta {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
   flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.clinical-header-chip {
+  font-size: 0.75rem;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
 }
 
 .clinical-appointment-header-meta-sep {
@@ -19742,39 +19765,44 @@ a.button {
 .clinical-appointment-header-status-badge {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: rgba(16, 185, 129, 0.1);
-  color: var(--color-success);
-  border-radius: var(--radius-pill);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  background: #ecfdf5;
+  color: #047857;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 /* Container Principal */
 .clinical-appointment-container {
-  display: flex;
   flex: 1;
-  gap: var(--spacing-xl);
-  padding: var(--spacing-xl);
-  max-width: 1600px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.65rem 1.25rem 1rem;
+  max-width: 1520px;
   margin: 0 auto;
   width: 100%;
 }
 
-/* Sidebar Clínica - Card */
-.clinical-appointment-sidebar-card {
-  width: 280px;
-  flex-shrink: 0;
-  background: var(--color-bg-card);
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border);
-  padding: var(--spacing-lg);
-  box-shadow: var(--shadow-sm);
-  height: fit-content;
-  align-self: flex-start;
+/* Área de Conteúdo */
+.clinical-appointment-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.clinical-appointment-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: 0.75rem;
 }
 
 .clinical-appointment-nav {
@@ -19849,21 +19877,971 @@ a.button {
   flex-shrink: 0;
 }
 
-/* Área de Conteúdo */
-.clinical-appointment-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-lg);
-}
-
 /* Seções de Conteúdo - Usam SectionCard */
 .clinical-section-actions {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
   flex-wrap: wrap;
+}
+
+/* Step navigation horizontal (Atendimento Clínico) */
+.clinical-step-nav--horizontal {
+  flex-shrink: 0;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 0.5rem 0.65rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.clinical-step-nav-label {
+  display: none;
+}
+
+.clinical-step-nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.clinical-step-nav-list-item {
+  display: flex;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 120px;
+}
+
+.clinical-step-nav-connector {
+  width: 12px;
+  height: 1px;
+  background: #e2e8f0;
+  flex-shrink: 0;
+  margin: 0 0.15rem;
+}
+
+.clinical-step-nav-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  min-height: 52px;
+}
+
+.clinical-step-nav-item:hover:not(.is-blocked) {
+  background: #f8fafc;
+}
+
+.clinical-step-nav-item.is-current {
+  background: rgba(109, 40, 217, 0.08);
+  border-color: rgba(109, 40, 217, 0.35);
+  box-shadow: 0 0 0 1px rgba(109, 40, 217, 0.08);
+}
+
+.clinical-step-nav-item.is-blocked {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.clinical-step-nav-item.is-done:not(.is-current) {
+  border-color: transparent;
+}
+
+.clinical-step-nav-index {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #94a3b8;
+  line-height: 1;
+}
+
+.clinical-step-nav-item.is-current .clinical-step-nav-index {
+  color: #6d28d9;
+}
+
+.clinical-step-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.clinical-step-nav-item.is-current .clinical-step-nav-icon,
+.clinical-step-nav-item.is-active .clinical-step-nav-icon {
+  color: #6d28d9;
+}
+
+.clinical-step-nav-item.is-done .clinical-step-nav-icon {
+  color: #059669;
+}
+
+.clinical-step-nav-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.clinical-step-nav-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.clinical-step-nav-item.is-blocked .clinical-step-nav-name {
+  color: #94a3b8;
+}
+
+.clinical-step-nav-status {
+  font-size: 0.625rem;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
+.clinical-step-nav-status--in_progress { color: #6d28d9; font-weight: 600; }
+.clinical-step-nav-status--completed { color: #059669; }
+.clinical-step-nav-status--blocked { color: #94a3b8; }
+
+.clinical-stage {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+
+.clinical-stage-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.125rem;
+  border-bottom: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.clinical-stage-title {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.clinical-stage-desc {
+  margin: 0.2rem 0 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.clinical-stage-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.clinical-stage-toolbar-secondary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.clinical-stage-body {
+  padding: 1rem 1.125rem 1.125rem;
+}
+
+.clinical-stage-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.clinical-stage-aside {
+  position: sticky;
+  top: 0;
+}
+
+.clinical-block {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin-bottom: 0.875rem;
+  overflow: hidden;
+}
+
+.clinical-block-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fafbfc;
+}
+
+.clinical-block-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.clinical-block-body {
+  padding: 0.875rem;
+}
+
+.clinical-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.clinical-btn--sm {
+  padding: 0.45rem 0.75rem;
+  min-height: 32px;
+}
+
+.clinical-btn--primary {
+  background: linear-gradient(135deg, #6d28d9, #7c3aed);
+  color: #fff;
+  border-color: #6d28d9;
+}
+
+.clinical-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5b21b6, #6d28d9);
+}
+
+.clinical-btn--secondary {
+  background: #fff;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.clinical-btn--secondary:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.clinical-btn--danger {
+  background: #fff;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.clinical-btn--danger:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.clinical-btn--ghost {
+  background: transparent;
+  color: #64748b;
+  border-color: transparent;
+  padding: 0.35rem;
+  min-height: auto;
+}
+
+.clinical-btn--ghost:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: #b91c1c;
+}
+
+.clinical-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clinical-summary-card {
+  background: #fafbfc;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.875rem;
+}
+
+.clinical-summary-card h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.clinical-summary-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.clinical-summary-list div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+}
+
+.clinical-summary-list dt { color: #64748b; }
+.clinical-summary-list dd { margin: 0; font-weight: 500; color: #1e293b; }
+
+.clinical-summary-total {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.8125rem;
+}
+
+.clinical-summary-total strong {
+  font-size: 1rem;
+  color: #6d28d9;
+}
+
+.clinical-summary-cta {
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.clinical-planning-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.clinical-planning-grid-table {
+  --planning-cols: minmax(200px, 2.2fr) minmax(118px, 1fr) minmax(140px, 1.15fr) 96px minmax(118px, 1fr) minmax(96px, 0.95fr) minmax(108px, 1fr) 88px;
+  min-width: 980px;
+}
+
+.clinical-planning-grid-head,
+.clinical-planning-row {
+  display: grid;
+  grid-template-columns: var(--planning-cols);
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.clinical-planning-grid-head {
+  padding: 0.5rem 0.875rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.clinical-planning-grid-head > div {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.clinical-planning-grid-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.clinical-planning-row {
+  min-height: 60px;
+  padding: 0.65rem 0.875rem;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.clinical-planning-row:hover {
+  background: #faf5ff;
+}
+
+.clinical-planning-row--enter {
+  animation: clinical-planning-row-enter 0.45s ease;
+}
+
+.clinical-planning-row--highlight {
+  background: color-mix(in srgb, var(--color-primary) 8%, #fff);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+@keyframes clinical-planning-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    background: color-mix(in srgb, var(--color-primary) 10%, #fff);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.clinical-planning-cell {
+  min-width: 0;
+}
+
+.clinical-planning-proc-name {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clinical-planning-proc-meta {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Etapa */
+.clinical-planning-stage {
+  position: relative;
+}
+
+.clinical-planning-stage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: filter 0.15s ease;
+}
+
+.clinical-planning-stage-badge:hover {
+  filter: brightness(0.97);
+}
+
+.clinical-planning-stage-badge.tone-blue {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.clinical-planning-stage-badge.tone-amber {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.clinical-planning-stage-badge.tone-green {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.clinical-planning-stage-badge.tone-violet {
+  background: #f5f3ff;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+}
+
+.clinical-planning-stage-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: var(--z-dropdown);
+  min-width: 150px;
+  padding: 0.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.clinical-planning-stage-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.4rem 0.55rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.clinical-planning-stage-option:hover,
+.clinical-planning-stage-option.is-selected {
+  background: #f8fafc;
+}
+
+/* Região */
+.clinical-planning-region {
+  position: relative;
+}
+
+.clinical-planning-region-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 0.75rem;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+}
+
+.clinical-planning-region-trigger span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clinical-planning-region-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.clinical-planning-region-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: var(--z-dropdown);
+  width: min(260px, 70vw);
+  padding: 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.clinical-planning-region-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.clinical-planning-region-types button {
+  padding: 0.25rem 0.45rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 0.6875rem;
+  color: #475569;
+  cursor: pointer;
+}
+
+.clinical-planning-region-types button.is-active {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, #e2e8f0);
+  background: color-mix(in srgb, var(--color-primary) 8%, #fff);
+  color: var(--color-primary);
+}
+
+.clinical-planning-region-input {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+/* Quantidade */
+.clinical-planning-qty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 80px;
+  height: 34px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.clinical-planning-qty-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 100%;
+  border: none;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+}
+
+.clinical-planning-qty-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  color: var(--color-primary);
+}
+
+.clinical-planning-qty-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.clinical-planning-qty-value {
+  min-width: 24px;
+  padding: 0 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: #0f172a;
+}
+
+/* Valores monetários */
+.clinical-planning-money-display,
+.clinical-planning-discount-display {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: #334155;
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.clinical-planning-money-display:hover,
+.clinical-planning-discount-display:hover {
+  border-color: #e2e8f0;
+  background: #fff;
+}
+
+.clinical-planning-money-input,
+.clinical-planning-discount-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.clinical-planning-discount-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.clinical-planning-discount-toggle {
+  display: inline-flex;
+  gap: 0.2rem;
+}
+
+.clinical-planning-discount-toggle button {
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.clinical-planning-discount-toggle button.is-active {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, #fff);
+}
+
+.clinical-planning-discount-hint {
+  font-size: 0.6875rem;
+  color: #64748b;
+  text-align: right;
+}
+
+.clinical-planning-final-value {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* Ações */
+.clinical-planning-actions {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.15rem;
+}
+
+.clinical-planning-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.clinical-planning-action-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.clinical-planning-action-btn--danger:hover {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.clinical-planning-actions-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: var(--z-dropdown);
+  min-width: 140px;
+  padding: 0.25rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+}
+
+.clinical-planning-actions-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.8125rem;
+  color: #334155;
+  cursor: pointer;
+  text-align: left;
+}
+
+.clinical-planning-actions-menu button:hover {
+  background: #f8fafc;
+}
+
+.clinical-planning-actions-menu button.is-danger {
+  color: #dc2626;
+}
+
+.clinical-planning-actions-menu button.is-danger:hover {
+  background: #fef2f2;
+}
+
+/* KPI bar */
+.clinical-planning-kpi-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+}
+
+.clinical-planning-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 140px;
+  padding-right: 1.25rem;
+  border-right: 1px solid #f1f5f9;
+}
+
+.clinical-planning-kpi:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+
+.clinical-planning-kpi-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.clinical-planning-kpi-value {
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+}
+
+.clinical-planning-kpi--primary .clinical-planning-kpi-value {
+  color: var(--color-primary);
+}
+
+.clinical-planning-kpi-value--discount {
+  color: #b45309;
+}
+
+.clinical-summary-card--planning {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1rem;
+  background: #fff;
+}
+
+.clinical-summary-list--planning dd {
+  font-variant-numeric: tabular-nums;
+}
+
+.clinical-summary-discount {
+  color: #b45309;
+}
+
+.clinical-summary-total--planning strong {
+  font-size: 1.125rem;
+  color: var(--color-primary);
+}
+
+.clinical-planning-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.clinical-planning-table th {
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.clinical-planning-table td {
+  padding: 0.45rem 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.clinical-planning-table-total {
+  font-weight: 600;
+  color: var(--color-primary);
+  white-space: nowrap;
+}
+
+.clinical-input-compact {
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  background: #fff;
+}
+
+.clinical-input-compact--xs { max-width: 52px; }
+.clinical-input-compact--sm { max-width: 88px; }
+
+.clinical-textarea-compact {
+  min-height: 64px;
+  max-height: 120px;
+  resize: vertical;
+}
+
+.clinical-locked-card,
+.clinical-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.65rem;
+  padding: 2rem 1.25rem;
+  color: #64748b;
+}
+
+.clinical-empty-state--compact { padding: 1.5rem 1rem; }
+
+.clinical-locked-card h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: #334155;
+}
+
+.clinical-contract-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.clinical-contract-status-ok {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #059669;
+}
+
+.clinical-budget-tab-content {
+  padding: 0;
+}
+
+.clinical-budget-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.clinical-budget-field-full {
+  grid-column: 1 / -1;
 }
 
 /* Histórico de Evoluções Clínicas */
@@ -21420,6 +22398,1581 @@ a.button {
   }
 }
 
+/* Fluxo comercial — Atendimento Clínico */
+.clinical-workflow-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding: 0.75rem 1.5rem 1rem;
+  border-top: 1px solid var(--color-border, #e2e8f0);
+  background: #fff;
+}
+
+.clinical-workflow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary, #64748b);
+}
+
+.clinical-workflow-step.is-done {
+  color: var(--color-success, #059669);
+}
+
+.clinical-workflow-step.is-current {
+  color: var(--color-primary, #2563eb);
+  font-weight: 600;
+}
+
+.clinical-workflow-phase-badge {
+  margin-left: auto;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.clinical-appointment-nav-item.is-locked {
+  opacity: 0.55;
+}
+
+.clinical-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.clinical-inline-error {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: #fef2f2;
+  color: #991b1b;
+  font-size: 0.875rem;
+}
+
+.clinical-planning-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.clinical-planning-card {
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: #fff;
+}
+
+.clinical-planning-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.clinical-planning-card-head h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.clinical-planning-card-meta {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.clinical-planning-card-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.clinical-planning-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.clinical-planning-grid label,
+.clinical-planning-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.clinical-planning-grid input,
+.clinical-planning-grid select,
+.clinical-planning-notes textarea {
+  padding: 0.5rem 0.625rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.clinical-planning-item-total {
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  text-align: right;
+}
+
+.clinical-planning-summary {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+}
+
+.clinical-planning-summary-total {
+  font-size: 1.0625rem;
+}
+
+.clinical-planning-anamnesis-badge {
+  margin-bottom: 1rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 0.8125rem;
+}
+
+.clinical-anamnesis-select-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.clinical-anamnesis-select-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.clinical-anamnesis-select-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.clinical-anamnesis-select-label small {
+  color: #64748b;
+}
+
+.clinical-payment-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.clinical-payment-option-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: #fff;
+}
+
+.clinical-payment-option-card.is-recommended {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 1px #bfdbfe;
+}
+
+.clinical-payment-option-card.is-accepted {
+  border-color: #6ee7b7;
+  background: #f0fdf4;
+}
+
+.clinical-payment-option-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.clinical-payment-option-head h4 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.clinical-payment-option-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.clinical-badge {
+  font-size: 0.6875rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.clinical-badge.recommended {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.clinical-badge.accepted {
+  background: #bbf7d0;
+  color: #047857;
+}
+
+.clinical-payment-option-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.clinical-payment-option-grid label,
+.clinical-payment-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.clinical-payment-option-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+/* Orçamento — layout comercial */
+.clinical-budget-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  gap: 1rem;
+  align-items: start;
+}
+
+.clinical-budget-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+/* Orçamento — layout comercial 3 colunas */
+.clinical-budget-funnel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+}
+
+.clinical-budget-funnel-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #94a3b8;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.clinical-budget-funnel-step.is-done {
+  color: #047857;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.clinical-budget-funnel-step.is-current {
+  color: var(--color-primary);
+  background: #f5f3ff;
+  border-color: color-mix(in srgb, var(--color-primary) 35%, #e2e8f0);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.clinical-budget-funnel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 0.625rem;
+  font-weight: 700;
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.clinical-budget-funnel-step.is-done .clinical-budget-funnel-icon {
+  background: #10b981;
+  color: #fff;
+}
+
+.clinical-budget-funnel-step.is-current .clinical-budget-funnel-icon {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.clinical-budget-commercial-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(240px, 280px);
+  gap: 0.875rem;
+  align-items: start;
+}
+
+.clinical-budget-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.clinical-budget-col--clinical {
+  position: sticky;
+  top: 0;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+}
+
+.clinical-budget-col--payments {
+  min-height: 420px;
+  border-color: color-mix(in srgb, var(--color-primary) 12%, #e5e7eb);
+}
+
+.clinical-budget-col--negotiation {
+  position: sticky;
+  top: 0;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+}
+
+.clinical-budget-col-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.25rem;
+}
+
+.clinical-budget-col-head h3 {
+  margin: 0;
+  flex: 1;
+  font-size: 0.9375rem;
+  color: #0f172a;
+}
+
+.clinical-budget-col-head--main {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.clinical-budget-col-head--main p {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.clinical-budget-clinical-kpis {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+}
+
+.clinical-budget-clinical-kpis dt {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.clinical-budget-clinical-kpis dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.clinical-budget-col-select,
+.clinical-budget-col-field input,
+.clinical-budget-col-field textarea {
+  width: 100%;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-col-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.clinical-budget-col-field--notes textarea {
+  resize: vertical;
+  min-height: 72px;
+}
+
+.clinical-budget-clinical-values {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.65rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+}
+
+.clinical-budget-clinical-value-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.clinical-budget-clinical-value-row strong {
+  color: #0f172a;
+}
+
+.clinical-budget-clinical-value-row.is-discount strong {
+  color: #dc2626;
+}
+
+.clinical-budget-clinical-value-row.is-final {
+  padding-top: 0.35rem;
+  margin-top: 0.15rem;
+  border-top: 1px dashed #e2e8f0;
+  font-weight: 600;
+}
+
+.clinical-budget-clinical-value-row.is-final strong {
+  font-size: 1rem;
+  color: var(--color-primary);
+}
+
+.clinical-budget-payment-card-kicker {
+  margin: 0 0 0.15rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.clinical-budget-payment-card-highlight {
+  margin: 0 0 0.35rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.clinical-budget-payment-card.is-chosen {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 4%, #fff);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+
+.clinical-budget-payment-card.is-chosen .clinical-budget-payment-chosen-tag {
+  background: #f5f3ff;
+  color: var(--color-primary);
+}
+
+.clinical-budget-payment-card.is-financing {
+  grid-column: 1 / -1;
+}
+
+.clinical-budget-payment-card-config {
+  margin-top: 0.5rem;
+  padding-top: 0.65rem;
+  border-top: 1px dashed #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.clinical-budget-card-btn {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  font-size: 0.75rem !important;
+  padding: 0.35rem 0.5rem !important;
+}
+
+.clinical-financing-calc-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.clinical-financing-calc-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.clinical-financing-calc-row--sub {
+  grid-template-columns: 1fr;
+}
+
+.clinical-financing-calc-row--results {
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+}
+
+.clinical-financing-calc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.clinical-financing-calc-field--wide {
+  grid-column: span 1;
+}
+
+.clinical-financing-calc-field input,
+.clinical-financing-calc-field select {
+  padding: 0.35rem 0.45rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.75rem;
+}
+
+.clinical-financing-calc-field strong {
+  font-size: 0.8125rem;
+  color: #0f172a;
+}
+
+.clinical-financing-calc-highlight {
+  color: var(--color-primary) !important;
+  font-size: 0.9375rem !important;
+}
+
+.clinical-financing-calc-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.clinical-budget-entry-badges--compact {
+  flex-wrap: wrap;
+}
+
+.clinical-budget-entry-badges--compact .clinical-budget-entry-badge {
+  padding: 0.2rem 0.4rem;
+  font-size: 0.6875rem;
+}
+
+.clinical-budget-financing-summary--compact {
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.clinical-budget-financing-summary--compact p {
+  margin: 0.15rem 0;
+  font-size: 0.75rem;
+}
+
+.clinical-budget-negotiation-block {
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.clinical-budget-negotiation-block h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.clinical-budget-negotiation-empty {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.clinical-budget-negotiation-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.clinical-budget-negotiation-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-negotiation-value {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.clinical-budget-negotiation-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
+.clinical-budget-negotiation-chosen {
+  display: flex;
+  gap: 0.55rem;
+  padding: 0.6rem;
+  border-radius: 8px;
+  border: 2px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 5%, #fff);
+}
+
+.clinical-budget-negotiation-chosen-icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.clinical-budget-negotiation-chosen strong {
+  display: block;
+  font-size: 0.8125rem;
+  color: #0f172a;
+}
+
+.clinical-budget-negotiation-chosen span {
+  display: block;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.clinical-budget-negotiation-status {
+  margin-top: 0.25rem !important;
+  font-weight: 600 !important;
+  color: var(--color-primary) !important;
+}
+
+.clinical-budget-negotiation-block--inline {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.clinical-budget-negotiation-block--inline div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-negotiation-block--inline span {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.clinical-budget-negotiation-docs {
+  margin-top: auto;
+}
+
+.clinical-budget-docs-panel.is-compact .clinical-budget-doc-card {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.clinical-budget-docs-panel.is-compact .clinical-budget-doc-card-actions {
+  flex-wrap: wrap;
+}
+
+.clinical-budget-docs-compact-title {
+  font-size: 0.75rem !important;
+}
+
+.clinical-budget-history-panel.is-compact .clinical-budget-history-timeline {
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+@media (max-width: 1200px) {
+  .clinical-budget-commercial-layout {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .clinical-budget-col--negotiation {
+    grid-column: span 2;
+    position: static;
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .clinical-budget-commercial-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-budget-col--clinical,
+  .clinical-budget-col--negotiation {
+    position: static;
+  }
+
+  .clinical-budget-col--negotiation {
+    grid-column: span 1;
+  }
+
+  .clinical-budget-payment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-financing-calc-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.clinical-budget-treatment-card {
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+}
+
+.clinical-budget-treatment-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.clinical-budget-treatment-kicker {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.clinical-budget-treatment-title {
+  margin: 0.15rem 0 0;
+  font-size: 1.125rem;
+  color: #0f172a;
+}
+
+.clinical-budget-treatment-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 0.75rem;
+}
+
+.clinical-budget-treatment-meta dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.clinical-budget-treatment-meta dd {
+  margin: 0.2rem 0 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.clinical-budget-validity-input {
+  padding: 0.25rem 0.4rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-commercial-fields {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 0.75rem;
+  margin-top: 0.875rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.clinical-budget-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-field span {
+  font-weight: 600;
+  color: #475569;
+}
+
+.clinical-budget-field select,
+.clinical-budget-field textarea {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-field--full {
+  grid-column: span 1;
+}
+
+.clinical-budget-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.clinical-budget-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.clinical-budget-status-badge.tone-amber {
+  background: #fffbeb;
+  color: #b45309;
+}
+.clinical-budget-status-badge.tone-amber .clinical-budget-status-dot { background: #f59e0b; }
+
+.clinical-budget-status-badge.tone-blue {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.clinical-budget-status-badge.tone-blue .clinical-budget-status-dot { background: #3b82f6; }
+
+.clinical-budget-status-badge.tone-green {
+  background: #ecfdf5;
+  color: #047857;
+}
+.clinical-budget-status-badge.tone-green .clinical-budget-status-dot { background: #10b981; }
+
+.clinical-budget-status-badge.tone-red {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.clinical-budget-status-badge.tone-red .clinical-budget-status-dot { background: #ef4444; }
+
+.clinical-budget-status-badge.tone-gray {
+  background: #f1f5f9;
+  color: #475569;
+}
+.clinical-budget-status-badge.tone-gray .clinical-budget-status-dot { background: #64748b; }
+
+.clinical-budget-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.clinical-budget-payment-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.875rem;
+  background: #fff;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.clinical-budget-payment-card.is-present {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, #e2e8f0);
+}
+
+.clinical-budget-payment-card.is-accepted {
+  border-color: #6ee7b7;
+  background: #f0fdf4;
+  box-shadow: 0 0 0 1px #a7f3d0;
+}
+
+.clinical-budget-payment-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.clinical-budget-payment-card-head h4 {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.clinical-budget-payment-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.clinical-budget-payment-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.clinical-budget-payment-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-payment-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-payment-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+}
+
+.clinical-budget-payment-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.clinical-budget-payment-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.clinical-budget-payment-inline input,
+.clinical-budget-payment-inline select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-payment-card-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.clinical-budget-sidebar {
+  position: sticky;
+  top: 0;
+}
+
+.clinical-summary-card--budget {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1rem;
+  background: #fff;
+}
+
+.clinical-budget-sidebar-extra {
+  margin: 0.75rem 0 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.clinical-budget-sidebar-extra div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.clinical-budget-sidebar-extra dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.clinical-budget-sidebar-extra dd {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-footer-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.clinical-budget-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.clinical-budget-footer-hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.clinical-budget-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.clinical-budget-history-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.clinical-budget-proc-modal-table-wrap {
+  overflow-x: auto;
+}
+
+.clinical-budget-proc-modal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-proc-modal-table th,
+.clinical-budget-proc-modal-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: left;
+}
+
+.clinical-budget-proc-modal-table small {
+  display: block;
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.clinical-budget-proc-modal-total {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  font-size: 0.9375rem;
+}
+
+.clinical-budget-proc-modal-total strong {
+  color: var(--color-primary);
+}
+
+.clinical-budget-approval-dl {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0 0 1rem;
+}
+
+.clinical-budget-approval-dl div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.clinical-budget-approval-dl dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.clinical-budget-approval-dl dd {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: #0f172a;
+}
+
+.clinical-budget-approval-value {
+  font-weight: 700;
+  color: var(--color-primary) !important;
+}
+
+.clinical-budget-approval-checklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.8125rem;
+  color: #047857;
+}
+
+.clinical-budget-approval-checklist li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.clinical-budget-status-badge.tone-violet {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+.clinical-budget-status-badge.tone-violet .clinical-budget-status-dot { background: var(--color-primary); }
+
+.clinical-budget-overview {
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
+}
+
+.clinical-budget-overview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.875rem;
+}
+
+.clinical-budget-overview-head h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.clinical-budget-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+  margin: 0;
+}
+
+.clinical-budget-overview-grid dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.clinical-budget-overview-grid dd {
+  margin: 0.2rem 0 0;
+  font-size: 0.875rem;
+  color: #0f172a;
+}
+
+.clinical-budget-overview-value {
+  font-weight: 700;
+  color: var(--color-primary) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.clinical-budget-overview-select,
+.clinical-budget-overview-date {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-overview-procs {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.clinical-budget-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.75rem;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.clinical-budget-overview-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.875rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid #f1f5f9;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-overview-notes textarea {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  resize: vertical;
+}
+
+.clinical-budget-chosen {
+  padding: 0.875rem 1rem;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 40%, #e2e8f0);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--color-primary) 6%, #fff);
+}
+
+.clinical-budget-chosen header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-primary);
+}
+
+.clinical-budget-chosen-kicker {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.clinical-budget-chosen header h4 {
+  margin: 0.1rem 0 0;
+  font-size: 0.9375rem;
+}
+
+.clinical-budget-chosen-body strong {
+  font-size: 1rem;
+}
+
+.clinical-budget-chosen-details {
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  color: #334155;
+}
+
+.clinical-budget-chosen-details p {
+  margin: 0.15rem 0;
+}
+
+.clinical-budget-payment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.clinical-budget-payment-intro {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.clinical-budget-payment-row-item {
+  padding: 0.875rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.clinical-budget-payment-row-item.is-presented {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+}
+
+.clinical-budget-payment-row-item.is-chosen {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, #e2e8f0);
+  background: color-mix(in srgb, var(--color-primary) 5%, #fff);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.clinical-budget-payment-row-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.clinical-budget-payment-row-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.clinical-budget-payment-chosen-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.clinical-budget-payment-present-tag {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.clinical-budget-payment-row-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+}
+
+.clinical-budget-payment-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 100px;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.clinical-budget-payment-field--wide {
+  flex: 1;
+  min-width: 200px;
+}
+
+.clinical-budget-payment-field input,
+.clinical-budget-payment-field select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+}
+
+.clinical-budget-payment-field strong {
+  font-size: 0.875rem;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.clinical-budget-payment-inline-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.clinical-budget-payment-inline-input input {
+  width: 72px;
+}
+
+.clinical-budget-payment-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.clinical-budget-payment-row-actions .button.is-active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.clinical-budget-payment-row-actions .button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.clinical-budget-history-panel h4,
+.clinical-budget-docs-panel h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.65rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.clinical-budget-history-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.clinical-budget-history-timeline li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.clinical-budget-history-timeline time {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
+
+.clinical-budget-history-timeline span {
+  font-size: 0.8125rem;
+  color: #334155;
+}
+
+.clinical-budget-docs-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.clinical-budget-doc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.clinical-budget-doc-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.clinical-budget-doc-card-info strong {
+  font-size: 0.875rem;
+}
+
+.clinical-budget-doc-card-info span {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.clinical-budget-doc-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.treatment-plan-types-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.treatment-plan-type-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.treatment-plan-type-row input {
+  flex: 1;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+@media (max-width: 1100px) {
+  .clinical-budget-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-budget-sidebar {
+    position: static;
+  }
+
+  .clinical-budget-payment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-budget-commercial-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-budget-treatment-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-budget-overview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .clinical-budget-footer-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.clinical-budget-field-full {
+  grid-column: 1 / -1;
+}
+
+.clinical-contract-summary {
+  padding: 1rem;
+  border-radius: 0.75rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+}
+
+.clinical-contract-payment-list {
+  margin: 0.75rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+}
+
 .clinical-procedures-list {
   display: flex;
   flex-direction: column;
@@ -21672,56 +24225,61 @@ a.button {
 /* Responsividade */
 @media (max-width: 1024px) {
   .clinical-appointment-container {
-    flex-direction: column;
-    padding: var(--spacing-lg);
+    padding: 0 0.75rem 0.75rem;
   }
 
-  .clinical-appointment-sidebar-card {
-    width: 100%;
+  .clinical-step-nav-list-item {
+    min-width: 108px;
+    flex: 0 0 auto;
+  }
+
+  .clinical-step-nav-connector {
+    display: none;
+  }
+
+  .clinical-stage-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .clinical-stage-aside {
     position: static;
-    max-height: none;
   }
 
-  .clinical-appointment-nav {
-    flex-direction: row;
-    overflow-x: auto;
-    gap: var(--spacing-sm);
+  .clinical-stage-header {
+    flex-direction: column;
   }
 
-  .clinical-appointment-nav-group {
-    min-width: fit-content;
-  }
-
-  .clinical-appointment-nav-items {
-    flex-direction: row;
-    gap: var(--spacing-xs);
-  }
-
-  .clinical-appointment-nav-item {
-    white-space: nowrap;
-    min-width: fit-content;
+  .clinical-stage-toolbar {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-end;
   }
 }
 
 @media (max-width: 768px) {
   .clinical-appointment-header-content {
-    padding: var(--spacing-md);
+    padding: 0.5rem 0.75rem;
     flex-wrap: wrap;
   }
 
   .clinical-appointment-header-title {
-    font-size: var(--font-size-xl);
+    font-size: 0.9375rem;
   }
 
-  .clinical-appointment-header-status-badge {
-    order: -1;
-    width: 100%;
-    justify-content: center;
+  .clinical-stage-toolbar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .clinical-section-actions {
-    width: 100%;
-    justify-content: flex-start;
+  .clinical-stage-toolbar-secondary,
+  .clinical-stage-toolbar-primary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .clinical-btn--sm {
+    flex: 1 1 auto;
   }
 }
 
@@ -22808,146 +25366,468 @@ a.button {
 }
 
 /* ============================================
-  PROCEDURE SELECTOR MODAL
+  PROCEDURE SELECTOR MODAL v2
   ============================================ */
 
-.procedure-selector-filters {
+.procedure-selector-modal.app-modal__content {
+  width: min(100%, 1180px);
+  max-height: 92dvh;
   display: flex;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.procedure-selector-header {
+  padding: 1rem 1.25rem;
+}
+
+.procedure-selector-header .app-modal__title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+}
+
+.procedure-selector-header .app-modal__description {
+  font-size: 0.8125rem;
+  margin-top: 0.2rem;
+}
+
+.procedure-selector-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.procedure-selector-close:hover {
+  background: #f8fafc;
+  color: #334155;
+}
+
+.procedure-selector-body.app-modal__body {
+  display: flex;
+  gap: 0;
+  padding: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.procedure-selector-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.875rem 1rem;
+  border-right: 1px solid #e5e7eb;
+  overflow: hidden;
+}
+
+.procedure-selector-sidebar {
+  width: 268px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0.875rem 1rem;
+  background: #fafbfc;
+  overflow-y: auto;
+}
+
+.procedure-selector-sidebar h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.procedure-selector-sidebar-empty {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  margin: 0 0 1rem;
+  line-height: 1.45;
+}
+
+.procedure-selector-selected-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.procedure-selector-selected-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.5rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+.procedure-selector-selected-list li div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.procedure-selector-selected-list li span {
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.procedure-selector-selected-list li strong {
+  color: #6d28d9;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.procedure-selector-remove {
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 4px;
+}
+
+.procedure-selector-remove:hover {
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.procedure-selector-sidebar-summary {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0.75rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.procedure-selector-sidebar-summary div {
+  display: flex;
+  justify-content: space-between;
+  color: #64748b;
+}
+
+.procedure-selector-subtotal strong {
+  color: #6d28d9;
+  font-size: 0.9375rem;
+}
+
+.procedure-selector-sidebar-cta {
+  width: 100%;
+}
+
+.procedure-selector-tabs {
+  display: flex;
   flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.procedure-selector-tab {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.procedure-selector-tab.is-active {
+  background: rgba(109, 40, 217, 0.08);
+  border-color: rgba(109, 40, 217, 0.25);
+  color: #6d28d9;
+}
+
+.procedure-selector-search-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
 }
 
 .procedure-selector-search {
   flex: 1;
-  min-width: 250px;
-  position: relative;
   display: flex;
   align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  min-height: 38px;
 }
 
 .procedure-selector-search svg {
-  position: absolute;
-  left: var(--spacing-md);
-  color: var(--color-text-muted);
-  pointer-events: none;
+  color: #94a3b8;
+  flex-shrink: 0;
 }
 
 .procedure-selector-search input {
-  width: 100%;
-  padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) 40px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-base);
-  background: var(--color-bg-card);
-  color: var(--color-text);
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.8125rem;
+  background: transparent;
+  color: #1e293b;
 }
 
-.procedure-selector-filters select {
-  padding: var(--spacing-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  background: var(--color-bg-card);
-  color: var(--color-text);
-  min-width: 150px;
+.procedure-selector-sort {
+  min-width: 148px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  background: #fff;
+  color: #475569;
 }
 
-.procedure-selector-list {
-  max-height: 400px;
-  overflow-y: auto;
-  margin-bottom: var(--spacing-lg);
-}
-
-.procedure-selector-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--spacing-md);
-}
-
-.procedure-selector-item {
-  padding: var(--spacing-md);
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-bg-card);
-  cursor: pointer;
-  transition: all var(--transition-base);
-}
-
-.procedure-selector-item:hover {
-  border-color: var(--color-primary);
-  box-shadow: var(--shadow-md);
-}
-
-.procedure-selector-item.selected {
-  border-color: var(--color-primary);
-  background: var(--color-bg);
-  box-shadow: var(--shadow-md);
-}
-
-.procedure-selector-item-header {
+.procedure-selector-chips {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: var(--spacing-sm);
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.65rem;
+  scrollbar-width: thin;
 }
 
-.procedure-selector-item-header h3 {
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-  margin: 0;
+.procedure-selector-chip {
+  flex-shrink: 0;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.procedure-selector-chip.is-active {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+.procedure-selector-list-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.procedure-selector-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.procedure-selector-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+}
+
+.procedure-selector-table th {
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.procedure-selector-table td {
+  padding: 0.4rem 0.65rem;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.procedure-selector-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.procedure-selector-row:hover {
+  background: #f8fafc;
+}
+
+.procedure-selector-row.is-selected {
+  background: rgba(109, 40, 217, 0.05);
+}
+
+.procedure-selector-name {
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.procedure-selector-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.procedure-selector-code {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-family: ui-monospace, monospace;
+}
+
+.procedure-selector-price {
+  color: #6d28d9;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.procedure-selector-time {
+  color: #94a3b8;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.procedure-selector-fav {
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  cursor: pointer;
+  padding: 0.2rem;
+  display: flex;
+}
+
+.procedure-selector-fav.is-on {
+  color: #f59e0b;
+}
+
+.procedure-selector-preview {
+  margin-top: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.procedure-selector-preview strong {
+  display: block;
+  color: #334155;
+  font-size: 0.8125rem;
+  margin-bottom: 0.15rem;
+}
+
+.procedure-selector-preview p {
+  margin: 0 0 0.25rem;
+  line-height: 1.4;
+}
+
+.procedure-selector-combos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
   flex: 1;
 }
 
-.procedure-selector-item-price {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-success);
-  margin-left: var(--spacing-md);
-}
-
-.procedure-selector-item-meta {
+.procedure-selector-combo-card {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-xs);
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.procedure-selector-item-meta span {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--color-bg);
-  border-radius: var(--radius-sm);
+.procedure-selector-combo-card:hover {
+  border-color: #c4b5fd;
+  box-shadow: 0 2px 8px rgba(109, 40, 217, 0.08);
 }
 
-.procedure-selector-customizations {
-  margin-top: var(--spacing-lg);
-  padding-top: var(--spacing-lg);
-  border-top: 1px solid var(--color-border);
+.procedure-selector-combo-card strong {
+  display: block;
+  font-size: 0.875rem;
+  color: #1e293b;
 }
 
-.procedure-selector-customizations h3 {
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text);
-  margin: 0 0 var(--spacing-md) 0;
+.procedure-selector-combo-card p {
+  margin: 0.15rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
 }
 
-.procedure-selector-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--spacing-md);
+.procedure-selector-combo-card svg {
+  margin-left: auto;
+  color: #6d28d9;
+  flex-shrink: 0;
 }
 
-.procedure-selector-total {
-  grid-column: 1 / -1;
-  padding: var(--spacing-md);
-  background: var(--color-bg);
-  border-radius: var(--radius-md);
-  text-align: right;
-  font-size: var(--font-size-lg);
-  color: var(--color-text);
+.procedure-selector-combo-emoji {
+  font-size: 1.25rem;
+}
+
+.procedure-selector-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+
+.procedure-selector-footer.app-modal__footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+@media (max-width: 900px) {
+  .procedure-selector-body.app-modal__body {
+    flex-direction: column;
+  }
+
+  .procedure-selector-main {
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+    max-height: 55vh;
+  }
+
+  .procedure-selector-sidebar {
+    width: 100%;
+    max-height: 35vh;
+  }
 }
 
 .restriction-badge {
@@ -24054,3 +26934,1126 @@ a.button {
     grid-template-columns: 1fr;
   }
 }
+
+.finance-financing-section-nav {
+  margin-bottom: 0.75rem;
+}
+
+.finance-partners-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.finance-partners-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.finance-partners-header h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
+}
+
+.finance-partners-header p {
+  margin: 0;
+  color: var(--text-muted, #64748b);
+  font-size: 0.875rem;
+}
+
+.finance-partners-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.finance-partner-card {
+  border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: var(--radius-md, 12px);
+  padding: 1rem;
+  background: var(--surface-card, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.finance-partner-card.is-inactive {
+  opacity: 0.65;
+}
+
+.finance-partner-card header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.625rem;
+  align-items: start;
+}
+
+.finance-partner-card header strong {
+  display: block;
+}
+
+.finance-partner-card header span {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--text-muted, #64748b);
+}
+
+.finance-partner-status {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.finance-partner-status--active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.finance-partner-status--inactive {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.finance-partner-card dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.75rem;
+  margin: 0;
+}
+
+.finance-partner-card dt {
+  font-size: 0.75rem;
+  color: var(--text-muted, #64748b);
+}
+
+.finance-partner-card dd {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
+.finance-partner-notes {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted, #64748b);
+}
+
+.finance-partner-form-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.finance-partner-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.finance-partner-form-grid label,
+.finance-partner-form-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.finance-partner-form-grid input,
+.finance-partner-form-grid select,
+.finance-partner-form-notes textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.finance-partner-form-notes {
+  grid-column: 1 / -1;
+}
+
+.finance-partner-form-error {
+  margin: 0;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.875rem;
+}
+
+.clinical-budget-payment-errors {
+  grid-column: 1 / -1;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+
+.clinical-budget-payment-errors p {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #b91c1c;
+}
+
+.clinical-budget-payment-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted, #64748b);
+}
+
+.clinical-budget-financing-entry {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.clinical-budget-financing-treatment-value {
+  font-size: 1.0625rem;
+}
+
+.clinical-budget-entry-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.clinical-budget-entry-badge {
+  border: 1px solid var(--border-color, #e2e8f0);
+  background: var(--surface-muted, #f8fafc);
+  color: var(--text-primary, #0f172a);
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.clinical-budget-entry-badge:hover:not(:disabled) {
+  border-color: var(--brand-primary, #6366f1);
+  background: #eef2ff;
+}
+
+.clinical-budget-entry-badge.is-active {
+  border-color: var(--brand-primary, #6366f1);
+  background: var(--brand-primary, #6366f1);
+  color: #fff;
+}
+
+.clinical-budget-entry-badge.is-disabled,
+.clinical-budget-entry-badge:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.clinical-budget-entry-badge--custom {
+  min-width: 6.5rem;
+}
+
+.clinical-budget-entry-min-hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted, #64748b);
+}
+
+.clinical-budget-financing-summary {
+  grid-column: 1 / -1;
+  margin-top: 0.25rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--radius-md, 12px);
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #bbf7d0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.clinical-budget-financing-summary p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #14532d;
+  font-weight: 500;
+}
+
+.clinical-budget-financing-summary svg {
+  flex-shrink: 0;
+  color: #16a34a;
+}
+
+@media (max-width: 768px) {
+  .finance-partner-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .finance-partners-header {
+    flex-direction: column;
+  }
+}
+
+/* ── Orçamento v2 — layout 2 colunas ── */
+.budget-tab-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.budget-tab-main {
+  min-width: 0;
+}
+
+.budget-tab-muted {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #94a3b8;
+}
+
+.budget-tab-presented {
+  margin-bottom: 0.875rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.budget-tab-presented h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.budget-tab-presented-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.budget-tab-presented-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  font-size: 0.8125rem;
+}
+
+.budget-tab-presented-list li strong {
+  color: #0f172a;
+}
+
+.budget-tab-presented-list li span {
+  color: #475569;
+}
+
+.budget-tab-presented-list li em {
+  font-style: normal;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
+.budget-tab-pay-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.budget-tab-pay-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.875rem;
+}
+
+.budget-tab-pay-card.is-presented {
+  border-color: #bfdbfe;
+}
+
+.budget-tab-pay-card.is-chosen {
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.budget-tab-pay-card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.budget-tab-pay-card-head h4 {
+  margin: 0;
+  flex: 1;
+  font-size: 0.9375rem;
+  color: #0f172a;
+}
+
+.budget-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.budget-tab-badge--chosen {
+  background: #f5f3ff;
+  color: var(--color-primary);
+}
+
+.budget-tab-badge--presented {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.budget-tab-pay-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 0.65rem;
+}
+
+.budget-tab-pay-grid--wide {
+  grid-column: 1 / -1;
+}
+
+.budget-tab-pay-grid dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #94a3b8;
+}
+
+.budget-tab-pay-grid dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.budget-tab-pay-grid dd.is-highlight {
+  color: var(--color-primary);
+}
+
+.budget-tab-pay-config {
+  padding: 0.65rem 0 0;
+  margin-bottom: 0.65rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.budget-tab-config-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.budget-tab-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.budget-tab-field input,
+.budget-tab-field select {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: #0f172a;
+}
+
+.budget-tab-field--wide {
+  grid-column: span 1;
+}
+
+.budget-tab-field--inline {
+  max-width: 140px;
+}
+
+.budget-tab-pay-methods {
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.budget-tab-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  margin-top: 0.35rem;
+}
+
+.budget-tab-checks label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: #334155;
+  cursor: pointer;
+}
+
+.budget-tab-pay-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.budget-tab-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.budget-tab-action--ghost {
+  background: #fff;
+  border-color: #e2e8f0;
+  color: #475569;
+}
+
+.budget-tab-action--secondary {
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+.budget-tab-action--secondary.is-active {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.budget-tab-action--primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.budget-tab-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.budget-tab-financing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.budget-tab-fin-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  align-items: end;
+}
+
+.budget-tab-fin-row--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.budget-tab-fin-row--sub {
+  grid-template-columns: 1fr 1fr;
+}
+
+.budget-tab-entry-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.budget-tab-entry-badge {
+  padding: 0.25rem 0.45rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+}
+
+.budget-tab-entry-badge.is-active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.budget-tab-entry-badge.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.budget-tab-inline-input {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.budget-tab-highlight {
+  color: var(--color-primary) !important;
+}
+
+.budget-tab-fin-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.budget-tab-errors {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #dc2626;
+}
+
+.budget-tab-hint {
+  margin: 0;
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
+.budget-tab-summary {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.budget-tab-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.budget-tab-summary-head h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: #0f172a;
+}
+
+.budget-tab-summary-dl {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+}
+
+.budget-tab-summary-dl dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #94a3b8;
+}
+
+.budget-tab-summary-dl dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.budget-tab-summary-values {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+}
+
+.budget-tab-summary-values > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.budget-tab-summary-values strong {
+  color: #0f172a;
+}
+
+.budget-tab-summary-values .is-discount strong {
+  color: #dc2626;
+}
+
+.budget-tab-summary-values .is-total strong {
+  font-size: 1rem;
+  color: var(--color-primary);
+}
+
+.budget-tab-summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.budget-tab-summary-section h4 {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.4rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.budget-tab-chosen-mini {
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 2px solid var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 4%, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.8125rem;
+}
+
+.budget-tab-chosen-mini span {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.budget-tab-doc-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.budget-tab-doc-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.budget-tab-history-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.budget-tab-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.budget-tab-history-list li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.8125rem;
+}
+
+.budget-tab-history-list time {
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
+@media (max-width: 1024px) {
+  .budget-tab-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .budget-tab-summary {
+    position: static;
+  }
+
+  .budget-tab-pay-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .budget-tab-fin-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .budget-tab-pay-grid,
+  .budget-tab-config-row,
+  .budget-tab-fin-row {
+    grid-template-columns: 1fr;
+  }
+
+  .budget-tab-pay-actions {
+    flex-direction: column;
+  }
+
+  .budget-tab-action {
+    width: 100%;
+  }
+}
+
+/* ── Contrato clínico v2 ── */
+.clinical-contract-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.clinical-contract-blocked-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 2rem 1.5rem;
+  border: 1px dashed #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.clinical-contract-blocked-card h3 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.clinical-contract-block-reasons {
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.clinical-contract-block-reasons li {
+  margin-bottom: 0.25rem;
+}
+
+.clinical-contract-status-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.clinical-contract-status-banner strong {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+
+.clinical-contract-status-banner span {
+  display: block;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.clinical-contract-status-banner em {
+  display: block;
+  font-style: normal;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.clinical-contract-status-banner.tone-blocked {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.clinical-contract-status-banner.tone-ready {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #047857;
+}
+
+.clinical-contract-status-banner.tone-waiting {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.clinical-contract-status-banner.tone-signed {
+  border-color: color-mix(in srgb, var(--color-primary) 35%, #e2e8f0);
+  background: color-mix(in srgb, var(--color-primary) 6%, #fff);
+  color: var(--color-primary);
+}
+
+.clinical-contract-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.clinical-contract-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.65rem 0.875rem;
+  border: none;
+  background: #fafbfc;
+  cursor: pointer;
+  text-align: left;
+}
+
+.clinical-contract-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.clinical-contract-section-chevron {
+  transition: transform 0.15s ease;
+  color: #94a3b8;
+}
+
+.clinical-contract-section.is-open .clinical-contract-section-chevron {
+  transform: rotate(180deg);
+}
+
+.clinical-contract-section-body {
+  padding: 0.75rem 0.875rem 0.875rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.clinical-contract-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.875rem;
+  margin: 0;
+}
+
+.clinical-contract-info-grid dt {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #94a3b8;
+}
+
+.clinical-contract-info-grid dd {
+  margin: 0.1rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.clinical-contract-payment-detail {
+  margin: 0.5rem 0 0;
+  padding: 0.5rem 0.65rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-primary) 6%, #fff);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 18%, #e2e8f0);
+  font-size: 0.8125rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+.clinical-contract-proc-list {
+  margin: 0.65rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.clinical-contract-proc-list li {
+  padding: 0.25rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.clinical-contract-clauses {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.clinical-contract-clause-group h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  color: #334155;
+}
+
+.clinical-contract-clause-group ul {
+  margin: 0;
+  padding-left: 1rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.clinical-contract-clause-group p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.clinical-contract-payment-details {
+  margin-top: 0.65rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.clinical-contract-payment-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.clinical-contract-payment-row strong {
+  color: #334155;
+  font-weight: 600;
+}
+
+.clinical-contract-schedule-table {
+  width: 100%;
+  margin-top: 0.75rem;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.clinical-contract-schedule-table th,
+.clinical-contract-schedule-table td {
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.clinical-contract-schedule-table th {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  background: #f8fafc;
+}
+
+.clinical-contract-schedule-table td:last-child {
+  text-align: right;
+  font-weight: 600;
+}
+
+.clinical-contract-terms-v2 {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: #334155;
+}
+
+.clinical-contract-terms-v2 li {
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+}
+
+.clinical-contract-history {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.clinical-contract-history li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-size: 0.8125rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.clinical-contract-history time {
+  font-size: 0.6875rem;
+  color: #94a3b8;
+}
+
+.clinical-contract-block-desc {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.clinical-contract-block-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.clinical-contract-block-list {
+  margin: 0 0 0.5rem;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  color: #475569;
+}
+
+@media (max-width: 768px) {
+  .clinical-contract-info-grid,
+  .clinical-contract-clauses {
+    grid-template-columns: 1fr;
+  }
+}
+

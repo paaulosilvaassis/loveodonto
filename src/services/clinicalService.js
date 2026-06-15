@@ -220,9 +220,22 @@ export const addPlannedProcedure = (user, appointmentId, procedure) => {
     const item = {
       id: createId('planned'),
       name: procedure.name || '',
+      procedureId: procedure.procedureId || null,
+      code: procedure.code || '',
+      category: procedure.category || '',
       tooth: procedure.tooth || '',
       region: procedure.region || '',
       notes: procedure.notes || '',
+      quantity: Number(procedure.quantity || 1),
+      unitValue: Number(procedure.unitValue || 0),
+      discount: Number(procedure.discount || 0),
+      discountType: procedure.discountType || 'percent',
+      regionType: procedure.regionType || '',
+      stage: procedure.stage || 'inicial',
+      professionalId: procedure.professionalId || null,
+      restriction: procedure.restriction || null,
+      minPrice: procedure.minPrice ?? null,
+      maxPrice: procedure.maxPrice ?? null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       createdBy: user.id,
@@ -263,12 +276,17 @@ export const updatePlannedProcedure = (user, appointmentId, plannedId, data) => 
 
     const now = new Date().toISOString();
     const prev = list[itemIndex];
+    const patch = {};
+    const fields = [
+      'name', 'procedureId', 'code', 'category', 'tooth', 'region', 'regionType', 'notes',
+      'quantity', 'unitValue', 'discount', 'discountType', 'stage', 'professionalId',
+    ];
+    fields.forEach((key) => {
+      if (data[key] !== undefined) patch[key] = data[key];
+    });
     db.clinicalAppointments[idx].plannedProcedures[itemIndex] = {
       ...prev,
-      name: data.name !== undefined ? data.name : prev.name,
-      tooth: data.tooth !== undefined ? data.tooth : prev.tooth,
-      region: data.region !== undefined ? data.region : prev.region,
-      notes: data.notes !== undefined ? data.notes : prev.notes,
+      ...patch,
       updatedAt: now,
     };
     db.clinicalAppointments[idx].updatedAt = now;
@@ -361,8 +379,10 @@ export const getClinicalEvents = (appointmentId) => {
 export const BUDGET_STATUS = {
   RASCUNHO: 'RASCUNHO',
   ENVIADO: 'ENVIADO',
+  NEGOCIACAO: 'NEGOCIACAO',
   APROVADO: 'APROVADO',
   REPROVADO: 'REPROVADO',
+  CANCELADO: 'CANCELADO',
 };
 
 /**
@@ -474,6 +494,34 @@ export const updateBudgetStatus = (user, appointmentId, status, notes = '') => {
       notes,
     }, user.id);
 
+    return db;
+  });
+};
+
+/**
+ * Salva chaves de anamnese selecionadas para o planejamento.
+ */
+export const savePlanningAnamnesisKeys = (user, appointmentId, keys) => {
+  return withDb((db) => {
+    if (!db.clinicalAppointments) db.clinicalAppointments = [];
+    const index = db.clinicalAppointments.findIndex((ca) => ca.appointmentId === appointmentId);
+    const now = new Date().toISOString();
+    if (index >= 0) {
+      db.clinicalAppointments[index].planningAnamnesisKeys = keys;
+      db.clinicalAppointments[index].updatedAt = now;
+      db.clinicalAppointments[index].updatedBy = user?.id || null;
+    } else {
+      db.clinicalAppointments.push({
+        id: createId('clinical'),
+        appointmentId,
+        planningAnamnesisKeys: keys,
+        plannedProcedures: [],
+        createdAt: now,
+        updatedAt: now,
+        createdBy: user?.id || null,
+        updatedBy: user?.id || null,
+      });
+    }
     return db;
   });
 };

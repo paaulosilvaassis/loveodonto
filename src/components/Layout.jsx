@@ -59,6 +59,7 @@ export default function Layout({ children }) {
   const tenant = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
+  const isClinicalFocusMode = location.pathname.startsWith('/atendimento-clinico/');
   const clinicSummary = useClinicSummary();
 
   // Estado da categoria ativa (restaurado do localStorage ou detectado pela rota)
@@ -283,6 +284,7 @@ export default function Layout({ children }) {
             {accessDeniedMessage}
           </div>
         ) : null}
+        {!isClinicalFocusMode ? (
         <header className="header">
           <div className="header-left">
             <button className="button secondary back-button" type="button" onClick={() => navigate(-1)}>
@@ -315,7 +317,8 @@ export default function Layout({ children }) {
             </div>
           </div>
         </header>
-        <main className="page">{children}</main>
+        ) : null}
+        <main className={`page${isClinicalFocusMode ? ' page--clinical-focus' : ''}`}>{children}</main>
         {tenant?.tenant?.billing_status === 'overdue' ? (
           <div className="alert warning" style={{ margin: '0 1rem 1rem' }}>
             Atenção: existem pendências financeiras nesta clínica. Alguns recursos podem ser limitados.

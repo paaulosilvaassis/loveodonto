@@ -1,5 +1,5 @@
 import { loadDb, withDb } from '../db/index.js';
-import { requirePermission } from '../permissions/permissions.js';
+import { requirePermission, can } from '../permissions/permissions.js';
 import { createId } from './helpers.js';
 import {
   calculateFinancingSummary,
@@ -115,6 +115,11 @@ export const listFinancings = (filters = {}) => {
   }
   if (filters.patient_id) items = items.filter((item) => item.patient_id === filters.patient_id);
   if (filters.professional_id) items = items.filter((item) => item.professional_id === filters.professional_id);
+  if (filters.clinical_appointment_id) {
+    items = items.filter((item) => item.clinical_appointment_id === filters.clinical_appointment_id);
+  }
+  if (filters.budget_id) items = items.filter((item) => item.budget_id === filters.budget_id);
+  if (filters.source) items = items.filter((item) => item.source === filters.source);
   if (filters.financial_responsible_id) items = items.filter((item) => item.financial_responsible_id === filters.financial_responsible_id);
   if (filters.startDate) items = items.filter((item) => (item.issue_date || '') >= filters.startDate);
   if (filters.endDate) items = items.filter((item) => (item.issue_date || '') <= filters.endDate);
@@ -170,8 +175,19 @@ export const getFinancingsKPIs = () => {
   };
 };
 
-export const createFinancingProposal = (user, payload) => {
+const assertFinancingCreatePermission = (user, options = {}) => {
+  if (options.source === 'clinical_budget') {
+    const allowed = can(user, 'prontuario_orcamentos:approve')
+      || can(user, 'financeiro_financiamentos:create')
+      || can(user, 'finance:write');
+    if (!allowed) requirePermission(user, 'financeiro_financiamentos:create');
+    return;
+  }
   requirePermission(user, 'finance:write');
+};
+
+export const createFinancingProposal = (user, payload, options = {}) => {
+  assertFinancingCreatePermission(user, options);
   if (!payload.patient_id) throw new Error('Paciente é obrigatório.');
   if (!payload.description?.trim()) throw new Error('Descrição do financiamento é obrigatória.');
   if (
@@ -196,6 +212,8 @@ export const createFinancingProposal = (user, payload) => {
     interest_type: payload.interest_type || FINANCING_INTEREST_TYPES.NONE,
     interest_rate: payload.interest_rate || 0,
     discount_amount: payload.discount_amount || 0,
+    admin_fee_amount: payload.admin_fee_amount || 0,
+    admin_fee_rate: payload.admin_fee_rate || 0,
   });
 
   const now = new Date().toISOString();
@@ -237,6 +255,18 @@ export const createFinancingProposal = (user, payload) => {
     send_reminders: Boolean(payload.send_reminders),
     payer_data: payload.payer_data || {},
     instructions: payload.instructions || '',
+    source: payload.source || 'manual',
+    clinical_appointment_id: payload.clinical_appointment_id || null,
+    budget_id: payload.budget_id || null,
+    partner_name: payload.partner_name || '',
+    financial_partner_id: payload.financial_partner_id || null,
+    admin_fee_rate: Number(payload.admin_fee_rate || 0),
+    admin_fee_amount: Number(summary.adminFee || payload.admin_fee_amount || 0),
+    calculation_snapshot: payload.calculation_snapshot || null,
+    patient_name: payload.patient_name || '',
+    patient_document: payload.patient_document || '',
+    budget_approved_at: payload.budget_approved_at || null,
+    budget_approved_by: payload.budget_approved_by || null,
     created_by: user?.id || null,
     approved_by: null,
     created_at: now,
@@ -254,8 +284,15 @@ export const createFinancingProposal = (user, payload) => {
     financing_id: id,
     event_type: FINANCING_TIMELINE_EVENT.PROPOSAL_CREATED,
     title: 'Proposta criada',
-    description: 'Proposta de financiamento registrada.',
+    description: options.source === 'clinical_budget'
+      ? 'Financiamento gerado automaticamente a partir do orçamento clínico aprovado.'
+      : 'Proposta de financiamento registrada.',
     actor_id: user?.id || null,
+    payload: {
+      source: payload.source || 'manual',
+      clinical_appointment_id: payload.clinical_appointment_id || null,
+      budget_id: payload.budget_id || null,
+    },
   });
   return record;
 };
@@ -933,5 +970,119 @@ export const renegotiateFinancing = (user, financingId, payload) => {
     actor_id: user?.id || null,
   });
 
+  syncClinicalBudgetIfNeeded(approved.financing?.id, user?.id);
+
   return approved.financing;
+};
+
+const syncClinicalBudgetIfNeeded = (financingId, actorId) => {
+  if (!financingId) return;
+  import('./clinicalBudgetFinancingIntegration.js')
+    .then((mod) => mod.syncClinicalBudgetFromFinancing(financingId, actorId))
+    .catch(() => {});
+};
+
+export const linkFinancingToContract = (user, financingId, contractId) => {
+  if (!financingId || !contractId) return null;
+  const current = getFinancingById(financingId);
+  if (!current) throw new Error('Financiamento não encontrado.');
+
+  withDb((db) => {
+    const list = Array.isArray(db.financings) ? db.financings : [];
+    const index = list.findIndex((item) => item.id === financingId);
+    if (index < 0) throw new Error('Financiamento não encontrado.');
+    list[index] = {
+      ...list[index],
+      contract_id: contractId,
+      updated_at: new Date().toISOString(),
+    };
+    db.financings = list;
+
+    if (Array.isArray(db.receivables)) {
+      db.receivables = db.receivables.map((item) => (
+        item.financing_id === financingId
+          ? { ...item, contract_id: contractId, updated_at: new Date().toISOString() }
+          : item
+      ));
+    }
+    return db;
+  });
+
+  logEvent({
+    financing_id: financingId,
+    event_type: FINANCING_TIMELINE_EVENT.CONTRACT_LINKED,
+    title: 'Contrato vinculado',
+    description: `Contrato ${contractId} associado ao financiamento.`,
+    actor_id: user?.id || null,
+    payload: { contract_id: contractId },
+  });
+
+  syncClinicalBudgetIfNeeded(financingId, user?.id);
+  return getFinancingById(financingId);
+};
+
+const EDITABLE_FINANCING_STATUSES = new Set([
+  FINANCING_STATUS.DRAFT,
+  FINANCING_STATUS.PENDING_ANALYSIS,
+]);
+
+export const updateFinancingTerms = (user, financingId, patch = {}) => {
+  requirePermission(user, 'financeiro_financiamentos:edit');
+  const current = getFinancingById(financingId);
+  if (!current) throw new Error('Financiamento não encontrado.');
+  if (!EDITABLE_FINANCING_STATUSES.has(current.status)) {
+    throw new Error('Alteração de termos permitida apenas enquanto o financiamento está em análise.');
+  }
+
+  const merged = {
+    total_amount: patch.total_amount ?? current.total_amount,
+    entry_amount: patch.entry_amount ?? current.entry_amount,
+    installments_count: patch.installments_count ?? current.installments_count,
+    interest_type: patch.interest_type ?? current.interest_type,
+    interest_rate: patch.interest_rate ?? current.interest_rate,
+    discount_amount: patch.discount_amount ?? current.discount_amount,
+    admin_fee_amount: patch.admin_fee_amount ?? current.admin_fee_amount,
+    admin_fee_rate: patch.admin_fee_rate ?? current.admin_fee_rate,
+  };
+  const summary = calculateFinancingSummary(merged);
+
+  const updated = {
+    ...current,
+    total_amount: summary.totalAmount,
+    entry_amount: summary.entryAmount,
+    financed_amount: summary.financedAmount,
+    installments_count: summary.installmentsCount,
+    interest_type: summary.interestType,
+    interest_rate: summary.interestRate,
+    discount_amount: summary.discountAmount,
+    net_financed_amount: summary.netFinancedAmount,
+    installment_amount: summary.installmentAmount,
+    total_payable_amount: summary.totalPayableAmount,
+    total_open_amount: summary.totalPayableAmount,
+    first_due_date: patch.first_due_date ?? current.first_due_date,
+    partner_name: patch.partner_name ?? current.partner_name,
+    internal_notes: patch.internal_notes ?? current.internal_notes,
+    updated_at: new Date().toISOString(),
+  };
+
+  withDb((db) => {
+    const list = Array.isArray(db.financings) ? db.financings : [];
+    const index = list.findIndex((item) => item.id === financingId);
+    if (index < 0) throw new Error('Financiamento não encontrado.');
+    list[index] = updated;
+    db.financings = list;
+    return db;
+  });
+
+  logEvent({
+    financing_id: financingId,
+    event_type: FINANCING_TIMELINE_EVENT.TERMS_UPDATED,
+    title: 'Termos atualizados',
+    description: 'Condições financeiras do financiamento foram revisadas.',
+    actor_id: user?.id || null,
+    payload: { patch },
+  });
+
+  syncClinicalBudgetIfNeeded(financingId, user?.id);
+  return updated;
 };

@@ -24,6 +24,7 @@ import FinanceFaturamentoPage from './pages/FinanceFaturamentoPage.jsx';
 import FinanceComissoesPage from './pages/FinanceComissoesPage.jsx';
 import FinanceDREPage from './pages/FinanceDREPage.jsx';
 import FornecedoresPage from './pages/administrativo/FornecedoresPage.jsx';
+import TreatmentPlanTypesAdminPage from './pages/admin/TreatmentPlanTypesAdminPage.jsx';
 import InventoryPage from './pages/InventoryPage.jsx';
 import AdminUsuariosPage from './pages/AdminUsuariosPage.jsx';
 import PatientsPage from './pages/PatientsPage.jsx';
@@ -182,6 +183,7 @@ export default function ProtectedApp() {
         <Route path="/admin/contratos" element={<Navigate to="/gestao/contratos" replace />} />
         <Route path="/admin/consentimentos" element={<Navigate to="/gestao/contratos/termos" replace />} />
         <Route path="/admin/fornecedores" element={withAdminGate(withRole('/admin/fornecedores', <FornecedoresPage />))} />
+        <Route path="/admin/tipos-tratamento" element={withAdminGate(withRole('/admin/tipos-tratamento', <TreatmentPlanTypesAdminPage />))} />
         <Route path="/administrativo/fornecedores" element={<Navigate to="/admin/fornecedores" replace />} />
         <Route path="/financeiro/contas-pagar" element={withRole('/financeiro/contas-pagar', <FinancePayablesPage />)} />
         <Route path="/financeiro/contas-receber" element={withRole('/financeiro/contas-receber', <FinanceReceivablesPage />)} />

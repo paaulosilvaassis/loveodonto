@@ -1,4 +1,4 @@
-export const DB_VERSION = 51;
+export const DB_VERSION = 52;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -193,6 +193,8 @@ export const defaultDbState = () => ({
   receivableCharges: [],
   /** Financiamentos próprios da clínica */
   financings: [],
+  /** Parceiros financeiros (bancos, financeiras, financiamento próprio) */
+  financialPartners: [],
   /** Parcelas vinculadas aos financiamentos */
   financingInstallments: [],
   /** Cobranças de boleto/carnê vinculadas a financiamento/parcela */

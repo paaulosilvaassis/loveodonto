@@ -94,6 +94,9 @@ export const FINANCING_TIMELINE_EVENT = {
   FINANCING_CANCELED: 'financing_canceled',
   CARNE_GENERATED: 'carne_generated',
   FINANCING_RENEGOTIATED: 'financing_renegotiated',
+  TERMS_UPDATED: 'terms_updated',
+  CLINICAL_BUDGET_SYNCED: 'clinical_budget_synced',
+  CONTRACT_LINKED: 'contract_linked',
 };
 
 export const FINANCING_STATUS = {

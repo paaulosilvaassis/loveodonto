@@ -7,7 +7,7 @@ import {
   BarChart3,
   Users,
   User,
-  FileSignature,
+  ScrollText,
   UserCog,
   Landmark,
   Receipt,
@@ -172,13 +172,6 @@ export const navCategories = [
         route: '/gestao/convenios',
         rolesAllowed: ['admin', 'gerente', 'recepcao'],
       },
-      {
-        id: 'contratos',
-        label: 'Contratos & Consentimentos',
-        icon: FileSignature,
-        route: '/gestao/contratos',
-        rolesAllowed: ['admin', 'gerente', 'recepcao'],
-      },
     ],
   },
   {
@@ -214,6 +207,20 @@ export const navCategories = [
         icon: BadgeDollarSign,
         route: '/admin/base-precos',
         rolesAllowed: ['admin', 'gerente'],
+      },
+      {
+        id: 'tipos-tratamento',
+        label: 'Tipos de Tratamento',
+        icon: Activity,
+        route: '/admin/tipos-tratamento',
+        rolesAllowed: ['admin', 'gerente'],
+      },
+      {
+        id: 'contratos',
+        label: 'Contratos e Consentimentos',
+        icon: ScrollText,
+        route: '/gestao/contratos',
+        rolesAllowed: ['admin', 'gerente', 'recepcao'],
       },
       {
         id: 'fornecedores',
@@ -414,9 +421,9 @@ export const getActiveCategory = (pathname) => {
   
   // Fallback: detecta por prefixo de rota
   if (pathname.startsWith('/gestao/dashboard')) return 'dashboard';
-  if (pathname.startsWith('/gestao-atendimento') || pathname.startsWith('/pacientes') || pathname.startsWith('/gestao/agenda') || pathname.startsWith('/gestao/convenios') || pathname.startsWith('/gestao/contratos') || pathname.startsWith('/gestao-comercial/fluxo-do-paciente')) return 'gestao-atendimento';
+  if (pathname.startsWith('/gestao-atendimento') || pathname.startsWith('/pacientes') || pathname.startsWith('/gestao/agenda') || pathname.startsWith('/gestao/convenios') || pathname.startsWith('/gestao-comercial/fluxo-do-paciente')) return 'gestao-atendimento';
   if (pathname.startsWith('/crm')) return 'comercial';
-  if (pathname.startsWith('/admin')) return 'administrativo';
+  if (pathname.startsWith('/gestao/contratos') || pathname.startsWith('/admin') || pathname.startsWith('/configuracoes')) return 'administrativo';
   if (pathname.startsWith('/financeiro')) return 'financeiro';
   if (pathname.startsWith('/comercial') || pathname.startsWith('/gestao/crm') || pathname.startsWith('/gestao-comercial')) return 'comercial';
   

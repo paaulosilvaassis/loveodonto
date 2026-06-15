@@ -186,7 +186,7 @@ export function createContractDraft(user, payload) {
     arr[idx] = {
       ...arr[idx],
       tenant_id: tenantIdFromUser(user),
-      title: tpl?.name || 'Contrato',
+      title: payload.title || (payload.skipHashtagValidation ? 'Contrato profissional odontológico' : null) || tpl?.name || 'Contrato',
       category: tpl?.category || 'servicos',
       treatmentType: tpl?.treatmentType || null,
       ...snaps,

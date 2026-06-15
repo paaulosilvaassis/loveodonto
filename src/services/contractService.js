@@ -301,6 +301,7 @@ export function createGeneratedContractDraft(user, payload) {
     patientId,
     templateId,
     editedHtml,
+    skipHashtagValidation = false,
   } = payload;
   if (!quoteSource || !quoteId || !patientId || !templateId) {
     throw new Error('quoteSource, quoteId, patientId e templateId são obrigatórios.');
@@ -321,9 +322,11 @@ export function createGeneratedContractDraft(user, payload) {
     currentUser: user,
   });
   const merged = editedHtml != null ? String(editedHtml) : baseHtml;
-  const unknown = findUnknownHashtags(merged);
-  if (unknown.length) {
-    throw new Error(`Hashtags desconhecidas: ${unknown.join(', ')}`);
+  if (!skipHashtagValidation) {
+    const unknown = findUnknownHashtags(merged);
+    if (unknown.length) {
+      throw new Error(`Hashtags desconhecidas: ${unknown.join(', ')}`);
+    }
   }
   const ctx = buildContractContext({
     quoteSource,

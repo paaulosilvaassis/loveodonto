@@ -1,346 +1,490 @@
-import { useEffect, useState } from 'react';
-import { Search, X, Plus } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Search, X, Star, Plus, Trash2 } from 'lucide-react';
+import {
+  ModalRoot,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  ModalTitle,
+  ModalDescription,
+  ModalClose,
+} from './ui/Modal.jsx';
 import {
   listProcedures,
   getPriceTableForPatient,
   getDefaultPriceTable,
   getEffectivePrice,
-  PROCEDURE_SEGMENT,
   PROCEDURE_STATUS,
-  SPECIALTIES,
 } from '../services/priceBaseService.js';
 import { loadDb } from '../db/index.js';
+import {
+  QUICK_SPECIALTY_FILTERS,
+  SORT_OPTIONS,
+  LIST_TABS,
+  PROCEDURE_COMBOS,
+  getFavoriteIds,
+  toggleFavorite,
+  pushRecent,
+  recordUsage,
+  resolveComboProcedures,
+  formatMoney,
+  getProcedureCode,
+  getEstimatedDuration,
+  getRecentIds,
+  getUsageCounts,
+} from './procedureSelectorConfig.js';
+
+function buildProcedurePayload(proc, priceTableId) {
+  const effective = priceTableId ? getEffectivePrice(proc.id, priceTableId) : null;
+  const catalogPrice = Number(proc.price) || 0;
+  const effectivePrice =
+    effective != null && effective.price != null && effective.price !== ''
+      ? Number(effective.price)
+      : catalogPrice;
+
+  return {
+    id: `proc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    procedureId: proc.id,
+    procedureCatalogId: proc.id,
+    title: proc.title,
+    name: proc.title,
+    specialty: proc.specialty,
+    category: proc.specialty,
+    segment: proc.segment,
+    code: proc.internalCode || proc.tussCode || '',
+    tussCode: proc.tussCode,
+    internalCode: proc.internalCode,
+    quantity: 1,
+    unitValue: effectivePrice,
+    totalValue: effectivePrice,
+    tooth: '',
+    region: '',
+    observations: proc.notes || '',
+    restriction: effective?.restriction ?? proc.priceRestriction,
+    minPrice: effective?.minPrice ?? proc.minPrice,
+    maxPrice: effective?.maxPrice ?? proc.maxPrice,
+    source: 'price_base',
+  };
+}
 
 /**
- * Modal para selecionar procedimento da Base de Preço
- * Usado em Orçamento e Procedimentos a Realizar
+ * Seletor profissional de procedimentos (Base de Preços).
+ * Suporta seleção múltipla, favoritos, recentes e combos.
  */
 export default function ProcedureSelectorModal({
   open,
   onClose,
   onSelect,
+  onSelectMultiple,
   patient = null,
   appointmentId = null,
 }) {
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({
-    segment: '',
-    specialty: '',
-    status: PROCEDURE_STATUS.ATIVO,
-  });
+  const [specialtyFilter, setSpecialtyFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('usage');
+  const [listTab, setListTab] = useState('all');
   const [procedures, setProcedures] = useState([]);
-  const [selectedProcedure, setSelectedProcedure] = useState(null);
-  const [customizations, setCustomizations] = useState({
-    quantity: 1,
-    unitValue: '',
-    tooth: '',
-    region: '',
-    observations: '',
-  });
+  const [selectedMap, setSelectedMap] = useState({});
+  const [favorites, setFavorites] = useState([]);
+  const [hoverId, setHoverId] = useState(null);
 
-  // Obter tabela de preço para o paciente
   const db = loadDb();
   let patientData = patient;
   if (!patientData && appointmentId) {
-    const appointment = db.appointments?.find(a => a.id === appointmentId);
+    const appointment = db.appointments?.find((a) => a.id === appointmentId);
     if (appointment?.patientId) {
-      patientData = db.patients?.find(p => p.id === appointment.patientId);
+      patientData = db.patients?.find((p) => p.id === appointment.patientId);
     }
   }
   const priceTable = patientData ? getPriceTableForPatient(patientData) : getDefaultPriceTable();
   const priceTableId = priceTable?.id || null;
 
-  useEffect(() => {
-    if (open && priceTableId) {
-      refreshProcedures();
-    } else if (open && !priceTableId) {
-      setProcedures([]);
-    }
-  }, [open, filters, search, priceTableId]);
+  const resetState = useCallback(() => {
+    setSearch('');
+    setSpecialtyFilter('all');
+    setSortBy('usage');
+    setListTab('all');
+    setSelectedMap({});
+    setHoverId(null);
+  }, []);
 
-  const refreshProcedures = () => {
-    if (!priceTableId) {
+  useEffect(() => {
+    if (!open) return;
+    resetState();
+    if (priceTableId) {
+      setFavorites(getFavoriteIds(priceTableId));
+      const list = listProcedures({
+        priceTableId,
+        status: PROCEDURE_STATUS.ATIVO,
+        sortBy: 'name',
+      });
+      setProcedures(list);
+    } else {
       setProcedures([]);
-      return;
     }
-    const filtered = listProcedures({
-      ...filters,
-      search,
-      sortBy: 'name',
-      priceTableId, // OBRIGATÓRIO: passar priceTableId
+  }, [open, priceTableId, resetState]);
+
+  const enrichedProcedures = useMemo(() => {
+    const usage = getUsageCounts(priceTableId);
+    return procedures.map((proc) => {
+      const effective = priceTableId ? getEffectivePrice(proc.id, priceTableId) : null;
+      const unitValue =
+        effective?.price != null && effective.price !== ''
+          ? Number(effective.price)
+          : Number(proc.price) || 0;
+      return {
+        ...proc,
+        unitValue,
+        usageCount: usage[proc.id] || 0,
+        isFavorite: favorites.includes(proc.id),
+      };
     });
-    setProcedures(filtered);
+  }, [procedures, priceTableId, favorites]);
+
+  const filteredProcedures = useMemo(() => {
+    let list = [...enrichedProcedures];
+    const recentIds = getRecentIds(priceTableId);
+
+    if (listTab === 'favorites') {
+      list = list.filter((p) => favorites.includes(p.id));
+    } else if (listTab === 'recent') {
+      list = list.filter((p) => recentIds.includes(p.id));
+      list.sort((a, b) => recentIds.indexOf(a.id) - recentIds.indexOf(b.id));
+    } else if (listTab === 'popular') {
+      list = list.filter((p) => p.usageCount > 0);
+      list.sort((a, b) => b.usageCount - a.usageCount);
+    }
+
+    if (specialtyFilter !== 'all') {
+      list = list.filter((p) => {
+        const spec = (p.specialty || '').toLowerCase();
+        const filter = specialtyFilter.toLowerCase();
+        return spec.includes(filter) || spec === filter;
+      });
+    }
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          (p.specialty || '').toLowerCase().includes(q) ||
+          (p.internalCode || '').toLowerCase().includes(q) ||
+          (p.tussCode || '').toLowerCase().includes(q)
+      );
+    }
+
+    if (sortBy === 'name') {
+      list.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === 'price_asc') {
+      list.sort((a, b) => a.unitValue - b.unitValue);
+    } else if (sortBy === 'price_desc') {
+      list.sort((a, b) => b.unitValue - a.unitValue);
+    } else if (sortBy === 'usage') {
+      list.sort((a, b) => b.usageCount - a.usageCount || a.title.localeCompare(b.title));
+    }
+
+    return list;
+  }, [enrichedProcedures, specialtyFilter, search, sortBy, listTab, favorites, priceTableId]);
+
+  const selectedItems = useMemo(
+    () => Object.values(selectedMap),
+    [selectedMap]
+  );
+
+  const subtotal = selectedItems.reduce((sum, item) => sum + item.unitValue, 0);
+
+  const toggleSelected = (proc) => {
+    setSelectedMap((prev) => {
+      const next = { ...prev };
+      if (next[proc.id]) {
+        delete next[proc.id];
+      } else {
+        next[proc.id] = { proc, payload: buildProcedurePayload(proc, priceTableId) };
+      }
+      return next;
+    });
   };
 
-  const handleSelect = () => {
-    if (!selectedProcedure) return;
+  const removeSelected = (procId) => {
+    setSelectedMap((prev) => {
+      const next = { ...prev };
+      delete next[procId];
+      return next;
+    });
+  };
 
-    // Obter preço efetivo da tabela (ou preço do procedimento quando não houver override)
-    const effective = priceTableId ? getEffectivePrice(selectedProcedure.id, priceTableId) : null;
-    const catalogPrice = Number(selectedProcedure.price) || 0;
-    const effectivePrice = effective != null && (effective.price != null && effective.price !== '')
-      ? Number(effective.price)
-      : catalogPrice;
-    const effectiveMinPrice = effective?.minPrice;
-    const effectiveMaxPrice = effective?.maxPrice;
-    const effectiveRestriction = effective?.restriction;
+  const handleFavorite = (e, procId) => {
+    e.stopPropagation();
+    const next = toggleFavorite(priceTableId, procId);
+    setFavorites(next);
+  };
 
-    const finalUnitValue = customizations.unitValue
-      ? parseFloat(customizations.unitValue)
-      : effectivePrice;
-
-    // Validar restrições
-    if (effectiveRestriction === 'FIXO' && customizations.unitValue) {
-      alert('Este procedimento tem preço fixo. Não é possível alterar.');
-      return;
-    }
-
-    if (effectiveRestriction === 'BLOQUEAR') {
-      if (effectiveMinPrice && finalUnitValue < effectiveMinPrice) {
-        alert(`Preço mínimo permitido: R$ ${effectiveMinPrice.toFixed(2)}`);
-        return;
-      }
-      if (effectiveMaxPrice && finalUnitValue > effectiveMaxPrice) {
-        alert(`Preço máximo permitido: R$ ${effectiveMaxPrice.toFixed(2)}`);
-        return;
-      }
-    }
-
-    if (effectiveRestriction === 'AVISAR') {
-      if (
-        (effectiveMinPrice && finalUnitValue < effectiveMinPrice) ||
-        (effectiveMaxPrice && finalUnitValue > effectiveMaxPrice)
-      ) {
-        const confirmMsg = `Preço fora do recomendado (R$ ${effectiveMinPrice || '—'} - R$ ${effectiveMaxPrice || '—'}). Deseja continuar?`;
-        if (!confirm(confirmMsg)) {
-          return;
-        }
-      }
-    }
-
-    const procedureData = {
-      id: `proc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      procedureCatalogId: selectedProcedure.id,
-      title: selectedProcedure.title,
-      specialty: selectedProcedure.specialty,
-      segment: selectedProcedure.segment,
-      tussCode: selectedProcedure.tussCode,
-      internalCode: selectedProcedure.internalCode,
-      quantity: parseInt(customizations.quantity) || 1,
-      unitValue: finalUnitValue,
-      totalValue: (parseInt(customizations.quantity) || 1) * finalUnitValue,
-      tooth: customizations.tooth || '',
-      region: customizations.region || '',
-      observations: customizations.observations || '',
-      restriction: effectiveRestriction,
-      minPrice: effectiveMinPrice,
-      maxPrice: effectiveMaxPrice,
-      source: 'price_base',
-    };
-
-    onSelect(procedureData);
-    handleClose();
+  const applyCombo = (combo) => {
+    const matches = resolveComboProcedures(combo, enrichedProcedures);
+    if (matches.length === 0) return;
+    setSelectedMap((prev) => {
+      const next = { ...prev };
+      matches.forEach((proc) => {
+        next[proc.id] = { proc, payload: buildProcedurePayload(proc, priceTableId) };
+      });
+      return next;
+    });
+    setListTab('all');
   };
 
   const handleClose = () => {
-    setSearch('');
-    setSelectedProcedure(null);
-    setCustomizations({
-      quantity: 1,
-      unitValue: '',
-      tooth: '',
-      region: '',
-      observations: '',
-    });
+    resetState();
     onClose();
   };
 
-  if (!open) return null;
+  const handleConfirm = () => {
+    if (selectedItems.length === 0) return;
+    const payloads = selectedItems.map((s) => s.payload);
+    const ids = selectedItems.map((s) => s.proc.id);
+    recordUsage(priceTableId, ids);
+    pushRecent(priceTableId, ids);
+
+    if (onSelectMultiple) {
+      onSelectMultiple(payloads);
+    } else {
+      payloads.forEach((p) => onSelect(p));
+    }
+    handleClose();
+  };
+
+  const hoveredProc = hoverId ? enrichedProcedures.find((p) => p.id === hoverId) : null;
 
   return (
-    <div className="modal-backdrop" onClick={handleClose}>
-      <div className="modal-content modal-content-large" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h2>Selecionar Procedimento</h2>
-          <button type="button" className="modal-close" onClick={handleClose}>
-            <X size={20} />
-          </button>
-        </div>
-
-        <div className="modal-body">
-          {/* Busca e Filtros */}
-          <div className="procedure-selector-filters">
-            <div className="procedure-selector-search">
-              <Search size={18} />
-              <input
-                type="text"
-                placeholder="Buscar procedimento..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <select
-              value={filters.segment}
-              onChange={(e) => setFilters({ ...filters, segment: e.target.value })}
-            >
-              <option value="">Todos os segmentos</option>
-              <option value={PROCEDURE_SEGMENT.ODONTOLOGIA}>Odontologia</option>
-              <option value={PROCEDURE_SEGMENT.OROFACIAL}>Orofacial</option>
-              <option value={PROCEDURE_SEGMENT.DIAGNOSTICO_IMAGEM}>Diagnóstico/Imagem</option>
-            </select>
-            <select
-              value={filters.specialty}
-              onChange={(e) => setFilters({ ...filters, specialty: e.target.value })}
-            >
-              <option value="">Todas as especialidades</option>
-              {SPECIALTIES.map((spec) => (
-                <option key={spec} value={spec}>
-                  {spec}
-                </option>
-              ))}
-            </select>
+    <ModalRoot open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
+      <ModalContent
+        size="xl"
+        className="procedure-selector-modal"
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <ModalHeader className="procedure-selector-header">
+          <div>
+            <ModalTitle>Selecionar Procedimentos para o Tratamento</ModalTitle>
+            <ModalDescription>
+              Busque e adicione procedimentos ao planejamento do paciente.
+            </ModalDescription>
           </div>
+          <ModalClose className="procedure-selector-close" aria-label="Fechar">
+            <X size={18} />
+          </ModalClose>
+        </ModalHeader>
 
-          {/* Lista de Procedimentos */}
-          <div className="procedure-selector-list">
-            {procedures.length === 0 ? (
-              <div className="clinical-empty-state">
-                <p>
-                  {!priceTableId
-                    ? 'Nenhuma tabela de preço disponível. Cadastre uma tabela em Gestão Comercial > Base de Preço.'
-                    : 'Nenhum procedimento encontrado.'}
-                </p>
+        <ModalBody className="procedure-selector-body">
+          <div className="procedure-selector-main">
+            <div className="procedure-selector-tabs">
+              {LIST_TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  className={`procedure-selector-tab ${listTab === tab.id ? 'is-active' : ''}`}
+                  onClick={() => setListTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {listTab === 'combos' ? (
+              <div className="procedure-selector-combos">
+                {PROCEDURE_COMBOS.map((combo) => (
+                  <button
+                    key={combo.id}
+                    type="button"
+                    className="procedure-selector-combo-card"
+                    onClick={() => applyCombo(combo)}
+                  >
+                    <span className="procedure-selector-combo-emoji">{combo.emoji}</span>
+                    <div>
+                      <strong>{combo.label}</strong>
+                      <p>{combo.description}</p>
+                    </div>
+                    <Plus size={16} aria-hidden="true" />
+                  </button>
+                ))}
               </div>
             ) : (
-              <div className="procedure-selector-grid">
-                {procedures.map((proc) => {
-                  const effective = getEffectivePrice(proc.id, priceTableId);
-                  const displayPrice = effective?.price ?? proc?.price ?? 0;
-                  const isSelected = selectedProcedure?.id === proc.id;
-                  return (
-                    <div
-                      key={proc.id}
-                      className={`procedure-selector-item ${isSelected ? 'selected' : ''}`}
-                      onClick={() => {
-                        setSelectedProcedure(proc);
-                        setCustomizations({
-                          ...customizations,
-                          unitValue: (effective?.price ?? proc?.price ?? 0).toString(),
-                        });
-                      }}
+              <>
+                <div className="procedure-selector-search-row">
+                  <div className="procedure-selector-search">
+                    <Search size={16} aria-hidden="true" />
+                    <input
+                      type="search"
+                      placeholder="Buscar procedimento, código ou especialidade"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+                  <select
+                    className="procedure-selector-sort"
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    aria-label="Ordenar por"
+                  >
+                    {SORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="procedure-selector-chips" role="tablist" aria-label="Especialidades">
+                  {QUICK_SPECIALTY_FILTERS.map((chip) => (
+                    <button
+                      key={chip.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={specialtyFilter === chip.id}
+                      className={`procedure-selector-chip ${specialtyFilter === chip.id ? 'is-active' : ''}`}
+                      onClick={() => setSpecialtyFilter(chip.id)}
                     >
-                      <div className="procedure-selector-item-header">
-                        <h3>{proc.title}</h3>
-                        <span className="procedure-selector-item-price">
-                          R$ {Number(displayPrice).toFixed(2)}
-                        </span>
-                      </div>
-                      <div className="procedure-selector-item-meta">
-                        <span>{proc.specialty}</span>
-                        {proc.tussCode && <span>TUSS: {proc.tussCode}</span>}
-                        {proc.priceRestriction !== 'LIVRE' && (
-                          <span className={`restriction-badge restriction-${proc.priceRestriction.toLowerCase()}`}>
-                            {proc.priceRestriction}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="procedure-selector-list-wrap">
+                  {!priceTableId ? (
+                    <p className="procedure-selector-empty">
+                      Nenhuma tabela de preço disponível. Cadastre em Administrativo → Base de Preços.
+                    </p>
+                  ) : filteredProcedures.length === 0 ? (
+                    <p className="procedure-selector-empty">Nenhum procedimento encontrado.</p>
+                  ) : (
+                    <table className="procedure-selector-table">
+                      <thead>
+                        <tr>
+                          <th aria-label="Selecionar" />
+                          <th>Procedimento</th>
+                          <th>Especialidade</th>
+                          <th>Código</th>
+                          <th>Valor</th>
+                          <th>Tempo</th>
+                          <th aria-label="Favorito" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredProcedures.map((proc) => {
+                          const checked = Boolean(selectedMap[proc.id]);
+                          return (
+                            <tr
+                              key={proc.id}
+                              className={`procedure-selector-row ${checked ? 'is-selected' : ''}`}
+                              onMouseEnter={() => setHoverId(proc.id)}
+                              onMouseLeave={() => setHoverId(null)}
+                              onClick={() => toggleSelected(proc)}
+                            >
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => toggleSelected(proc)}
+                                  onClick={(e) => e.stopPropagation()}
+                                  aria-label={`Selecionar ${proc.title}`}
+                                />
+                              </td>
+                              <td>
+                                <span className="procedure-selector-name">{proc.title}</span>
+                              </td>
+                              <td>
+                                <span className="procedure-selector-badge">{proc.specialty || '—'}</span>
+                              </td>
+                              <td className="procedure-selector-code">{getProcedureCode(proc)}</td>
+                              <td className="procedure-selector-price">{formatMoney(proc.unitValue)}</td>
+                              <td className="procedure-selector-time">{getEstimatedDuration(proc)}</td>
+                              <td>
+                                <button
+                                  type="button"
+                                  className={`procedure-selector-fav ${proc.isFavorite ? 'is-on' : ''}`}
+                                  onClick={(e) => handleFavorite(e, proc.id)}
+                                  aria-label={proc.isFavorite ? 'Remover favorito' : 'Favoritar'}
+                                >
+                                  <Star size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                {hoveredProc && (
+                  <div className="procedure-selector-preview">
+                    <strong>{hoveredProc.title}</strong>
+                    <p>{hoveredProc.notes || 'Sem descrição cadastrada.'}</p>
+                    <span>
+                      Qtd. padrão: 1 · Tempo médio: {getEstimatedDuration(hoveredProc)}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
-          {/* Customizações */}
-          {selectedProcedure && (
-            <div className="procedure-selector-customizations">
-              <h3>Detalhes do Procedimento</h3>
-              <div className="procedure-selector-form">
-                <div className="form-field">
-                  <label>Quantidade</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={customizations.quantity}
-                    onChange={(e) => {
-                      const qty = parseInt(e.target.value) || 1;
-                      setCustomizations({
-                        ...customizations,
-                        quantity: qty,
-                      });
-                    }}
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Valor Unitário</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={customizations.unitValue}
-                    onChange={(e) => setCustomizations({ ...customizations, unitValue: e.target.value })}
-                    disabled={selectedProcedure?.priceRestriction === 'FIXO'}
-                    placeholder={selectedProcedure ? (selectedProcedure.price || 0).toFixed(2) : '0.00'}
-                  />
-                  {selectedProcedure?.priceRestriction === 'FIXO' && (
-                    <p className="price-base-restriction-warning">Preço fixo pela Base de Preço</p>
-                  )}
-                </div>
-                <div className="form-field">
-                  <label>Dente</label>
-                  <input
-                    type="text"
-                    value={customizations.tooth}
-                    onChange={(e) => setCustomizations({ ...customizations, tooth: e.target.value })}
-                    placeholder="Ex: 16, 17, 18"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Região</label>
-                  <input
-                    type="text"
-                    value={customizations.region}
-                    onChange={(e) => setCustomizations({ ...customizations, region: e.target.value })}
-                    placeholder="Ex: Superior direito"
-                  />
-                </div>
-                <div className="form-field">
-                  <label>Observações</label>
-                  <textarea
-                    value={customizations.observations}
-                    onChange={(e) => setCustomizations({ ...customizations, observations: e.target.value })}
-                    rows={2}
-                    placeholder="Observações sobre este procedimento..."
-                  />
-                </div>
-                <div className="procedure-selector-total">
-                  <strong>
-                    Total: R${' '}
-                    {(
-                      (parseInt(customizations.quantity) || 1) *
-                      (parseFloat(customizations.unitValue) || (getEffectivePrice(selectedProcedure.id, priceTableId)?.price ?? 0))
-                    ).toFixed(2)}
-                  </strong>
-                </div>
+          <aside className="procedure-selector-sidebar">
+            <h3>Procedimentos Selecionados</h3>
+            {selectedItems.length === 0 ? (
+              <p className="procedure-selector-sidebar-empty">
+                Selecione itens na lista ou use um combo pronto.
+              </p>
+            ) : (
+              <ul className="procedure-selector-selected-list">
+                {selectedItems.map(({ proc, payload }) => (
+                  <li key={proc.id}>
+                    <div>
+                      <span>{proc.title}</span>
+                      <strong>{formatMoney(payload.unitValue)}</strong>
+                    </div>
+                    <button
+                      type="button"
+                      className="procedure-selector-remove"
+                      onClick={() => removeSelected(proc.id)}
+                      aria-label={`Remover ${proc.title}`}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="procedure-selector-sidebar-summary">
+              <div><span>Quantidade</span><strong>{selectedItems.length}</strong></div>
+              <div className="procedure-selector-subtotal">
+                <span>Subtotal</span>
+                <strong>{formatMoney(subtotal)}</strong>
               </div>
             </div>
-          )}
-        </div>
+            <button
+              type="button"
+              className="clinical-btn clinical-btn--primary clinical-btn--sm procedure-selector-sidebar-cta"
+              disabled={selectedItems.length === 0}
+              onClick={handleConfirm}
+            >
+              Adicionar ao planejamento
+            </button>
+          </aside>
+        </ModalBody>
 
-        <div className="modal-footer">
-          <button type="button" className="button secondary" onClick={handleClose}>
+        <ModalFooter className="procedure-selector-footer">
+          <button type="button" className="clinical-btn clinical-btn--secondary clinical-btn--sm" onClick={handleClose}>
             Cancelar
           </button>
           <button
             type="button"
-            className="button primary"
-            onClick={handleSelect}
-            disabled={!selectedProcedure}
+            className="clinical-btn clinical-btn--primary clinical-btn--sm"
+            disabled={selectedItems.length === 0}
+            onClick={handleConfirm}
           >
-            <Plus size={16} />
-            Adicionar Procedimento
+            Adicionar procedimentos{selectedItems.length > 0 ? ` (${selectedItems.length})` : ''}
           </button>
-        </div>
-      </div>
-    </div>
+        </ModalFooter>
+      </ModalContent>
+    </ModalRoot>
   );
 }

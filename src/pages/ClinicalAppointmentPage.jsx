@@ -1,8 +1,6 @@
-import { useEffect, useState, useMemo, useRef, Component } from 'react';
+﻿import { useEffect, useState, useMemo, useRef, Component } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
-import { can } from '../permissions/permissions.js';
-import GenerateContractModal from '../components/contracts/GenerateContractModal.jsx';
 import { loadDb } from '../db/index.js';
 import { createId } from '../services/helpers.js';
 import { getAppointmentDetails, APPOINTMENT_STATUS } from '../services/appointmentService.js';
@@ -51,16 +49,27 @@ import {
 } from 'lucide-react';
 import ProcedureSelectorModal from '../components/ProcedureSelectorModal.jsx';
 import DocumentsSection from '../components/clinical/DocumentsSection.jsx';
+import { ClinicalPlanningSection } from '../components/clinical/ClinicalPlanningSection.jsx';
+import { ClinicalStepNav } from '../components/clinical/ClinicalStepNav.jsx';
+import { ClinicalStageShell, ClinicalBlock, ClinicalBtn } from '../components/clinical/ClinicalStageShell.jsx';
+import { ClinicalBudgetSection } from '../components/clinical/ClinicalBudgetSection.jsx';
+import { ClinicalContractSection } from '../components/clinical/ClinicalContractSection.jsx';
+import {
+  CLINICAL_NAV_ITEMS,
+  canAccessClinicalSection,
+  sectionLockMessage,
+  getClinicalWorkflowState,
+} from '../components/clinical/clinicalAppointmentConfig.js';
+import { createReceivablesFromApprovedBudget } from '../services/clinicalBudgetFinance.js';
 import { getLeadById } from '../services/crmService.js';
 import { RegisterPatientFromLeadModal } from '../components/agenda/RegisterPatientFromLeadModal.jsx';
 import { listProcedures, getPriceTableForPatient, getDefaultPriceTable, PROCEDURE_STATUS } from '../services/priceBaseService.js';
-import { getPatient, PENDING_FIELDS_MAP } from '../services/patientService.js';
 
 function ClinicalAppointmentPageContent() {
   const { appointmentId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [activeSection, setActiveSection] = useState('desenvolvimento');
+  const [activeSection, setActiveSection] = useState('planejamento');
   const [appointment, setAppointment] = useState(null);
   const [patient, setPatient] = useState(null);
   const [professional, setProfessional] = useState(null);
@@ -75,12 +84,12 @@ function ClinicalAppointmentPageContent() {
       if (appointmentId) {
         loadAppointmentData();
       } else {
-        setError('ID do atendimento não fornecido');
+        setError('ID do atendimento nÃ£o fornecido');
         setLoading(false);
       }
     } catch (err) {
       console.error('Erro no useEffect:', err);
-      setError(err.message || 'Erro ao inicializar página');
+      setError(err.message || 'Erro ao inicializar pÃ¡gina');
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -90,13 +99,13 @@ function ClinicalAppointmentPageContent() {
     try {
       const db = loadDb();
       if (!db) {
-        throw new Error('Banco de dados não disponível');
+        throw new Error('Banco de dados nÃ£o disponÃ­vel');
       }
 
       const details = getAppointmentDetails(appointmentId);
       
       if (!details || !details.appointment) {
-        setError('Atendimento não encontrado');
+        setError('Atendimento nÃ£o encontrado');
         setLoading(false);
         setTimeout(() => {
           navigate('/gestao-comercial/jornada-do-paciente');
@@ -107,7 +116,7 @@ function ClinicalAppointmentPageContent() {
       const apt = details.appointment;
 
       if (apt.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO) {
-        setError('Atendimento não está em andamento');
+        setError('Atendimento nÃ£o estÃ¡ em andamento');
         setLoading(false);
         setTimeout(() => {
           navigate('/gestao-comercial/jornada-do-paciente');
@@ -117,7 +126,7 @@ function ClinicalAppointmentPageContent() {
 
       setAppointment(apt);
       
-      // Usar dados já retornados por getAppointmentDetails
+      // Usar dados jÃ¡ retornados por getAppointmentDetails
       const patientData = details.patient || null;
       setPatient(patientData);
 
@@ -132,32 +141,29 @@ function ClinicalAppointmentPageContent() {
       console.error('Erro ao carregar dados do atendimento:', err);
       setError(err.message || 'Erro ao carregar dados do atendimento');
       setLoading(false);
-      // Navegar após um pequeno delay para evitar problemas de renderização
+      // Navegar apÃ³s um pequeno delay para evitar problemas de renderizaÃ§Ã£o
       setTimeout(() => {
         navigate('/gestao-comercial/jornada-do-paciente');
       }, 2000);
     }
   };
 
-  const menuItems = useMemo(() => {
-    const items = [
-      { id: 'desenvolvimento', label: 'Observações do Orçamento', icon: FileText },
-      { id: 'procedimentos', label: 'Procedimentos a Realizar', icon: ClipboardList },
-      { id: 'planejamento', label: 'Planejamento', icon: Calendar },
-      { id: 'orcamento', label: 'Orçamento', icon: DollarSign },
-      { id: 'contratos', label: 'Contratos', icon: FileCheck },
-      { id: 'documentos', label: 'Documentos', icon: FileSignature },
-    ];
+  const workflow = useMemo(
+    () => getClinicalWorkflowState(appointmentId),
+    [appointmentId, activeSection, sectionToast]
+  );
 
-    // Adicionar Convênios apenas se paciente tiver convênio
-    if (patient?.insurance_provider) {
-      items.push({ id: 'convenios', label: 'Convênios', icon: CreditCard });
+  const handleNavClick = (sectionId) => {
+    if (!canAccessClinicalSection(sectionId, workflow)) {
+      setSectionToast({
+        type: 'error',
+        message: sectionLockMessage(sectionId, workflow) || 'Etapa bloqueada.',
+      });
+      setTimeout(() => setSectionToast(null), 4000);
+      return;
     }
-
-    items.push({ id: 'dados-clinicos', label: 'Dados Clínicos', icon: Stethoscope });
-
-    return items;
-  }, [patient]);
+    setActiveSection(sectionId);
+  };
 
   if (loading) {
     return (
@@ -211,9 +217,9 @@ function ClinicalAppointmentPageContent() {
               width: '100%',
             }}
           >
-            <strong>Paciente não cadastrado</strong>
+            <strong>Paciente nÃ£o cadastrado</strong>
             <br />
-            Este atendimento veio do Pipeline (CRM) e o lead ainda não está vinculado ao cadastro. Cadastre o paciente para continuar o atendimento.
+            Este atendimento veio do Pipeline (CRM) e o lead ainda nÃ£o estÃ¡ vinculado ao cadastro. Cadastre o paciente para continuar o atendimento.
           </div>
           <button
             type="button"
@@ -255,142 +261,92 @@ function ClinicalAppointmentPageContent() {
   }
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return 'Data não disponível';
+    if (!dateStr) return 'Data nÃ£o disponÃ­vel';
     try {
       const date = new Date(dateStr + 'T00:00:00');
-      if (isNaN(date.getTime())) return 'Data inválida';
+      if (isNaN(date.getTime())) return 'Data invÃ¡lida';
       return date.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     } catch (err) {
-      return 'Data inválida';
+      return 'Data invÃ¡lida';
     }
   };
 
   const formatTime = (timeStr) => {
-    if (!timeStr) return 'Horário não disponível';
+    if (!timeStr) return 'HorÃ¡rio nÃ£o disponÃ­vel';
     try {
       return timeStr.slice(0, 5);
     } catch (err) {
-      return 'Horário inválido';
+      return 'HorÃ¡rio invÃ¡lido';
     }
   };
 
   
-  // Renderização simplificada para debug
+  // RenderizaÃ§Ã£o simplificada para debug
   
-  // Agrupar itens do menu
-  const atendimentoItems = menuItems.filter(item => 
-    ['desenvolvimento', 'procedimentos', 'planejamento', 'orcamento', 'contratos', 'documentos'].includes(item.id)
-  );
-  const dadosClinicosItems = menuItems.filter(item => 
-    ['convenios', 'dados-clinicos'].includes(item.id)
-  );
+  const formatDateShort = (dateStr) => {
+    if (!dateStr) return 'â€”';
+    try {
+      const date = new Date(`${dateStr}T00:00:00`);
+      if (Number.isNaN(date.getTime())) return 'â€”';
+      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch {
+      return 'â€”';
+    }
+  };
 
   return (
     <div className="clinical-appointment-page">
-      {/* Header Fixo */}
       <header className="clinical-appointment-header">
         <div className="clinical-appointment-header-content">
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="clinical-appointment-back-btn"
             onClick={() => navigate('/gestao-comercial/jornada-do-paciente')}
             aria-label="Voltar"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={18} />
           </button>
+
           <div className="clinical-appointment-header-info">
             <h1 className="clinical-appointment-header-title">
               {patient?.full_name || patient?.nickname || patient?.social_name || 'Paciente'}
             </h1>
             <div className="clinical-appointment-header-meta">
-              <span>Dr(a). {professional?.nomeCompleto || professional?.name || 'Profissional'}</span>
-              <span className="clinical-appointment-header-meta-sep">•</span>
-              <span>{appointment?.date ? formatDate(appointment.date) : 'Data não disponível'}</span>
-              <span className="clinical-appointment-header-meta-sep">•</span>
-              <span>{appointment?.startTime ? formatTime(appointment.startTime) : 'Horário não disponível'}</span>
-              {room && (
-                <>
-                  <span className="clinical-appointment-header-meta-sep">•</span>
-                  <span>{room.name}</span>
-                </>
-              )}
+              <span className="clinical-header-chip">
+                Dr(a). {professional?.nomeCompleto || professional?.name || 'Profissional'}
+              </span>
+              <span className="clinical-header-chip">
+                {formatDateShort(appointment?.date)} Â· {appointment?.startTime ? formatTime(appointment.startTime) : 'â€”'}
+              </span>
+              {room ? <span className="clinical-header-chip">{room.name}</span> : null}
             </div>
           </div>
+
           <div className="clinical-appointment-header-status-badge">
-            <Activity size={16} />
-            <span>Em Atendimento</span>
+            <Activity size={14} />
+            <span>Em atendimento</span>
           </div>
         </div>
       </header>
 
-      {/* Container Principal */}
       <div className="clinical-appointment-container">
-        {/* Sidebar Clínica */}
-        <aside className="clinical-appointment-sidebar-card">
-          <nav className="clinical-appointment-nav">
-            {/* Grupo: Atendimento */}
-            <div className="clinical-appointment-nav-group">
-              <h3 className="clinical-appointment-nav-group-title">Atendimento</h3>
-              <div className="clinical-appointment-nav-items">
-                {atendimentoItems.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`clinical-appointment-nav-item ${activeSection === item.id ? 'active' : ''}`}
-                      onClick={() => setActiveSection(item.id)}
-                    >
-                      <Icon size={18} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Grupo: Dados Clínicos */}
-            <div className="clinical-appointment-nav-group">
-              <h3 className="clinical-appointment-nav-group-title">Dados Clínicos</h3>
-              <div className="clinical-appointment-nav-items">
-                {dadosClinicosItems.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className={`clinical-appointment-nav-item ${activeSection === item.id ? 'active' : ''}`}
-                      onClick={() => setActiveSection(item.id)}
-                    >
-                      <Icon size={18} />
-                      <span>{item.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </nav>
-        </aside>
-
-        {/* Área de Conteúdo */}
         <main className="clinical-appointment-main">
+          <ClinicalStepNav
+            items={CLINICAL_NAV_ITEMS}
+            activeSection={activeSection}
+            workflow={workflow}
+            onSelect={handleNavClick}
+            getLockMessage={(id) => sectionLockMessage(id, workflow)}
+          />
+
+          <div className="clinical-appointment-content">
           {sectionToast && (
-            <div
-              className={`toast ${sectionToast.type}`}
-              role="status"
-              style={{ position: 'sticky', top: '1rem', zIndex: 10, marginBottom: '1rem' }}
-            >
+            <div className={`toast ${sectionToast.type}`} role="status">
               {sectionToast.message}
             </div>
           )}
-          {activeSection === 'desenvolvimento' && (
-            <DesenvolvimentoClinicoSection appointmentId={appointmentId} user={user} patient={patient} />
-          )}
-          {activeSection === 'procedimentos' && (
-            <ProcedimentosSection appointmentId={appointmentId} user={user} appointment={appointment} patient={patient} />
-          )}
           {activeSection === 'planejamento' && (
-            <PlanejamentoSection
+            <ClinicalPlanningSection
               appointmentId={appointmentId}
               user={user}
               appointment={appointment}
@@ -403,10 +359,41 @@ function ClinicalAppointmentPageContent() {
             />
           )}
           {activeSection === 'orcamento' && (
-            <OrcamentoSection appointmentId={appointmentId} user={user} appointment={appointment} patient={patient} />
+            canAccessClinicalSection('orcamento', workflow) ? (
+              <ClinicalBudgetSection appointmentId={appointmentId} user={user} appointment={appointment} patient={patient} />
+            ) : (
+              <ClinicalSectionLocked message={sectionLockMessage('orcamento', workflow)} onGo={() => setActiveSection('planejamento')} />
+            )
           )}
           {activeSection === 'contratos' && (
-            <ContratosSection appointmentId={appointmentId} patientId={patient?.id} />
+            canAccessClinicalSection('contratos', workflow) ? (
+              <ClinicalContractSection
+                appointmentId={appointmentId}
+                patientId={patient?.id}
+                user={user}
+                budgetApproved={workflow.budgetApproved}
+                budget={workflow.budget}
+                appointment={appointment}
+                professional={professional}
+              />
+            ) : (
+              <ClinicalSectionLocked message={sectionLockMessage('contratos', workflow)} onGo={() => setActiveSection('orcamento')} />
+            )
+          )}
+          {activeSection === 'documentos' && patient && (
+            canAccessClinicalSection('documentos', workflow) ? (
+              <DocumentsSection
+                appointmentId={appointmentId}
+                patient={patient}
+                appointment={appointment}
+                professional={professional}
+              />
+            ) : (
+              <ClinicalSectionLocked message={sectionLockMessage('documentos', workflow)} onGo={() => setActiveSection('orcamento')} />
+            )
+          )}
+          {activeSection === 'observacoes' && (
+            <DesenvolvimentoClinicoSection appointmentId={appointmentId} user={user} patient={patient} />
           )}
           {activeSection === 'convenios' && patient && (
             <ConveniosSection patient={patient} />
@@ -414,21 +401,30 @@ function ClinicalAppointmentPageContent() {
           {activeSection === 'dados-clinicos' && patient && (
             <DadosClinicosSection appointmentId={appointmentId} patientId={patient.id} />
           )}
-          {activeSection === 'documentos' && patient && (
-            <DocumentsSection 
-              appointmentId={appointmentId} 
-              patient={patient} 
-              appointment={appointment}
-              professional={professional}
-            />
-          )}
+          </div>
         </main>
       </div>
     </div>
   );
 }
 
-// Seção: Observações do Orçamento (observações clínicas e administrativas vinculadas ao orçamento)
+function ClinicalSectionLocked({ message, onGo }) {
+  return (
+    <ClinicalStageShell title="Etapa bloqueada" description={message}>
+      <div className="clinical-locked-card">
+        <FileCheck size={40} strokeWidth={1.25} />
+        <p>{message}</p>
+        {onGo && (
+          <ClinicalBtn variant="secondary" onClick={onGo}>
+            Voltar Ã  etapa anterior
+          </ClinicalBtn>
+        )}
+      </div>
+    </ClinicalStageShell>
+  );
+}
+
+// SeÃ§Ã£o: ObservaÃ§Ãµes clÃ­nicas do atendimento
 function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
   const [evolution, setEvolution] = useState('');
   const [saving, setSaving] = useState(false);
@@ -452,7 +448,7 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
       const allEvolutions = listClinicalEvolutions(patientId, appointmentId);
       setEvolutions(allEvolutions);
     } catch (error) {
-      console.error('Erro ao carregar observações:', error);
+      console.error('Erro ao carregar observaÃ§Ãµes:', error);
       setEvolutions([]);
     } finally {
       setLoadingEvolutions(false);
@@ -472,7 +468,7 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
       setEvolution('');
       loadEvolutions();
     } catch (error) {
-      console.error('Erro ao salvar observação:', error);
+      console.error('Erro ao salvar observaÃ§Ã£o:', error);
     } finally {
       setSaving(false);
     }
@@ -495,13 +491,13 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
   };
 
   const getProfessionalName = (professionalId) => {
-    if (!professionalId) return 'Profissional não identificado';
+    if (!professionalId) return 'Profissional nÃ£o identificado';
     try {
       const db = loadDb();
       const professional = db.collaborators?.find((c) => c.id === professionalId);
-      return professional?.nomeCompleto || professional?.name || 'Profissional não identificado';
+      return professional?.nomeCompleto || professional?.name || 'Profissional nÃ£o identificado';
     } catch {
-      return 'Profissional não identificado';
+      return 'Profissional nÃ£o identificado';
     }
   };
 
@@ -524,11 +520,11 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
       logClinicalEvent(appointmentId, 'evolution_edited', { evolutionId: editingEvolutionId }, user.id);
       setEditingEvolutionId(null);
       setEditingContent('');
-      loadEvolutions(); // Recarregar histórico
+      loadEvolutions(); // Recarregar histÃ³rico
       setSavingEdit(false);
     } catch (error) {
-      console.error('Erro ao editar evolução:', error);
-      alert(error.message || 'Erro ao editar evolução');
+      console.error('Erro ao editar evoluÃ§Ã£o:', error);
+      alert(error.message || 'Erro ao editar evoluÃ§Ã£o');
       setSavingEdit(false);
     }
   };
@@ -537,38 +533,34 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
   const hasMoreEvolutions = evolutions.length > 5;
 
   return (
-    <SectionCard
-      title="Observações do Orçamento"
-      description="Registre observações clínicas e administrativas relacionadas a este orçamento"
-      actions={
-        <button
-          type="button"
-          className="button primary"
-          onClick={handleSave}
-          disabled={saving || !(evolution || '').trim()}
-        >
-          <Save size={16} />
-          {saving ? 'Salvando...' : 'Salvar observações'}
-        </button>
+    <ClinicalStageShell
+      title="ObservaÃ§Ãµes"
+      description="EvoluÃ§Ãµes e anotaÃ§Ãµes clÃ­nicas deste atendimento."
+      primaryAction={
+        <ClinicalBtn variant="primary" icon={Save} onClick={handleSave} disabled={saving || !(evolution || '').trim()}>
+          {saving ? 'Salvandoâ€¦' : 'Salvar'}
+        </ClinicalBtn>
       }
     >
-      <textarea
-        className="clinical-evolution-textarea"
-        placeholder="Descreva observações clínicas, cuidados, condições ou orientações relacionadas a este orçamento..."
-        value={evolution}
-        onChange={(e) => setEvolution(e.target.value)}
-        rows={12}
-      />
+      <ClinicalBlock title="Nova observaÃ§Ã£o">
+        <textarea
+          className="clinical-evolution-textarea clinical-textarea-compact"
+          placeholder="Descreva evoluÃ§Ã£o clÃ­nica, cuidados ou orientaÃ§Ãµesâ€¦"
+          value={evolution}
+          onChange={(e) => setEvolution(e.target.value)}
+          rows={4}
+        />
+      </ClinicalBlock>
 
-      {/* Histórico de observações (mais recente primeiro) */}
+      {/* HistÃ³rico de observaÃ§Ãµes (mais recente primeiro) */}
       <div className="clinical-evolutions-history">
-        <h3 className="clinical-evolutions-history-title">Histórico de observações</h3>
+        <h3 className="clinical-evolutions-history-title">HistÃ³rico de observaÃ§Ãµes</h3>
 
         {loadingEvolutions ? (
-          <div className="clinical-evolutions-loading">Carregando histórico...</div>
+          <div className="clinical-evolutions-loading">Carregando histÃ³rico...</div>
         ) : evolutions.length === 0 ? (
           <div className="clinical-evolutions-empty">
-            Nenhuma observação registrada ainda.
+            Nenhuma observaÃ§Ã£o registrada ainda.
           </div>
         ) : (
           <>
@@ -585,7 +577,7 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
                           (Editado em {formatDateTime(evo.updatedAt)})
                         </span>
                       )}
-                      <span className="clinical-evolution-professional" title="Usuário que registrou">
+                      <span className="clinical-evolution-professional" title="UsuÃ¡rio que registrou">
                         {getProfessionalName(evo.professionalId)}
                       </span>
                     </div>
@@ -594,7 +586,7 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
                         type="button"
                         className="button-icon clinical-evolution-edit-btn"
                         onClick={() => handleStartEdit(evo)}
-                        title="Editar observação"
+                        title="Editar observaÃ§Ã£o"
                       >
                         <Edit size={16} />
                       </button>
@@ -650,11 +642,11 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
           </>
         )}
       </div>
-    </SectionCard>
+    </ClinicalStageShell>
   );
 }
 
-// Seção: Procedimentos a Realizar
+// SeÃ§Ã£o: Procedimentos a Realizar
 function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
   const [procedures, setProcedures] = useState([]);
   const [showProcedureSelector, setShowProcedureSelector] = useState(false);
@@ -698,7 +690,7 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
 
         setProcedures(mappedProcedures);
       } catch (error) {
-        console.error('Erro ao carregar procedimentos do orçamento:', error);
+        console.error('Erro ao carregar procedimentos do orÃ§amento:', error);
         setProcedures([]);
       }
     };
@@ -708,7 +700,7 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
 
   const handleSelectProcedure = (procedureData) => {
     if (!user) return;
-    // Adaptar estrutura para o formato esperado pelo serviço
+    // Adaptar estrutura para o formato esperado pelo serviÃ§o
     const adaptedProcedure = {
       name: procedureData.title,
       tooth: procedureData.tooth,
@@ -741,13 +733,13 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
         }
       >
         <div className="clinical-section-filter-label">
-          Exibindo: aguardando início, em andamento e concluídos (últimos 30 dias)
+          Exibindo: aguardando inÃ­cio, em andamento e concluÃ­dos (Ãºltimos 30 dias)
         </div>
         {procedures.length === 0 ? (
           <div className="clinical-empty-state">
             <ClipboardList size={48} />
             <p>Nenhum procedimento encontrado para o filtro atual.</p>
-            <p className="clinical-empty-hint">São exibidos apenas contratos aguardando início, em andamento ou concluídos nos últimos 30 dias.</p>
+            <p className="clinical-empty-hint">SÃ£o exibidos apenas contratos aguardando inÃ­cio, em andamento ou concluÃ­dos nos Ãºltimos 30 dias.</p>
           </div>
         ) : (
           <div className="clinical-procedures-list">
@@ -759,7 +751,7 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
                   <span className="clinical-procedure-value">R$ {proc.value?.toFixed(2) || '0,00'}</span>
                 </div>
                 <span className={`clinical-procedure-status clinical-procedure-status--${proc.status || 'pending'}`}>
-                  {proc.status === 'completed' ? 'Concluído' : 'Pendente'}
+                  {proc.status === 'completed' ? 'ConcluÃ­do' : 'Pendente'}
                 </span>
               </div>
             ))}
@@ -771,6 +763,9 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
           open={showProcedureSelector}
           onClose={() => setShowProcedureSelector(false)}
           onSelect={handleSelectProcedure}
+          onSelectMultiple={(items) => {
+            items.forEach((item) => handleSelectProcedure(item));
+          }}
           patient={patient}
           appointmentId={appointmentId}
         />
@@ -779,7 +774,7 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
   );
 }
 
-// Seção: Planejamento (estrutura clínica; sem valores; precificação na aba Orçamento)
+// SeÃ§Ã£o: Planejamento (estrutura clÃ­nica; sem valores; precificaÃ§Ã£o na aba OrÃ§amento)
 function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavigateToOrcamento, onShowToast }) {
   const [plannedProcedures, setPlannedProcedures] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -811,7 +806,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
     loadPlanned();
   }, [appointmentId]);
 
-  // Carregar procedimentos cadastrados (Base de Preço) quando o form de adicionar ou edição estiver ativo
+  // Carregar procedimentos cadastrados (Base de PreÃ§o) quando o form de adicionar ou ediÃ§Ã£o estiver ativo
   useEffect(() => {
     if (!showAddForm && !editingId) return;
     const priceTable = patient ? getPriceTableForPatient(patient) : getDefaultPriceTable();
@@ -849,11 +844,11 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
     const name = (addName || '').trim();
     const toothRegion = (addToothOrRegion || '').trim();
     if (!name) {
-      setError('Procedimento é obrigatório.');
+      setError('Procedimento Ã© obrigatÃ³rio.');
       return;
     }
     if (!toothRegion) {
-      setError('Dente / Região é obrigatório.');
+      setError('Dente / RegiÃ£o Ã© obrigatÃ³rio.');
       return;
     }
     setSaving(true);
@@ -895,7 +890,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
     const name = (editName || '').trim();
     const toothRegion = (editToothOrRegion || '').trim();
     if (!name || !toothRegion) {
-      setError('Procedimento e Dente/Região são obrigatórios.');
+      setError('Procedimento e Dente/RegiÃ£o sÃ£o obrigatÃ³rios.');
       return;
     }
     setSaving(true);
@@ -965,9 +960,9 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
         plannedProceduresCount: plannedProcedures.length,
       }, user.id);
       if (onNavigateToOrcamento) onNavigateToOrcamento();
-      if (onShowToast) onShowToast('Orçamento gerado a partir do planejamento.');
+      if (onShowToast) onShowToast('OrÃ§amento gerado a partir do planejamento.');
     } catch (err) {
-      setError(err?.message || 'Erro ao gerar orçamento.');
+      setError(err?.message || 'Erro ao gerar orÃ§amento.');
     }
   };
 
@@ -992,7 +987,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
               onClick={handleGenerateBudgetFromPlan}
             >
               <DollarSign size={16} />
-              Gerar Orçamento a partir do Planejamento
+              Gerar OrÃ§amento a partir do Planejamento
             </button>
           )}
         </div>
@@ -1054,7 +1049,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
             </div>
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.875rem' }}>
-            <span>Dente / Região</span>
+            <span>Dente / RegiÃ£o</span>
             <input
               type="text"
               value={addToothOrRegion}
@@ -1064,11 +1059,11 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
             />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.875rem' }}>
-            <span>Observações clínicas (opcional)</span>
+            <span>ObservaÃ§Ãµes clÃ­nicas (opcional)</span>
             <textarea
               value={addNotes}
               onChange={(e) => setAddNotes(e.target.value)}
-              placeholder="Observações"
+              placeholder="ObservaÃ§Ãµes"
               rows={2}
               style={{ padding: '0.5rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', resize: 'vertical' }}
             />
@@ -1079,7 +1074,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
             disabled={saving || !addName.trim() || !addToothOrRegion.trim()}
             onClick={handleAddProcedure}
           >
-            {saving ? 'Salvando…' : 'Salvar no Planejamento'}
+            {saving ? 'Salvandoâ€¦' : 'Salvar no Planejamento'}
           </button>
         </div>
       )}
@@ -1153,13 +1148,13 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
                     type="text"
                     value={editToothOrRegion}
                     onChange={(e) => setEditToothOrRegion(e.target.value)}
-                    placeholder="Dente / Região"
+                    placeholder="Dente / RegiÃ£o"
                     style={{ padding: '0.5rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem' }}
                   />
                   <textarea
                     value={editNotes}
                     onChange={(e) => setEditNotes(e.target.value)}
-                    placeholder="Observações"
+                    placeholder="ObservaÃ§Ãµes"
                     rows={2}
                     style={{ padding: '0.5rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', resize: 'vertical' }}
                   />
@@ -1177,7 +1172,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
                   <div>
                     <h3 style={{ margin: 0, fontSize: '1rem' }}>{proc.name}</h3>
                     <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: '#64748b' }}>
-                      {proc.tooth || proc.region || '—'}
+                      {proc.tooth || proc.region || 'â€”'}
                     </p>
                     {proc.notes ? (
                       <p style={{ margin: '0.5rem 0 0', fontSize: '0.8125rem', color: '#475569' }}>{proc.notes}</p>
@@ -1201,1748 +1196,17 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
   );
 }
 
-// Seção: Orçamento
-function OrcamentoSection({ appointmentId, user, appointment: appointmentProp, patient: patientProp }) {
-  const [activeTab, setActiveTab] = useState('geral');
-  const [budget, setBudget] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [toast, setToast] = useState(null);
-  const [contractModalOpen, setContractModalOpen] = useState(false);
-  const db = loadDb();
-  const appointmentFromDb = db.appointments?.find(a => a.id === appointmentId);
-  const appointment = appointmentProp ?? appointmentFromDb;
-  const patientFromDb = appointmentFromDb?.patientId ? db.patients?.find(p => p.id === appointmentFromDb.patientId) : null;
-  const patient = patientProp ?? patientFromDb;
-  const professional = appointment?.professionalId ? db.collaborators?.find(c => c.id === appointment.professionalId) : null;
-  const isDev = import.meta.env.DEV;
-
-  useEffect(() => {
-    const budgetData = getBudget(appointmentId);
-    if (budgetData) {
-      setBudget(budgetData);
-    } else {
-      // Inicializar com dados padrão
-      const clinicalData = getClinicalData(appointmentId);
-      const plannedProcedures = clinicalData?.plannedProcedures || [];
-      
-      setBudget({
-        status: BUDGET_STATUS.RASCUNHO,
-        planName: '',
-        procedures: plannedProcedures.map(proc => ({
-          id: proc.id || createId('proc'),
-          name: proc.name,
-          tooth: proc.tooth || '',
-          region: proc.region || '',
-          quantity: 1,
-          unitValue: 0,
-          totalValue: 0,
-          observations: proc.notes || '',
-        })),
-        paymentType: 'a_vista',
-        downPayment: 0,
-        installments: 1,
-        installmentValue: 0,
-        paymentMethod: 'dinheiro',
-        discount: 0,
-        interest: 0,
-        validityDate: '',
-        professionalId: appointment?.professionalId || null,
-        createdAt: new Date().toISOString(),
-        createdBy: user?.id || null,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appointmentId]);
-
-  const handleSave = async () => {
-    if (!user || !budget) return;
-    setSaving(true);
-    try {
-      saveBudget(user, appointmentId, budget);
-      await persistBudgetToSupabase(budget);
-      setSaving(false);
-      setToast({ message: 'Orçamento salvo com sucesso!', type: 'success' });
-      setTimeout(() => setToast(null), 3000);
-    } catch (error) {
-      console.error('Erro ao salvar orçamento:', error);
-      setSaving(false);
-      setToast({ message: `Erro ao salvar orçamento: ${error.message}`, type: 'error' });
-      setTimeout(() => setToast(null), 5000);
-    }
-  };
-
-  const handleSendBudget = () => {
-    if (!budget || !user) return;
-    try {
-      // Primeiro salvar o orçamento atual
-      saveBudget(user, appointmentId, budget);
-      // Depois atualizar o status para enviado
-      updateBudgetStatus(user, appointmentId, BUDGET_STATUS.ENVIADO);
-      setBudget({ ...budget, status: BUDGET_STATUS.ENVIADO });
-      
-      // Mostrar feedback de sucesso
-      setToast({ message: 'Orçamento enviado com sucesso!', type: 'success' });
-      setTimeout(() => setToast(null), 3000);
-      
-      // Registrar evento
-      logClinicalEvent(appointmentId, 'budget_sent', {
-        budgetId: budget.id,
-        totalValue: budget.procedures?.reduce((sum, proc) => sum + (parseFloat(proc.quantity || 1) * parseFloat(proc.unitValue || 0)), 0) || 0,
-      }, user.id);
-      
-      // TODO: Implementar envio por WhatsApp/PDF
-    } catch (error) {
-      console.error('Erro ao enviar orçamento:', error);
-      setToast({ message: `Erro ao enviar orçamento: ${error.message}`, type: 'error' });
-      setTimeout(() => setToast(null), 5000);
-    }
-  };
-
-  const persistBudgetToSupabase = async (budgetData) => {
-    const patientId = patient?.id || appointment?.patientId || null;
-    if (!patientId) {
-      throw new Error('Paciente não identificado para persistir orçamento.');
-    }
-
-
-    const total = (budgetData.procedures || []).reduce((sum, proc) => {
-      return sum + (Number(proc.quantity || 1) * Number(proc.unitValue || 0));
-    }, 0);
-
-    let supabaseBudgetId = budgetData.supabaseBudgetId;
-    if (!supabaseBudgetId) {
-      const created = await createBudget({
-        patient_id: patientId,
-        price_table_id: budgetData.priceTableId || null,
-        status: budgetData.status || 'AGUARDANDO_INICIO',
-      });
-      supabaseBudgetId = created.id;
-    }
-
-    const itemsPayload = (budgetData.procedures || []).map((proc) => ({
-      name: proc.title || proc.name || 'Procedimento',
-      quantity: Number(proc.quantity || 1),
-      unit_price: Number(proc.unitValue || 0),
-      tooth: proc.tooth || null,
-      region: proc.region || null,
-      notes: proc.observations || null,
-    }));
-
-    await createBudgetItems(supabaseBudgetId, itemsPayload);
-    await updateBudgetTotal(supabaseBudgetId, total);
-
-    const { data: budgetsCount } = await supabase
-      .from('budgets')
-      .select('*', { count: 'exact', head: true });
-    const { data: budgetItemsCount } = await supabase
-      .from('budget_items')
-      .select('*', { count: 'exact', head: true });
-
-
-    setBudget((prev) => ({ ...prev, supabaseBudgetId }));
-  };
-
-  const handleSeedBudget = async () => {
-    if (!isDev) return;
-    try {
-      const patientId = patient?.id || appointment?.patientId || null;
-      if (!patientId) {
-        throw new Error('Paciente não identificado para seed.');
-      }
-      const created = await createBudget({
-        patient_id: patientId,
-        price_table_id: budget?.priceTableId || null,
-        status: 'AGUARDANDO_INICIO',
-      });
-      const items = [
-        { name: 'Avaliação clínica', quantity: 1, unit_price: 150 },
-        { name: 'Profilaxia', quantity: 1, unit_price: 200 },
-      ];
-      await createBudgetItems(created.id, items);
-      await updateBudgetTotal(created.id, 350);
-      const { data: budgetsCount } = await supabase
-        .from('budgets')
-        .select('*', { count: 'exact', head: true });
-      const { data: budgetItemsCount } = await supabase
-        .from('budget_items')
-        .select('*', { count: 'exact', head: true });
-
-      setToast({ message: `Seed criado. Budgets: ${budgetsCount?.count || 0} | Itens: ${budgetItemsCount?.count || 0}`, type: 'success' });
-      setTimeout(() => setToast(null), 4000);
-    } catch (error) {
-      setToast({ message: `Erro no seed: ${error.message}`, type: 'error' });
-      setTimeout(() => setToast(null), 5000);
-    }
-  };
-
-  const handleApproveBudget = () => {
-    if (!budget || !user) return;
-    try {
-      // Primeiro salvar o orçamento atual
-      saveBudget(user, appointmentId, budget);
-      // Depois atualizar o status para aprovado
-      updateBudgetStatus(user, appointmentId, BUDGET_STATUS.APROVADO);
-      setBudget({ ...budget, status: BUDGET_STATUS.APROVADO });
-      
-      // Mostrar feedback de sucesso
-      setToast({ message: 'Orçamento aprovado com sucesso!', type: 'success' });
-      setTimeout(() => setToast(null), 3000);
-      
-      // Registrar evento
-      logClinicalEvent(appointmentId, 'budget_approved', {
-        budgetId: budget.id,
-        totalValue: budget.procedures?.reduce((sum, proc) => sum + (parseFloat(proc.quantity || 1) * parseFloat(proc.unitValue || 0)), 0) || 0,
-      }, user.id);
-    } catch (error) {
-      console.error('Erro ao aprovar orçamento:', error);
-      setToast({ message: `Erro ao aprovar orçamento: ${error.message}`, type: 'error' });
-      setTimeout(() => setToast(null), 5000);
-    }
-  };
-
-  const handleGeneratePDF = () => {
-    
-    if (!budget || !patient) {
-      setToast({ message: 'Dados do orçamento ou paciente não disponíveis', type: 'error' });
-      setTimeout(() => setToast(null), 3000);
-      return;
-    }
-
-    try {
-      // Salvar o orçamento antes de gerar PDF
-      saveBudget(user, appointmentId, budget);
-      persistBudgetToSupabase(budget).catch((error) => {
-        console.error('Erro ao persistir orçamento no Supabase:', error);
-      });
-
-      // Criar conteúdo HTML do orçamento
-      const formatCurrency = (value) => {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
-      };
-
-      const formatDate = (dateStr) => {
-        if (!dateStr) return 'Não informada';
-        try {
-          return new Date(dateStr).toLocaleDateString('pt-BR');
-        } catch {
-          return dateStr;
-        }
-      };
-
-      const clinic = db.clinicProfile || {};
-      const clinicDocs = db.clinicDocumentation || {};
-      const clinicPhones = db.clinicPhones || [];
-      const clinicAddresses = db.clinicAddresses || [];
-      const clinicName = clinic.nomeClinica || clinic.nomeFantasia || clinic.razaoSocial || 'Clínica Odontológica';
-      const clinicLogo = clinic.logoUrl || '';
-      const patientName = patient.full_name || patient.nickname || patient.social_name || 'Paciente';
-      const patientPhone = patient.phone || patient.telefone || patient.legacy_phone || patient.legacyPhone || 'Não informado';
-      const professionalName = professional?.nomeCompleto || professional?.name || 'Profissional';
-      const professionalCro = professional?.cro || professional?.croNumber || professional?.registroCRO || professional?.conselhoNumero || professional?.councilNumber || 'Não informado';
-      const professionalSpecialty = professional?.especialidade || professional?.specialty || professional?.especialidadeClinica || 'Não informado';
-      const clinicalData = getClinicalData(appointmentId) || {};
-      const observationsList = listClinicalEvolutions(patient?.id, appointmentId, null, budget?.id || null);
-      const clinicalNotes = observationsList.length > 0
-        ? observationsList.map((obs) => {
-            const dateStr = obs.createdAt ? new Date(obs.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-            return (dateStr ? `[${dateStr}] ` : '') + (obs.content || '').trim();
-          }).join('\n\n').trim()
-        : (clinicalData.evolution || '');
-      const planName = budget.planName || '';
-      const budgetNumber = budget.id || appointmentId || '—';
-      const issueDate = budget.createdAt || new Date().toISOString();
-      const treatmentStartDate = appointment?.date || budget.startDate || '';
-      const validityDate = budget.validityDate || '';
-      const generatedAt = new Date().toLocaleString('pt-BR');
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-
-      const clinicPhoneMain = clinicPhones.find((item) => item.principal) || clinicPhones[0];
-      const clinicPhone = clinicPhoneMain ? `${clinicPhoneMain.ddd || ''} ${clinicPhoneMain.numero || ''}`.trim() : '';
-      const clinicAddressMain = clinicAddresses.find((item) => item.principal) || clinicAddresses[0];
-      const clinicAddressText = clinicAddressMain ? [
-        clinicAddressMain.logradouro,
-        clinicAddressMain.numero,
-        clinicAddressMain.complemento,
-        clinicAddressMain.bairro,
-        clinicAddressMain.cidade ? `${clinicAddressMain.cidade}${clinicAddressMain.uf ? `/${clinicAddressMain.uf}` : ''}` : '',
-        clinicAddressMain.cep ? `CEP ${clinicAddressMain.cep}` : '',
-      ].filter(Boolean).join(', ') : '';
-
-      const clinicSettings = db.clinicSettings || {
-        clinicName,
-        clinicAddress: clinicAddressText,
-        clinicPhone,
-      };
-
-      const escapeHtml = (value) => String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-
-      const toMultilineHtml = (value) => escapeHtml(value).replace(/\n/g, '<br />');
-
-      const statusLabel = budget.status === BUDGET_STATUS.APROVADO
-        ? 'Aprovado'
-        : budget.status === BUDGET_STATUS.ENVIADO
-          ? 'Enviado'
-          : budget.status === BUDGET_STATUS.REPROVADO
-            ? 'Reprovado'
-            : 'Rascunho';
-
-      const paymentTypeLabel = budget.paymentType === 'parcelado'
-        ? 'Parcelado'
-        : budget.paymentType === 'convenio'
-          ? 'Convênio'
-          : budget.paymentType === 'a_vista'
-            ? 'À vista'
-            : 'Não informado';
-
-      const paymentMethodLabel = budget.paymentMethod === 'dinheiro'
-        ? 'Dinheiro'
-        : budget.paymentMethod === 'pix'
-          ? 'PIX'
-          : budget.paymentMethod === 'cartao_debito'
-            ? 'Cartão de Débito'
-            : budget.paymentMethod === 'cartao_credito'
-              ? 'Cartão de Crédito'
-              : budget.paymentMethod === 'convenio'
-                ? 'Convênio'
-                : budget.paymentMethod === 'transferencia'
-                  ? 'Transferência Bancária'
-                  : budget.paymentMethod || 'Não informado';
-
-      // Calcular valores ANTES de usar no template HTML
-      const calcTotalValue = (budget.procedures || []).reduce((sum, proc) => {
-        return sum + (parseFloat(proc.quantity || 1) * parseFloat(proc.unitValue || 0));
-      }, 0);
-      const calcFinalValue = calcTotalValue - (budget.discount || 0) + (budget.interest || 0);
-      const calcInstallmentValue = budget.installments > 0
-        ? (calcFinalValue - (budget.downPayment || 0)) / budget.installments
-        : 0;
-
-      const proceduresTable = (budget.procedures || []).map((proc, index) => {
-        const quantity = parseFloat(proc.quantity || 1);
-        const unitValue = parseFloat(proc.unitValue || 0);
-        const computedTotal = parseFloat(proc.totalValue || (quantity * unitValue));
-
-        return {
-          step: index + 1,
-          name: proc.title || proc.name || 'Procedimento',
-          region: proc.tooth || proc.region || '',
-          quantity,
-          unitValue: formatCurrency(unitValue),
-          totalValue: formatCurrency(computedTotal),
-          notes: proc.observations || proc.notes || '',
-        };
-      });
-
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>Orçamento Odontológico - ${escapeHtml(patientName)}</title>
-          <style>
-            :root { color-scheme: light; }
-            body {
-              font-family: "Inter", "Segoe UI", Arial, sans-serif;
-              padding: 24px;
-              color: #1f2933;
-              background: #f5f7fb;
-            }
-            .page {
-              max-width: 900px;
-              margin: 0 auto;
-              background: #fff;
-              border-radius: 16px;
-              box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-              padding: 32px;
-            }
-            .doc-header {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              gap: 20px;
-              padding-bottom: 20px;
-              border-bottom: 1px solid #e5e7eb;
-              margin-bottom: 24px;
-            }
-            .brand {
-              display: flex;
-              align-items: center;
-              gap: 16px;
-            }
-            .logo {
-              width: 64px;
-              height: 64px;
-              object-fit: contain;
-              border-radius: 12px;
-              border: 1px solid #e5e7eb;
-              background: #fff;
-            }
-            .logo-fallback {
-              width: 64px;
-              height: 64px;
-              border-radius: 12px;
-              border: 1px dashed #cbd5f5;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-size: 11px;
-              color: #64748b;
-              background: #f8fafc;
-              text-align: center;
-              padding: 6px;
-            }
-            .clinic-name {
-              font-size: 18px;
-              font-weight: 600;
-              margin: 0;
-            }
-            .clinic-doc {
-              font-size: 12px;
-              color: #64748b;
-              margin-top: 4px;
-            }
-            .doc-title {
-              font-size: 18px;
-              font-weight: 700;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              margin: 0;
-              color: #0f172a;
-            }
-            .doc-meta {
-              text-align: right;
-              font-size: 12px;
-              color: #475569;
-            }
-            .meta-row { margin-top: 4px; }
-            .status-badge {
-              display: inline-flex;
-              align-items: center;
-              padding: 4px 10px;
-              border-radius: 999px;
-              font-weight: 600;
-              font-size: 11px;
-              background: #eef2ff;
-              color: #3730a3;
-              margin-left: 8px;
-            }
-            .section {
-              margin: 24px 0;
-              padding: 20px;
-              border: 1px solid #e5e7eb;
-              border-radius: 12px;
-              background: #fff;
-            }
-            .section h2 {
-              font-size: 15px;
-              margin: 0 0 14px 0;
-              color: #0f172a;
-            }
-            .info-grid {
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 12px 16px;
-            }
-            .info-item {
-              background: #f8fafc;
-              border-radius: 10px;
-              padding: 10px 12px;
-              border: 1px solid #e2e8f0;
-            }
-            .info-label {
-              font-weight: 600;
-              color: #64748b;
-              font-size: 11px;
-              text-transform: uppercase;
-              letter-spacing: 0.4px;
-            }
-            .info-value {
-              font-size: 13px;
-              margin-top: 6px;
-              color: #0f172a;
-            }
-            .summary-text {
-              background: #eef2ff;
-              border-radius: 12px;
-              padding: 14px 16px;
-              color: #3730a3;
-              font-size: 13px;
-              margin-bottom: 16px;
-              border: 1px solid #c7d2fe;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 12px;
-              font-size: 12px;
-            }
-            table th {
-              text-align: left;
-              padding: 10px;
-              background: #f1f5f9;
-              border: 1px solid #e2e8f0;
-              font-weight: 600;
-              color: #475569;
-            }
-            table td {
-              padding: 10px;
-              border: 1px solid #e2e8f0;
-              vertical-align: top;
-              color: #0f172a;
-            }
-            .proc-notes {
-              display: block;
-              font-size: 11px;
-              color: #64748b;
-              margin-top: 6px;
-            }
-            .financial-summary {
-              display: grid;
-              gap: 8px;
-            }
-            .total-row {
-              display: flex;
-              justify-content: space-between;
-              font-size: 13px;
-              color: #1f2933;
-            }
-            .total-highlight {
-              margin-top: 10px;
-              padding: 12px 16px;
-              border-radius: 12px;
-              background: #0f172a;
-              color: #fff;
-              display: flex;
-              justify-content: space-between;
-              font-size: 16px;
-              font-weight: 700;
-            }
-            .important-notes {
-              font-size: 12px;
-              color: #475569;
-              line-height: 1.5;
-            }
-            .acceptance {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              gap: 24px;
-              margin-top: 12px;
-            }
-            .signature-box {
-              border-top: 1px solid #94a3b8;
-              padding-top: 8px;
-              font-size: 12px;
-              color: #475569;
-            }
-            .footer {
-              margin-top: 28px;
-              padding-top: 16px;
-              border-top: 1px solid #e2e8f0;
-              font-size: 11px;
-              color: #64748b;
-              text-align: center;
-            }
-            .footer-address {
-              margin-top: 8px;
-              font-size: 11px;
-              color: #94a3b8;
-            }
-            .audit-card {
-              margin-top: 20px;
-              padding: 14px 16px;
-              border-radius: 12px;
-              border: 1px solid #e2e8f0;
-              background: #f8fafc;
-              font-size: 12px;
-              color: #64748b;
-              display: grid;
-              gap: 6px;
-            }
-            @media print {
-              body { background: #fff; padding: 0; }
-              .page { box-shadow: none; border-radius: 0; padding: 0; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="page">
-            <header class="doc-header">
-              <div class="brand">
-                ${clinicLogo
-                  ? `<img class="logo" src="${escapeHtml(clinicLogo)}" alt="Logo da clínica" />`
-                  : `<div class="logo-fallback">Logo da clínica</div>`}
-                <div>
-                  <p class="clinic-name">${escapeHtml(clinicName)}</p>
-                  <p class="clinic-doc">${clinicDocs.cnpj ? `CNPJ: ${escapeHtml(clinicDocs.cnpj)}` : 'Documento não informado'}</p>
-                </div>
-              </div>
-              <div class="doc-meta">
-                <p class="doc-title">Orçamento Odontológico</p>
-                <div class="meta-row">Nº ${escapeHtml(budgetNumber)}</div>
-                <div class="meta-row">Data de emissão: ${formatDate(issueDate)}</div>
-                <div class="meta-row">
-                  Status:<span class="status-badge">${escapeHtml(statusLabel)}</span>
-                </div>
-              </div>
-            </header>
-
-            <section class="section">
-              <h2>Dados do Paciente e Profissional</h2>
-              <div class="info-grid">
-                <div class="info-item">
-                  <div class="info-label">Paciente</div>
-                  <div class="info-value">${escapeHtml(patientName)}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">Telefone</div>
-                  <div class="info-value">${escapeHtml(patientPhone)}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">Dentista responsável</div>
-                  <div class="info-value">${escapeHtml(professionalName)}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">CRO</div>
-                  <div class="info-value">${escapeHtml(professionalCro)}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">Especialidade</div>
-                  <div class="info-value">${escapeHtml(professionalSpecialty)}</div>
-                </div>
-              </div>
-            </section>
-
-            <section class="section">
-              <h2>Resumo do Tratamento</h2>
-              <div class="summary-text">
-                Este orçamento refere-se ao plano de tratamento odontológico elaborado após avaliação clínica, visando restabelecer a saúde bucal, função mastigatória e estética.
-              </div>
-              <div class="info-grid">
-                <div class="info-item">
-                  <div class="info-label">Plano/Tratamento</div>
-                  <div class="info-value">${planName ? escapeHtml(planName) : 'Não informado'}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">Data prevista de início</div>
-                  <div class="info-value">${treatmentStartDate ? formatDate(treatmentStartDate) : 'Não informada'}</div>
-                </div>
-                <div class="info-item" style="grid-column: span 2;">
-                  <div class="info-label">Observações clínicas gerais</div>
-                  <div class="info-value">${clinicalNotes ? toMultilineHtml(clinicalNotes) : 'Não informadas'}</div>
-                </div>
-              </div>
-            </section>
-
-            <section class="section">
-              <h2>Procedimentos</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Etapa/Fase</th>
-                    <th>Procedimento</th>
-                    <th>Região/Dente</th>
-                    <th>Qtd</th>
-                    <th>Valor unitário</th>
-                    <th>Valor total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${proceduresTable.map((row) => `
-                    <tr>
-                      <td>${row.step}</td>
-                      <td>
-                        ${escapeHtml(row.name)}
-                        ${row.notes ? `<span class="proc-notes">${toMultilineHtml(row.notes)}</span>` : ''}
-                      </td>
-                      <td>${row.region ? escapeHtml(row.region) : '-'}</td>
-                      <td>${row.quantity}</td>
-                      <td>${row.unitValue}</td>
-                      <td>${row.totalValue}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </section>
-
-            <section class="section">
-              <h2>Resumo Financeiro</h2>
-              <div class="financial-summary">
-                <div class="total-row">
-                  <span>Subtotal</span>
-                  <span>${formatCurrency(calcTotalValue)}</span>
-                </div>
-                <div class="total-row">
-                  <span>Descontos</span>
-                  <span>${formatCurrency(budget.discount || 0)}</span>
-                </div>
-                <div class="total-row">
-                  <span>Acréscimos</span>
-                  <span>${formatCurrency(budget.interest || 0)}</span>
-                </div>
-                <div class="total-highlight">
-                  <span>TOTAL DO TRATAMENTO</span>
-                  <span>${formatCurrency(calcFinalValue)}</span>
-                </div>
-              </div>
-            </section>
-
-            <section class="section">
-              <h2>Condições de Pagamento</h2>
-              <div class="info-grid">
-                <div class="info-item">
-                  <div class="info-label">Forma de pagamento</div>
-                  <div class="info-value">${escapeHtml(paymentMethodLabel)}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">Tipo</div>
-                  <div class="info-value">${escapeHtml(paymentTypeLabel)}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">Parcelamento</div>
-                  <div class="info-value">${budget.installments > 1 ? `${budget.installments}x de ${formatCurrency(calcInstallmentValue)}` : 'À vista'}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">Entrada</div>
-                  <div class="info-value">${formatCurrency(budget.downPayment || 0)}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">Datas</div>
-                  <div class="info-value">${budget.paymentDates || budget.paymentDate ? escapeHtml(budget.paymentDates || budget.paymentDate) : 'Não informadas'}</div>
-                </div>
-                <div class="info-item">
-                  <div class="info-label">Observações</div>
-                  <div class="info-value">${budget.paymentNotes || budget.paymentObservations ? toMultilineHtml(budget.paymentNotes || budget.paymentObservations) : 'Sem observações'}</div>
-                </div>
-              </div>
-            </section>
-
-            <section class="section">
-              <h2>Observações Importantes</h2>
-              <div class="important-notes">
-                <p>- Validade do orçamento: ${validityDate ? formatDate(validityDate) : 'Não informada'}.</p>
-                <p>- Alterações clínicas podem impactar valores e procedimentos previstos.</p>
-                <p>- O paciente é responsável por informar qualquer condição de saúde relevante.</p>
-              </div>
-            </section>
-
-            <section class="section">
-              <h2>Aceite</h2>
-              <div class="acceptance">
-                <div>
-                  <div class="info-label">Nome do paciente</div>
-                  <div class="info-value">${escapeHtml(patientName)}</div>
-                  <div class="signature-box">Assinatura do paciente</div>
-                </div>
-                <div>
-                  <div class="info-label">Data</div>
-                  <div class="info-value">${formatDate(issueDate)}</div>
-                  <div class="signature-box">Assinatura do responsável técnico</div>
-                </div>
-              </div>
-            </section>
-
-            <section class="section">
-              <h2>Assinatura do Sistema</h2>
-              <div class="audit-card">
-                <div>Gerado por: ${escapeHtml(user?.name || 'Usuário do sistema')}</div>
-                <div>Data/Hora: ${escapeHtml(generatedAt)}</div>
-                <div>Origem: ${escapeHtml(origin || 'Não informada')}</div>
-              </div>
-            </section>
-
-            <div class="footer">
-              <p>Gerado em ${escapeHtml(generatedAt)} • ${escapeHtml(clinicSettings.clinicName || clinicName)}</p>
-              <p>Status final: ${escapeHtml(statusLabel)}</p>
-              ${clinicSettings.clinicAddress ? `<div class="footer-address">${escapeHtml(clinicSettings.clinicAddress)}</div>` : ''}
-              ${clinicSettings.clinicPhone ? `<div class="footer-address">Telefone: ${escapeHtml(clinicSettings.clinicPhone)}</div>` : ''}
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
-
-      const fileName = `orcamento-${patientName.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.html`;
-
-      // Criar blob e fazer download
-      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      const documentEntry = {
-        id: createId('budget_doc'),
-        type: 'pdf',
-        format: 'html',
-        fileName,
-        htmlContent,
-        createdAt: new Date().toISOString(),
-        createdBy: user?.id || null,
-        createdByName: user?.name || 'Usuário do sistema',
-        origin: typeof window !== 'undefined' ? window.location.origin : '',
-      };
-
-      const nextDocuments = [...(budget.documents || []), documentEntry];
-      const nextBudget = { ...budget, documents: nextDocuments };
-      saveBudget(user, appointmentId, nextBudget);
-      setBudget(nextBudget);
-
-
-      // Tentar abrir em nova janela para impressão
-      let printWindow = null;
-      try {
-        printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(htmlContent);
-          printWindow.document.close();
-          // Aguardar um pouco mais para garantir que o conteúdo foi carregado
-          setTimeout(() => {
-            try {
-              printWindow.print();
-            } catch (printError) {
-              console.warn('Erro ao chamar print():', printError);
-              // Se print() falhar, pelo menos o HTML foi baixado
-            }
-          }, 500);
-        } else {
-          // Se popup foi bloqueado, apenas mostrar mensagem
-          setToast({ message: 'Popup bloqueado. O arquivo HTML foi baixado. Abra-o e use Ctrl+P para imprimir como PDF.', type: 'success' });
-          setTimeout(() => setToast(null), 7000);
-        }
-      } catch (windowError) {
-        console.warn('Erro ao abrir janela de impressão:', windowError);
-        // Mesmo se a janela falhar, o download do HTML já foi feito
-      }
-      
-      
-      setToast({ message: 'PDF gerado com sucesso! Use Ctrl+P para salvar como PDF.', type: 'success' });
-      setTimeout(() => setToast(null), 5000);
-
-      // Registrar evento
-      logClinicalEvent(appointmentId, 'budget_pdf_generated', {
-        budgetId: budget.id,
-        totalValue: calcFinalValue,
-        documentId: documentEntry.id,
-        fileName: documentEntry.fileName,
-        origin: documentEntry.origin,
-      }, user.id);
-    } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      setToast({ message: `Erro ao gerar PDF: ${error.message}`, type: 'error' });
-      setTimeout(() => setToast(null), 5000);
-    }
-  };
-
-
-  const totalValue = budget?.procedures?.reduce((sum, proc) => {
-    return sum + (parseFloat(proc.quantity || 1) * parseFloat(proc.unitValue || 0));
-  }, 0) || 0;
-
-  const finalValue = totalValue - (budget?.discount || 0) + (budget?.interest || 0);
-  const installmentValue = budget?.installments > 0 ? (finalValue - (budget?.downPayment || 0)) / budget.installments : 0;
-
-  return (
-    <>
-    <SectionCard
-      title="Orçamento"
-      description="Gerencie orçamentos profissionais e integrados ao atendimento"
-      actions={
-        <div className="clinical-section-actions">
-          {isDev && (
-            <button
-              type="button"
-              className="button secondary"
-              onClick={handleSeedBudget}
-            >
-              Criar orçamento de teste
-            </button>
-          )}
-          <button 
-            type="button" 
-            className="button secondary"
-            onClick={handleSave}
-            disabled={saving}
-          >
-            <Save size={16} />
-            {saving ? 'Salvando...' : 'Salvar'}
-          </button>
-          <button 
-            type="button" 
-            className="button secondary"
-            onClick={handleSendBudget}
-            disabled={!budget || budget.status === BUDGET_STATUS.APROVADO}
-          >
-            <Send size={16} />
-            Enviar
-          </button>
-          <button 
-            type="button" 
-            className="button secondary"
-            onClick={handleGeneratePDF}
-            disabled={!budget}
-          >
-            <Download size={16} />
-            Gerar PDF
-          </button>
-          <button 
-            type="button" 
-            className="button primary"
-            onClick={handleApproveBudget}
-            disabled={!budget || budget.status === BUDGET_STATUS.APROVADO}
-          >
-            <CheckCircle2 size={16} />
-            Aprovar
-          </button>
-          {budget?.status === BUDGET_STATUS.APROVADO && patient?.id
-            && (can(user, 'prontuario_contratos:create') || can(user, 'admin_contratos:generate')) && (
-            <button
-              type="button"
-              className="button secondary"
-              onClick={() => setContractModalOpen(true)}
-            >
-              <FileSignature size={16} />
-              Gerar contrato
-            </button>
-          )}
-        </div>
-      }
-    >
-      {/* Tabs Internas */}
-      <div className="clinical-budget-tabs">
-        <button
-          type="button"
-          className={`clinical-budget-tab ${activeTab === 'geral' ? 'active' : ''}`}
-          onClick={() => setActiveTab('geral')}
-        >
-          <FileTextIcon size={16} />
-          Geral
-        </button>
-        <button
-          type="button"
-          className={`clinical-budget-tab ${activeTab === 'procedimentos' ? 'active' : ''}`}
-          onClick={() => setActiveTab('procedimentos')}
-        >
-          <ClipboardList size={16} />
-          Procedimentos
-        </button>
-        <button
-          type="button"
-          className={`clinical-budget-tab ${activeTab === 'pagamento' ? 'active' : ''}`}
-          onClick={() => setActiveTab('pagamento')}
-        >
-          <CreditCard size={16} />
-          Pagamento
-        </button>
-        <button
-          type="button"
-          className={`clinical-budget-tab ${activeTab === 'documentos' ? 'active' : ''}`}
-          onClick={() => setActiveTab('documentos')}
-        >
-          <FileText size={16} />
-          Documentos
-        </button>
-        <button
-          type="button"
-          className={`clinical-budget-tab ${activeTab === 'historico' ? 'active' : ''}`}
-          onClick={() => setActiveTab('historico')}
-        >
-          <History size={16} />
-          Histórico
-        </button>
-      </div>
-
-      {/* Conteúdo das Tabs */}
-      <div className="clinical-budget-content">
-        {activeTab === 'geral' && (
-          <OrcamentoGeralTab 
-            budget={budget} 
-            setBudget={setBudget}
-            totalValue={totalValue}
-            appointment={appointment}
-            patient={patient}
-            professional={professional}
-            appointmentId={appointmentId}
-          />
-        )}
-        {activeTab === 'procedimentos' && (
-          <OrcamentoProcedimentosTab 
-            budget={budget} 
-            setBudget={setBudget}
-            totalValue={totalValue}
-            appointment={appointment}
-            patient={patient}
-            appointmentId={appointmentId}
-          />
-        )}
-        {activeTab === 'pagamento' && (
-          <OrcamentoPagamentoTab 
-            budget={budget} 
-            setBudget={setBudget}
-            totalValue={totalValue}
-            finalValue={finalValue}
-            installmentValue={installmentValue}
-          />
-        )}
-        {activeTab === 'documentos' && (
-          <OrcamentoDocumentosTab 
-            appointmentId={appointmentId}
-            budget={budget}
-            onGeneratePDF={handleGeneratePDF}
-          />
-        )}
-        {activeTab === 'historico' && (
-          <OrcamentoHistoricoTab appointmentId={appointmentId} />
-        )}
-      </div>
-      </SectionCard>
-
-      <GenerateContractModal
-        open={contractModalOpen}
-        onOpenChange={setContractModalOpen}
-        user={user}
-        patientId={patient?.id || ''}
-        quoteSource="clinical_budget"
-        quoteId={appointmentId}
-        flow="clinical"
-      />
-
-      {toast && (
-        <div className={`toast ${toast.type}`} role="status">
-          {toast.message}
-        </div>
-      )}
-    </>
-  );
-}
-
-// Tab: Geral
-function OrcamentoGeralTab({ budget, setBudget, totalValue, appointment, patient, professional, appointmentId }) {
-  if (!budget) return null;
-
-  const budgetObservations = listClinicalEvolutions(patient?.id, appointmentId, null, budget?.id);
-
-  return (
-    <div className="clinical-budget-tab-content">
-      <div className="clinical-budget-form-grid">
-        <div className="form-field">
-          <label>Status do Orçamento</label>
-          <select
-            value={budget.status || BUDGET_STATUS.RASCUNHO}
-            onChange={(e) => setBudget({ ...budget, status: e.target.value })}
-          >
-            <option value={BUDGET_STATUS.RASCUNHO}>Rascunho</option>
-            <option value={BUDGET_STATUS.ENVIADO}>Enviado</option>
-            <option value={BUDGET_STATUS.APROVADO}>Aprovado</option>
-            <option value={BUDGET_STATUS.REPROVADO}>Reprovado</option>
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label>Nome do Plano/Tratamento</label>
-          <input
-            type="text"
-            value={budget.planName || ''}
-            onChange={(e) => setBudget({ ...budget, planName: e.target.value })}
-            placeholder="Ex: Tratamento Ortodôntico Completo"
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Valor Total</label>
-          <input
-            type="text"
-            value={`R$ ${totalValue.toFixed(2)}`}
-            disabled
-            className="clinical-budget-total-display"
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Forma de Pagamento Principal</label>
-          <select
-            value={budget.paymentMethod || 'dinheiro'}
-            onChange={(e) => setBudget({ ...budget, paymentMethod: e.target.value })}
-          >
-            <option value="dinheiro">Dinheiro</option>
-            <option value="pix">PIX</option>
-            <option value="cartao_debito">Cartão de Débito</option>
-            <option value="cartao_credito">Cartão de Crédito</option>
-            <option value="convenio">Convênio</option>
-            <option value="transferencia">Transferência Bancária</option>
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label>Validade do Orçamento</label>
-          <input
-            type="date"
-            value={budget.validityDate || ''}
-            onChange={(e) => setBudget({ ...budget, validityDate: e.target.value })}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Profissional Responsável</label>
-          <input
-            type="text"
-            value={professional?.nomeCompleto || professional?.name || 'Não definido'}
-            disabled
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Data de Criação</label>
-          <input
-            type="text"
-            value={budget.createdAt ? new Date(budget.createdAt).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')}
-            disabled
-          />
-        </div>
-      </div>
-
-      {budgetObservations.length > 0 && (
-        <div className="clinical-budget-observations-block" style={{ marginTop: '1.5rem', padding: '1rem', border: '1px solid var(--color-border, #e2e8f0)', borderRadius: '0.5rem', background: 'var(--color-bg-secondary, #f8fafc)' }}>
-          <h4 style={{ margin: '0 0 0.75rem', fontSize: '0.9375rem' }}>Observações do orçamento</h4>
-          <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.875rem', color: 'var(--color-text, #334155)' }}>
-            {budgetObservations.map((obs) => (
-              <li key={obs.id} style={{ marginBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--color-text-secondary, #64748b)', marginRight: '0.5rem' }}>
-                  {obs.createdAt ? new Date(obs.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}
-                </span>
-                {(obs.content || '').trim().split('\n').map((line, idx) => (
-                  <span key={idx}>{line || '\u00A0'}<br /></span>
-                ))}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Tab: Procedimentos
-function OrcamentoProcedimentosTab({ budget, setBudget, totalValue, appointment, patient, appointmentId }) {
-  if (!budget) return null;
-
-  const [showProcedureSelector, setShowProcedureSelector] = useState(false);
-
-
-  const handleAddProcedure = () => {
-    setShowProcedureSelector(true);
-  };
-
-  const handleSelectProcedure = (procedureData) => {
-    // Garantir compatibilidade: o modal retorna 'title', mas o código também usa 'name'
-    const adaptedProcedure = {
-      ...procedureData,
-      name: procedureData.title || procedureData.name || '',
-      // Garantir que totalValue seja calculado corretamente
-      totalValue: (procedureData.quantity || 1) * (procedureData.unitValue || 0),
-    };
-    
-    setBudget({
-      ...budget,
-      procedures: [...(budget.procedures || []), adaptedProcedure],
-    });
-    setShowProcedureSelector(false);
-  };
-
-  const handleUpdateProcedure = (id, field, value) => {
-    const updatedProcedures = (budget.procedures || []).map(proc => {
-      if (proc.id === id) {
-        // Validar restrições de preço
-        if (field === 'unitValue') {
-          const numValue = parseFloat(value) || 0;
-          if (proc.restriction === 'FIXO') {
-            alert('Este procedimento tem preço fixo pela Base de Preço. Não é possível alterar.');
-            return proc;
-          }
-          if (proc.restriction === 'BLOQUEAR') {
-            if (proc.minPrice && numValue < proc.minPrice) {
-              alert(`Preço mínimo permitido: R$ ${proc.minPrice.toFixed(2)}`);
-              return proc;
-            }
-            if (proc.maxPrice && numValue > proc.maxPrice) {
-              alert(`Preço máximo permitido: R$ ${proc.maxPrice.toFixed(2)}`);
-              return proc;
-            }
-          }
-          if (proc.restriction === 'AVISAR') {
-            if (
-              (proc.minPrice && numValue < proc.minPrice) ||
-              (proc.maxPrice && numValue > proc.maxPrice)
-            ) {
-              const confirmMsg = `Preço fora do recomendado (R$ ${proc.minPrice || '—'} - R$ ${proc.maxPrice || '—'}). Deseja continuar?`;
-              if (!confirm(confirmMsg)) {
-                return proc;
-              }
-            }
-          }
-        }
-
-        const updated = { ...proc, [field]: value };
-        // Se atualizar 'name', também atualizar 'title' para manter compatibilidade
-        if (field === 'name') {
-          updated.title = value;
-        }
-        if (field === 'quantity' || field === 'unitValue') {
-          updated.totalValue = parseFloat(updated.quantity || 1) * parseFloat(updated.unitValue || 0);
-        }
-        return updated;
-      }
-      return proc;
-    });
-    setBudget({ ...budget, procedures: updatedProcedures });
-  };
-
-  const handleRemoveProcedure = (id) => {
-    setBudget({
-      ...budget,
-      procedures: (budget.procedures || []).filter(proc => proc.id !== id),
-    });
-  };
-
-  return (
-    <>
-      <div className="clinical-budget-tab-content">
-        <div className="clinical-budget-procedures-header">
-          <h3>Procedimentos do Orçamento</h3>
-          <button type="button" className="button primary" onClick={handleAddProcedure}>
-            <Plus size={16} />
-            Adicionar Procedimento
-          </button>
-        </div>
-
-      {(!budget.procedures || budget.procedures.length === 0) ? (
-        <div className="clinical-empty-state">
-          <ClipboardList size={48} />
-          <p>Nenhum procedimento adicionado.</p>
-        </div>
-      ) : (
-        <>
-          <div className="clinical-budget-procedures-list">
-            {budget.procedures.map((proc) => (
-              <div key={proc.id} className="clinical-budget-procedure-item">
-                <div className="clinical-budget-procedure-fields">
-                  <div className="clinical-budget-procedure-field clinical-budget-procedure-name">
-                    <label>Procedimento</label>
-                    <input
-                      type="text"
-                      value={proc.title || proc.name || ''}
-                      onChange={(e) => handleUpdateProcedure(proc.id, 'name', e.target.value)}
-                      disabled={!!proc.procedureCatalogId}
-                    />
-                  </div>
-                  <div className="clinical-budget-procedure-field clinical-budget-procedure-tooth">
-                    <label>Dente</label>
-                    <input
-                      type="text"
-                      placeholder="Ex.: 18"
-                      value={proc.tooth ?? ''}
-                      onChange={(e) => handleUpdateProcedure(proc.id, 'tooth', e.target.value)}
-                    />
-                  </div>
-                  <div className="clinical-budget-procedure-field clinical-budget-procedure-region">
-                    <label>Região</label>
-                    <input
-                      type="text"
-                      placeholder="Ex.: superior direita"
-                      value={proc.region ?? ''}
-                      onChange={(e) => handleUpdateProcedure(proc.id, 'region', e.target.value)}
-                    />
-                  </div>
-                  <div className="clinical-budget-procedure-field clinical-budget-procedure-quantity">
-                    <label>Quantidade</label>
-                    <input
-                      type="number"
-                      value={proc.quantity ?? 1}
-                      onChange={(e) => handleUpdateProcedure(proc.id, 'quantity', parseInt(e.target.value) || 1)}
-                      min={1}
-                    />
-                  </div>
-                  <div className="clinical-budget-procedure-field clinical-budget-procedure-unit-value">
-                    <label>Valor unit. (R$)</label>
-                    <input
-                      type="number"
-                      value={proc.unitValue ?? ''}
-                      onChange={(e) => handleUpdateProcedure(proc.id, 'unitValue', parseFloat(e.target.value) || 0)}
-                      step="0.01"
-                      min={0}
-                      disabled={proc.restriction === 'FIXO'}
-                      title={proc.restriction === 'FIXO' ? 'Preço fixo pela Base de Preço' : ''}
-                    />
-                    {proc.restriction === 'FIXO' && (
-                      <span className="price-base-restriction-warning" style={{ fontSize: '11px', marginTop: '2px', display: 'block' }}>
-                        Preço fixo
-                      </span>
-                    )}
-                  </div>
-                  <div className="clinical-budget-procedure-field clinical-budget-procedure-total">
-                    <label>Total (R$)</label>
-                    <input
-                      type="text"
-                      value={`R$ ${(proc.totalValue || 0).toFixed(2)}`}
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                  <div className="clinical-budget-procedure-field clinical-budget-procedure-remove">
-                    <label>&nbsp;</label>
-                    <button
-                      type="button"
-                      className="clinical-budget-procedure-remove-btn"
-                      onClick={() => handleRemoveProcedure(proc.id)}
-                      title="Remover procedimento"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-                <div className="clinical-budget-procedure-field clinical-budget-procedure-observations-wrap">
-                  <label>Observações</label>
-                  <textarea
-                    placeholder="Observações sobre este procedimento..."
-                    value={proc.observations || ''}
-                    onChange={(e) => handleUpdateProcedure(proc.id, 'observations', e.target.value)}
-                    className="clinical-budget-procedure-observations"
-                    rows={2}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="clinical-budget-total-summary">
-            <strong>Total: R$ {totalValue.toFixed(2)}</strong>
-          </div>
-        </>
-      )}
-      </div>
-
-      {showProcedureSelector && (
-        <ProcedureSelectorModal
-          open={showProcedureSelector}
-          onClose={() => setShowProcedureSelector(false)}
-          onSelect={handleSelectProcedure}
-          patient={patient}
-          appointmentId={appointmentId}
-        />
-      )}
-    </>
-  );
-}
-
-// Tab: Pagamento
-function OrcamentoPagamentoTab({ budget, setBudget, totalValue, finalValue, installmentValue }) {
-  if (!budget) return null;
-
-  const handlePaymentTypeChange = (value) => {
-    const updates = { paymentType: value };
-    if (value === 'a_vista') {
-      updates.installments = 1;
-      updates.downPayment = finalValue;
-    }
-    setBudget({ ...budget, ...updates });
-  };
-
-  const handleDownPaymentChange = (value) => {
-    const downPayment = parseFloat(value) || 0;
-    setBudget({ ...budget, downPayment });
-  };
-
-  const handleInstallmentsChange = (value) => {
-    const installments = parseInt(value) || 1;
-    setBudget({ ...budget, installments });
-  };
-
-  const handleDiscountChange = (value) => {
-    const discount = parseFloat(value) || 0;
-    setBudget({ ...budget, discount });
-  };
-
-  const handleInterestChange = (value) => {
-    const interest = parseFloat(value) || 0;
-    setBudget({ ...budget, interest });
-  };
-
-  return (
-    <div className="clinical-budget-tab-content">
-      <div className="clinical-budget-payment-form">
-        <div className="form-field">
-          <label>Tipo de Pagamento</label>
-          <select
-            value={budget.paymentType || 'a_vista'}
-            onChange={(e) => handlePaymentTypeChange(e.target.value)}
-          >
-            <option value="a_vista">À Vista</option>
-            <option value="parcelado">Parcelado</option>
-            <option value="convenio">Convênio</option>
-          </select>
-        </div>
-
-        {budget.paymentType === 'parcelado' && (
-          <>
-            <div className="form-field">
-              <label>Entrada</label>
-              <input
-                type="number"
-                value={budget.downPayment || 0}
-                onChange={(e) => handleDownPaymentChange(e.target.value)}
-                step="0.01"
-                min="0"
-                max={finalValue}
-              />
-            </div>
-
-            <div className="form-field">
-              <label>Número de Parcelas</label>
-              <input
-                type="number"
-                value={budget.installments || 1}
-                onChange={(e) => handleInstallmentsChange(e.target.value)}
-                min="1"
-                max="24"
-              />
-            </div>
-
-            <div className="form-field">
-              <label>Valor da Parcela</label>
-              <input
-                type="text"
-                value={`R$ ${installmentValue.toFixed(2)}`}
-                disabled
-                className="clinical-budget-installment-display"
-              />
-            </div>
-          </>
-        )}
-
-        <div className="form-field">
-          <label>Meio de Pagamento</label>
-          <select
-            value={budget.paymentMethod || 'dinheiro'}
-            onChange={(e) => setBudget({ ...budget, paymentMethod: e.target.value })}
-          >
-            <option value="dinheiro">Dinheiro</option>
-            <option value="pix">PIX</option>
-            <option value="cartao_debito">Cartão de Débito</option>
-            <option value="cartao_credito">Cartão de Crédito</option>
-            <option value="transferencia">Transferência Bancária</option>
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label>Desconto (R$)</label>
-          <input
-            type="number"
-            value={budget.discount || 0}
-            onChange={(e) => handleDiscountChange(e.target.value)}
-            step="0.01"
-            min="0"
-            max={totalValue}
-          />
-        </div>
-
-        <div className="form-field">
-          <label>Juros (R$)</label>
-          <input
-            type="number"
-            value={budget.interest || 0}
-            onChange={(e) => handleInterestChange(e.target.value)}
-            step="0.01"
-            min="0"
-          />
-        </div>
-      </div>
-
-      {/* Resumo de Pagamento */}
-      <div className="clinical-budget-payment-summary">
-        <div className="clinical-budget-summary-row">
-          <span>Subtotal:</span>
-          <span>R$ {totalValue.toFixed(2)}</span>
-        </div>
-        {budget.discount > 0 && (
-          <div className="clinical-budget-summary-row clinical-budget-summary-discount">
-            <span>Desconto:</span>
-            <span>- R$ {budget.discount.toFixed(2)}</span>
-          </div>
-        )}
-        {budget.interest > 0 && (
-          <div className="clinical-budget-summary-row clinical-budget-summary-interest">
-            <span>Juros:</span>
-            <span>+ R$ {budget.interest.toFixed(2)}</span>
-          </div>
-        )}
-        <div className="clinical-budget-summary-row clinical-budget-summary-total">
-          <strong>Total:</strong>
-          <strong>R$ {finalValue.toFixed(2)}</strong>
-        </div>
-        {budget.paymentType === 'parcelado' && budget.installments > 1 && (
-          <div className="clinical-budget-summary-row">
-            <span>Entrada:</span>
-            <span>R$ {budget.downPayment.toFixed(2)}</span>
-          </div>
-        )}
-        {budget.paymentType === 'parcelado' && budget.installments > 1 && (
-          <div className="clinical-budget-summary-row">
-            <span>{budget.installments}x de:</span>
-            <span>R$ {installmentValue.toFixed(2)}</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Tab: Documentos
-function OrcamentoDocumentosTab({ appointmentId, budget, onGeneratePDF }) {
-  const db = loadDb();
-
-  const getUserName = (userId) => {
-    if (!userId) return 'Usuário do sistema';
-    const user = db.users?.find((item) => item.id === userId);
-    return user?.name || 'Usuário do sistema';
-  };
-
-  const documents = Array.isArray(budget?.documents) ? budget.documents : [];
-  const events = getClinicalEvents(appointmentId) || [];
-  const pdfEvents = events.filter((event) => event.type === 'budget_pdf_generated');
-  const fallbackDocuments = pdfEvents.map((event) => ({
-    id: event.id,
-    fileName: event.data?.fileName || 'Orçamento gerado',
-    createdAt: event.timestamp,
-    createdByName: getUserName(event.userId),
-    origin: event.data?.origin || '',
-    htmlContent: null,
-  }));
-
-  const visibleDocuments = documents.length > 0 ? documents : fallbackDocuments;
-
-  const handleViewDocument = (doc) => {
-    if (!doc?.htmlContent) {
-      alert('Documento sem conteúdo para visualização. Gere novamente o PDF.');
-      return;
-    }
-
-    try {
-      const viewWindow = window.open('', '_blank');
-      if (viewWindow) {
-        viewWindow.document.write(doc.htmlContent);
-        viewWindow.document.close();
-      }
-    } catch (error) {
-      alert('Não foi possível abrir o documento. Verifique o bloqueio de pop-ups.');
-    }
-  };
-
-
-  return (
-    <div className="clinical-budget-tab-content">
-      <div className="clinical-budget-documents-header">
-        <h3>Documentos do Orçamento</h3>
-        <button 
-          type="button" 
-          className="button primary"
-          onClick={onGeneratePDF}
-        >
-          <Download size={16} />
-          Gerar PDF
-        </button>
-      </div>
-      {visibleDocuments.length === 0 ? (
-        <div className="clinical-empty-state">
-          <FileText size={48} />
-          <p>Nenhum documento gerado ainda.</p>
-          <p className="clinical-empty-hint">Clique em "Gerar PDF" para criar o documento do orçamento.</p>
-        </div>
-      ) : (
-        <div className="clinical-budget-documents-list">
-          {visibleDocuments.map((doc) => (
-            <div key={doc.id} className="clinical-budget-document-item">
-              <div className="clinical-budget-document-info">
-                <div className="clinical-budget-document-title">{doc.fileName}</div>
-                <div className="clinical-budget-document-meta">
-                  Gerado por {doc.createdByName || 'Usuário do sistema'}
-                  {doc.createdAt && ` • ${new Date(doc.createdAt).toLocaleString('pt-BR')}`}
-                  {doc.origin && ` • ${doc.origin}`}
-                </div>
-              </div>
-              <div className="clinical-budget-document-actions">
-                <button
-                  type="button"
-                  className="button secondary"
-                  onClick={() => handleViewDocument(doc)}
-                  disabled={!doc.htmlContent}
-                  title={!doc.htmlContent ? 'Gere novamente para visualizar' : 'Visualizar documento'}
-                >
-                  Visualizar
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Tab: Histórico
-function OrcamentoHistoricoTab({ appointmentId }) {
-  const [events, setEvents] = useState([]);
-
-  useEffect(() => {
-    const clinicalEvents = getClinicalEvents(appointmentId);
-    const budgetEvents = clinicalEvents.filter(e => 
-      e.type.includes('budget') || e.type.includes('orçamento')
-    );
-    setEvents(budgetEvents);
-  }, [appointmentId]);
-
-  const getEventTypeLabel = (type) => {
-    const labels = {
-      'budget_created': 'Orçamento Criado',
-      'budget_updated': 'Orçamento Atualizado',
-      'budget_status_changed': 'Status Alterado',
-      'budget_sent': 'Orçamento Enviado',
-      'budget_approved': 'Orçamento Aprovado',
-      'budget_rejected': 'Orçamento Reprovado',
-    };
-    return labels[type] || type;
-  };
-
-  return (
-    <div className="clinical-budget-tab-content">
-      <h3>Histórico de Alterações</h3>
-      {events.length === 0 ? (
-        <div className="clinical-empty-state">
-          <History size={48} />
-          <p>Nenhum evento registrado ainda.</p>
-        </div>
-      ) : (
-        <div className="clinical-events-list">
-          {events.map((event) => (
-            <div key={event.id} className="clinical-event-item">
-              <div className="clinical-event-time">
-                {new Date(event.timestamp).toLocaleString('pt-BR')}
-              </div>
-              <div className="clinical-event-content">
-                <strong>{getEventTypeLabel(event.type)}</strong>
-                {event.data && Object.keys(event.data).length > 0 && (
-                  <p>
-                    {event.data.status && `Status: ${event.data.status}`}
-                    {event.data.totalValue && ` | Valor: R$ ${event.data.totalValue.toFixed(2)}`}
-                    {event.data.notes && ` | ${event.data.notes}`}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Seção: Contratos (bloqueia gerar/vincular contrato se cadastro com campos críticos pendentes)
-function ContratosSection({ appointmentId, patientId }) {
-  const navigate = useNavigate();
-  const fullPatient = patientId ? getPatient(patientId) : null;
-  const pendingCriticalFields = fullPatient?.profile?.pendingCriticalFields || [];
-  const hasBlockingPending = pendingCriticalFields.length > 0;
-  const [showBlockModal, setShowBlockModal] = useState(false);
-
-  const handleContractAction = () => {
-    if (hasBlockingPending) {
-      setShowBlockModal(true);
-      return;
-    }
-    // Futuro: abrir fluxo de vincular/gerar contrato
-  };
-
-  return (
-    <>
-      <SectionCard
-        title="Contratos"
-        description="Vincule contratos relacionados a este atendimento"
-        actions={
-          <button
-            type="button"
-            className="button primary"
-            disabled={hasBlockingPending}
-            title={hasBlockingPending ? 'Preencha os campos críticos do cadastro do paciente para habilitar.' : undefined}
-            onClick={handleContractAction}
-          >
-            <Plus size={16} />
-            Vincular Contrato
-          </button>
-        }
-      >
-        <div className="clinical-empty-state">
-          <FileCheck size={48} />
-          <p>Nenhum contrato vinculado ainda.</p>
-        </div>
-      </SectionCard>
-      {showBlockModal && (
-        <div
-          className="modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="contract-block-modal-title"
-          onClick={(e) => e.target === e.currentTarget && setShowBlockModal(false)}
-        >
-          <div className="modal-content" style={{ maxWidth: '28rem' }}>
-            <h3 id="contract-block-modal-title">Não é possível gerar contrato</h3>
-            <p style={{ marginBottom: '1rem' }}>
-              Não é possível gerar contrato enquanto faltarem informações importantes do cadastro.
-            </p>
-            <p style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Campos críticos faltando:</p>
-            <ul style={{ margin: '0 0 1rem 1rem', padding: 0, fontSize: '0.875rem' }}>
-              {pendingCriticalFields.map((key) => (
-                <li key={key}>{PENDING_FIELDS_MAP[key] || key}</li>
-              ))}
-            </ul>
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-              <button type="button" className="button secondary" onClick={() => setShowBlockModal(false)}>
-                Cancelar
-              </button>
-              <button
-                type="button"
-                className="button primary"
-                onClick={() => {
-                  setShowBlockModal(false);
-                  if (patientId) navigate(`/pacientes/cadastro/${patientId}?highlight=pending`);
-                }}
-              >
-                Preencher agora
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
 // Seção: Convênios
 function ConveniosSection({ patient }) {
   if (!patient) {
     return (
       <SectionCard
-        title="Convênios"
-        description="Informações sobre o convênio do paciente"
+        title="ConvÃªnios"
+        description="InformaÃ§Ãµes sobre o convÃªnio do paciente"
       >
         <div className="clinical-empty-state">
           <Activity size={48} />
-          <p>Dados do paciente não disponíveis.</p>
+          <p>Dados do paciente nÃ£o disponÃ­veis.</p>
         </div>
       </SectionCard>
     );
@@ -2950,42 +1214,42 @@ function ConveniosSection({ patient }) {
 
   return (
     <SectionCard
-      title="Convênios"
-      description="Informações sobre o convênio do paciente"
+      title="ConvÃªnios"
+      description="InformaÃ§Ãµes sobre o convÃªnio do paciente"
     >
       {patient.insurance_provider ? (
         <div className="clinical-insurance-info">
           <h3>{patient.insurance_provider}</h3>
-          {patient.insurance_number && <p>Número: {patient.insurance_number}</p>}
+          {patient.insurance_number && <p>NÃºmero: {patient.insurance_number}</p>}
           {patient.insurance_plan && <p>Plano: {patient.insurance_plan}</p>}
         </div>
       ) : (
         <div className="clinical-empty-state">
           <CreditCard size={48} />
-          <p>Paciente não possui convênio cadastrado.</p>
+          <p>Paciente nÃ£o possui convÃªnio cadastrado.</p>
         </div>
       )}
     </SectionCard>
   );
 }
 
-// Seção: Dados Clínicos
+// SeÃ§Ã£o: Dados ClÃ­nicos
 function DadosClinicosSection({ appointmentId, patientId }) {
   const [activeSubmenu, setActiveSubmenu] = useState('odontograma');
   const navigate = useNavigate();
 
   const submenuItems = [
     { id: 'odontograma', label: 'Odontograma' },
-    { id: 'situacao-bucal', label: 'Situação Bucal' },
-    { id: 'situacao-facial', label: 'Situação Facial' },
-    { id: 'situacao-fisica', label: 'Situação Física' },
-    { id: 'historico-eventos', label: 'Histórico de Eventos' },
+    { id: 'situacao-bucal', label: 'SituaÃ§Ã£o Bucal' },
+    { id: 'situacao-facial', label: 'SituaÃ§Ã£o Facial' },
+    { id: 'situacao-fisica', label: 'SituaÃ§Ã£o FÃ­sica' },
+    { id: 'historico-eventos', label: 'HistÃ³rico de Eventos' },
   ];
 
   return (
     <SectionCard
-      title="Dados Clínicos"
-      description="Acesse odontograma, histórico e informações clínicas do paciente"
+      title="Dados ClÃ­nicos"
+      description="Acesse odontograma, histÃ³rico e informaÃ§Ãµes clÃ­nicas do paciente"
     >
       <div className="clinical-submenu">
         {submenuItems.map((item) => (
@@ -3011,7 +1275,7 @@ function DadosClinicosSection({ appointmentId, patientId }) {
         {activeSubmenu !== 'historico-eventos' && (
           <div className="clinical-empty-state">
             <Activity size={48} />
-            <p>Conteúdo em desenvolvimento.</p>
+            <p>ConteÃºdo em desenvolvimento.</p>
           </div>
         )}
       </div>
@@ -3019,25 +1283,25 @@ function DadosClinicosSection({ appointmentId, patientId }) {
   );
 }
 
-// Componente: Histórico de Eventos
+// Componente: HistÃ³rico de Eventos
 function HistoricoEventos({ appointmentId }) {
   const [events, setEvents] = useState([]);
 
   useEffect(() => {
-    // Carregar histórico de eventos
+    // Carregar histÃ³rico de eventos
     const clinicalEvents = getClinicalEvents(appointmentId);
     setEvents(clinicalEvents);
   }, [appointmentId]);
 
   const getEventTypeLabel = (type) => {
     const labels = {
-      'clinical_appointment_opened': 'Atendimento Clínico Aberto',
-      'evolution_saved': 'Observação do Orçamento salva',
-      'evolution_edited': 'Observação do Orçamento editada',
+      'clinical_appointment_opened': 'Atendimento ClÃ­nico Aberto',
+      'evolution_saved': 'ObservaÃ§Ã£o do OrÃ§amento salva',
+      'evolution_edited': 'ObservaÃ§Ã£o do OrÃ§amento editada',
       'procedure_added': 'Procedimento Adicionado',
       'procedure_planned': 'Procedimento Planejado',
-      'budget_generated': 'Orçamento Gerado',
-      'budget_approved': 'Orçamento Aprovado',
+      'budget_generated': 'OrÃ§amento Gerado',
+      'budget_approved': 'OrÃ§amento Aprovado',
       'appointment_finished': 'Atendimento Finalizado',
     };
     return labels[type] || type;
@@ -3120,7 +1384,7 @@ function AddProcedureModal({ onClose, onAdd }) {
             />
           </div>
           <div className="form-group">
-            <label>Região</label>
+            <label>RegiÃ£o</label>
             <input
               type="text"
               value={region}
@@ -3172,7 +1436,7 @@ class ClinicalAppointmentErrorBoundary extends Component {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', padding: '2rem' }}>
           <div style={{ color: 'var(--color-error)', marginBottom: '1rem' }}>
-            Erro ao carregar página: {this.state.error?.message || 'Erro desconhecido'}
+            Erro ao carregar pÃ¡gina: {this.state.error?.message || 'Erro desconhecido'}
           </div>
           <button 
             type="button" 
@@ -3189,7 +1453,7 @@ class ClinicalAppointmentErrorBoundary extends Component {
   }
 }
 
-// Export direto - renderização normal sem portal
+// Export direto - renderizaÃ§Ã£o normal sem portal
 export default function ClinicalAppointmentPage() {
   
   return <ClinicalAppointmentPageContent />;

@@ -6,9 +6,11 @@ import { readTenantAccessSnapshot } from '../services/platformAccessService.js';
 import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
+import { DEV_BACKEND_NOT_RUNNING_MSG } from '../config/adminApiBase.js';
 
 /** Curto o suficiente para não travar a tela; o erro oferece retry e volta ao login. */
-const TENANT_SNAPSHOT_TIMEOUT_MS = 15000;
+const TENANT_SNAPSHOT_TIMEOUT_MS = 20000;
+const TENANT_SNAPSHOT_TIMEOUT_MSG = `Tempo esgotado ao carregar dados da clínica. ${DEV_BACKEND_NOT_RUNNING_MSG}`;
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const EMPTY_CONTEXT = {
@@ -43,7 +45,7 @@ export function TenantProvider({ children }) {
       const context = await raceWithTimeout(
         readTenantAccessSnapshot(user.tenantId),
         TENANT_SNAPSHOT_TIMEOUT_MS,
-        'Tempo esgotado ao carregar dados da clínica (rede ou API). Verifique o backend em :3001 e tente novamente.',
+        TENANT_SNAPSHOT_TIMEOUT_MSG,
       );
       setTenantContext(context);
       hasLoadedOnce.current = true;

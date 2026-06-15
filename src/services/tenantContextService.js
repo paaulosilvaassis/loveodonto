@@ -13,6 +13,7 @@ import {
   formatAdminApiServerError,
   getConfiguredAdminApiBaseUrl,
   getDevDirectAdminApiUrl,
+  isDevBackendUnreachableError,
 } from '../config/adminApiBase.js';
 
 function parseJsonSafe(value, fallback = {}) {
@@ -180,27 +181,8 @@ function isTransientTenantContextError(err) {
   );
 }
 
-/**
- * Em DEV: Admin API local (:3001) opcional. Se não houver conexão, usa o caminho direto
- * Supabase (anon + RLS) já implementado abaixo — evita bloquear o app só com Vite.
- */
-function isDevAdminApiUnreachable(err) {
-  if (!import.meta.env.DEV) return false;
-  const m = String(err?.message || '').toLowerCase();
-  return (
-    m.includes('3001')
-    && (
-      m.includes('conectar')
-      || m.includes('não respondeu')
-      || m.includes('failed to fetch')
-      || m.includes('network')
-      || m.includes('econnrefused')
-    )
-  );
-}
-
 async function fetchTenantContextViaAdminApi() {
-  const maxAttempts = 4;
+  const maxAttempts = import.meta.env.DEV ? 1 : 4;
   let lastErr;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
@@ -210,6 +192,9 @@ async function fetchTenantContextViaAdminApi() {
       return await fetchTenantContextViaAdminApiAttempt();
     } catch (err) {
       lastErr = err;
+      if (import.meta.env.DEV && isDevBackendUnreachableError(err)) {
+        throw err;
+      }
       if (!isTransientTenantContextError(err) || attempt === maxAttempts - 1) {
         throw err;
       }
@@ -280,7 +265,7 @@ export async function getTenantContext(tenantId) {
   try {
     apiContext = await runQuery(() => fetchTenantContextViaAdminApi());
   } catch (err) {
-    if (isDevAdminApiUnreachable(err)) {
+    if (isDevBackendUnreachableError(err)) {
       apiContext = null;
     } else {
       throw err;

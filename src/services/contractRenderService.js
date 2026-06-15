@@ -4,6 +4,7 @@
 import { loadDb } from '../db/index.js';
 import { getPatient } from './patientService.js';
 import { getCrmBudgetById } from './crmBudgetService.js';
+import { enrichClinicalBudgetContext } from './clinicalBudgetContractBridge.js';
 import { integerToWordsPt, currencyToWordsPt } from '../utils/numberToWordsPt.js';
 
 function escapeHtml(s) {
@@ -53,11 +54,14 @@ function clinicalProceduresTable(procedures) {
   return html;
 }
 
-function receivablesTableForPatient(patientId, quoteId) {
+function receivablesTableForPatient(patientId, quoteIds) {
   const db = loadDb();
   const list = (db.accountsReceivable || []).filter((r) => r.patient_id === patientId);
-  const linked = quoteId
-    ? list.filter((r) => String(r.origin_id || '') === String(quoteId))
+  const ids = new Set(
+    (Array.isArray(quoteIds) ? quoteIds : [quoteIds]).filter(Boolean).map(String),
+  );
+  const linked = ids.size
+    ? list.filter((r) => ids.has(String(r.origin_id || '')))
     : list;
   const use = linked.length ? linked : list;
   if (!use.length) return '<p><em>Nenhuma parcela/título localizado para este vínculo. Cadastre contas a receber ou vincule ao orçamento.</em></p>';
@@ -96,9 +100,11 @@ export function buildContractContext(params) {
 
   let crmBudget = null;
   let clinicalBudget = null;
+  let clinicalMeta = null;
   let procHtml = '';
   let totalNum = 0;
   let obs = observacoes;
+  let receivableIds = quoteId ? [quoteId] : [];
 
   if (quoteSource === 'crm_budget') {
     crmBudget = getCrmBudgetById(quoteId);
@@ -111,15 +117,17 @@ export function buildContractContext(params) {
     const ca = (db.clinicalAppointments || []).find((c) => c.appointmentId === quoteId);
     clinicalBudget = ca?.budget || null;
     if (clinicalBudget) {
+      clinicalMeta = enrichClinicalBudgetContext(clinicalBudget, quoteId);
       procHtml = clinicalProceduresTable(clinicalBudget.procedures);
-      totalNum = Number(clinicalBudget.totalValue || 0);
+      totalNum = Number(clinicalMeta?.total || clinicalBudget.totalValue || 0);
       if (!totalNum && Array.isArray(clinicalBudget.procedures)) {
         totalNum = clinicalBudget.procedures.reduce(
           (sum, proc) => sum + Number(proc.quantity || 1) * Number(proc.unitValue || 0),
           0,
         );
       }
-      obs = obs || String(clinicalBudget.notes || clinicalBudget.observations || '');
+      obs = obs || String(clinicalBudget.commercialNotes || clinicalBudget.notes || clinicalBudget.observations || '');
+      receivableIds = clinicalMeta?.receivableOriginIds || receivableIds;
     }
   }
 
@@ -165,10 +173,13 @@ export function buildContractContext(params) {
     const teeth = crmBudget.teethJson || crmBudget.teeth || [];
     if (Array.isArray(teeth) && teeth.length) dentesStr = teeth.join(', ');
   } else if (clinicalBudget) {
+    orcNum = clinicalMeta?.budgetId || quoteId || '—';
     orcDate = clinicalBudget.createdAt
       ? new Date(clinicalBudget.createdAt).toLocaleDateString('pt-BR')
       : '—';
-    tratamentoNome = clinicalBudget.title || '';
+    tratamentoNome = clinicalMeta?.planName || clinicalBudget.title || '';
+    entrada = Number(clinicalMeta?.entryAmount || 0);
+    formaPag = clinicalMeta?.paymentLabel || '—';
     const teeth = clinicalBudget.teeth || [];
     if (Array.isArray(teeth) && teeth.length) dentesStr = teeth.join(', ');
   }
@@ -188,7 +199,7 @@ export function buildContractContext(params) {
     '#clinicaEndereco': clinEnd,
     '#clinicaCidadeEstado': cityState || '—',
     '#procedimentos': procHtml,
-    '#parcelas': receivablesTableForPatient(patientId, quoteId),
+    '#parcelas': receivablesTableForPatient(patientId, receivableIds),
     '#manutencaoMeses': includeOrtho ? '6' : '—',
     '#totalContrato': totalNum.toFixed(2),
     '#totalManutencoes': totalMan.toFixed(2),

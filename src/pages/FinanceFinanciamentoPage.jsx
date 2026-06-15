@@ -26,7 +26,13 @@ import FinancingDetailsModal from '../components/finance/FinancingDetailsModal.j
 import GenerateBoletoModal from '../components/finance/GenerateBoletoModal.jsx';
 import RegisterFinancingPaymentModal from '../components/finance/RegisterFinancingPaymentModal.jsx';
 import RenegotiateFinancingModal from '../components/finance/RenegotiateFinancingModal.jsx';
+import FinancialPartnersPanel from '../components/finance/FinancialPartnersPanel.jsx';
 import { FINANCING_STATUS } from '../services/auditEventCatalog.js';
+
+const PAGE_SECTIONS = [
+  { key: 'financings', label: 'Financiamentos' },
+  { key: 'partners', label: 'Parceiros Financeiros' },
+];
 
 const TABS = [
   { key: 'all', label: 'Propostas' },
@@ -64,6 +70,7 @@ const formatDate = (iso) => {
 export default function FinanceFinanciamentoPage() {
   const { user } = useAuth();
   const [refreshKey, setRefreshKey] = useState(0);
+  const [pageSection, setPageSection] = useState('financings');
   const [activeTab, setActiveTab] = useState('all');
   const [filters, setFilters] = useState({
     startDate: '',
@@ -189,6 +196,7 @@ export default function FinanceFinanciamentoPage() {
       )}
       <div className="finance-financing-header">
         <h1>Financiamentos</h1>
+        {pageSection === 'financings' ? (
         <div className="finance-financing-actions-inline">
           <button type="button" className="button secondary" onClick={() => {
             if (!window.confirm('Executar rotina de inadimplência agora?')) return;
@@ -221,8 +229,31 @@ export default function FinanceFinanciamentoPage() {
             Novo financiamento
           </button>
         </div>
+        ) : null}
       </div>
 
+      <nav className="finance-receivables-nav finance-financing-section-nav">
+        <div className="finance-receivables-nav-inner">
+          {PAGE_SECTIONS.map((section) => (
+            <button
+              key={section.key}
+              type="button"
+              className={`finance-receivables-nav-tab ${pageSection === section.key ? 'active' : ''}`}
+              onClick={() => setPageSection(section.key)}
+            >
+              {section.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {pageSection === 'partners' ? (
+        <FinancialPartnersPanel
+          refreshKey={refreshKey}
+          onChanged={() => setRefreshKey((k) => k + 1)}
+        />
+      ) : (
+        <>
       <nav className="finance-receivables-nav">
         <div className="finance-receivables-nav-inner">
           {TABS.map((tab) => (
@@ -443,6 +474,8 @@ export default function FinanceFinanciamentoPage() {
           </tbody>
         </table>
       </div>
+        </>
+      )}
 
       <FinancingFormModal
         isOpen={modal === 'new'}

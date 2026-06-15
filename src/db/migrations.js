@@ -3,6 +3,7 @@ import { DB_VERSION, defaultDbState } from './schema.js';
 import { buildPermissionsCatalog, permissionId } from '../permissions/catalog.js';
 import { ROLE_DEFAULT_PERMISSIONS, ROLES_FOR_SEED } from '../permissions/roleDefaults.js';
 import { seedDefaultContractsForDb } from '../contracts/defaultContractSeed.js';
+import { DEFAULT_FINANCIAL_PARTNERS } from '../services/financialPartnersService.js';
 
 const migrations = {
   1: (db) => ({
@@ -1469,6 +1470,26 @@ const migrations = {
       contractSignLinks: ensureArray('contractSignLinks'),
       contractSettings: ensureArray('contractSettings'),
       version: 51,
+    };
+  },
+  /**
+   * 52: Parceiros financeiros para financiamentos (cadastro + seed padrão).
+   */
+  52: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 52 };
+    let partners = Array.isArray(db.financialPartners) ? [...db.financialPartners] : [];
+    if (partners.length === 0) {
+      partners = DEFAULT_FINANCIAL_PARTNERS();
+    } else {
+      const ids = new Set(partners.map((p) => p.id));
+      for (const seed of DEFAULT_FINANCIAL_PARTNERS()) {
+        if (!ids.has(seed.id)) partners.push(seed);
+      }
+    }
+    return {
+      ...db,
+      financialPartners: partners,
+      version: 52,
     };
   },
 };

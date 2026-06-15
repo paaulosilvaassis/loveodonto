@@ -1,7 +1,10 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
+  DEV_BACKEND_NOT_RUNNING_MSG,
+  formatAdminApiNetworkError,
   getAdminApiBaseConfigError,
   getConfiguredAdminApiBaseUrl,
+  isDevBackendUnreachableError,
   isLocalhostBackendUrl,
   PROD_BACKEND_MISCONFIGURED_MSG,
   PROD_BACKEND_ENV_EMPTY_MSG,
@@ -40,5 +43,13 @@ describe('adminApiBase', () => {
     vi.stubEnv('VITE_APP_ADMIN_API_BASE_URL', 'https://api.loveodonto.app');
     expect(getConfiguredAdminApiBaseUrl()).toBe('https://api.loveodonto.app');
     expect(getAdminApiBaseConfigError()).toBeNull();
+  });
+
+  it('em dev retorna mensagem clara quando backend local está offline', () => {
+    vi.stubEnv('PROD', false);
+    vi.stubEnv('DEV', true);
+    expect(formatAdminApiNetworkError()).toBe(DEV_BACKEND_NOT_RUNNING_MSG);
+    expect(isDevBackendUnreachableError(new Error(DEV_BACKEND_NOT_RUNNING_MSG))).toBe(true);
+    expect(isDevBackendUnreachableError(new Error('Failed to fetch'))).toBe(true);
   });
 });

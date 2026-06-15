@@ -36,7 +36,7 @@ const internalAppProxy = {
         res.end(
           JSON.stringify({
             error: isConn
-              ? 'Não foi possível conectar ao backend SaaS na porta 3001. Inicie com npm run server:restart ou npm run stack:start.'
+              ? 'Backend local não está rodando. Abra outro terminal e rode cd server && npm start.'
               : `Falha no proxy para o backend (3001): ${msg || 'erro desconhecido'}`,
           }),
         );

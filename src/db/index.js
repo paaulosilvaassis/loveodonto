@@ -130,6 +130,7 @@ function applyPostMigrationFixes(migrated) {
   if (!Array.isArray(migrated.receivablePayments)) migrated.receivablePayments = [];
   if (!Array.isArray(migrated.receivableCharges)) migrated.receivableCharges = [];
   if (!Array.isArray(migrated.financings)) migrated.financings = [];
+  if (!Array.isArray(migrated.financialPartners)) migrated.financialPartners = [];
   if (!Array.isArray(migrated.financingInstallments)) migrated.financingInstallments = [];
   if (!Array.isArray(migrated.boletoCharges)) migrated.boletoCharges = [];
   if (!Array.isArray(migrated.financingEvents)) migrated.financingEvents = [];

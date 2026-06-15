@@ -18,6 +18,7 @@ export const FINANCING_INTEREST_TYPES = {
   NONE: 'none',
   SIMPLE: 'simple',
   COMPOUND: 'compound',
+  FIXED_PERCENT: 'fixed_percent',
 };
 
 export const FINANCING_FREQUENCIES = {
@@ -50,6 +51,8 @@ export const calculateFinancingSummary = (payload) => {
   const interestType = payload.interest_type || FINANCING_INTEREST_TYPES.NONE;
   const interestRate = roundToCents(payload.interest_rate);
   const discountAmount = roundToCents(payload.discount_amount);
+  const adminFeeAmountInput = roundToCents(payload.admin_fee_amount);
+  const adminFeeRate = roundToCents(payload.admin_fee_rate);
 
   if (totalAmount <= 0) throw new Error('Valor total deve ser maior que zero.');
   if (entryAmount < 0) throw new Error('Entrada não pode ser negativa.');
@@ -63,9 +66,15 @@ export const calculateFinancingSummary = (payload) => {
   } else if (interestType === FINANCING_INTEREST_TYPES.COMPOUND && financedAmount > 0) {
     const compounded = financedAmount * ((1 + (interestRate / 100)) ** installmentsCount);
     totalInterest = roundToCents(compounded - financedAmount);
+  } else if (interestType === FINANCING_INTEREST_TYPES.FIXED_PERCENT && financedAmount > 0) {
+    totalInterest = roundToCents(financedAmount * (interestRate / 100));
   }
 
-  const netFinancedAmount = roundToCents(financedAmount + totalInterest - discountAmount);
+  const adminFee = adminFeeAmountInput > 0
+    ? adminFeeAmountInput
+    : roundToCents(financedAmount * (adminFeeRate / 100));
+
+  const netFinancedAmount = roundToCents(financedAmount + totalInterest + adminFee - discountAmount);
   const totalPayableAmount = roundToCents(entryAmount + netFinancedAmount);
   const installmentParts = splitInCents(netFinancedAmount, installmentsCount);
   const installmentAmount = installmentParts[0] || 0;
@@ -78,6 +87,9 @@ export const calculateFinancingSummary = (payload) => {
     interestType,
     interestRate,
     totalInterest,
+    adminFee,
+    adminFeeRate,
+    adminFeeAmount: adminFeeAmountInput,
     discountAmount,
     netFinancedAmount,
     installmentAmount,

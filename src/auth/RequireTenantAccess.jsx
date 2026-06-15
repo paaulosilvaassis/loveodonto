@@ -2,6 +2,7 @@ import TenantAccessBlockedPage from '../pages/TenantAccessBlockedPage.jsx';
 import { useTenant } from '../tenant/useTenant.js';
 import { useAuth } from './useAuth.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
+import { DEV_BACKEND_NOT_RUNNING_MSG } from '../config/adminApiBase.js';
 
 function classifyTenantError(message) {
   const lower = String(message || '').toLowerCase();
@@ -19,11 +20,19 @@ function classifyTenantError(message) {
       help: 'O sistema manteve sua sessão. Tente recarregar o contexto.',
     };
   }
-  if (lower.includes('3001') || lower.includes('backend') || lower.includes('network') || lower.includes('fetch')) {
+  if (
+    lower.includes('3001')
+    || lower.includes('backend local')
+    || lower.includes('backend saas')
+    || lower.includes('backend')
+    || lower.includes('network')
+    || lower.includes('fetch')
+    || lower.includes('tempo esgotado')
+  ) {
     return {
       code: 'BACKEND_FAILED',
       title: 'Backend indisponível',
-      help: 'Verifique se a API local está ativa e tente novamente.',
+      help: import.meta.env.DEV ? DEV_BACKEND_NOT_RUNNING_MSG : 'Verifique se a API está ativa e tente novamente.',
     };
   }
   if (lower.includes('supabase') || lower.includes('vite_supabase') || lower.includes('configura')) {
