@@ -12,6 +12,18 @@ import {
 } from './contractRenderService.js';
 import { findUnknownHashtags } from '../contracts/hashtagRegistry.js';
 import { getPatient } from './patientService.js';
+import { BUDGET_LOCK_ERROR } from './clinicalBudgetLockService.js';
+
+const NON_EDITABLE_CONTRACT_STATUSES = new Set(['generated', 'sent', 'viewed', 'signed', 'canceled']);
+
+function assertContractMutationAllowed(contract, { allowDraft = false } = {}) {
+  if (!contract) throw new Error('Contrato não encontrado.');
+  if (contract.status === 'canceled') throw new Error(BUDGET_LOCK_ERROR);
+  if (allowDraft && contract.status === 'draft') return;
+  if (NON_EDITABLE_CONTRACT_STATUSES.has(contract.status)) {
+    throw new Error(BUDGET_LOCK_ERROR);
+  }
+}
 
 function clinicId() {
   return loadDb().clinicProfile?.id || 'clinic-1';
@@ -302,6 +314,7 @@ export function createGeneratedContractDraft(user, payload) {
     templateId,
     editedHtml,
     skipHashtagValidation = false,
+    budgetId = null,
   } = payload;
   if (!quoteSource || !quoteId || !patientId || !templateId) {
     throw new Error('quoteSource, quoteId, patientId e templateId são obrigatórios.');
@@ -358,6 +371,7 @@ export function createGeneratedContractDraft(user, payload) {
       patientId,
       quoteId,
       quoteSource,
+      budgetId: budgetId || null,
       templateId,
       templateVersion: Number(tpl.version || 1),
       contractNumber,
@@ -392,6 +406,7 @@ export function updateDraftGeneratedContract(user, contractId, { finalContent })
     const idx = arr.findIndex((c) => c.id === contractId);
     if (idx < 0) throw new Error('Contrato não encontrado.');
     const c = arr[idx];
+    assertContractMutationAllowed(c, { allowDraft: true });
     if (c.status !== 'draft') throw new Error('Apenas rascunhos podem ser editados.');
     const merged = String(finalContent ?? '');
     const unknown = findUnknownHashtags(merged);
@@ -435,17 +450,28 @@ export function finalizeGeneratedContract(user, contractId) {
   });
 }
 
-export function cancelGeneratedContract(user, contractId) {
+export function cancelGeneratedContract(user, contractId, meta = {}) {
   return withDb((db) => {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === contractId);
     if (idx < 0) throw new Error('Contrato não encontrado.');
+    const current = arr[idx];
+    if (current.status === 'signed') {
+      throw new Error('Contrato assinado não pode ser cancelado por este fluxo.');
+    }
+    if (current.status === 'canceled') {
+      throw new Error('Contrato já está cancelado.');
+    }
     arr[idx] = {
       ...arr[idx],
       status: 'canceled',
       canceledAt: new Date().toISOString(),
+      cancelReason: meta.reason || arr[idx].cancelReason || null,
+      canceledBy: meta.canceledBy || user?.id || null,
+      canceledByName: meta.canceledByName || null,
+      cancelFinancialAction: meta.financialAction || null,
     };
-    audit(user, contractId, 'CANCEL', {});
+    audit(user, contractId, 'CANCEL', meta);
     return arr[idx];
   });
 }

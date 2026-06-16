@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { listPatientContracts } from '../../services/contractModuleService.js';
+import { listPatientBudgetHistory } from '../../services/clinicalBudgetLockService.js';
 import { ContractTable, ContractStatusBadge, formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
+import { BudgetStatusBadge } from '../clinical/budget/BudgetStatusBadge.jsx';
 
 export default function PatientContractsPanel({ patientId }) {
   const contracts = useMemo(() => {
@@ -8,7 +10,12 @@ export default function PatientContractsPanel({ patientId }) {
     return listPatientContracts(patientId);
   }, [patientId]);
 
-  const rows = contracts.map((c) => ({
+  const budgetHistory = useMemo(() => {
+    if (!patientId) return [];
+    return listPatientBudgetHistory(patientId);
+  }, [patientId]);
+
+  const contractRows = contracts.map((c) => ({
     id: c.id,
     number: c.contractNumber || c.id,
     title: c.title || 'Contrato',
@@ -21,9 +28,38 @@ export default function PatientContractsPanel({ patientId }) {
         : '—',
   }));
 
+  const budgetRows = budgetHistory.map((b) => ({
+    id: b.id,
+    number: b.budgetNumber,
+    status: b.status,
+    contract: b.contractStatus,
+    value: formatCtrCurrency(b.totalValue),
+    date: new Date(b.archivedAt || b.createdAt || 0).toLocaleDateString('pt-BR'),
+  }));
+
   return (
-    <div className="tab-content">
-      <h3>Contratos &amp; Consentimentos</h3>
+    <div className="tab-content patient-financial-history">
+      <h3>Histórico de Orçamentos</h3>
+      <p className="text-sm text-[var(--color-text-muted)] mb-3">
+        Orçamentos vinculados a atendimentos deste paciente, incluindo versões arquivadas.
+      </p>
+      <ContractTable
+        columns={[
+          { key: 'number', label: 'Orçamento' },
+          { key: 'status', label: 'Status', render: (r) => <BudgetStatusBadge status={r.status} /> },
+          {
+            key: 'contract',
+            label: 'Contrato',
+            render: (r) => (r.contract ? <ContractStatusBadge status={r.contract} /> : '—'),
+          },
+          { key: 'value', label: 'Valor' },
+          { key: 'date', label: 'Data' },
+        ]}
+        rows={budgetRows}
+        emptyMessage="Nenhum orçamento registrado para este paciente."
+      />
+
+      <h3 className="mt-6">Contratos &amp; Consentimentos</h3>
       <p className="text-sm text-[var(--color-text-muted)] mb-3">
         Documentos gerados a partir de orçamentos aprovados, com histórico de assinatura.
       </p>
@@ -35,7 +71,7 @@ export default function PatientContractsPanel({ patientId }) {
           { key: 'value', label: 'Valor' },
           { key: 'date', label: 'Data' },
         ]}
-        rows={rows}
+        rows={contractRows}
         emptyMessage="Nenhum contrato vinculado a este paciente."
       />
     </div>

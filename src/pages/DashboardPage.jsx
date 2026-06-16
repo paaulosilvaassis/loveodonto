@@ -24,11 +24,15 @@ import {
   BarChart3,
   Activity
 } from 'lucide-react';
-import { loadDbAsync } from '../db/index.js';
+import { loadDbAsync, loadDb } from '../db/index.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
 import { getTicketsByUser } from '../services/supportTicketService.js';
 import { getNomeUsuario } from '../services/userProfileService.js';
 import { can as canByPermission } from '../permissions/permissions.js';
+import {
+  getDashboardMetrics,
+  getDashboardChartData,
+} from '../services/dashboardMetricsService.js';
 import SupportIcon from '../components/support/SupportIcon.jsx';
 
 function getSaudacaoAtual() {
@@ -38,11 +42,39 @@ function getSaudacaoAtual() {
   return 'Boa noite';
 }
 
+function DashboardChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null;
+
+  const row = payload[0]?.payload || {};
+  const formatCurrency = (value) => Number(value || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+
+  return (
+    <div
+      style={{
+        background: '#FFFFFF',
+        border: '1px solid #E5E7EB',
+        borderRadius: '12px',
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+        padding: '0.75rem 1rem',
+      }}
+    >
+      <p style={{ color: '#1F2937', fontWeight: 600, marginBottom: '0.5rem' }}>{label}</p>
+      <p style={{ color: '#1F2937', margin: '0.15rem 0' }}>Agendados: {row.scheduled ?? 0}</p>
+      <p style={{ color: '#1F2937', margin: '0.15rem 0' }}>Atendidos: {row.attended ?? 0}</p>
+      <p style={{ color: '#1F2937', margin: '0.15rem 0' }}>Faturamento: {formatCurrency(row.revenue)}</p>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate();
   const clinic = useClinicSummary();
   const kpiGridRef = useRef(null);
   const [db, setDb] = useState(null);
+  const [metricsVersion, setMetricsVersion] = useState(0);
   const [ticketRefresh, setTicketRefresh] = useState(0);
   const [nomeUsuario, setNomeUsuario] = useState('Usuário');
 
@@ -58,15 +90,35 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const rafId = requestAnimationFrame(() => {
+
+    const refreshDb = () => {
       if (cancelled) return;
-      loadDbAsync().then((data) => {
-        if (!cancelled) setDb(data);
-      });
+      try {
+        setDb(loadDb());
+        setMetricsVersion((v) => v + 1);
+      } catch {
+        loadDbAsync().then((data) => {
+          if (!cancelled) setDb(data);
+        });
+      }
+    };
+
+    loadDbAsync().then((data) => {
+      if (!cancelled) setDb(data);
     });
+
+    window.addEventListener('db:updated', refreshDb);
+    window.addEventListener('focus', refreshDb);
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') refreshDb();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       cancelled = true;
-      cancelAnimationFrame(rafId);
+      window.removeEventListener('db:updated', refreshDb);
+      window.removeEventListener('focus', refreshDb);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 
@@ -88,86 +140,30 @@ export default function DashboardPage() {
         orcamentosPendentes: 0,
         pacientesEmTratamento: 0,
         consultasHoje: 0,
+        todayAppointments: { total: 0, scheduled: 0, inProgress: 0, finished: 0, noShows: 0 },
       };
     }
-    const appointments = db.appointments;
-    const transactions = db.transactions;
-    const today = new Date().toISOString().slice(0, 10);
-    const now = new Date();
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-
-    const atendimentosHoje = appointments.filter(
-      (apt) => apt.date === today && apt.status === 'atendido'
-    ).length;
-
-    const faturamentoHoje = transactions
-      .filter((txn) => txn.type === 'receber' && txn.dueDate === today)
-      .reduce((sum, txn) => sum + txn.amount, 0);
-
-    const faturamentoMes = transactions
-      .filter((txn) => txn.type === 'receber' && txn.dueDate >= firstDayOfMonth && txn.dueDate <= lastDayOfMonth)
-      .reduce((sum, txn) => sum + txn.amount, 0);
-
-    const pacientesEmEspera = appointments.filter(
-      (apt) => apt.date === today && ['agendado', 'confirmado'].includes(apt.status)
-    ).length;
-
-    const orcamentosPendentes = 0; // TODO: implementar quando schema estiver disponível
-
-    const pacientesEmTratamento = appointments.filter(
-      (apt) => apt.date > today && ['agendado', 'confirmado'].includes(apt.status)
-    ).length;
-
-    const consultasHoje = appointments.filter((apt) => apt.date === today).length;
-
-    return {
-      atendimentosHoje,
-      faturamentoHoje,
-      faturamentoMes,
-      pacientesEmEspera,
-      orcamentosPendentes,
-      pacientesEmTratamento,
-      consultasHoje,
-    };
-  }, [db]);
+    return getDashboardMetrics();
+  }, [db, metricsVersion]);
 
   const chartData = useMemo(() => {
     if (!db) return [];
-    const appointments = db.appointments;
-    const transactions = db.transactions;
-    const days = [];
-    const today = new Date();
+    return getDashboardChartData(7);
+  }, [db, metricsVersion]);
 
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().slice(0, 10);
-      const label = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  const hasChartData = useMemo(
+    () => chartData.some((row) => row.scheduled > 0 || row.attended > 0 || row.revenue > 0),
+    [chartData],
+  );
 
-      const agendados = appointments.filter(
-        (apt) => apt.date === dateStr && ['agendado', 'confirmado'].includes(apt.status)
-      ).length;
-
-      const atendidos = appointments.filter(
-        (apt) => apt.date === dateStr && apt.status === 'atendido'
-      ).length;
-
-      const faturamento = transactions
-        .filter((txn) => txn.type === 'receber' && txn.dueDate === dateStr)
-        .reduce((sum, txn) => sum + txn.amount, 0);
-
-      days.push({
-        date: dateStr,
-        label,
-        agendados,
-        atendidos,
-        faturamento: Math.round(faturamento),
-      });
-    }
-
-    return days;
-  }, [db]);
+  const useRevenueAxis = useMemo(() => {
+    const maxQty = Math.max(
+      0,
+      ...chartData.flatMap((row) => [row.scheduled, row.attended]),
+    );
+    const maxRevenue = Math.max(0, ...chartData.map((row) => row.revenue));
+    return maxRevenue > 0 && maxRevenue > maxQty;
+  }, [chartData]);
 
   const currentUser = db ? (db.users.find((item) => item.id === session?.userId) || db.users[0]) : null;
 
@@ -209,11 +205,6 @@ export default function DashboardPage() {
     );
   }
 
-  const appointments = db.appointments;
-  const transactions = db.transactions;
-  const patients = db.patients || [];
-
-  // 6 botões obrigatórios conforme requisito
   const quickActions = [
     {
       id: 'pacientes',
@@ -273,26 +264,34 @@ export default function DashboardPage() {
     return canByPermission(currentUser, permission);
   });
 
+  const formatCurrency = (value) => Number(value || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  });
+
   // KPIs principais conforme requisito
   const kpiCards = [
     {
       id: 'atendimentos',
       label: 'Atendimentos hoje',
       value: metrics.atendimentosHoje,
+      hint: metrics.todayAppointments
+        ? `${metrics.todayAppointments.scheduled} agendados · ${metrics.todayAppointments.inProgress} em atendimento · ${metrics.todayAppointments.finished} finalizados`
+        : null,
       icon: UserCheck,
       color: '#10B981',
     },
     {
       id: 'faturamento-dia',
       label: 'Faturamento do dia',
-      value: `R$ ${metrics.faturamentoHoje.toFixed(2)}`,
+      value: formatCurrency(metrics.faturamentoHoje),
       icon: TrendingUp,
       color: '#2563EB',
     },
     {
       id: 'faturamento-mes',
       label: 'Faturamento do mês',
-      value: `R$ ${metrics.faturamentoMes.toFixed(2)}`,
+      value: formatCurrency(metrics.faturamentoMes),
       icon: Activity,
       color: '#6A00FF',
     },
@@ -401,6 +400,9 @@ export default function DashboardPage() {
                   <span className="app-dashboard-kpi-label">{card.label}</span>
                 </div>
                 <div className="app-dashboard-kpi-value">{card.value}</div>
+                {card.hint ? (
+                  <p className="app-dashboard-kpi-hint">{card.hint}</p>
+                ) : null}
               </div>
             );
           })}
@@ -411,8 +413,13 @@ export default function DashboardPage() {
       <section className="app-dashboard-section">
         <h2 className="app-dashboard-section-title">Visão Geral (Últimos 7 dias)</h2>
         <div className="app-dashboard-chart-container">
+          {!hasChartData ? (
+            <p className="app-dashboard-chart-empty" role="status">
+              Nenhum dado registrado no período.
+            </p>
+          ) : null}
           <ResponsiveContainer width="100%" height={300}>
-            <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 10, right: useRevenueAxis ? 20 : 10, left: -10, bottom: 0 }}>
               <defs>
                 <linearGradient id="grad-agendados" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#6A00FF" stopOpacity={0.4} />
@@ -428,62 +435,68 @@ export default function DashboardPage() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-              <XAxis 
-                dataKey="label" 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: '#6B7280', fontSize: 12 }} 
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#6B7280', fontSize: 12 }}
               />
-              <YAxis 
-                axisLine={false} 
-                tickLine={false} 
-                tick={{ fill: '#6B7280', fontSize: 12 }} 
+              <YAxis
+                yAxisId="left"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#6B7280', fontSize: 12 }}
+                allowDecimals={false}
               />
-              <Tooltip
-                contentStyle={{
-                  background: '#FFFFFF',
-                  border: '1px solid #E5E7EB',
-                  borderRadius: '12px',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                }}
-                labelStyle={{ color: '#1F2937', fontWeight: 600 }}
-                itemStyle={{ color: '#1F2937' }}
-              />
-              <Legend 
+              {useRevenueAxis ? (
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#EC4899', fontSize: 12 }}
+                  tickFormatter={(value) => formatCurrency(value)}
+                />
+              ) : null}
+              <Tooltip content={<DashboardChartTooltip />} />
+              <Legend
                 wrapperStyle={{ paddingTop: '1rem' }}
                 iconType="circle"
                 formatter={(value) => {
                   const labels = {
-                    agendados: 'Agendados',
-                    atendidos: 'Atendidos',
-                    faturamento: 'Faturamento (R$)',
+                    scheduled: 'Agendados',
+                    attended: 'Atendidos',
+                    revenue: 'Faturamento (R$)',
                   };
                   return labels[value] || value;
                 }}
               />
-              <Area 
-                type="monotone" 
-                dataKey="agendados" 
-                stroke="#6A00FF" 
+              <Area
+                yAxisId="left"
+                type="monotone"
+                dataKey="scheduled"
+                stroke="#6A00FF"
                 strokeWidth={2}
-                fill="url(#grad-agendados)" 
-                name="agendados"
+                fill="url(#grad-agendados)"
+                name="scheduled"
               />
-              <Area 
-                type="monotone" 
-                dataKey="atendidos" 
-                stroke="#2563EB" 
+              <Area
+                yAxisId="left"
+                type="monotone"
+                dataKey="attended"
+                stroke="#2563EB"
                 strokeWidth={2}
-                fill="url(#grad-atendidos)" 
-                name="atendidos"
+                fill="url(#grad-atendidos)"
+                name="attended"
               />
-              <Area 
-                type="monotone" 
-                dataKey="faturamento" 
-                stroke="#EC4899" 
+              <Area
+                yAxisId={useRevenueAxis ? 'right' : 'left'}
+                type="monotone"
+                dataKey="revenue"
+                stroke="#EC4899"
                 strokeWidth={2}
-                fill="url(#grad-faturamento)" 
-                name="faturamento"
+                fill="url(#grad-faturamento)"
+                name="revenue"
               />
             </AreaChart>
           </ResponsiveContainer>

@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useMemo, useRef, Component } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import { createId } from '../services/helpers.js';
@@ -68,6 +68,7 @@ import { listProcedures, getPriceTableForPatient, getDefaultPriceTable, PROCEDUR
 function ClinicalAppointmentPageContent() {
   const { appointmentId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('planejamento');
   const [appointment, setAppointment] = useState(null);
@@ -78,6 +79,13 @@ function ClinicalAppointmentPageContent() {
   const [error, setError] = useState(null);
   const [showRegisterFromLead, setShowRegisterFromLead] = useState(false);
   const [sectionToast, setSectionToast] = useState(null);
+  const [planningRefreshKey, setPlanningRefreshKey] = useState(0);
+
+  useEffect(() => {
+    if (location.state?.section) {
+      setActiveSection(location.state.section);
+    }
+  }, [location.state?.section]);
 
   useEffect(() => {
     try {
@@ -301,8 +309,8 @@ function ClinicalAppointmentPageContent() {
           <button
             type="button"
             className="clinical-appointment-back-btn"
-            onClick={() => navigate('/gestao-comercial/jornada-do-paciente')}
-            aria-label="Voltar"
+            onClick={() => navigate(`/atendimento-clinico/${appointmentId}/central`)}
+            aria-label="Voltar para Central de Atendimento"
           >
             <ArrowLeft size={18} />
           </button>
@@ -347,6 +355,7 @@ function ClinicalAppointmentPageContent() {
           )}
           {activeSection === 'planejamento' && (
             <ClinicalPlanningSection
+              key={planningRefreshKey}
               appointmentId={appointmentId}
               user={user}
               appointment={appointment}
@@ -360,7 +369,17 @@ function ClinicalAppointmentPageContent() {
           )}
           {activeSection === 'orcamento' && (
             canAccessClinicalSection('orcamento', workflow) ? (
-              <ClinicalBudgetSection appointmentId={appointmentId} user={user} appointment={appointment} patient={patient} />
+              <ClinicalBudgetSection
+                appointmentId={appointmentId}
+                user={user}
+                appointment={appointment}
+                patient={patient}
+                onNavigateToContract={() => setActiveSection('contratos')}
+                onNavigateToPlanning={() => {
+                  setPlanningRefreshKey((k) => k + 1);
+                  setActiveSection('planejamento');
+                }}
+              />
             ) : (
               <ClinicalSectionLocked message={sectionLockMessage('orcamento', workflow)} onGo={() => setActiveSection('planejamento')} />
             )

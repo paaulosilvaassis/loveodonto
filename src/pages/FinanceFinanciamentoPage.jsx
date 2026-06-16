@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Plus, Eye, FileText, DollarSign, RefreshCcw, XCircle, BadgeCheck, AlertTriangle, BellRing } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
@@ -69,13 +70,14 @@ const formatDate = (iso) => {
 
 export default function FinanceFinanciamentoPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [refreshKey, setRefreshKey] = useState(0);
   const [pageSection, setPageSection] = useState('financings');
   const [activeTab, setActiveTab] = useState('all');
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
-    patient_id: '',
+    patient_id: searchParams.get('patientId') || '',
     status: '',
     professional_id: '',
     treatment: '',

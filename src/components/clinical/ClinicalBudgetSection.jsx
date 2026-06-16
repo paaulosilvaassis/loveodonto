@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Save, Send, CheckCircle2, XCircle, FileText } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { loadDb } from '../../db/index.js';
 import { createId } from '../../services/helpers.js';
 import {
@@ -11,18 +11,23 @@ import {
   getClinicalEvents,
   BUDGET_STATUS,
 } from '../../services/clinicalService.js';
+import {
+  getBudgetLockContext,
+  createNewBudgetForAppointment,
+} from '../../services/clinicalBudgetLockService.js';
 import { processApprovedBudgetFinance } from '../../services/clinicalBudgetFinance.js';
-import { ClinicalStageShell, ClinicalBtn } from './ClinicalStageShell.jsx';
 import { BudgetPaymentConditions } from './budget/BudgetPaymentConditions.jsx';
 import { BudgetSummaryPanel } from './budget/BudgetSummaryPanel.jsx';
+import { BudgetPremiumHeader } from './budget/BudgetPremiumHeader.jsx';
+import { BudgetCommercialFunnel } from './budget/BudgetCommercialFunnel.jsx';
 import { BudgetProceduresDetailModal } from './budget/BudgetProceduresDetailModal.jsx';
 import { BudgetApprovalModal } from './budget/BudgetApprovalModal.jsx';
 import { BudgetHistoryModal } from './budget/BudgetHistoryModal.jsx';
 import { BudgetValidityModal } from './budget/BudgetValidityModal.jsx';
 import { getPaymentOptionTitle } from './budget/budgetEventLabels.js';
+import { resolveNextSteps } from './budget/budgetCommercialUtils.js';
 import {
   calcPlannedValue,
-  getAcceptedOption,
   resolveBudgetFinancials,
 } from './budget/budgetUtils.js';
 import { generateBudgetPdf } from './budget/generateBudgetPdf.js';
@@ -32,6 +37,7 @@ import {
   PAYMENT_PRESENTATION_STATUS,
 } from './budget/budgetPaymentPdfUtils.js';
 import { DEFAULT_PAYMENT_OPTIONS } from './clinicalAppointmentConfig.js';
+import { CreateNewBudgetModal } from './budget/CreateNewBudgetModal.jsx';
 
 function defaultValidityDate() {
   const d = new Date();
@@ -66,6 +72,8 @@ export function ClinicalBudgetSection({
   user,
   appointment,
   patient,
+  onNavigateToContract,
+  onNavigateToPlanning,
 }) {
   const [budget, setBudget] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -76,6 +84,8 @@ export function ClinicalBudgetSection({
   const [approvalOpen, setApprovalOpen] = useState(false);
   const [approving, setApproving] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+  const [newBudgetModalOpen, setNewBudgetModalOpen] = useState(false);
+  const [creatingBudget, setCreatingBudget] = useState(false);
 
   const db = loadDb();
 
@@ -129,10 +139,21 @@ export function ClinicalBudgetSection({
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   }, [appointmentId, historyKey, budget?.status]);
 
-  const isLocked =
-    budget?.status === BUDGET_STATUS.APROVADO
-    || budget?.status === BUDGET_STATUS.REPROVADO
+  const lockCtx = useMemo(
+    () => getBudgetLockContext(appointmentId),
+    [appointmentId, budget?.status, budget?.id, historyKey],
+  );
+
+  const isLocked = lockCtx.isLocked;
+  const isTerminalStatus =
+    budget?.status === BUDGET_STATUS.REPROVADO
     || budget?.status === BUDGET_STATUS.CANCELADO;
+  const isEditBlocked = isLocked || isTerminalStatus;
+
+  const nextSteps = useMemo(
+    () => resolveNextSteps(budget, financials, lockCtx),
+    [budget, financials, lockCtx],
+  );
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -318,6 +339,52 @@ export function ClinicalBudgetSection({
     }
   };
 
+  const handleCreateNewBudget = async () => {
+    if (!user) return;
+    setCreatingBudget(true);
+    try {
+      const created = createNewBudgetForAppointment(user, appointmentId);
+      setBudget({
+        ...created,
+        validityDate: defaultValidityDate(),
+        paymentOptions: created.paymentOptions?.length
+          ? created.paymentOptions
+          : DEFAULT_PAYMENT_OPTIONS().map((o) => ({ ...o, total: 0 })),
+      });
+      setNewBudgetModalOpen(false);
+      refreshHistory();
+      showToast('Novo orçamento criado. Planejamento reiniciado do zero.');
+      if (typeof onNavigateToPlanning === 'function') {
+        onNavigateToPlanning();
+      }
+    } catch (error) {
+      showToast(error.message || 'Erro ao criar novo orçamento.', 'error');
+    } finally {
+      setCreatingBudget(false);
+    }
+  };
+
+  const handlePrintLatestDocument = () => {
+    const latest = budget?.documents?.[budget.documents.length - 1];
+    if (!latest?.htmlContent) {
+      showToast('Gere ou baixe o PDF antes de imprimir.', 'error');
+      return;
+    }
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    printWindow.document.write(latest.htmlContent);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  const handleViewContract = () => {
+    if (typeof onNavigateToContract === 'function') {
+      onNavigateToContract();
+      return;
+    }
+    showToast('Abra a aba Contrato para visualizar o documento.', 'error');
+  };
   const handleDownloadDocument = (doc) => {
     if (!doc?.htmlContent) {
       showToast('Documento indisponível. Gere um novo PDF.', 'error');
@@ -347,75 +414,86 @@ export function ClinicalBudgetSection({
     professional?.nomeCompleto || professional?.name || professional?.apelido || '—';
 
   return (
-    <>
-      <ClinicalStageShell
-        title="Orçamento"
-        description="Defina as condições de pagamento e registre a escolha do paciente."
-        secondaryActions={(
-          <>
-            <ClinicalBtn variant="secondary" icon={Save} onClick={handleSave} disabled={saving || isLocked}>
-              {saving ? 'Salvando…' : 'Salvar'}
-            </ClinicalBtn>
-            <ClinicalBtn variant="secondary" icon={FileText} onClick={handleGeneratePDF}>
-              Gerar PDF
-            </ClinicalBtn>
-            <ClinicalBtn
-              variant="secondary"
-              icon={Send}
-              onClick={handleSendToPatient}
-              disabled={isLocked}
-            >
-              Enviar ao paciente
-            </ClinicalBtn>
-            <ClinicalBtn variant="danger" icon={XCircle} onClick={handleRejectBudget} disabled={isLocked}>
-              Reprovar
-            </ClinicalBtn>
-          </>
-        )}
-        primaryAction={(
-          <ClinicalBtn
-            variant="primary"
-            icon={CheckCircle2}
-            onClick={handleApproveClick}
-            disabled={budget.status === BUDGET_STATUS.APROVADO}
-          >
-            Aprovar orçamento
-          </ClinicalBtn>
-        )}
-      >
-        <div className="budget-tab-layout">
-          <div className="budget-tab-main">
-            <BudgetPaymentConditions
-              budget={budget}
-              setBudget={setBudget}
-              originalValue={financials.originalValue}
-              onPresent={handlePaymentPresented}
-              onChoose={handlePaymentChosen}
-              readOnly={isLocked}
-              user={user}
-            />
-          </div>
+    <div className="budget-premium-shell">
+      <BudgetPremiumHeader
+        isEditBlocked={isEditBlocked}
+        isLocked={isLocked}
+        hasDocuments={(budget.documents?.length || 0) > 0}
+        hasActiveContract={lockCtx.hasActiveContract}
+        budgetStatus={budget.status}
+        saving={saving}
+        onSave={handleSave}
+        onSend={handleSendToPatient}
+        onReject={handleRejectBudget}
+        onGeneratePdf={handleGeneratePDF}
+        onPrint={handlePrintLatestDocument}
+        onViewContract={handleViewContract}
+        onCreateNew={() => setNewBudgetModalOpen(true)}
+        onApprove={handleApproveClick}
+      />
 
-          <BudgetSummaryPanel
-            patientName={patientName}
-            planName={budget.planName}
-            professionalName={professionalName}
-            procedureCount={budget.procedures?.length || 0}
-            originalValue={financials.originalValue}
-            discount={financials.discount}
-            finalValue={financials.finalValue}
-            validityDate={budget.validityDate}
-            status={budget.status}
-            chosenOption={financials.accepted}
-            documents={budget.documents || []}
-            onViewProcedures={() => setProceduresModalOpen(true)}
-            onEditValidity={() => setValidityModalOpen(true)}
-            onOpenHistory={() => setHistoryModalOpen(true)}
-            onGeneratePdf={handleGeneratePDF}
-            onDownloadDocument={handleDownloadDocument}
-          />
+      {isLocked && lockCtx.lockMessage ? (
+        <div className="clinical-budget-locked-banner" role="status">
+          <Lock size={18} aria-hidden />
+          <p>{lockCtx.lockMessage}</p>
         </div>
-      </ClinicalStageShell>
+      ) : null}
+
+      <BudgetCommercialFunnel
+        budget={budget}
+        financials={financials}
+        lockCtx={lockCtx}
+      />
+
+      <div className="budget-tab-layout budget-tab-layout--premium">
+        <div className="budget-tab-main">
+          <BudgetPaymentConditions
+            budget={budget}
+            setBudget={setBudget}
+            originalValue={financials.originalValue}
+            onPresent={handlePaymentPresented}
+            onChoose={handlePaymentChosen}
+            readOnly={isEditBlocked}
+            user={user}
+          />
+
+          <section className="budget-tab-notes">
+            <h3>Observações clínicas e comerciais</h3>
+            <textarea
+              rows={3}
+              value={budget.commercialNotes || ''}
+              onChange={(e) => patchBudget({ commercialNotes: e.target.value })}
+              onBlur={(e) => {
+                if (!isEditBlocked) persist({ ...budget, commercialNotes: e.target.value });
+              }}
+              disabled={isEditBlocked}
+              placeholder="Registre objeções, preferências do paciente e acordos verbais…"
+            />
+          </section>
+        </div>
+
+        <BudgetSummaryPanel
+          patientName={patientName}
+          planName={budget.planName}
+          professionalName={professionalName}
+          procedureCount={budget.procedures?.length || 0}
+          originalValue={financials.originalValue}
+          discount={financials.discount}
+          finalValue={financials.finalValue}
+          validityDate={budget.validityDate}
+          status={budget.status}
+          chosenOption={financials.accepted}
+          documents={budget.documents || []}
+          events={budgetEvents}
+          nextSteps={nextSteps}
+          onViewProcedures={() => setProceduresModalOpen(true)}
+          onEditValidity={() => setValidityModalOpen(true)}
+          onGeneratePdf={handleGeneratePDF}
+          onDownloadDocument={handleDownloadDocument}
+          onOpenFullHistory={() => setHistoryModalOpen(true)}
+          readOnly={isEditBlocked}
+        />
+      </div>
 
       <BudgetProceduresDetailModal
         open={proceduresModalOpen}
@@ -433,7 +511,7 @@ export function ClinicalBudgetSection({
         open={validityModalOpen}
         onClose={() => setValidityModalOpen(false)}
         value={budget.validityDate}
-        readOnly={isLocked}
+        readOnly={isEditBlocked}
         onSave={(validityDate) => {
           patchBudget({ validityDate });
           persist({ ...budget, validityDate });
@@ -452,11 +530,18 @@ export function ClinicalBudgetSection({
         confirming={approving}
       />
 
+      <CreateNewBudgetModal
+        open={newBudgetModalOpen}
+        onOpenChange={setNewBudgetModalOpen}
+        busy={creatingBudget}
+        onConfirm={handleCreateNewBudget}
+      />
+
       {toast ? (
         <div className={`toast ${toast.type}`} role="status">
           {toast.message}
         </div>
       ) : null}
-    </>
+    </div>
   );
 }

@@ -217,6 +217,8 @@ export const BUDGET_STATUS_BADGES = [
   { value: BUDGET_STATUS.ENVIADO, label: 'Apresentado ao paciente', tone: 'blue' },
   { value: BUDGET_STATUS.NEGOCIACAO, label: 'Em negociação', tone: 'violet' },
   { value: BUDGET_STATUS.APROVADO, label: 'Aprovado', tone: 'green' },
+  { value: BUDGET_STATUS.CONTRATO_GERADO, label: 'Contrato gerado', tone: 'green' },
+  { value: BUDGET_STATUS.HISTORICO, label: 'Histórico', tone: 'gray' },
   { value: BUDGET_STATUS.REPROVADO, label: 'Reprovado', tone: 'red' },
   { value: BUDGET_STATUS.CANCELADO, label: 'Cancelado', tone: 'gray' },
   { value: 'EXPIRADO', label: 'Expirado', tone: 'gray' },

@@ -14,14 +14,13 @@ import { PlanningProcedureRow } from './planning/PlanningProcedureRow.jsx';
 
 import { PlanningSummaryPanel } from './planning/PlanningSummaryPanel.jsx';
 
+import { PlanningRemoveProcedureModal } from './planning/PlanningRemoveProcedureModal.jsx';
+
 import {
-
   buildPlanningSummary,
-
+  EMPTY_PLANNING_SUMMARY,
   calcItemDiscount,
-
   calcItemTotal,
-
 } from './planning/planningUtils.js';
 
 import { createId } from '../../services/helpers.js';
@@ -31,8 +30,6 @@ import {
   addPlannedProcedure,
 
   updatePlannedProcedure,
-
-  removePlannedProcedure,
 
   getClinicalData,
 
@@ -45,6 +42,17 @@ import {
   savePlanningAnamnesisKeys,
 
 } from '../../services/clinicalService.js';
+
+import {
+  getPlanningRemoveContext,
+  removePlannedProcedureWithSync,
+} from '../../services/clinicalPlanningRemoveService.js';
+import {
+  getPreviousBudgetImportContext,
+  importProceduresFromPreviousBudget,
+} from '../../services/clinicalBudgetLockService.js';
+import { PreviousBudgetImportCard } from './planning/PreviousBudgetImportCard.jsx';
+import { AppointmentBudgetHistoryModal } from './planning/AppointmentBudgetHistoryModal.jsx';
 
 
 export function ClinicalPlanningSection({
@@ -77,13 +85,23 @@ export function ClinicalPlanningSection({
 
   const [newItemIds, setNewItemIds] = useState([]);
 
-  const [highlightId, setHighlightId] = useState(null);
+  const [removeModal, setRemoveModal] = useState({
+    open: false,
+    mode: 'confirm',
+    plannedId: null,
+    procedureName: '',
+    isApprovedBudget: false,
+    blockReason: 'signed',
+  });
+
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [planningRefreshKey, setPlanningRefreshKey] = useState(0);
 
   const prevCountRef = useRef(0);
 
   const isInitialLoadRef = useRef(true);
-
-  const rowRefs = useRef({});
 
 
 
@@ -141,6 +159,10 @@ export function ClinicalPlanningSection({
 
       if (onShowToast) onShowToast('Procedimento adicionado ao planejamento.');
 
+    } else if (count < prevCountRef.current) {
+
+      if (onShowToast) onShowToast('Procedimento removido com sucesso.');
+
     }
 
     prevCountRef.current = count;
@@ -150,12 +172,21 @@ export function ClinicalPlanningSection({
 
 
   const summary = useMemo(
-
-    () => buildPlanningSummary(plannedProcedures),
-
-    [plannedProcedures]
-
+    () => buildPlanningSummary(plannedProcedures) || EMPTY_PLANNING_SUMMARY,
+    [plannedProcedures],
   );
+
+  const previousBudgetCtx = useMemo(
+    () => getPreviousBudgetImportContext(appointmentId),
+    [appointmentId, plannedProcedures.length, planningRefreshKey],
+  );
+
+  const budgetHistoryItems = useMemo(() => {
+    const clinicalData = getClinicalData(appointmentId);
+    return [...(clinicalData?.budgetHistory || [])].sort(
+      (a, b) => new Date(b.archivedAt || b.createdAt || 0) - new Date(a.archivedAt || a.createdAt || 0),
+    );
+  }, [appointmentId, planningRefreshKey]);
 
 
 
@@ -247,75 +278,83 @@ export function ClinicalPlanningSection({
 
 
 
-  const handleRemove = (plannedId) => {
+  const handleRemoveRequest = (plannedId) => {
 
-    if (!window.confirm('Remover este item do planejamento?')) return;
+    const ctx = getPlanningRemoveContext(appointmentId, plannedId);
 
-    try {
+    if (!ctx.procedure) {
 
-      removePlannedProcedure(user, appointmentId, plannedId);
+      setError('Procedimento não encontrado no planejamento.');
 
-      loadPlanned();
-
-    } catch (err) {
-
-      setError(err?.message || 'Erro ao remover.');
+      return;
 
     }
+
+    if (ctx.hasSignedContract || ctx.isBudgetLocked) {
+      setRemoveModal({
+        open: true,
+        mode: 'blocked',
+        plannedId: null,
+        procedureName: '',
+        isApprovedBudget: false,
+        blockReason: ctx.hasSignedContract ? 'signed' : 'locked',
+      });
+      return;
+    }
+
+    setRemoveModal({
+
+      open: true,
+
+      mode: 'confirm',
+
+      plannedId,
+
+      procedureName: ctx.procedure.name || 'Procedimento',
+
+      isApprovedBudget: ctx.hasApprovedBudget,
+
+    });
 
   };
 
 
 
-  const handleDuplicate = (proc) => {
+  const handleConfirmRemove = async () => {
+
+    if (!removeModal.plannedId || !user) return;
+
+    setRemoveBusy(true);
+
+    setError('');
 
     try {
 
-      addPlannedProcedure(user, appointmentId, {
+      removePlannedProcedureWithSync(user, appointmentId, removeModal.plannedId);
 
-        name: proc.name,
+      setRemoveModal({
 
-        procedureId: proc.procedureId,
+        open: false,
 
-        code: proc.code,
+        mode: 'confirm',
 
-        category: proc.category,
+        plannedId: null,
 
-        tooth: proc.tooth,
+        procedureName: '',
 
-        region: proc.region,
-
-        regionType: proc.regionType,
-
-        notes: proc.notes,
-
-        quantity: proc.quantity || 1,
-
-        unitValue: proc.unitValue || 0,
-
-        discount: proc.discount || 0,
-
-        discountType: proc.discountType || 'percent',
-
-        stage: proc.stage || 'inicial',
-
-        professionalId: proc.professionalId || appointment?.professionalId,
-
-        restriction: proc.restriction,
-
-        minPrice: proc.minPrice,
-
-        maxPrice: proc.maxPrice,
+        isApprovedBudget: false,
 
       });
 
       loadPlanned();
 
-      if (onShowToast) onShowToast('Procedimento duplicado.');
-
     } catch (err) {
 
-      setError(err?.message || 'Erro ao duplicar.');
+      setError(err?.message || 'Erro ao remover procedimento.');
+
+    } finally {
+
+      setRemoveBusy(false);
 
     }
 
@@ -323,14 +362,22 @@ export function ClinicalPlanningSection({
 
 
 
-  const handleEditRow = (procId) => {
-
-    setHighlightId(procId);
-
-    rowRefs.current[procId]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-    window.setTimeout(() => setHighlightId(null), 1800);
-
+  const handleImportPrevious = async () => {
+    if (!user) return;
+    setImportBusy(true);
+    setError('');
+    try {
+      const result = importProceduresFromPreviousBudget(user, appointmentId);
+      loadPlanned();
+      setPlanningRefreshKey((k) => k + 1);
+      onShowToast?.(
+        `${result.procedureCount} procedimento(s) importados do orçamento ${result.budgetNumber}.`,
+      );
+    } catch (err) {
+      setError(err?.message || 'Erro ao importar procedimentos.');
+    } finally {
+      setImportBusy(false);
+    }
   };
 
 
@@ -497,7 +544,15 @@ export function ClinicalPlanningSection({
 
         {error ? <div className="clinical-inline-error">{error}</div> : null}
 
-
+        {previousBudgetCtx.hasPrevious && plannedProcedures.length === 0 ? (
+          <PreviousBudgetImportCard
+            budgetNumber={previousBudgetCtx.budgetNumber}
+            procedureCount={previousBudgetCtx.procedureCount}
+            onViewHistory={() => setHistoryModalOpen(true)}
+            onImport={handleImportPrevious}
+            importing={importBusy}
+          />
+        ) : null}
 
         {plannedProcedures.length > 0 ? (
 
@@ -555,11 +610,11 @@ export function ClinicalPlanningSection({
 
                   <Calendar size={36} strokeWidth={1.25} />
 
-                  <p>Busque procedimentos na Base de Preços para iniciar o planejamento.</p>
+                  <p>Nenhum procedimento adicionado ainda.</p>
 
                   <ClinicalBtn variant="primary" icon={Plus} onClick={() => setShowSelector(true)}>
 
-                    Buscar procedimento
+                    Adicionar procedimento
 
                   </ClinicalBtn>
 
@@ -575,19 +630,21 @@ export function ClinicalPlanningSection({
 
                       <div role="columnheader">Procedimento</div>
 
+                      <div role="columnheader">Especialidade</div>
+
                       <div role="columnheader">Etapa</div>
 
                       <div role="columnheader">Região</div>
 
                       <div role="columnheader">Qtd</div>
 
-                      <div role="columnheader">Valor unitário</div>
+                      <div role="columnheader">Valor</div>
 
                       <div role="columnheader">Desconto</div>
 
-                      <div role="columnheader">Valor final</div>
+                      <div role="columnheader">Total</div>
 
-                      <div role="columnheader" aria-label="Ações" />
+                      <div role="columnheader" className="clinical-planning-col-actions">Ações</div>
 
                     </div>
 
@@ -601,24 +658,13 @@ export function ClinicalPlanningSection({
 
                           proc={proc}
 
-                          rowRef={(el) => {
-                            if (el) rowRefs.current[proc.id] = el;
-                            else delete rowRefs.current[proc.id];
-                          }}
-
                           isNew={newItemIds.includes(proc.id)}
-
-                          isHighlighted={highlightId === proc.id}
 
                           onFieldChange={handleFieldChange}
 
                           onPatch={handlePatch}
 
-                          onDuplicate={() => handleDuplicate(proc)}
-
-                          onEdit={() => handleEditRow(proc.id)}
-
-                          onRemove={() => handleRemove(proc.id)}
+                          onRemove={() => handleRemoveRequest(proc.id)}
 
                         />
 
@@ -691,6 +737,45 @@ export function ClinicalPlanningSection({
           savePlanningAnamnesisKeys(user, appointmentId, keys);
 
         }}
+
+      />
+
+      <AppointmentBudgetHistoryModal
+        open={historyModalOpen}
+        onClose={() => setHistoryModalOpen(false)}
+        items={budgetHistoryItems}
+      />
+
+      <PlanningRemoveProcedureModal
+
+        open={removeModal.open}
+
+        onOpenChange={(open) => {
+
+          if (!open && !removeBusy) {
+
+            setRemoveModal({
+              open: false,
+              mode: 'confirm',
+              plannedId: null,
+              procedureName: '',
+              isApprovedBudget: false,
+              blockReason: 'signed',
+            });
+
+          }
+
+        }}
+
+        mode={removeModal.mode}
+
+        procedureName={removeModal.procedureName}
+
+        isApprovedBudget={removeModal.isApprovedBudget}
+        blockReason={removeModal.blockReason}
+        busy={removeBusy}
+
+        onConfirm={handleConfirmRemove}
 
       />
 

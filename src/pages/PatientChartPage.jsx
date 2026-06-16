@@ -22,8 +22,16 @@ import { addFile, listFiles } from '../services/patientFilesService.js';
 import { addAlbumPhoto, createAlbum, listAlbumPhotos, listAlbums } from '../services/patientAlbumService.js';
 import { logAccess } from '../services/accessAuditService.js';
 import { validateFileMeta } from '../utils/validators.js';
+import { buildPatientCareContextByPatient } from '../services/patientCareCentralService.js';
+import { PatientCareCentralPanel } from '../components/careCentral/PatientCareCentralPanel.jsx';
+import { PatientDelinquencyBanner } from '../components/careCentral/PatientDelinquencyBanner.jsx';
+import {
+  getPatientDelinquencyInfo,
+  buildFinanceNavigationUrl,
+} from '../services/patientFinancialSummaryService.js';
 
 const TAB_CONFIG = [
+  { value: 'careCentral', label: 'Visão Geral' },
   { value: 'characteristics', label: 'Características' },
   { value: 'anamnesisClinical', label: 'Anamnese Clínica' },
   { value: 'anamnesisAtm', label: 'Anamnese ATM' },
@@ -120,7 +128,8 @@ export default function PatientChartPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [patient, setPatient] = useState(null);
-  const [activeTab, setActiveTab] = useState('characteristics');
+  const [activeTab, setActiveTab] = useState('careCentral');
+  const [careCentralFocusTab, setCareCentralFocusTab] = useState(null);
   const [editingTab, setEditingTab] = useState(null);
   const [characteristics, setCharacteristics] = useState(null);
   const [clinicalAnswers, setClinicalAnswers] = useState([]);
@@ -215,6 +224,16 @@ export default function PatientChartPage() {
     const current = TAB_CONFIG.find((tab) => tab.value === activeTab);
     return current?.label || 'Prontuário';
   }, [activeTab]);
+
+  const careCentralContext = useMemo(
+    () => (patientId ? buildPatientCareContextByPatient(patientId) : null),
+    [patientId],
+  );
+
+  const delinquency = useMemo(
+    () => (patientId ? getPatientDelinquencyInfo(patientId) : null),
+    [patientId],
+  );
 
   const startEdit = () => {
     if (!user || !canEditChart(user)) return;
@@ -331,8 +350,18 @@ export default function PatientChartPage() {
   const canView = canViewChart(user);
 
   return (
-    <div className="stack">
+    <div className="stack patient-chart-page">
       <Section title={`Prontuário — ${patient.profile?.full_name || 'Paciente'}`}>
+        {activeTab !== 'careCentral' && delinquency?.isDelinquent ? (
+          <PatientDelinquencyBanner
+            delinquency={delinquency}
+            onViewFinance={() => {
+              setActiveTab('careCentral');
+              setCareCentralFocusTab('financeiro');
+            }}
+            onNegotiate={() => navigate(buildFinanceNavigationUrl(patientId, { tab: 'financing' }))}
+          />
+        ) : null}
         {hasPendingData && (
           <div className="alert alert-warning pending-data-alert" style={{ marginBottom: '1rem' }}>
             <span>Cadastro pendente: atualize para liberar geração de contrato.</span>
@@ -372,13 +401,22 @@ export default function PatientChartPage() {
           <SectionCard>
             <SectionHeaderActions
               title={tabTitle}
-              isEditing={editingTab === activeTab}
-              onEdit={startEdit}
-              onCancel={cancelEdit}
-              onSave={saveEdit}
+              isEditing={activeTab !== 'careCentral' && editingTab === activeTab}
+              onEdit={activeTab === 'careCentral' ? undefined : startEdit}
+              onCancel={activeTab === 'careCentral' ? undefined : cancelEdit}
+              onSave={activeTab === 'careCentral' ? undefined : saveEdit}
             />
             {status.error ? <div className="alert error">{status.error}</div> : null}
             {status.success ? <div className="alert success">{status.success}</div> : null}
+
+            {activeTab === 'careCentral' ? (
+              <PatientCareCentralPanel
+                context={careCentralContext}
+                embedded
+                focusTab={careCentralFocusTab}
+                onFocusTabConsumed={() => setCareCentralFocusTab(null)}
+              />
+            ) : null}
 
             {activeTab === 'characteristics' ? (
               <div className="patient-form-grid">

@@ -1,5 +1,6 @@
 import { loadDb } from '../db/index.js';
 import { getDelinquency } from './financeService.js';
+import { getDashboardMetrics as computeDashboardMetrics } from './dashboardMetricsService.js';
 
 export const getDashboardMetrics = () => {
   const db = loadDb();
@@ -29,6 +30,7 @@ export const getDashboardMetrics = () => {
     inadimplencia,
     retornos,
     aniversariantes,
+    ...computeDashboardMetrics(),
   };
 };
 

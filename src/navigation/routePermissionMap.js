@@ -4,6 +4,7 @@ export function resolveRoutePermission(routePath) {
 
   if (path === '/gestao/dashboard') return 'dashboard:view';
   if (path === '/suporte') return 'dashboard:view';
+  if (path.startsWith('/orcamentos')) return 'comercial:view';
   if (path.startsWith('/pacientes')) return 'patients:view';
   if (path.startsWith('/prontuario')) return 'prontuario_atendimento:view';
   if (path.startsWith('/gestao/agenda')) return 'agenda:view';

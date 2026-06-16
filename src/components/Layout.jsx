@@ -59,7 +59,8 @@ export default function Layout({ children }) {
   const tenant = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
-  const isClinicalFocusMode = location.pathname.startsWith('/atendimento-clinico/');
+  const isClinicalFocusMode = location.pathname.startsWith('/atendimento-clinico/')
+    && !location.pathname.endsWith('/central');
   const clinicSummary = useClinicSummary();
 
   // Estado da categoria ativa (restaurado do localStorage ou detectado pela rota)

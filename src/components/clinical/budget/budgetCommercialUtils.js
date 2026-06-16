@@ -112,22 +112,83 @@ export function formatPresentedAt(iso) {
   }
 }
 
-export function resolveFunnelSteps(budget, financials) {
+export function resolveFunnelSteps(budget, financials, lockCtx = {}) {
   const options = budget?.paymentOptions || [];
   const accepted = financials?.accepted;
   const status = budget?.status;
   const hasTreatment = (budget?.procedures || []).length > 0;
-  const hasPresented = options.some((o) => o.presentToPatient);
+  const hasPresented = options.some((o) => o.presentToPatient || o.presentedAt);
   const isApproved = status === BUDGET_STATUS.APROVADO;
+  const financeDone = Boolean(lockCtx.hasReceivables || lockCtx.hasFinancing || budget?.financingId);
+  const contractDone = Boolean(lockCtx.hasActiveContract || lockCtx.contractSigned);
 
-  return [
+  const raw = [
     { key: 'treatment', label: 'Tratamento definido', done: hasTreatment },
     { key: 'presented', label: 'Condições apresentadas', done: hasPresented },
     { key: 'chosen', label: 'Condição escolhida', done: Boolean(accepted) },
     { key: 'approved', label: 'Orçamento aprovado', done: isApproved },
-    { key: 'finance', label: 'Financeiro gerado', done: isApproved },
-    { key: 'contract', label: 'Contrato liberado', done: isApproved },
+    { key: 'finance', label: 'Financeiro gerado', done: financeDone && isApproved },
+    { key: 'contract', label: 'Contrato liberado', done: contractDone },
   ];
+
+  const firstOpenIndex = raw.findIndex((s) => !s.done);
+
+  return raw.map((step, index) => {
+    let stepStatus = 'pending';
+    if (step.done) stepStatus = 'done';
+    else if (index === firstOpenIndex) stepStatus = 'current';
+    else if (firstOpenIndex >= 0 && index > firstOpenIndex) {
+      stepStatus = raw.slice(0, index).every((s) => s.done) ? 'pending' : 'blocked';
+    }
+    return { ...step, status: stepStatus };
+  });
+}
+
+export function resolveNextSteps(budget, financials, lockCtx = {}) {
+  const steps = [];
+  const accepted = financials?.accepted;
+  const isApproved = budget?.status === BUDGET_STATUS.APROVADO;
+
+  if (lockCtx?.isLocked) {
+    steps.push({
+      id: 'new-budget',
+      label: 'Contrato gerado — use "Criar novo orçamento" para nova negociação.',
+      tone: 'info',
+    });
+    return steps;
+  }
+
+  if (!(budget?.procedures || []).length) {
+    steps.push({ id: 'planning', label: 'Defina os procedimentos no Planejamento.', tone: 'warning' });
+    return steps;
+  }
+
+  const hasPresented = (budget?.paymentOptions || []).some((o) => o.presentToPatient);
+  if (!hasPresented) {
+    steps.push({ id: 'present', label: 'Apresente ao menos uma condição de pagamento ao paciente.', tone: 'warning' });
+  }
+
+  if (!accepted) {
+    steps.push({ id: 'choose', label: 'Marque a condição escolhida pelo paciente.', tone: 'warning' });
+    return steps;
+  }
+
+  if (!isApproved) {
+    steps.push({ id: 'approve', label: 'Aprove o orçamento para gerar financeiro e contrato.', tone: 'primary' });
+    return steps;
+  }
+
+  if (!lockCtx?.hasReceivables && !lockCtx?.hasFinancing) {
+    steps.push({ id: 'finance', label: 'Financeiro será gerado na aprovação — verifique Contas a Receber.', tone: 'info' });
+  }
+
+  if (!lockCtx?.hasActiveContract) {
+    steps.push({ id: 'contract', label: 'Gere o contrato na aba Contrato.', tone: 'info' });
+  } else {
+    steps.push({ id: 'done', label: 'Orçamento aprovado e contrato em andamento.', tone: 'success' });
+  }
+
+  return steps;
 }
 
 export function chosenStatusLabel(budget) {

@@ -22,14 +22,17 @@ import { ClinicalStageShell, ClinicalBtn } from './ClinicalStageShell.jsx';
 import { ContractBlockModal } from './contract/ContractBlockModal.jsx';
 import { formatContractEventLabel } from './contract/contractEventLabels.js';
 import { linkFinancingToClinicalContract } from '../../services/clinicalBudgetFinancingIntegration.js';
+import { markBudgetContractGenerated } from '../../services/clinicalBudgetLockService.js';
+import { cancelContractSecure } from '../../services/cancelContractSecureService.js';
+import { can } from '../../permissions/permissions.js';
 import { loadDb } from '../../db/index.js';
 import { getPatient, PENDING_FIELDS_MAP } from '../../services/patientService.js';
 import {
   getContractStatusForQuote,
   getContractDetails,
   sendContractForSignature,
-  cancelGeneratedContract,
 } from '../../services/contractModuleService.js';
+import { CancelContractSecureModal } from './contract/CancelContractSecureModal.jsx';
 import {
   CONTRACT_STATUS,
   CONTRACT_STATUS_LABELS,
@@ -174,12 +177,14 @@ export function ClinicalContractSection({
   const pendingCriticalFields = fullPatient?.profile?.pendingCriticalFields || [];
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [contractModalOpen, setContractModalOpen] = useState(false);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [toast, setToast] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);
 
   const linkedContract = useMemo(
-    () => getContractStatusForQuote(appointmentId, 'clinical_budget'),
-    [appointmentId, historyKey],
+    () => getContractStatusForQuote(appointmentId, 'clinical_budget', budget?.id || null),
+    [appointmentId, budget?.id, historyKey],
   );
 
   const contractDetails = useMemo(
@@ -314,13 +319,19 @@ export function ClinicalContractSection({
 
   const handleCancelContract = () => {
     if (!linkedContract?.id || !user) return;
-    if (!window.confirm('Cancelar este contrato?')) return;
+    setCancelModalOpen(true);
+  };
+
+  const handleConfirmCancelContract = async (payload) => {
+    if (!linkedContract?.id || !user) return;
+    setCancelBusy(true);
     try {
-      cancelGeneratedContract(user, linkedContract.id);
+      await cancelContractSecure(user, linkedContract.id, payload);
+      setCancelModalOpen(false);
       setHistoryKey((k) => k + 1);
-      showToast('Contrato cancelado.');
-    } catch (error) {
-      showToast(error.message || 'Erro ao cancelar contrato.', 'error');
+      showToast('Contrato cancelado e registrado na auditoria.');
+    } finally {
+      setCancelBusy(false);
     }
   };
 
@@ -328,13 +339,18 @@ export function ClinicalContractSection({
     .map((event) => ({ event, label: formatContractEventLabel(event) }))
     .filter((item) => item.label);
 
-  const canGenerate = readiness.ready;
+  const canCancelAsAdmin = Boolean(
+    user && (user.role === 'admin' || user.isMaster || can(user, 'admin_contratos:cancel')),
+  );
+  const canGenerate = readiness.ready && !linkedContract;
   const canEdit = linkedContract?.status === CONTRACT_STATUS.DRAFT;
-  const canView = readiness.ready;
+  const canView = Boolean(linkedContract?.renderedHtml || linkedContract?.editedHtml || readiness.ready);
   const canPreview = readiness.ready;
   const canSend = linkedContract?.status === CONTRACT_STATUS.GENERATED;
-  const canCancel = linkedContract
+  const canCancel = canCancelAsAdmin
+    && linkedContract
     && ![CONTRACT_STATUS.SIGNED, CONTRACT_STATUS.CANCELED].includes(linkedContract.status);
+  const isCanceled = linkedContract?.status === CONTRACT_STATUS.CANCELED;
 
   return (
     <>
@@ -346,12 +362,12 @@ export function ClinicalContractSection({
             <ClinicalBtn variant="secondary" icon={FileSignature} onClick={openContractFlow} disabled={!canGenerate}>
               Gerar contrato
             </ClinicalBtn>
-            {canPreview ? (
+            {canPreview && !isCanceled ? (
               <ClinicalBtn variant="secondary" icon={FileText} onClick={handlePreviewContract}>
                 Pré-visualizar
               </ClinicalBtn>
             ) : null}
-            {canPreview ? (
+            {canPreview && !isCanceled ? (
               <ClinicalBtn variant="secondary" icon={FileText} onClick={handleDownloadPdf}>
                 Baixar PDF
               </ClinicalBtn>
@@ -398,6 +414,20 @@ export function ClinicalContractSection({
           </div>
         ) : (
           <div className="clinical-contract-v2">
+            {isCanceled ? (
+              <div className="clinical-contract-canceled-banner" role="status">
+                <XCircle size={18} aria-hidden />
+                <div>
+                  <strong>Contrato cancelado</strong>
+                  {linkedContract?.cancelReason ? (
+                    <p>Motivo: {linkedContract.cancelReason}</p>
+                  ) : null}
+                  {linkedContract?.canceledByName ? (
+                    <p>Responsável: {linkedContract.canceledByName}</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             <div className={`clinical-contract-status-banner tone-${uiStatus.tone}`}>
               <CheckCircle2 size={18} />
               <div>
@@ -553,13 +583,22 @@ export function ClinicalContractSection({
         patientId={patientId || ''}
         quoteSource="clinical_budget"
         quoteId={appointmentId}
+        budgetId={budget?.id || null}
         flow="clinical"
         onSuccess={(contract) => {
           if (contract?.id) {
             linkFinancingToClinicalContract(user, appointmentId, contract.id);
           }
+          markBudgetContractGenerated(user, appointmentId);
           setHistoryKey((k) => k + 1);
         }}
+      />
+
+      <CancelContractSecureModal
+        open={cancelModalOpen}
+        onOpenChange={setCancelModalOpen}
+        busy={cancelBusy}
+        onConfirm={handleConfirmCancelContract}
       />
 
       <ContractBlockModal

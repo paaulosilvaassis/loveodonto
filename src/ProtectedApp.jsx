@@ -38,8 +38,10 @@ import ReportsPage from './pages/ReportsPage.jsx';
 import TeamPage from './pages/TeamPage.jsx';
 import PatientJourneyPage from './pages/PatientJourneyPage.jsx';
 import PatientFlowPage from './pages/PatientFlowPage.jsx';
+import PatientCareCentralPage from './pages/PatientCareCentralPage.jsx';
 import ClinicalAppointmentPage from './pages/ClinicalAppointmentPage.jsx';
 import GestaoAtendimentoPage from './pages/GestaoAtendimentoPage.jsx';
+import BudgetsHubPage from './pages/BudgetsHubPage.jsx';
 import CrmShellLayout from './crm/ui/CrmShellLayout.jsx';
 import CrmCaptacaoPage from './pages/crm/CrmCaptacaoPage.jsx';
 import CrmPipelinePage from './pages/crm/CrmPipelinePage.jsx';
@@ -107,6 +109,7 @@ export default function ProtectedApp() {
   return (
     <Layout>
       <Routes>
+        <Route path="/atendimento-clinico/:appointmentId/central" element={<PatientCareCentralPage />} />
         <Route path="/atendimento-clinico/:appointmentId" element={<ClinicalAppointmentPage />} />
         <Route path="/" element={<Navigate to="/gestao/dashboard" replace />} />
         <Route path="/dashboard" element={<Navigate to="/gestao/dashboard" replace />} />
@@ -127,6 +130,7 @@ export default function ProtectedApp() {
         <Route path="/suporte" element={withRole('/suporte', <SupportPage />)} />
         <Route path="/gestao/agenda" element={withRole('/gestao/agenda', <AgendaPage />)} />
         <Route path="/gestao-atendimento" element={withRole('/gestao-atendimento', <GestaoAtendimentoPage />)} />
+        <Route path="/orcamentos" element={withRole('/orcamentos', <BudgetsHubPage />)} />
         <Route path="/gestao/crm" element={withRole('/gestao/crm', <PlaceholderPage title="CRM (Kanban)" description="Pipeline comercial com etapas e oportunidades." />)} />
         <Route path="/crm" element={withRole('/crm/captacao', <CrmShellLayout />)}>
           <Route index element={<Navigate to="/crm/captacao" replace />} />

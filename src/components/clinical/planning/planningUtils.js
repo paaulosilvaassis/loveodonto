@@ -61,14 +61,23 @@ function inferRegionType(item) {
   return item.region ? 'livre' : 'tooth';
 }
 
-export function buildPlanningSummary(items) {
-  const count = items.length;
-  const subtotal = items.reduce(
+export function buildPlanningSummary(items = []) {
+  const list = Array.isArray(items) ? items : [];
+  const count = list.length;
+  const subtotal = list.reduce(
     (sum, p) => sum + Number(p.quantity || 1) * Number(p.unitValue || 0),
-    0
+    0,
   );
-  const discounts = items.reduce((sum, p) => sum + calcItemDiscount(p), 0);
-  const total = items.reduce((sum, p) => sum + calcItemTotal(p), 0);
+  const discounts = list.reduce((sum, p) => sum + calcItemDiscount(p), 0);
+  const total = list.reduce((sum, p) => sum + calcItemTotal(p), 0);
   const average = count > 0 ? total / count : 0;
   return { count, subtotal, discounts, total, average };
 }
+
+export const EMPTY_PLANNING_SUMMARY = {
+  count: 0,
+  subtotal: 0,
+  discounts: 0,
+  total: 0,
+  average: 0,
+};

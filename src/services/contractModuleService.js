@@ -444,22 +444,29 @@ export function createContractNewVersion(user, contractId) {
   });
 }
 
-export function hasSignedContractForQuote(quoteId, quoteSource = 'crm_budget') {
+export function hasSignedContractForQuote(quoteId, quoteSource = 'crm_budget', budgetId = null) {
   const cid = clinicId();
   const db = loadDb();
   return (db.generatedContracts || []).some(
     (c) => c.clinicId === cid
       && c.quoteId === quoteId
       && c.quoteSource === quoteSource
-      && c.status === CONTRACT_STATUS.SIGNED,
+      && c.status === CONTRACT_STATUS.SIGNED
+      && (!budgetId || c.budgetId === budgetId),
   );
 }
 
-export function getContractStatusForQuote(quoteId, quoteSource = 'crm_budget') {
+export function getContractStatusForQuote(quoteId, quoteSource = 'crm_budget', budgetId = null) {
   const cid = clinicId();
   const db = loadDb();
   const list = (db.generatedContracts || [])
     .filter((c) => c.clinicId === cid && c.quoteId === quoteId && c.quoteSource === quoteSource)
+    .filter((c) => c.status !== CONTRACT_STATUS.REPLACED)
+    .filter((c) => {
+      if (!budgetId) return true;
+      if (!c.budgetId) return false;
+      return c.budgetId === budgetId;
+    })
     .sort((a, b) => new Date(b.generatedAt || 0) - new Date(a.generatedAt || 0));
   return list[0] ? normalizeContract(list[0]) : null;
 }

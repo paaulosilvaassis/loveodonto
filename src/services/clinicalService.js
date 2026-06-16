@@ -1,5 +1,9 @@
 import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
+import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
+import { assertBudgetEditable, assertBudgetStatusChangeAllowed } from './clinicalBudgetLockService.js';
+
+export { BUDGET_STATUS };
 
 /**
  * Salva observação do orçamento (evolução clínica vinculada ao atendimento e, se existir, ao orçamento).
@@ -374,21 +378,31 @@ export const getClinicalEvents = (appointmentId) => {
 };
 
 /**
- * Status do orçamento
+ * Status do orçamento — ver clinicalBudgetConstants.js
  */
-export const BUDGET_STATUS = {
-  RASCUNHO: 'RASCUNHO',
-  ENVIADO: 'ENVIADO',
-  NEGOCIACAO: 'NEGOCIACAO',
-  APROVADO: 'APROVADO',
-  REPROVADO: 'REPROVADO',
-  CANCELADO: 'CANCELADO',
-};
+
+function isDocumentsOnlyBudgetUpdate(existing, next) {
+  if (!existing || !next) return false;
+  const strip = (b) => {
+    const clone = { ...b };
+    delete clone.documents;
+    delete clone.updatedAt;
+    delete clone.updatedBy;
+    return JSON.stringify(clone);
+  };
+  return strip(existing) === strip(next);
+}
 
 /**
  * Cria ou atualiza orçamento de um atendimento
  */
-export const saveBudget = (user, appointmentId, budgetData) => {
+export const saveBudget = (user, appointmentId, budgetData, options = {}) => {
+  const existing = getClinicalData(appointmentId)?.budget;
+  assertBudgetEditable(appointmentId, budgetData, {
+    ...options,
+    allowDocumentsOnly: options.allowDocumentsOnly ?? isDocumentsOnlyBudgetUpdate(existing, budgetData),
+  });
+
   return withDb((db) => {
     if (!db.clinicalAppointments) {
       db.clinicalAppointments = [];
@@ -466,6 +480,8 @@ export const getBudget = (appointmentId) => {
  * Atualiza status do orçamento
  */
 export const updateBudgetStatus = (user, appointmentId, status, notes = '') => {
+  assertBudgetStatusChangeAllowed(appointmentId);
+
   return withDb((db) => {
     const clinicalData = getClinicalData(appointmentId);
     if (!clinicalData || !clinicalData.budget) {

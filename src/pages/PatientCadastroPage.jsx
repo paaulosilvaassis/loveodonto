@@ -28,7 +28,7 @@ import {
 } from '../services/patientService.js';
 import { getPatientRecord, updatePatientRecord } from '../services/patientRecordService.js';
 import { formatCep, formatCpf, formatPhone, onlyDigits } from '../utils/validators.js';
-import PatientContractsPanel from '../components/contracts/PatientContractsPanel.jsx';
+import PatientBudgetsContractsTab from '../components/budgets/PatientBudgetsContractsTab.jsx';
 
 /** Campos que não são obrigatórios; removidos da lista de pendências ao exibir (compatível com dados antigos). */
 const PENDING_OPTIONAL_KEYS = ['preferred_dentist', 'insurance_name'];
@@ -43,7 +43,7 @@ const TAB_CONFIG = [
   { id: 'enderecos', label: 'Endereços' },
   { id: 'relacionamentos', label: 'Relacionamentos' },
   { id: 'convenios', label: 'Convênios' },
-  { id: 'contratos', label: 'Contratos' },
+  { id: 'contratos', label: 'Orçamentos e Contratos' },
   { id: 'acesso', label: 'Dados de Acesso' },
   { id: 'prontuario', label: 'Prontuário' },
   { id: 'situacao', label: 'Situação do Cadastro' },
@@ -287,6 +287,13 @@ export default function PatientCadastroPage() {
   const slotDate = searchParams.get('slotDate') || '';
   const startTime = searchParams.get('startTime') || '';
   const professionalId = searchParams.get('professionalId') || '';
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && TAB_CONFIG.some((item) => item.id === tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   const handleAvatarDebugClick = (source) => {
   };
@@ -1345,7 +1352,10 @@ export default function PatientCadastroPage() {
             ) : null}
 
             {activeTab === 'contratos' ? (
-              <PatientContractsPanel patientId={patientId} />
+              <PatientBudgetsContractsTab
+                patientId={patientId}
+                patientName={draft.profile.full_name || draft.profile.nickname || draft.profile.social_name}
+              />
             ) : null}
 
             {activeTab === 'acesso' ? (

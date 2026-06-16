@@ -306,6 +306,9 @@ export const saveDb = (db) => {
     console.error('Erro ao persistir no IndexedDB:', err);
   });
   cachedDb = db;
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('db:updated'));
+  }
   return db;
 };
 

@@ -145,6 +145,13 @@ export const navCategories = [
         rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'],
       },
       {
+        id: 'orcamentos-hub',
+        label: 'Orçamentos',
+        icon: Receipt,
+        route: '/orcamentos',
+        rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional', 'comercial', 'financeiro'],
+      },
+      {
         id: 'cadastro-paciente-completo',
         label: 'Cadastro de Paciente',
         icon: ClipboardList,
@@ -421,7 +428,7 @@ export const getActiveCategory = (pathname) => {
   
   // Fallback: detecta por prefixo de rota
   if (pathname.startsWith('/gestao/dashboard')) return 'dashboard';
-  if (pathname.startsWith('/gestao-atendimento') || pathname.startsWith('/pacientes') || pathname.startsWith('/gestao/agenda') || pathname.startsWith('/gestao/convenios') || pathname.startsWith('/gestao-comercial/fluxo-do-paciente')) return 'gestao-atendimento';
+  if (pathname.startsWith('/gestao-atendimento') || pathname.startsWith('/pacientes') || pathname.startsWith('/gestao/agenda') || pathname.startsWith('/gestao/convenios') || pathname.startsWith('/gestao-comercial/fluxo-do-paciente') || pathname.startsWith('/orcamentos')) return 'gestao-atendimento';
   if (pathname.startsWith('/crm')) return 'comercial';
   if (pathname.startsWith('/gestao/contratos') || pathname.startsWith('/admin') || pathname.startsWith('/configuracoes')) return 'administrativo';
   if (pathname.startsWith('/financeiro')) return 'financeiro';

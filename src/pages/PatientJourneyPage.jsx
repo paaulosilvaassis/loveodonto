@@ -21,7 +21,8 @@ import {
   calculateAverageWaitTime,
   getLongestWaitTime,
 } from '../utils/journeyUtils.js';
-import { Bell, CheckCircle2, Clock, Users, Activity, Search, User, Building2, Clipboard, Calendar } from 'lucide-react';
+import { Bell, CheckCircle2, Clock, Users, Activity, Search, User, Building2, Clipboard, Calendar, AlertTriangle } from 'lucide-react';
+import { getPatientDelinquencyInfo } from '../services/patientFinancialSummaryService.js';
 
 const todayIso = () => {
   const d = new Date();
@@ -636,6 +637,9 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
   };
 
   const patientInitials = getInitials(appointment.patientName);
+  const financialStatus = appointment.patientId
+    ? getPatientDelinquencyInfo(appointment.patientId)
+    : null;
 
   return (
     <div className={`patient-journey-card-premium ${statusConfig.pulse ? 'patient-journey-card-pulse' : ''}`}>
@@ -656,6 +660,17 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
             {stage === JOURNEY_STAGE.CONSULTORIO && 'Em Atendimento'}
             {stage === JOURNEY_STAGE.FINALIZADO && 'Finalizado'}
           </span>
+          {financialStatus?.isDelinquent ? (
+            <span className="patient-journey-card-badge patient-journey-card-badge--delinquent">
+              <AlertTriangle size={12} aria-hidden />
+              Inadimplente
+            </span>
+          ) : null}
+          {!financialStatus?.isDelinquent && financialStatus?.hasPending ? (
+            <span className="patient-journey-card-badge patient-journey-card-badge--financial-pending">
+              Pendência financeira
+            </span>
+          ) : null}
         </div>
         <div className="patient-journey-card-meta">
           <span className="patient-journey-card-meta-item">
@@ -730,7 +745,7 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  if (appointment?.id) navigate(`/atendimento-clinico/${appointment.id}`);
+                  if (appointment?.id) navigate(`/atendimento-clinico/${appointment.id}/central`);
                 }}
               >
                 <Clipboard size={18} />

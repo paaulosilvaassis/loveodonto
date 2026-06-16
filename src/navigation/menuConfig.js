@@ -43,6 +43,7 @@ export const menuSections = [
       { id: 'cadastro-paciente-form', label: 'Pacientes > Cadastro', route: '/pacientes/cadastro', icon: ClipboardList, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'], description: 'Cadastro completo do paciente.' },
       { id: 'agenda', label: 'Agenda da Clínica', route: '/gestao/agenda', icon: Calendar, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'], description: 'Calendário e gestão de consultas.' },
       { id: 'gestao-atendimento', label: 'Gestão de Atendimento', route: '/gestao-atendimento', icon: LayoutDashboard, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional'], description: 'Central de operação da clínica (agenda, fluxo e acompanhamento).' },
+      { id: 'orcamentos-hub', label: 'Orçamentos', route: '/orcamentos', icon: Receipt, rolesAllowed: ['admin', 'gerente', 'recepcao', 'profissional', 'comercial', 'financeiro'], description: 'Central de orçamentos clínicos, histórico e novos planejamentos.' },
       { id: 'crm', label: 'CRM (Kanban)', route: '/gestao/crm', icon: KanbanSquare, rolesAllowed: ['admin', 'gerente', 'recepcao', 'comercial'], description: 'Pipeline comercial e funil de leads.' },
       { id: 'convenios', label: 'Convênios', route: '/gestao/convenios', icon: Handshake, rolesAllowed: ['admin', 'gerente', 'recepcao'], description: 'Gestão completa de convênios — guias TISS, glosas, faturamento e rentabilidade.' },
     ],

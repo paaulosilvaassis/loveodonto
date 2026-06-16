@@ -57,6 +57,7 @@ function canExportPdfContract(user) {
  *   patientId: string,
  *   quoteSource: 'crm_budget'|'clinical_budget',
  *   quoteId: string,
+ *   budgetId?: string|null,
  *   flow?: 'crm'|'clinical',
  *   onSuccess?: (contract: object) => void,
  * }} props
@@ -68,6 +69,7 @@ export default function GenerateContractModal({
   patientId,
   quoteSource,
   quoteId,
+  budgetId = null,
   flow = 'crm',
   onSuccess,
 }) {
@@ -175,6 +177,7 @@ export default function GenerateContractModal({
         quoteSource,
         quoteId,
         patientId,
+        budgetId,
         templateId: selectedTemplateId || templates.find((t) => t.type === 'system_default')?.id,
         editedHtml: htmlBody,
         skipHashtagValidation: flow === 'clinical',

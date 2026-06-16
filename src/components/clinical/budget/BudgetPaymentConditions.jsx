@@ -34,6 +34,12 @@ const CARD_TITLES = {
   financiamento: 'Financiamento',
 };
 
+function getPresentationStatusLabel(opt) {
+  if (opt.accepted) return { text: 'Escolhida', className: 'is-chosen' };
+  if (opt.presentToPatient || opt.presentedAt) return { text: 'Apresentada', className: 'is-presented' };
+  return { text: 'Não apresentada', className: 'is-idle' };
+}
+
 function calcInstallment(total, down, installments) {
   const rest = Math.max(0, Number(total || 0) - Number(down || 0));
   const n = Math.max(1, Number(installments || 1));
@@ -51,14 +57,18 @@ function PresentedConditionsBlock({ options, originalValue }) {
         {presented.map((opt) => {
           const preview = getPaymentCardPreview(opt, originalValue);
           return (
-            <li key={opt.id}>
-              <strong>{getPaymentOptionTitle(opt)}</strong>
+            <li key={opt.id} className="budget-tab-presented-card">
+              <div className="budget-tab-presented-card-head">
+                <strong>{getPaymentOptionTitle(opt)}</strong>
+                {opt.presentedAt ? (
+                  <time>{formatPresentedAt(opt.presentedAt)}</time>
+                ) : null}
+              </div>
               {preview.lines.map((line) => (
-                <span key={line.label}>{line.label}: {line.value}</span>
+                <span key={line.label} className="budget-tab-presented-line">
+                  {line.label}: <strong>{line.value}</strong>
+                </span>
               ))}
-              {opt.presentedAt ? (
-                <em>Apresentado em: {formatPresentedAt(opt.presentedAt)}</em>
-              ) : null}
             </li>
           );
         })}
@@ -203,6 +213,13 @@ export function BudgetPaymentConditions({
 
   return (
     <div className="budget-tab-payments">
+      <header className="budget-tab-section-head">
+        <div>
+          <h3>Condições de pagamento</h3>
+          <p>Configure, apresente e registre a escolha do paciente.</p>
+        </div>
+      </header>
+
       <PresentedConditionsBlock options={options} originalValue={originalValue} />
 
       <div className="budget-tab-pay-stack">
@@ -218,6 +235,7 @@ export function BudgetPaymentConditions({
           const rowErrors = financingErrors[opt.id] || [];
           const installmentValue = calcInstallment(finalVal, opt.downPayment, opt.installments);
           const cardInstallment = calcInstallment(finalVal, 0, opt.installments);
+          const statusLabel = getPresentationStatusLabel(opt);
 
           const cardClass = [
             'budget-tab-pay-card',
@@ -229,16 +247,32 @@ export function BudgetPaymentConditions({
             <article key={opt.id} className={cardClass}>
               <header className="budget-tab-pay-card-head">
                 <h4>{CARD_TITLES[opt.type] || getPaymentOptionTitle(opt)}</h4>
+                <span className={`budget-tab-status-pill ${statusLabel.className}`}>
+                  {statusLabel.text}
+                </span>
                 {opt.accepted ? (
                   <span className="budget-tab-badge budget-tab-badge--chosen">
                     <Check size={12} />
                     Escolhida pelo paciente
                   </span>
                 ) : null}
-                {opt.presentToPatient && !opt.accepted ? (
-                  <span className="budget-tab-badge budget-tab-badge--presented">Apresentada</span>
-                ) : null}
               </header>
+
+              <div className="budget-tab-pay-card-preview">
+                <strong>{formatCurrencyBRL(finalVal)}</strong>
+                {opt.type === 'parcelado_clinica' || opt.type === 'cartao' ? (
+                  <span>
+                    {Math.max(1, Number(opt.installments || 1))}x de{' '}
+                    {formatCurrencyBRL(opt.type === 'cartao' ? cardInstallment : installmentValue)}
+                  </span>
+                ) : null}
+                {opt.type === 'financiamento' && financingSummary ? (
+                  <span>
+                    {financingSummary.installmentsCount}x de{' '}
+                    {formatCurrencyBRL(financingSummary.installmentAmount)}
+                  </span>
+                ) : null}
+              </div>
 
               {opt.type !== 'financiamento' ? (
                 <PaymentSummaryGrid opt={opt} originalValue={originalValue} finalVal={finalVal} />

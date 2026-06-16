@@ -9,19 +9,14 @@ import { calcItemTotal, formatPlanningMoney } from './planningUtils.js';
 export function PlanningProcedureRow({
   proc,
   isNew,
-  isHighlighted,
   rowRef,
   onFieldChange,
   onPatch,
-  onDuplicate,
-  onEdit,
   onRemove,
 }) {
-  const meta = [proc.code, proc.category].filter(Boolean).join(' • ');
   const rowClass = [
     'clinical-planning-row',
     isNew ? 'clinical-planning-row--enter' : '',
-    isHighlighted ? 'clinical-planning-row--highlight' : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -30,7 +25,15 @@ export function PlanningProcedureRow({
     <div ref={rowRef} className={rowClass} data-planned-id={proc.id}>
       <div className="clinical-planning-cell clinical-planning-cell--procedure">
         <strong className="clinical-planning-proc-name">{proc.name}</strong>
-        {meta ? <span className="clinical-planning-proc-meta">{meta}</span> : null}
+        {proc.code ? (
+          <span className="clinical-planning-proc-meta">{proc.code}</span>
+        ) : null}
+      </div>
+
+      <div className="clinical-planning-cell clinical-planning-cell--specialty">
+        <span className="clinical-planning-specialty">
+          {proc.category || '—'}
+        </span>
       </div>
 
       <div className="clinical-planning-cell clinical-planning-cell--stage">
@@ -78,11 +81,7 @@ export function PlanningProcedureRow({
       </div>
 
       <div className="clinical-planning-cell clinical-planning-cell--actions">
-        <PlanningRowActions
-          onDuplicate={onDuplicate}
-          onEdit={onEdit}
-          onRemove={onRemove}
-        />
+        <PlanningRowActions onRemove={onRemove} />
       </div>
     </div>
   );

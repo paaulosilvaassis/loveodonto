@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import { getProfessionalOptions } from '../services/collaboratorService.js';
@@ -82,6 +83,7 @@ const usePatientsAndProfessionals = () => {
 
 export default function FinanceReceivablesPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const { patients, professionals } = usePatientsAndProfessionals();
 
   const [refreshKey, setRefresh] = useState(0);
@@ -90,7 +92,7 @@ export default function FinanceReceivablesPage() {
     startDate: firstDayOfMonth(),
     endDate: lastDayOfMonth(),
     status: '',
-    patientId: '',
+    patientId: searchParams.get('patientId') || '',
     professionalId: '',
     paymentMethodExpected: '',
     originType: '',

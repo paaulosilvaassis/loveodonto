@@ -1,30 +1,46 @@
-import { Check } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
 import { resolveFunnelSteps } from './budgetCommercialUtils.js';
 
-export function BudgetCommercialFunnel({ budget, financials }) {
-  const steps = resolveFunnelSteps(budget, financials);
-  const currentIndex = steps.findIndex((s) => !s.done);
-  const activeIndex = currentIndex === -1 ? steps.length - 1 : currentIndex;
+const STATUS_LABELS = {
+  done: 'Concluído',
+  current: 'Em andamento',
+  pending: 'Pendente',
+  blocked: 'Bloqueado',
+};
+
+export function BudgetCommercialFunnel({ budget, financials, lockCtx }) {
+  const steps = resolveFunnelSteps(budget, financials, lockCtx);
 
   return (
-    <nav className="clinical-budget-funnel" aria-label="Funil comercial do orçamento">
-      {steps.map((step, index) => {
-        const isDone = step.done;
-        const isCurrent = index === activeIndex && !isDone;
-        const rowClass = [
-          'clinical-budget-funnel-step',
-          isDone ? 'is-done' : '',
-          isCurrent ? 'is-current' : '',
-        ].filter(Boolean).join(' ');
-        return (
-          <div key={step.key} className={rowClass}>
-            <span className="clinical-budget-funnel-icon">
-              {isDone ? <Check size={12} strokeWidth={3} /> : index + 1}
-            </span>
-            <span className="clinical-budget-funnel-label">{step.label}</span>
-          </div>
-        );
-      })}
+    <nav className="budget-premium-funnel" aria-label="Progresso comercial do orçamento">
+      <ol className="budget-premium-funnel-track">
+        {steps.map((step, index) => {
+          const status = step.status || (step.done ? 'done' : 'pending');
+          const rowClass = [
+            'budget-premium-funnel-step',
+            `is-${status}`,
+          ].join(' ');
+
+          return (
+            <li key={step.key} className={rowClass}>
+              <span className="budget-premium-funnel-marker" aria-hidden>
+                {status === 'done' ? <Check size={12} strokeWidth={3} /> : null}
+                {status === 'blocked' ? <Lock size={10} /> : null}
+                {!step.done && status !== 'blocked' ? index + 1 : null}
+              </span>
+              <div className="budget-premium-funnel-body">
+                <span className="budget-premium-funnel-label">{step.label}</span>
+                <span className={`budget-premium-funnel-badge is-${status}`}>
+                  {STATUS_LABELS[status]}
+                </span>
+              </div>
+              {index < steps.length - 1 ? (
+                <span className="budget-premium-funnel-connector" aria-hidden />
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
     </nav>
   );
 }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Eye, RefreshCcw, Ban, DollarSign, Link2, Send } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
@@ -46,10 +47,11 @@ const safeCopyToClipboard = async (value) => {
 
 export default function FinanceBoletosPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
   const [refreshKey, setRefreshKey] = useState(0);
   const [activeTab, setActiveTab] = useState('all');
   const [filters, setFilters] = useState({
-    patient_id: '',
+    patient_id: searchParams.get('patientId') || '',
     financing_id: '',
     installment_id: '',
     startDate: '',
