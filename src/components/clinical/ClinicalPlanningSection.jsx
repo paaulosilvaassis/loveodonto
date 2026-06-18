@@ -51,6 +51,10 @@ import {
   getPreviousBudgetImportContext,
   importProceduresFromPreviousBudget,
 } from '../../services/clinicalBudgetLockService.js';
+import {
+  resolveBudgetForView,
+  mapBudgetProceduresToPlanningView,
+} from '../../services/budgetNavigationService.js';
 import { PreviousBudgetImportCard } from './planning/PreviousBudgetImportCard.jsx';
 import { AppointmentBudgetHistoryModal } from './planning/AppointmentBudgetHistoryModal.jsx';
 
@@ -58,6 +62,8 @@ import { AppointmentBudgetHistoryModal } from './planning/AppointmentBudgetHisto
 export function ClinicalPlanningSection({
 
   appointmentId,
+
+  viewBudgetId = null,
 
   user,
 
@@ -107,6 +113,18 @@ export function ClinicalPlanningSection({
 
   const loadPlanned = () => {
 
+    if (viewBudgetId) {
+      const { budget } = resolveBudgetForView(appointmentId, viewBudgetId);
+      if (budget?.procedures?.length) {
+        const list = mapBudgetProceduresToPlanningView(budget.procedures, budget.createdAt);
+        setAttachedAnamnesis([]);
+        setPlannedProcedures(
+          [...list].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)),
+        );
+        return;
+      }
+    }
+
     const clinicalData = getClinicalData(appointmentId);
 
     const list = clinicalData?.plannedProcedures || [];
@@ -127,7 +145,7 @@ export function ClinicalPlanningSection({
 
     loadPlanned();
 
-  }, [appointmentId]);
+  }, [appointmentId, viewBudgetId]);
 
 
 
@@ -496,9 +514,24 @@ export function ClinicalPlanningSection({
 
 
 
+  const budgetViewState = useMemo(
+    () => (viewBudgetId ? resolveBudgetForView(appointmentId, viewBudgetId) : null),
+    [appointmentId, viewBudgetId],
+  );
+
+  const isReadOnlyView = Boolean(budgetViewState?.isReadOnly);
+
+
+
   return (
 
     <>
+
+      {isReadOnlyView ? (
+        <div className="clinical-budget-locked-banner" role="status">
+          <p>Planejamento vinculado ao orçamento selecionado — somente visualização.</p>
+        </div>
+      ) : null}
 
       <ClinicalStageShell
 
@@ -516,7 +549,7 @@ export function ClinicalPlanningSection({
 
             </ClinicalBtn>
 
-            <ClinicalBtn variant="secondary" icon={Plus} onClick={() => setShowSelector(true)} disabled={saving}>
+            <ClinicalBtn variant="secondary" icon={Plus} onClick={() => setShowSelector(true)} disabled={saving || isReadOnlyView}>
 
               Procedimento
 

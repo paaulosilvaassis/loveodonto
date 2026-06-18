@@ -22,12 +22,16 @@ import {
 } from '../../services/contractService.js';
 import { composeProfessionalClinicalContractHtml } from '../clinical/contract/composeProfessionalClinicalContract.js';
 import { createContractDraft, ensureContractsModuleSeeded } from '../../services/contractModuleService.js';
+import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 import {
   contractHtmlWithSignatures,
   printContractElement,
   downloadContractPdfFromElement,
 } from '../../services/contractPdfService.js';
 import { syncGeneratedContractToSaas } from '../../services/contractSaasSyncService.js';
+import { ContractReadinessChecklist } from './ContractReadinessChecklist.jsx';
+import { getContractReadinessChecklist } from '../../services/contractValidationService.js';
+import { resolveAttachedTcleIdsFromClinicalDocuments } from '../../services/clinicalTcleAttachmentService.js';
 
 function canGenerateContract(user, flow) {
   if (!user) return false;
@@ -132,7 +136,7 @@ export default function GenerateContractModal({
 
   const previewHtml = useMemo(() => {
     if (flow === 'clinical') {
-      return contractHtmlWithSignatures(htmlBody);
+      return htmlBody;
     }
     try {
       const ctx = buildContractContext({
@@ -148,6 +152,28 @@ export default function GenerateContractModal({
   }, [htmlBody, quoteSource, quoteId, patientId, user, flow]);
 
   const unknownTags = useMemo(() => findUnknownHashtags(htmlBody), [htmlBody]);
+
+  const attachedTcleIds = useMemo(
+    () => resolveAttachedTcleIdsFromClinicalDocuments({ patientId, appointmentId: quoteId }),
+    [patientId, quoteId, open],
+  );
+
+  const readinessChecklist = useMemo(() => {
+    if (!open || !patientId || !quoteId) return null;
+    try {
+      return getContractReadinessChecklist({
+        quoteSource,
+        quoteId,
+        patientId,
+        currentUser: user,
+        htmlPreview: flow === 'clinical' ? '' : htmlBody,
+        attachedTcleIds,
+        strict: true,
+      });
+    } catch {
+      return null;
+    }
+  }, [open, patientId, quoteId, quoteSource, user, htmlBody, flow, attachedTcleIds]);
 
   const filteredTags = useMemo(() => {
     const q = tagQuery.trim().toLowerCase();
@@ -185,7 +211,7 @@ export default function GenerateContractModal({
       await syncGeneratedContractToSaas(row);
       setDraftContract(row);
       setStep('draft');
-      setToast({ type: 'success', message: `Rascunho ${row.contractNumber || row.id} criado.` });
+      setToast({ type: 'success', message: `Rascunho ${formatFriendlyContractNumber(row.contractNumber, 1)} criado.` });
       onSuccess?.(row);
     } catch (e) {
       setError(e?.message || 'Erro ao gerar rascunho.');
@@ -216,6 +242,16 @@ export default function GenerateContractModal({
   };
 
   const handlePrint = () => {
+    if (flow === 'clinical' && htmlBody) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(htmlBody);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+      }
+      return;
+    }
     if (!printRef.current || !canPrintContract(user)) return;
     printContractElement(printRef.current);
   };
@@ -227,7 +263,7 @@ export default function GenerateContractModal({
     }
     setBusy(true);
     try {
-      const num = draftContract?.contractNumber || 'contrato';
+      const num = formatFriendlyContractNumber(draftContract?.contractNumber, 1);
       await downloadContractPdfFromElement(printRef.current, `contrato-${num}.pdf`);
     } catch (e) {
       setError(e?.message || 'Falha ao gerar PDF.');
@@ -258,6 +294,10 @@ export default function GenerateContractModal({
           )}
           {error && <p className="text-sm text-[var(--color-error)]">{error}</p>}
 
+          {allowed && readinessChecklist && (
+            <ContractReadinessChecklist checklist={readinessChecklist} />
+          )}
+
           {step === 'edit' && (
             <>
               {flow !== 'clinical' ? (
@@ -285,6 +325,7 @@ export default function GenerateContractModal({
               )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {flow !== 'clinical' ? (
                 <div>
                   <h4 className="text-sm font-semibold mb-2">Edição</h4>
                   <ContractRichEditor
@@ -294,7 +335,6 @@ export default function GenerateContractModal({
                     onChange={setHtmlBody}
                     editable={allowed}
                   />
-                  {flow !== 'clinical' ? (
                   <div className="mt-3 space-y-2">
                     <label className="text-xs font-medium text-[var(--color-text-muted)]">Inserir hashtag</label>
                     <input
@@ -317,17 +357,40 @@ export default function GenerateContractModal({
                       ))}
                     </div>
                   </div>
-                  ) : null}
                 </div>
+                ) : (
+                <div>
+                  <h4 className="text-sm font-semibold mb-2">Documento jurídico</h4>
+                  <p className="text-sm text-[var(--color-text-muted)]">
+                    O contrato é gerado automaticamente a partir do orçamento aprovado e da condição
+                    de pagamento escolhida. Revise o preview ao lado antes de gerar o rascunho.
+                  </p>
+                </div>
+                )}
                 <div>
                   <h4 className="text-sm font-semibold mb-2">
                     {flow === 'clinical' ? 'Preview do contrato profissional' : 'Preview (hashtags resolvidas)'}
                   </h4>
+                  {flow === 'clinical' ? (
+                    <iframe
+                      title="Preview do contrato odontológico"
+                      srcDoc={htmlBody}
+                      className="clinical-contract-preview-frame"
+                      style={{
+                        width: '100%',
+                        minHeight: '520px',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: '8px',
+                        background: '#fff',
+                      }}
+                    />
+                  ) : (
                   <div
                     ref={printRef}
                     className="contract-print-root border border-[var(--color-border)] rounded-md min-h-[200px] overflow-auto text-sm"
                     dangerouslySetInnerHTML={{ __html: previewHtml }}
                   />
+                  )}
                   {flow !== 'clinical' && unknownTags.length > 0 && (
                     <p className="text-xs text-[var(--color-warning)] mt-2">
                       Tags não reconhecidas (corrija antes de gerar): {unknownTags.join(', ')}
@@ -341,7 +404,7 @@ export default function GenerateContractModal({
           {step === 'draft' && draftContract && (
             <div className="space-y-3">
               <p className="text-sm">
-                <strong>Número:</strong> {draftContract.contractNumber || draftContract.id} ·{' '}
+                <strong>Número:</strong> {formatFriendlyContractNumber(draftContract.contractNumber, 1)} ·{' '}
                 <strong>Status:</strong> {draftContract.status}
               </p>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -380,7 +443,12 @@ export default function GenerateContractModal({
             <button
               type="button"
               className="button primary"
-              disabled={busy || !allowed || (flow !== 'clinical' && !selectedTemplateId)}
+              disabled={
+                busy
+                || !allowed
+                || (flow !== 'clinical' && !selectedTemplateId)
+                || (readinessChecklist && !readinessChecklist.canGenerate)
+              }
               onClick={handleCreateDraft}
             >
               {busy ? 'Gerando…' : 'Gerar rascunho'}
@@ -407,7 +475,11 @@ export default function GenerateContractModal({
               <button
                 type="button"
                 className="button primary"
-                disabled={busy || !canFinalizeContract(user)}
+                disabled={
+                  busy
+                  || !canFinalizeContract(user)
+                  || (readinessChecklist && !readinessChecklist.canGenerate)
+                }
                 onClick={handleFinalize}
               >
                 {busy ? 'Salvando…' : 'Finalizar contrato'}

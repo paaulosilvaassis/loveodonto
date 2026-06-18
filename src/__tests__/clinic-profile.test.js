@@ -37,7 +37,10 @@ describe('ClinicProfile - permissões e validações', () => {
   it('valida telefone e CEP', () => {
     expect(() =>
       addClinicPhone(admin, { tipo: 'whatsapp', ddd: '11', numero: '123', principal: true })
-    ).toThrow('Telefone inválido.');
+    ).toThrow('Telefone inválido');
+    expect(() =>
+      addClinicPhone(admin, { tipo: '', ddd: '31', numero: '971196315' })
+    ).toThrow('Selecione o tipo do telefone.');
     expect(() =>
       addClinicAddress(admin, {
         tipo: 'principal',

@@ -1492,6 +1492,19 @@ const migrations = {
       version: 52,
     };
   },
+  /**
+   * 53: Solicitações e auditoria jurídica de assinatura digital.
+   */
+  53: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 53 };
+    const ensureArray = (key) => (Array.isArray(db[key]) ? db[key] : []);
+    return {
+      ...db,
+      contractSignatureRequests: ensureArray('contractSignatureRequests'),
+      contractSignatureAudits: ensureArray('contractSignatureAudits'),
+      version: 53,
+    };
+  },
 };
 
 /** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */

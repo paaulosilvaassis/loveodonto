@@ -1,182 +1,280 @@
-import { formatCurrencyBRL } from '../../../utils/currency.js';
 import {
   buildProfessionalContractContext,
   escapeHtml,
   hasText,
-  regionLabel,
-  calcProcedureTotal,
 } from './buildProfessionalContractContext.js';
+import { PROFESSIONAL_CONTRACT_CSS } from './professionalContractStyles.js';
+import { buildForumClauseText } from './professionalContractClauses.js';
+import { getConditionalClausesForTreatments } from '../../../contracts/contractConditionalClauses.js';
 
-function renderList(items) {
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+  'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX'];
+
+const ORDINALS = [
+  'PRIMEIRA', 'SEGUNDA', 'TERCEIRA', 'QUARTA', 'QUINTA', 'SEXTA',
+  'SÉTIMA', 'OITAVA', 'NONA', 'DÉCIMA', 'DÉCIMA PRIMEIRA', 'DÉCIMA SEGUNDA',
+  'DÉCIMA TERCEIRA', 'DÉCIMA QUARTA', 'DÉCIMA QUINTA',
+];
+
+function clauseHeading(number, title) {
+  const ordinal = ORDINALS[number - 1] || `${number}ª`;
+  return `<h3 class="clause-heading">CLÁUSULA ${ordinal} — ${escapeHtml(title)}</h3>`;
+}
+
+function renderAlphaList(items) {
   if (!items?.length) return '';
-  return `<ol class="legal-list">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ol>`;
+  return `<ol class="clause-list alpha">${items.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ol>`;
 }
 
-function renderProceduresTable(procedures, globalValue) {
+function renderParagraphs(items) {
+  if (!items?.length) return '';
+  if (typeof items === 'string') return `<p class="clause-p">${escapeHtml(items)}</p>`;
+  return items.map((item) => `<p class="clause-p">${escapeHtml(item)}</p>`).join('');
+}
+
+function buildPartyQualification(clinic, patient, professional) {
+  const clinicName = clinic.legalName || clinic.name;
+  const rtName = clinic.technicalResponsible || professional.name;
+  const rtCro = professional.cro;
+
+  let contracted = `Pelo presente instrumento particular de prestação de serviços odontológicos, de um lado ${clinicName}`;
+  if (hasText(clinic.cnpj)) {
+    contracted += `, inscrita no CNPJ sob nº ${clinic.cnpj}`;
+  }
+  if (hasText(clinic.address)) {
+    contracted += `, estabelecida à ${clinic.address}`;
+  }
+  if (hasText(rtName)) {
+    contracted += `, neste ato representada por seu responsável técnico ${rtName}`;
+    if (hasText(rtCro)) contracted += `, ${rtCro}`;
+  }
+  contracted += ', doravante denominada CONTRATADA.';
+
+  let contractor = `E de outro lado ${patient.name || 'o CONTRATANTE'}`;
+  if (hasText(patient.cpf)) {
+    contractor += `, inscrito no CPF nº ${patient.cpf}`;
+  }
+  if (hasText(patient.rg)) {
+    contractor += `, portador do RG nº ${patient.rg}`;
+  }
+  if (hasText(patient.address)) {
+    contractor += `, residente e domiciliado à ${patient.address}`;
+  }
+  contractor += ', doravante denominado CONTRATANTE.';
+
+  return `${contracted}\n\n${contractor}\n\nAs partes acima qualificadas têm entre si justo e contratado o presente instrumento, que se regerá pelas cláusulas e condições seguintes:`;
+}
+
+function renderProceduresList(procedures) {
   if (!procedures?.length) {
-    return '<p class="legal-paragraph">Não há procedimentos vinculados ao orçamento aprovado.</p>';
+    return '<p class="clause-p">Não há procedimentos vinculados ao orçamento aprovado.</p>';
   }
-  const rows = procedures.map((proc) => {
+  return procedures.map((proc, index) => {
+    const roman = ROMAN[index] || String(index + 1);
+    const name = proc.name || proc.title || 'Procedimento';
     const qty = Number(proc.quantity || 1);
-    const unit = Number(proc.unitValue || 0);
-    const total = calcProcedureTotal(proc);
-    return `
-      <tr>
-        <td>${escapeHtml(proc.name || proc.title || 'Procedimento')}</td>
-        <td>${escapeHtml(regionLabel(proc))}</td>
-        <td class="center">${qty}</td>
-        <td class="right">${formatCurrencyBRL(unit)}</td>
-        <td class="right">${formatCurrencyBRL(total)}</td>
-      </tr>`;
+    const suffix = qty > 1 ? ` (${qty} unidade${qty > 1 ? 's' : ''})` : '';
+    return `<p class="clause-p proc-item"><strong>${roman}</strong> — ${escapeHtml(name)}${escapeHtml(suffix)}</p>`;
   }).join('');
+}
+
+function renderFinancialConditions(financial) {
+  const lines = financial.summaryLines || [];
+  if (!lines.length) return '';
+
+  const prose = [];
+  const words = financial.finalValueWords;
+  const valuePhrase = words
+    ? `${financial.finalValueFormatted} (${words})`
+    : financial.finalValueFormatted;
+
+  prose.push(
+    `O CONTRATANTE obriga-se ao pagamento do valor final de ${valuePhrase}, nas condições financeiras aprovadas no orçamento vinculado a este contrato, conforme discriminação a seguir:`,
+  );
+
+  const items = lines.map((line) => `
+    <p class="financial-line"><strong>${escapeHtml(line.label)}:</strong> ${escapeHtml(line.value)}</p>
+  `).join('');
+
+  return `
+    ${prose.map((text) => `<p class="clause-p">${escapeHtml(text)}</p>`).join('')}
+    <div class="financial-lines">${items}</div>`;
+}
+
+function renderFinancialSchedule(schedule) {
+  if (!schedule?.length) return '';
+
+  const rows = schedule.map((row) => `
+    <tr>
+      <td>${escapeHtml(row.parcelLabel || row.label)}</td>
+      <td class="center">${escapeHtml(row.dueDateFormatted)}</td>
+      <td class="right">${escapeHtml(row.amountFormatted)}</td>
+      <td>${escapeHtml(row.paymentMethod || '')}</td>
+      <td class="center">${escapeHtml(row.statusLabel || 'A vencer')}</td>
+    </tr>
+  `).join('');
 
   return `
     <table class="legal-table">
       <thead>
         <tr>
-          <th>Procedimento</th>
-          <th>Região</th>
-          <th class="center">Quantidade</th>
-          <th class="right">Valor unitário</th>
-          <th class="right">Valor total</th>
+          <th>Parcela</th>
+          <th>Vencimento</th>
+          <th>Valor</th>
+          <th>Forma de pagamento</th>
+          <th>Status</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
-      <tfoot>
-        <tr>
-          <td colspan="4" class="right"><strong>Valor global contratado:</strong></td>
-          <td class="right"><strong>${formatCurrencyBRL(globalValue)}</strong></td>
-        </tr>
-      </tfoot>
     </table>`;
 }
 
-function renderPaymentFields(financial) {
+function renderRunningHeader(clinic, meta) {
+  return `
+    <div class="print-running-header">
+      ${escapeHtml(clinic.name)} — Contrato nº ${escapeHtml(meta.contractNumber)}
+    </div>`;
+}
+
+function renderDocumentHeader(clinic, professional) {
+  const logoBlock = clinic.logoUrl
+    ? `<img src="${escapeHtml(clinic.logoUrl)}" alt="Logo da clínica" />`
+    : '';
+
   const lines = [
-    { label: 'Valor total do tratamento', value: financial.originalValueFormatted },
-    { label: 'Desconto concedido', value: financial.discountFormatted },
-    { label: 'Valor final contratado', value: financial.finalValueFormatted },
-    { label: 'Forma de pagamento', value: financial.paymentTitle },
-  ];
-
-  for (const row of financial.detailRows || []) {
-    lines.push({ label: row.label, value: row.value });
-  }
+    hasText(clinic.cnpj) ? `CNPJ: ${clinic.cnpj}` : '',
+    clinic.address,
+    hasText(clinic.phone) ? `Telefone: ${clinic.phone}` : '',
+    hasText(clinic.technicalResponsible || professional.name)
+      ? `Responsável Técnico: ${clinic.technicalResponsible || professional.name}`
+      : '',
+    hasText(professional.cro) ? professional.cro : '',
+  ].filter(hasText);
 
   return `
-    <dl class="payment-fields">
-      ${lines.map((line) => `
-        <div class="payment-field">
-          <dt>${escapeHtml(line.label)}:</dt>
-          <dd>${escapeHtml(line.value)}</dd>
-        </div>`).join('')}
-    </dl>`;
+    <header class="doc-header">
+      ${logoBlock}
+      <p class="clinic-name">${escapeHtml(clinic.name)}</p>
+      ${lines.map((line) => `<p class="header-line">${escapeHtml(line)}</p>`).join('')}
+    </header>`;
 }
 
-function renderInstallmentTable(schedule) {
-  if (!schedule?.length) {
-    return '<p class="legal-paragraph">Cronograma de parcelas conforme condição financeira aprovada.</p>';
-  }
+function formatSignatureCity(city) {
+  if (!hasText(city)) return '';
+  return String(city).trim();
+}
 
-  const rows = schedule.map((row, index) => {
-    let parcelLabel = row.label || String(index + 1);
-    if (/^Parcela\s(\d+)$/i.test(parcelLabel)) {
-      parcelLabel = parcelLabel.replace(/^Parcela\s/i, '').padStart(2, '0');
-    }
-    return `
-      <tr>
-        <td class="center">${escapeHtml(parcelLabel)}</td>
-        <td class="center">${escapeHtml(row.dueDateFormatted || '—')}</td>
-        <td class="right">${escapeHtml(row.amountFormatted)}</td>
-      </tr>`;
-  }).join('');
-
+function renderSignatureBlock({ title, lines }) {
+  const body = (lines || []).filter(hasText).map((line) => `<p>${escapeHtml(line)}</p>`).join('');
   return `
-    <table class="legal-table">
-      <thead>
-        <tr>
-          <th class="center">Parcela</th>
-          <th class="center">Vencimento</th>
-          <th class="right">Valor</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>`;
+    <div class="signature-block">
+      <div class="signature-line" aria-hidden="true"></div>
+      <p class="signature-title">${escapeHtml(title)}</p>
+      ${body}
+    </div>`;
+}
+
+function renderWitnessBlock(title) {
+  return `
+    <div class="signature-block">
+      <div class="signature-line" aria-hidden="true"></div>
+      <p class="signature-title">${escapeHtml(title)}</p>
+      <p>Nome: ________________________________</p>
+      <p>CPF: _________________________________</p>
+    </div>`;
+}
+
+function applyClausePlaceholders(html, replacements = {}) {
+  let out = String(html || '');
+  for (const [tag, value] of Object.entries(replacements)) {
+    const safe = escapeHtml(String(value ?? ''));
+    out = out.split(tag).join(safe);
+  }
+  return out;
+}
+
+function renderConditionalClausesSection(treatmentTypes, replacements, startClauseNum) {
+  const clauses = getConditionalClausesForTreatments(treatmentTypes || []);
+  if (!clauses.length) return { html: '', nextClauseNum: startClauseNum };
+
+  let clauseNum = startClauseNum;
+  const blocks = clauses.map((item) => {
+    const heading = clauseHeading(clauseNum++, item.title);
+    const body = applyClausePlaceholders(item.html, replacements);
+    return `${heading}${body}`;
+  });
+
+  return { html: blocks.join('\n'), nextClauseNum: clauseNum };
 }
 
 function renderSignatures(ctx) {
   const { patient, professional, clinic, meta } = ctx;
-  const guardianLine = patient.guardian !== '—'
-    ? escapeHtml(patient.guardian)
-    : '________________________________________';
+  const cityDate = [
+    formatSignatureCity(meta.city),
+    meta.issueDateExtenso,
+  ].filter(hasText).join(', ');
 
   return `
-    <p class="legal-paragraph closing-text">
-      E, por estarem justos e contratados, assinam o presente instrumento em 2 (duas) vias de igual teor e forma.
-    </p>
-    <p class="legal-paragraph signature-place">
-      ${escapeHtml(meta.city)}, ${escapeHtml(meta.issueDateExtenso)}.
-    </p>
-    <div class="signatures-block">
-      <div class="signature-item">
-        <div class="signature-line"></div>
-        <p><strong>CONTRATANTE / Paciente</strong></p>
-        <p>${escapeHtml(patient.name)}</p>
-        <p>CPF: ${escapeHtml(patient.cpf)}</p>
+    <section class="signature-section">
+      <p class="clause-p signature-closing">
+        E, por estarem justos e contratados, firmam o presente instrumento em 2 (duas) vias de igual teor e forma.
+      </p>
+      ${cityDate ? `<p class="signature-place">${escapeHtml(cityDate)}.</p>` : ''}
+
+      <div class="signature-grid-3">
+        ${renderSignatureBlock({
+          title: 'Contratante / Paciente',
+          lines: [
+            patient.name,
+            hasText(patient.cpf) ? `CPF: ${patient.cpf}` : '',
+          ],
+        })}
+        ${renderSignatureBlock({
+          title: 'Responsável Técnico',
+          lines: [
+            professional.name,
+            professional.cro,
+          ],
+        })}
+        ${renderSignatureBlock({
+          title: 'Representante Legal da Contratada',
+          lines: [
+            clinic.legalName || clinic.name,
+            hasText(clinic.cnpj) ? `CNPJ: ${clinic.cnpj}` : '',
+          ],
+        })}
       </div>
-      <div class="signature-item">
-        <div class="signature-line"></div>
-        <p><strong>Responsável legal</strong></p>
-        <p>${guardianLine}</p>
-        <p>(quando aplicável)</p>
+
+      <div class="signature-grid-2">
+        ${renderWitnessBlock('Testemunha 1')}
+        ${renderWitnessBlock('Testemunha 2')}
       </div>
-      <div class="signature-item">
-        <div class="signature-line"></div>
-        <p><strong>Profissional responsável</strong></p>
-        <p>${escapeHtml(professional.name)}</p>
-        <p>${escapeHtml(professional.cro)}</p>
-      </div>
-      <div class="signature-item">
-        <div class="signature-line"></div>
-        <p><strong>CONTRATADA / Clínica</strong></p>
-        <p>${escapeHtml(clinic.legalName || clinic.name)}</p>
-        <p>CNPJ: ${escapeHtml(clinic.cnpj)}</p>
-      </div>
-      <div class="signature-item">
-        <div class="signature-line"></div>
-        <p><strong>Testemunha 1</strong></p>
-        <p>Nome: ____________________________________</p>
-        <p>CPF: ____________________________________</p>
-      </div>
-      <div class="signature-item">
-        <div class="signature-line"></div>
-        <p><strong>Testemunha 2</strong></p>
-        <p>Nome: ____________________________________</p>
-        <p>CPF: ____________________________________</p>
-      </div>
-    </div>
-    <p class="validation-line">
-      Documento gerado eletronicamente. Hash de validação: <strong>${escapeHtml(ctx.validationHash)}</strong>
-    </p>`;
+    </section>`;
 }
 
 export function buildProfessionalContractHtml(context) {
   const ctx = context.meta ? context : buildProfessionalContractContext(context);
   const {
-    meta, clinic, patient, professional, treatment, procedures, financial, legalTexts, treatmentWarranty,
+    meta, clinic, patient, professional, treatment, procedures,
+    financial, legalTexts, treatmentWarranties,
   } = ctx;
 
-  const logoBlock = clinic.logoUrl
-    ? `<img class="header-logo" src="${escapeHtml(clinic.logoUrl)}" alt="" />`
-    : '';
+  const forumCity = clinic.clinicForumCity || meta.clinicForumCity;
+  if (!forumCity) {
+    throw new Error('Cadastre a cidade e UF da clínica para gerar corretamente a cláusula de foro.');
+  }
+  const forumText = buildForumClauseText(forumCity);
 
-  const clinicIdentity = [
-    hasText(clinic.legalName) && clinic.legalName !== clinic.name ? clinic.legalName : '',
-    hasText(clinic.cnpj) ? `CNPJ: ${clinic.cnpj}` : '',
-    clinic.address,
-    hasText(clinic.phone) ? `Telefone: ${clinic.phone}` : '',
-    hasText(clinic.email) ? `E-mail: ${clinic.email}` : '',
-  ].filter(hasText);
+  const objectText = `${legalTexts.object} Plano de tratamento: ${treatment.planName}.`;
+
+  const qualification = buildPartyQualification(clinic, patient, professional)
+    .split('\n\n')
+    .map((p) => `<p class="clause-p">${escapeHtml(p)}</p>`)
+    .join('');
+
+  let clauseNum = 1;
+  const treatmentTypes = treatment.treatmentTypes
+    || (treatment.treatmentType ? [treatment.treatmentType] : []);
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -184,351 +282,85 @@ export function buildProfessionalContractHtml(context) {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Contrato de Prestação de Serviços Odontológicos — ${escapeHtml(patient.name)}</title>
-  <style>
-    @page {
-      size: A4;
-      margin: 22mm 20mm 28mm 20mm;
-    }
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #fff;
-      color: #000;
-      font-family: "Times New Roman", Times, serif;
-      font-size: 12pt;
-      line-height: 1.65;
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-    .contract-document {
-      max-width: 170mm;
-      margin: 0 auto;
-      padding: 8mm 0 20mm;
-    }
-    .contract-header {
-      text-align: center;
-      margin-bottom: 22pt;
-      padding-bottom: 14pt;
-      border-bottom: 1pt solid #000;
-    }
-    .header-logo {
-      max-width: 70px;
-      max-height: 70px;
-      object-fit: contain;
-      margin-bottom: 10pt;
-    }
-    .clinic-title {
-      margin: 0 0 6pt;
-      font-size: 13pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .clinic-meta {
-      margin: 0;
-      padding: 0;
-      list-style: none;
-      font-size: 10pt;
-      line-height: 1.5;
-    }
-    .document-title {
-      margin: 16pt 0 8pt;
-      font-size: 13pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-    }
-    .document-meta {
-      font-size: 10.5pt;
-      margin: 0;
-    }
-    .document-meta span { display: inline-block; margin: 0 12pt; }
-    .contract-section {
-      margin-bottom: 18pt;
-      break-inside: avoid-page;
-    }
-    .section-title {
-      margin: 0 0 10pt;
-      font-size: 11pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-    .subsection-title {
-      margin: 12pt 0 6pt;
-      font-size: 10.5pt;
-      font-weight: 700;
-    }
-    .legal-paragraph {
-      margin: 0 0 8pt;
-      text-align: justify;
-      text-indent: 12pt;
-    }
-    .legal-paragraph.no-indent { text-indent: 0; }
-    .party-label {
-      margin: 10pt 0 4pt;
-      font-weight: 700;
-      text-transform: uppercase;
-      text-indent: 0;
-    }
-    .party-data {
-      margin: 0 0 3pt 12pt;
-      text-align: left;
-      text-indent: 0;
-    }
-    .legal-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 10pt 0 12pt;
-      font-size: 10pt;
-    }
-    .legal-table th,
-    .legal-table td {
-      border: 0.75pt solid #000;
-      padding: 5pt 6pt;
-      vertical-align: top;
-    }
-    .legal-table th {
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 9pt;
-      letter-spacing: 0.03em;
-    }
-    .legal-table tfoot td {
-      font-weight: 700;
-      background: #f7f7f7;
-    }
-    .center { text-align: center; }
-    .right { text-align: right; }
-    .payment-fields {
-      margin: 8pt 0 12pt;
-      padding: 0;
-    }
-    .payment-field {
-      display: flex;
-      gap: 8pt;
-      margin-bottom: 4pt;
-      font-size: 11pt;
-    }
-    .payment-field dt {
-      min-width: 180pt;
-      font-weight: 700;
-      margin: 0;
-    }
-    .payment-field dd {
-      margin: 0;
-      flex: 1;
-    }
-    .legal-list {
-      margin: 6pt 0 10pt 0;
-      padding-left: 20pt;
-      text-align: justify;
-    }
-    .legal-list li { margin-bottom: 4pt; }
-    .image-auth {
-      margin: 8pt 0;
-      font-size: 11pt;
-    }
-    .image-auth label {
-      display: inline-block;
-      margin-right: 24pt;
-    }
-    .signatures-block {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 28pt 20pt;
-      margin-top: 24pt;
-    }
-    .signature-item {
-      break-inside: avoid;
-      font-size: 10pt;
-      text-align: center;
-    }
-    .signature-line {
-      height: 36pt;
-      border-bottom: 0.75pt solid #000;
-      margin-bottom: 6pt;
-    }
-    .signature-item p { margin: 0 0 2pt; }
-    .closing-text { margin-top: 18pt; }
-    .signature-place {
-      text-align: center;
-      text-indent: 0;
-      margin: 14pt 0 0;
-    }
-    .validation-line {
-      margin-top: 16pt;
-      padding-top: 8pt;
-      border-top: 0.5pt solid #666;
-      font-size: 9pt;
-      color: #333;
-      text-align: center;
-      text-indent: 0;
-    }
-    .print-footer {
-      display: none;
-    }
-    @media print {
-      html, body { background: #fff; }
-      .contract-document { max-width: none; padding: 0; }
-      .print-footer {
-        display: block;
-        position: fixed;
-        bottom: 8mm;
-        left: 0;
-        right: 0;
-        text-align: center;
-        font-size: 9pt;
-        color: #444;
-        border-top: 0.5pt solid #999;
-        padding-top: 4pt;
-      }
-    }
-  </style>
+  <style>${PROFESSIONAL_CONTRACT_CSS}</style>
 </head>
 <body>
+  ${renderRunningHeader(clinic, meta)}
   <div class="contract-document">
-    <header class="contract-header">
-      ${logoBlock}
-      <h1 class="clinic-title">${escapeHtml(clinic.name)}</h1>
-      <ul class="clinic-meta">
-        ${clinicIdentity.map((line) => `<li>${escapeHtml(line)}</li>`).join('')}
-      </ul>
-      <h2 class="document-title">Contrato de Prestação de Serviços Odontológicos</h2>
-      <p class="document-meta">
-        <span><strong>Nº:</strong> ${escapeHtml(meta.contractNumber)}</span>
-        <span><strong>Data de emissão:</strong> ${escapeHtml(meta.issueDate)}</span>
-      </p>
-    </header>
+    ${renderDocumentHeader(clinic, professional)}
 
-    <section class="contract-section">
-      <h3 class="section-title">1. Das Partes</h3>
-      <p class="legal-paragraph no-indent">
-        Pelo presente instrumento particular, de um lado:
-      </p>
-      <p class="party-label">A Contratada:</p>
-      <p class="party-data"><strong>Razão social / Nome:</strong> ${escapeHtml(clinic.legalName || clinic.name)}</p>
-      <p class="party-data"><strong>CNPJ:</strong> ${escapeHtml(clinic.cnpj)}</p>
-      <p class="party-data"><strong>Endereço:</strong> ${escapeHtml(clinic.address)}</p>
-      <p class="party-data"><strong>Representante legal:</strong> ${escapeHtml(clinic.legalRepresentative)}</p>
-      <p class="party-data"><strong>Profissional responsável:</strong> ${escapeHtml(professional.name)}</p>
-      <p class="party-data"><strong>Conselho profissional (CRO):</strong> ${escapeHtml(professional.cro)}</p>
-      <p class="legal-paragraph no-indent party-label">E, de outro lado, o Contratante:</p>
-      <p class="party-data"><strong>Nome completo:</strong> ${escapeHtml(patient.name)}</p>
-      <p class="party-data"><strong>CPF:</strong> ${escapeHtml(patient.cpf)}</p>
-      <p class="party-data"><strong>RG:</strong> ${escapeHtml(patient.rg)}</p>
-      <p class="party-data"><strong>Data de nascimento:</strong> ${escapeHtml(patient.birthDate)}</p>
-      <p class="party-data"><strong>Estado civil:</strong> ${escapeHtml(patient.maritalStatus)}</p>
-      <p class="party-data"><strong>Endereço:</strong> ${escapeHtml(patient.address)}</p>
-      <p class="party-data"><strong>Telefone:</strong> ${escapeHtml(patient.phone)}</p>
-      <p class="party-data"><strong>E-mail:</strong> ${escapeHtml(patient.email)}</p>
-      ${patient.guardian !== '—' ? `<p class="party-data"><strong>Responsável legal:</strong> ${escapeHtml(patient.guardian)}</p>` : ''}
-      <p class="legal-paragraph">
-        As partes acima qualificadas têm, entre si, justo e contratado o presente instrumento, que se regerá pelas cláusulas e condições seguintes.
-      </p>
-    </section>
+    <div class="doc-title-block">
+      <h1 class="doc-title">Contrato de Prestação de Serviços Odontológicos</h1>
+      <p class="doc-meta-line">Contrato nº ${escapeHtml(meta.contractNumber)}</p>
+      ${hasText(meta.city) ? `<p class="doc-meta-line">${escapeHtml(meta.city)}</p>` : ''}
+      <p class="doc-meta-line">${escapeHtml(meta.issueDateExtenso)}</p>
+    </div>
 
-    <section class="contract-section">
-      <h3 class="section-title">2. Do Objeto</h3>
-      <p class="legal-paragraph">${escapeHtml(legalTexts.object)}</p>
-      <p class="legal-paragraph no-indent">
-        <strong>Plano de tratamento:</strong> ${escapeHtml(treatment.planName)} (${escapeHtml(treatment.typeLabel)}).
-      </p>
-    </section>
+    ${qualification}
 
-    <section class="contract-section">
-      <h3 class="section-title">3. Dos Procedimentos Contratados</h3>
-      <p class="legal-paragraph">
-        Integram o presente contrato os procedimentos odontológicos aprovados pelo CONTRATANTE, conforme discriminados na tabela abaixo:
-      </p>
-      ${renderProceduresTable(procedures, financial.finalValue)}
-    </section>
+    ${clauseHeading(clauseNum++, 'DO OBJETO')}
+    <p class="clause-p">${escapeHtml(objectText)}</p>
 
-    <section class="contract-section">
-      <h3 class="section-title">4. Da Duração do Tratamento</h3>
-      <p class="legal-paragraph">${escapeHtml(legalTexts.duration)}</p>
-      <p class="legal-paragraph no-indent">
-        <strong>Data prevista de início:</strong> ${escapeHtml(treatment.startDate)}.
-      </p>
-      <p class="legal-paragraph no-indent">
-        <strong>Data prevista de término:</strong> ${escapeHtml(treatment.endDate)}.
-      </p>
-    </section>
+    ${clauseHeading(clauseNum++, 'DOS PROCEDIMENTOS CONTRATADOS')}
+    <p class="clause-p">Integram o presente contrato os procedimentos odontológicos aprovados pelo CONTRATANTE${hasText(meta.budgetNumber) ? `, conforme orçamento nº ${meta.budgetNumber}` : ''}, a seguir discriminados:</p>
+    ${renderProceduresList(procedures)}
 
-    <section class="contract-section">
-      <h3 class="section-title">5. Do Pagamento</h3>
-      <p class="legal-paragraph">
-        O CONTRATANTE pagará à CONTRATADA pelos serviços odontológicos contratados, nas condições financeiras aprovadas e vinculadas ao orçamento nº ${escapeHtml(meta.budgetNumber)}, conforme abaixo:
-      </p>
-      ${renderPaymentFields(financial)}
-      <h4 class="subsection-title">5.1. Do Cronograma de Parcelas</h4>
-      <p class="legal-paragraph no-indent">
-        O pagamento será efetuado conforme cronograma de vencimentos a seguir:
-      </p>
-      ${renderInstallmentTable(financial.schedule)}
-    </section>
+    ${clauseHeading(clauseNum++, 'DA DURAÇÃO DO TRATAMENTO')}
+    <p class="clause-p">${escapeHtml(legalTexts.duration)}</p>
 
-    <section class="contract-section">
-      <h3 class="section-title">6. Das Garantias</h3>
-      <p class="legal-paragraph">${escapeHtml(legalTexts.warrantiesGeneral)}</p>
-      ${treatmentWarranty ? `<p class="legal-paragraph">${escapeHtml(treatmentWarranty)}</p>` : ''}
-      <p class="legal-paragraph">${escapeHtml(legalTexts.warrantiesMaintenance)}</p>
-      <p class="legal-paragraph">${escapeHtml(legalTexts.warrantiesReturns)}</p>
-    </section>
+    ${clauseHeading(clauseNum++, 'DAS CONDIÇÕES FINANCEIRAS')}
+    ${renderFinancialConditions(financial)}
 
-    <section class="contract-section">
-      <h3 class="section-title">7. Das Obrigações do Paciente</h3>
-      <p class="legal-paragraph">São obrigações do CONTRATANTE:</p>
-      ${renderList(legalTexts.patientObligations)}
-    </section>
+    ${clauseHeading(clauseNum++, 'DO CRONOGRAMA FINANCEIRO')}
+    <p class="clause-p">O pagamento será realizado conforme o cronograma abaixo, integrando o presente contrato para todos os fins de direito:</p>
+    ${renderFinancialSchedule(financial.schedule)}
 
-    <section class="contract-section">
-      <h3 class="section-title">8. Das Obrigações da Clínica</h3>
-      <p class="legal-paragraph">São obrigações da CONTRATADA:</p>
-      ${renderList(legalTexts.clinicObligations)}
-    </section>
+    ${clauseHeading(clauseNum++, 'DA INADIMPLÊNCIA')}
+    <p class="clause-p">${escapeHtml(legalTexts.default)}</p>
 
-    <section class="contract-section">
-      <h3 class="section-title">9. Da Inadimplência</h3>
-      ${renderList(legalTexts.default)}
-    </section>
+    ${clauseHeading(clauseNum++, 'DA RESCISÃO')}
+    ${renderParagraphs(legalTexts.rescission)}
 
-    <section class="contract-section">
-      <h3 class="section-title">10. Da Rescisão</h3>
-      ${renderList(legalTexts.rescission)}
-    </section>
+    ${clauseHeading(clauseNum++, 'DAS GARANTIAS')}
+    <p class="clause-p">${escapeHtml(legalTexts.warrantiesGeneral)}</p>
+    ${renderParagraphs(legalTexts.warranties)}
+    ${(treatmentWarranties || []).map((text) => `<p class="clause-p">${escapeHtml(text)}</p>`).join('')}
 
-    <section class="contract-section">
-      <h3 class="section-title">11. Da LGPD — Proteção de Dados Pessoais</h3>
-      ${renderList(legalTexts.lgpd)}
-    </section>
+    ${clauseHeading(clauseNum++, 'DAS OBRIGAÇÕES DO CONTRATANTE')}
+    ${renderAlphaList(legalTexts.patientObligations)}
 
-    <section class="contract-section">
-      <h3 class="section-title">12. Do Uso de Imagem</h3>
-      <p class="legal-paragraph">${escapeHtml(legalTexts.imageUse)}</p>
-      <p class="image-auth">
-        <label>( &nbsp; ) AUTORIZA</label>
-        <label>( &nbsp; ) NÃO AUTORIZA</label>
-      </p>
-    </section>
+    ${clauseHeading(clauseNum++, 'DAS OBRIGAÇÕES DA CONTRATADA')}
+    ${renderAlphaList(legalTexts.clinicObligations)}
 
-    <section class="contract-section">
-      <h3 class="section-title">13. Do Foro</h3>
-      <p class="legal-paragraph">${escapeHtml(legalTexts.forum)}</p>
-      <p class="legal-paragraph no-indent">
-        <strong>Comarca eleita:</strong> ${escapeHtml(clinic.city || meta.city)}.
-      </p>
-    </section>
+    ${clauseHeading(clauseNum++, 'DO ABANDONO DE TRATAMENTO')}
+    <p class="clause-p">${escapeHtml(legalTexts.abandonment)}</p>
 
-    <section class="contract-section">
-      <h3 class="section-title">Das Assinaturas</h3>
-      ${renderSignatures(ctx)}
-    </section>
-  </div>
+    ${clauseHeading(clauseNum++, 'DA PROTEÇÃO DE DADOS PESSOAIS — LGPD')}
+    <p class="clause-p">${escapeHtml(legalTexts.lgpd)}</p>
 
-  <div class="print-footer">
-    ${escapeHtml(clinic.name)} — Contrato nº ${escapeHtml(meta.contractNumber)} — Hash: ${escapeHtml(ctx.validationHash)}
+    ${clauseHeading(clauseNum++, 'DO USO DE IMAGEM')}
+    <p class="clause-p">${escapeHtml(legalTexts.imageUse)}</p>
+    <div class="image-auth">
+      <span>( &nbsp;) Não autorizado</span>
+      <span>( &nbsp;) Autorizado apenas para prontuário</span>
+      <span>( &nbsp;) Autorizado para fins científicos</span>
+      <span>( &nbsp;) Autorizado para marketing/redes sociais</span>
+    </div>
+
+    ${(() => {
+      const conditional = renderConditionalClausesSection(
+        treatmentTypes,
+        { '#manutencaoMeses': treatment.maintenanceMonths || meta.maintenanceMonths || '—' },
+        clauseNum,
+      );
+      clauseNum = conditional.nextClauseNum;
+      return conditional.html;
+    })()}
+
+    ${clauseHeading(clauseNum++, 'DO FORO')}
+    <p class="clause-p">${escapeHtml(forumText)}</p>
+
+    ${renderSignatures(ctx)}
   </div>
 </body>
 </html>`;

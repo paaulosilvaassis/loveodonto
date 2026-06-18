@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 import { can } from '../../permissions/permissions.js';
 import { useAuth } from '../../auth/useAuth.js';
 import { CONTRACT_HASHTAG_DEFS } from '../../contracts/hashtagRegistry.js';
@@ -281,9 +282,9 @@ export default function AdminContratosConsentimentosPage() {
                 </tr>
               </thead>
               <tbody>
-                {generated.map((c) => (
+                {generated.map((c, index) => (
                   <tr key={c.id} className="border-t border-[var(--color-border)]">
-                    <td className="p-2 tabular-nums">{c.contractNumber || c.id}</td>
+                    <td className="p-2 tabular-nums">{formatFriendlyContractNumber(c.contractNumber, index + 1)}</td>
                     <td className="p-2">{c.patientId}</td>
                     <td className="p-2">{c.quoteSource}</td>
                     <td className="p-2">{c.status}</td>

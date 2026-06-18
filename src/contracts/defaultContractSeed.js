@@ -7,26 +7,32 @@ import { createId } from '../services/helpers.js';
 const DISCLAIMER =
   '<p><em>Modelo base do sistema Love Odonto — sujeito à adequação à realidade da clínica e revisão por profissional habilitado.</em></p>';
 
-/** Bloco 1: variantes condicionais (has_financial_responsible no paciente) */
-const BLOCK1_NO_FIN = `Pelo presente instrumento particular de prestação de serviços odontológicos, de um lado, #emissorNomeRazaoSocial, inscrito sob o nº #emissorCNPJCPF, com sede à #clinicaEndereco, doravante denominado simplesmente CLÍNICA, e, de outro lado, #pacienteNomeCompleto, inscrito sob o CPF nº #pacienteCPF, residente e domiciliado à #pacienteEndereco, doravante denominado PACIENTE, têm entre si justo e contratado o que segue:`;
+import { QUALIFICATION_TEMPLATE_PATIENT_ONLY, QUALIFICATION_TEMPLATE_WITH_RESPONSIBLE } from './contractQualificationTemplates.js';
+import { FIXED_LEGAL_CLAUSES } from './contractConditionalClauses.js';
 
-const BLOCK1_WITH_FIN = `Pelo presente instrumento particular de prestação de serviços odontológicos, de um lado, #emissorNomeRazaoSocial, inscrito sob o nº #emissorCNPJCPF, com sede à #clinicaEndereco, doravante denominado simplesmente CLÍNICA, e, de outro lado, o paciente #dependenteNomeCompleto, neste ato representado por seu responsável financeiro #pacienteNomeCompleto, inscrito no CPF nº #pacienteCPF, residente e domiciliado à #pacienteEndereco, doravante denominado RESPONSÁVEL, têm entre si justo e contratado o que segue:`;
+/** Bloco 1: variantes condicionais (has_financial_responsible / menor / responsável) */
+const BLOCK1_NO_FIN = QUALIFICATION_TEMPLATE_PATIENT_ONLY;
+
+const BLOCK1_WITH_FIN = QUALIFICATION_TEMPLATE_WITH_RESPONSIBLE;
 
 const STANDARD_BLOCKS = [
   { blockNumber: 1, title: 'Das Partes', conditionType: 'parties_no_financial', orderIndex: 1, content: BLOCK1_NO_FIN },
   { blockNumber: 1, title: 'Das Partes (responsável financeiro)', conditionType: 'parties_with_financial', orderIndex: 2, content: BLOCK1_WITH_FIN },
-  { blockNumber: 2, title: 'Do Objeto', conditionType: 'always', orderIndex: 10, content: '<p>O presente contrato tem por objeto a prestação de serviços odontológicos descritos no plano de tratamento vinculado ao orçamento aprovado, observadas as normas técnicas e éticas do Conselho Federal de Odontologia e do Código de Defesa do Consumidor.</p>' },
-  { blockNumber: 3, title: 'Dos Procedimentos', conditionType: 'always', orderIndex: 20, content: '<p>Constam do presente contrato os procedimentos descritos na tabela abaixo, decorrentes do orçamento aprovado:</p><p>#procedimentos</p><p><strong>Observações do orçamento:</strong> #orcamentoObservacoes</p>' },
-  { blockNumber: 4, title: 'Da Duração do Tratamento', conditionType: 'always', orderIndex: 30, content: '<p>A duração estimada do tratamento observará o plano clínico, podendo ser ajustada por indicação profissional, respeitando a evolução clínica e a adesão do paciente às orientações.</p>' },
+  { blockNumber: 2, title: 'Do Objeto', conditionType: 'always', orderIndex: 10, content: `<p>${FIXED_LEGAL_CLAUSES.object}</p>` },
+  { blockNumber: 3, title: 'Dos Serviços Contratados', conditionType: 'always', orderIndex: 20, content: '<p>Constam do presente contrato os procedimentos aprovados no orçamento vinculado:</p><p>#procedimentos</p><p><strong>Observações:</strong> #orcamentoObservacoes</p>' },
+  { blockNumber: 4, title: 'Da Duração do Tratamento', conditionType: 'always', orderIndex: 30, content: '<p>A duração do tratamento poderá variar conforme resposta biológica, comparecimento, exames, intercorrências, necessidade clínica, laboratório, cicatrização, colaboração do paciente e planejamento profissional.</p>' },
   { blockNumber: 5, title: 'Ortodontia', conditionType: 'optional_orthodontics', orderIndex: 40, content: '<p>Quando aplicável ao plano aprovado, poderão constar procedimentos de Ortodontia, nos termos orientados pelo profissional responsável, com esclarecimentos sobre riscos, benefícios e alternativas.</p>' },
   { blockNumber: 6, title: 'Manutenção Ortodôntica', conditionType: 'optional_orthodontics', orderIndex: 50, content: '<p>Em tratamentos ortodônticos, o paciente compromete-se a comparecer às consultas de manutenção conforme periodicidade indicada (#manutencaoMeses). O descumprimento poderá impactar prazos, resultados e custos adicionais.</p>' },
-  { blockNumber: 7, title: 'Do Pagamento', conditionType: 'always', orderIndex: 60, content: '<p>O valor total do contrato é de <strong>R$ #totalContrato</strong> (#totalContratoExtenso), sendo as parcelas/títulos conforme tabela:</p><p>#parcelas</p><p>Manutenções ortodônticas, quando houver: total de <strong>R$ #totalManutencoes</strong> (#totalManutencoesExtenso).</p><p><strong>Total geral:</strong> R$ #totalGeralContrato (#totalGeralContratoExtenso).</p>' },
-  { blockNumber: 8, title: 'Da Rescisão do Contrato', conditionType: 'always', orderIndex: 70, content: '<p>A rescisão observará a legislação aplicável, quitando-se valores devidos pelos serviços já prestados e materiais utilizados, conforme política da clínica e comprovação documental.</p>' },
-  { blockNumber: 9, title: 'Das Garantias', conditionType: 'always', orderIndex: 80, content: '<p>As garantias legais aplicáveis ao fornecimento de serviços de saúde são observadas, sem prejuízo de esclarecimentos específicos por procedimento quando necessário.</p>' },
-  { blockNumber: 10, title: 'Das Obrigações do Paciente', conditionType: 'always', orderIndex: 90, content: '<p>O paciente e/ou responsável comprometem-se a fornecer informações verídicas, cumprir orientações, comparecer às consultas agendadas e realizar os pagamentos nos vencimentos acordados.</p>' },
-  { blockNumber: 11, title: 'Das Obrigações da Clínica', conditionType: 'always', orderIndex: 100, content: '<p>A clínica compromete-se a prestar os serviços com zelo técnico, em ambiente adequado, por profissionais legalmente habilitados, resguardando a dignidade e a privacidade do paciente.</p>' },
-  { blockNumber: 12, title: 'Do Abandono de Tratamento', conditionType: 'always', orderIndex: 110, content: '<p>O abandono ou interrupção prolongada sem justificativa poderá ensejar arquivamento do caso, cobrança de valores em aberto e necessidade de novo planejamento para retomada.</p>' },
-  { blockNumber: 13, title: 'Do Foro', conditionType: 'always', orderIndex: 120, content: '<p>Fica eleito o foro da comarca de #clinicaCidadeEstado, com renúncia a qualquer outro, por mais privilegiado que seja, para dirimir questões oriundas deste contrato.</p>' },
+  { blockNumber: 7, title: 'Do Pagamento', conditionType: 'always', orderIndex: 60, content: '<p>Valor do tratamento: <strong>R$ #totalContrato</strong> (#totalContratoExtenso). Entrada: R$ #entrada. Saldo: R$ #saldo. Forma: #formaPagamento. Parcelas: #quantidadeParcelas de R$ #valorParcela. Primeiro vencimento: #dataPrimeiroVencimento.</p><p>#parcelas</p><p><strong>Total geral:</strong> R$ #totalGeralContrato (#totalGeralContratoExtenso).</p>' },
+  { blockNumber: 8, title: 'Da Inadimplência', conditionType: 'always', orderIndex: 65, content: `<p>${FIXED_LEGAL_CLAUSES.default}</p>` },
+  { blockNumber: 9, title: 'Da Rescisão do Contrato', conditionType: 'always', orderIndex: 70, content: '<p>A rescisão poderá ocorrer por qualquer das partes. Tratamentos iniciados, executados ou personalizados serão apurados. Serviços laboratoriais e peças personalizadas podem ser cobrados conforme fase. Reembolso apenas do não executado, quando cabível.</p>' },
+  { blockNumber: 10, title: 'Das Garantias e Limites', conditionType: 'always', orderIndex: 80, content: `<p>${FIXED_LEGAL_CLAUSES.warranties}</p>` },
+  { blockNumber: 11, title: 'Das Obrigações do Paciente', conditionType: 'always', orderIndex: 90, content: `<ul>${FIXED_LEGAL_CLAUSES.patientObligations.map((t) => `<li>${t}</li>`).join('')}</ul>` },
+  { blockNumber: 12, title: 'Das Obrigações da Clínica', conditionType: 'always', orderIndex: 100, content: `<ul>${FIXED_LEGAL_CLAUSES.clinicObligations.map((t) => `<li>${t}</li>`).join('')}</ul>` },
+  { blockNumber: 13, title: 'Do Abandono de Tratamento', conditionType: 'always', orderIndex: 110, content: `<p>${FIXED_LEGAL_CLAUSES.abandonment}</p>` },
+  { blockNumber: 14, title: 'LGPD e Dados Sensíveis', conditionType: 'always', orderIndex: 115, content: `<p>${FIXED_LEGAL_CLAUSES.lgpd}</p>` },
+  { blockNumber: 15, title: 'Uso de Imagem', conditionType: 'always', orderIndex: 118, content: `<p>${FIXED_LEGAL_CLAUSES.imageUse}</p>` },
+  { blockNumber: 16, title: 'Do Foro', conditionType: 'always', orderIndex: 120, content: '<p>Fica eleito o foro da comarca de #clinicaCidadeEstado, renunciando as partes a qualquer outro, por mais privilegiado que seja, para dirimir eventuais dúvidas oriundas do presente contrato.</p>' },
 ];
 
 /**

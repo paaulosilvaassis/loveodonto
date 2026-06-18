@@ -1,92 +1,98 @@
 import { TREATMENT_TYPES } from '../../../contracts/contractConstants.js';
 
-/** Garantias específicas por tipo de tratamento (Seção 6). */
 export const TREATMENT_WARRANTY_CLAUSES = {
-  [TREATMENT_TYPES.IMPLANTE_UNITARIO]: 'Em tratamentos com implantes, a garantia abrange os procedimentos executados conforme normas técnicas, observada a osseointegração e manutenção periódica. Falhas por mau uso, tabagismo, doenças sistêmicas não controladas ou ausência a retornos excluem cobertura.',
-  [TREATMENT_TYPES.PROTOCOLO_TOTAL]: 'Tratamentos protocolo exigem manutenção periódica obrigatória e comparecimento a retornos programados. A garantia protética está condicionada ao cumprimento das orientações clínicas e higiene adequada.',
-  [TREATMENT_TYPES.PROTESE_REMOVIVEL]: 'Próteses removíveis possuem garantia limitada a defeitos de fabricação e adaptação inicial, não cobrindo desgaste natural, rebases necessários por alteração óssea ou quebra por mau uso.',
-  [TREATMENT_TYPES.PROTESE_FLEXIVEL]: 'Próteses flexíveis possuem garantia restrita a defeitos de material no período inicial, excluindo fraturas, manchas e desgaste decorrente de uso contínuo.',
-  [TREATMENT_TYPES.PONTE_FIXA]: 'Próteses fixas têm garantia sobre execução técnica e adaptação, excluindo fraturas por trauma, carie em dentes pilares e descolamento por falta de higiene.',
-  [TREATMENT_TYPES.ORTODONTIA]: 'Tratamentos ortodônticos exigem contenção após a fase ativa. A garantia não cobre recidiva por ausência de uso de contenção ou abandono de manutenções.',
-  [TREATMENT_TYPES.LENTE_RESINA]: 'Lentes em resina possuem garantia limitada contra defeitos de execução inicial, excluindo manchas, desgaste e fraturas por hábitos parafuncionais.',
-  [TREATMENT_TYPES.LENTE_PORCELANA]: 'Lentes de porcelana possuem garantia sobre adaptação e fixação inicial, excluindo fraturas por trauma, bruxismo não tratado e descolamento por higiene inadequada.',
-  [TREATMENT_TYPES.CLAREAMENTO]: 'Clareamentos possuem garantia sobre execução do procedimento, não sobre manutenção de tonalidade, que depende de hábitos alimentares e higiene do paciente.',
-  [TREATMENT_TYPES.ENDODONTIA]: 'Tratamentos de canal possuem garantia sobre execução técnica do procedimento realizado, excluindo falhas por fratura radicular, reinfecção por nova carie ou restauração inadequada.',
-  [TREATMENT_TYPES.EXTRACAO]: 'Procedimentos de extração possuem garantia sobre execução cirúrgica, não cobrindo alveolite, infecções ou complicações por descumprimento de orientações pós-operatórias.',
-  [TREATMENT_TYPES.CIRURGIA]: 'Procedimentos cirúrgicos possuem garantia sobre execução técnica, excluindo complicações por condições sistêmicas não informadas ou descumprimento de cuidados pós-operatórios.',
-  [TREATMENT_TYPES.PERIODONTIA]: 'Tratamentos periodontais exigem manutenção periódica obrigatória. Sem retornos e higiene adequada, não há garantia contra recidiva da doença periodontal.',
+  [TREATMENT_TYPES.IMPLANTE_UNITARIO]: 'Quanto aos implantes, a CONTRATADA garante a execução técnica do procedimento cirúrgico e protético, observada a osseointegração, o comparecimento do CONTRATANTE às revisões periódicas, a higiene bucal adequada e a ausência de fatores de risco não informados. Falhas decorrentes de mau uso, tabagismo, trauma, abandono do tratamento ou ausência injustificada aos retornos excluem a cobertura da garantia.',
+
+  [TREATMENT_TYPES.PROTOCOLO_TOTAL]: 'Quanto aos protocolos protéticos sobre implantes, a garantia está condicionada à manutenção periódica obrigatória, ao comparecimento às consultas de revisão, à higiene bucal rigorosa e ao uso adequado da prótese. A garantia protética não abrange fraturas por trauma, desgaste por bruxismo não tratado ou abandono das manutenções prescritas.',
+
+  [TREATMENT_TYPES.PROTESE_IMPLANTE]: 'Quanto às próteses fixas sobre implantes, a garantia abrange defeitos de fabricação e adaptação inicial, desde que respeitadas as orientações de uso, higiene e retornos periódicos. Não estão cobertos desgaste natural, quebra por trauma ou alterações decorrentes de não comparecimento às manutenções.',
+
+  [TREATMENT_TYPES.PROTESE_REMOVIVEL]: 'Quanto às próteses removíveis, a garantia limita-se a defeitos de adaptação e confecção constatados no período inicial de uso, não abrangendo desgaste natural, reabsorção óssea progressiva, quebra por queda ou mau uso.',
+
+  [TREATMENT_TYPES.PROTESE_FLEXIVEL]: 'Quanto às próteses flexíveis, a garantia cobre defeitos de confecção e adaptação inicial, excluindo rupturas por trauma, desgaste prematuro por higiene inadequada ou ausência aos retornos de manutenção.',
+
+  [TREATMENT_TYPES.PONTE_FIXA]: 'Quanto às próteses fixas, a garantia refere-se à execução técnica e adaptação inicial, condicionada ao comparecimento aos retornos e à manutenção da higiene bucal. Fraturas por trauma ou sobrecarga occlusal não informada excluem cobertura.',
+
+  [TREATMENT_TYPES.ORTODONTIA]: 'Quanto ao tratamento ortodôntico, a garantia refere-se à execução técnica do planejamento aprovado, observado o uso contínuo dos aparelhos ou alinhadores, a contenção pós-tratamento e os retornos periódicos. Recidivas por ausência de contenção ou abandono do tratamento excluem a garantia.',
+
+  [TREATMENT_TYPES.LENTE_PORCELANA]: 'Quanto às lentes de contato em porcelana, a garantia abrange defeitos de confecção e cimentação inicial, desde que observados os cuidados de higiene, ausência de bruxismo não tratado e comparecimento às revisões. Fraturas por trauma, hábitos parafuncionais ou mau uso excluem cobertura.',
+
+  [TREATMENT_TYPES.LENTE_RESINA]: 'Quanto às lentes de contato em resina ou facetas estéticas, a garantia limita-se a defeitos de execução e adaptação inicial, não cobrindo manchas por dieta inadequada, fraturas por trauma ou desgaste por bruxismo.',
+
+  [TREATMENT_TYPES.PERIODONTIA]: 'Quanto aos tratamentos periodontais, a garantia depende da adesão do CONTRATANTE às sessões de manutenção periódica, ao controle de placa bacteriana e ao comparecimento aos retornos. Recidivas por higiene inadequada ou abandono do tratamento de suporte periodontal excluem cobertura.',
+
+  [TREATMENT_TYPES.CLAREAMENTO]: 'Quanto ao clareamento dental, a garantia refere-se à execução técnica do procedimento, não garantindo tonalidade específica nem permanência indefinida do resultado, uma vez que hábitos alimentares, tabagismo e envelhecimento tecidual podem alterar a cor dos dentes.',
+
+  [TREATMENT_TYPES.ENDODONTIA]: 'Quanto aos tratamentos de canal, a garantia abrange a execução técnica endodôntica, observado o comparecimento à restauração definitiva e aos retornos. Fraturas radiculares, reinfecções por restaurações inadequadas ou abandono do seguimento excluem cobertura.',
+
+  [TREATMENT_TYPES.CIRURGIA]: 'Quanto aos procedimentos cirúrgicos, a garantia refere-se à execução técnica do ato operatório, não abrangendo complicações decorrentes de não observância das orientações pós-operatórias, tabagismo ou condições sistêmicas não informadas.',
+
+  [TREATMENT_TYPES.RESTAURACAO]: 'Quanto às restaurações, a garantia cobre defeitos de execução no período inicial, excluindo fraturas por trauma, desgaste por bruxismo ou nova cárie por higiene inadequada.',
 };
 
 export const LEGAL_CONTRACT_TEXTS = {
-  object: 'O presente contrato tem por objeto a prestação de serviços odontológicos referentes ao plano de tratamento aprovado pelo CONTRATANTE, observadas as condições clínicas, técnicas e financeiras descritas neste instrumento, bem como os procedimentos especificados na cláusula terceira.',
+  object: 'O presente contrato tem por objeto a prestação de serviços de assistência odontológica pela CONTRATADA ao CONTRATANTE, compreendendo o plano de tratamento aprovado, os procedimentos discriminados neste instrumento e as condições financeiras por ele aceitas, nos termos da legislação vigente e das normas éticas da profissão.',
 
-  duration: 'O prazo estimado para execução do tratamento será contado a partir da data prevista de início, podendo ser alterado em razão de intercorrências clínicas, necessidade de exames complementares, comparecimento do paciente ou fatores biológicos individuais, mediante comunicação prévia e registro em prontuário.',
+  duration: 'O prazo para conclusão do tratamento poderá variar conforme a natureza dos procedimentos, a resposta biológica individual do CONTRATANTE, o comparecimento às consultas agendadas, a necessidade de exames complementares, intercorrências clínicas e os critérios técnicos do profissional responsável, não constituindo prazo certo e determinado salvo quando expressamente previsto em documento clínico específico.',
 
-  warrantiesGeneral: 'As garantias aplicáveis limitam-se aos serviços executados pela CONTRATADA em conformidade com as normas técnicas e éticas da Odontologia, não abrangendo mau uso, trauma, descumprimento de orientações, ausência a retornos programados ou manutenções obrigatórias. Materiais seguem garantia do fabricante ou laboratório quando aplicável.',
+  default: 'O atraso no pagamento de qualquer parcela, entrada ou saldo devido poderá acarretar a suspensão imediata das etapas futuras do tratamento, a cobrança de multa contratual, juros moratórios, correção monetária, honorários de cobrança e demais medidas cabíveis, inclusive protesto, negativação junto aos órgãos de proteção ao crédito e adoção de medidas judiciais, respeitados os limites da legislação consumerista e civil vigente.',
 
-  warrantiesMaintenance: 'Tratamentos que exijam manutenção periódica — incluindo, mas não se limitando a, ortodontia, implantes, próteses, protocolos e periodontia — dependem de comparecimento regular do CONTRATANTE. A ausência de manutenção poderá invalidar garantias e comprometer o resultado clínico.',
+  rescission: [
+    'O presente contrato poderá ser rescindido por qualquer das partes, mediante comunicação por escrito, observadas as disposições desta cláusula.',
+    'Se a rescisão ocorrer por iniciativa do CONTRATANTE, serão devidos os procedimentos já iniciados, concluídos ou em execução, bem como materiais adquiridos, personalizados ou fabricados exclusivamente para o seu tratamento.',
+    'Se a rescisão ocorrer por iniciativa da CONTRATADA, será apurado saldo a pagar ou a restituir, conforme serviços efetivamente prestados, custos incorridos e documentação clínica respectiva.',
+    'A rescisão poderá ocorrer de pleno direito em caso de inadimplência, abandono de tratamento, descumprimento das obrigações contratuais ou condutas que impeçam a continuidade segura do atendimento.',
+  ],
 
-  warrantiesReturns: 'O CONTRATANTE deverá comparecer aos retornos clínicos agendados pela CONTRATADA. Consultas de urgência decorrentes de descumprimento de orientações ou ausência a retornos poderão ser cobradas separadamente.',
+  warrantiesGeneral: 'As partes reconhecem que os tratamentos odontológicos dependem de fatores biológicos individuais, da colaboração do paciente, da higiene bucal, do comparecimento aos retornos e da manutenção adequada, não existindo garantia absoluta de resultado estético, funcional ou biológico.',
+
+  warranties: [
+    'A garantia contratual, quando aplicável, depende do cumprimento integral das orientações clínicas, da higiene bucal e do comparecimento às manutenções periódicas.',
+    'Mau uso, trauma, abandono do tratamento, tabagismo, hábitos parafuncionais ou ausência injustificada aos retornos excluem a cobertura da garantia.',
+    'Materiais, componentes e insumos poderão seguir garantia própria do fabricante ou laboratório, quando aplicável, sem prejuízo das obrigações da CONTRATADA quanto à execução técnica.',
+  ],
 
   patientObligations: [
-    'Comparecer pontualmente às consultas e procedimentos agendados, comunicando impossibilidade com antecedência mínima de 24 (vinte e quatro) horas.',
-    'Manter rigorosa higiene bucal conforme orientação profissional.',
-    'Comparecer aos retornos e manutenções periódicas indicados.',
-    'Comunicar imediatamente qualquer intercorrência, dor, sensibilidade ou complicação clínica.',
-    'Informar condições de saúde, medicamentos em uso, alergias e histórico clínico relevante.',
-    'Efetuar os pagamentos nas datas e condições estabelecidas neste contrato.',
+    'Comparecer pontualmente às consultas, procedimentos e retornos agendados.',
+    'Comunicar ausências com antecedência mínima de 24 (vinte e quatro) horas, ressalvados casos de força maior.',
+    'Seguir rigorosamente as orientações clínicas, medicamentosas e de higiene bucal prescritas.',
+    'Informar imediatamente alterações de saúde, medicamentos, alergias e intercorrências.',
+    'Efetuar os pagamentos nas datas, valores e condições estabelecidas neste instrumento.',
+    'Comparecer às manutenções periódicas e revisões indicadas pela CONTRATADA.',
+    'Zelar pelos dispositivos, próteses e aparelhos recebidos, comunicando danos ou desconfortos.',
   ],
 
   clinicObligations: [
-    'Executar os serviços contratados com observância das normas éticas e técnicas da Odontologia.',
-    'Manter sigilo profissional sobre informações clínicas do paciente.',
-    'Manter prontuário odontológico atualizado conforme legislação vigente.',
-    'Prestar atendimento em ambiente adequado, com biossegurança e profissionais habilitados.',
-    'Informar o paciente sobre riscos, alternativas e limitações do tratamento.',
+    'Executar os serviços contratados com técnica adequada, por profissionais legalmente habilitados.',
+    'Manter prontuário odontológico completo e atualizado, nos termos da legislação vigente.',
+    'Guardar sigilo sobre informações clínicas e dados pessoais do CONTRATANTE.',
+    'Orientar o CONTRATANTE quanto aos riscos, benefícios, alternativas e cuidados do tratamento.',
+    'Prestar atendimento em ambiente adequado, observadas as normas de biossegurança.',
+    'Informar previamente sobre alterações relevantes no plano de tratamento ou nos valores contratados.',
   ],
 
-  default: [
-    'O atraso no pagamento de qualquer parcela ensejará multa de 2% (dois por cento) sobre o valor devido, acrescido de juros de mora de 1% (um por cento) ao mês e correção monetária pelo índice legalmente aplicável.',
-    'A inadimplência superior a 30 (trinta) dias poderá ensejar a suspensão de etapas futuras do tratamento até a regularização do débito.',
-    'Persistindo a inadimplência, a CONTRATADA poderá adotar medidas de cobrança extrajudicial ou judicial, inclusive protesto de título e inclusão em cadastros de proteção ao crédito, conforme permitido em lei.',
-    'Os encargos moratórios não eximem o CONTRATANTE da obrigação principal.',
-  ],
+  abandonment: 'Será considerado abandono de tratamento a ausência injustificada por 3 (três) consultas consecutivas, a ausência superior a 30 (trinta) dias sem comunicação prévia à CONTRATADA ou o não comparecimento às manutenções obrigatórias expressamente indicadas, facultando à CONTRATADA a suspensão do tratamento e as medidas contratuais cabíveis.',
 
-  rescission: [
-    'O CONTRATANTE poderá rescindir o presente contrato a qualquer tempo, mediante comunicação por escrito, permanecendo responsável pelo pagamento de procedimentos já executados, materiais adquiridos ou etapas concluídas.',
-    'A CONTRATADA poderá rescindir o contrato em caso de inadimplência reiterada, descumprimento de orientações que coloque em risco o resultado clínico ou conduta incompatível com o atendimento.',
-    'O abandono de tratamento, caracterizado pela ausência injustificada a 3 (três) ou mais consultas agendadas consecutivas, poderá ensejar rescisão automática, sem prejuízo das obrigações financeiras pendentes.',
-    'Eventual reembolso de valores pagos por serviços não executados será calculado de forma proporcional, deduzidos custos administrativos, materiais personalizados e procedimentos já realizados.',
-  ],
+  lgpd: 'O CONTRATANTE autoriza a CONTRATADA a tratar seus dados pessoais e dados sensíveis de saúde para fins de prestação dos serviços odontológicos contratados, elaboração e guarda de prontuário, faturamento, comunicações relacionadas ao tratamento, cumprimento de obrigações legais e regulatórias, nos termos da Lei nº 13.709/2018 (Lei Geral de Proteção de Dados Pessoais — LGPD).',
 
-  lgpd: [
-    'O CONTRATANTE declara ciência de que seus dados pessoais e sensíveis de saúde serão tratados pela CONTRATADA para fins de atendimento, faturamento, prontuário eletrônico, comunicação e cumprimento de obrigações legais, nos termos da Lei nº 13.709/2018 (LGPD).',
-    'Os dados serão armazenados pelo prazo necessário ao cumprimento das finalidades descritas e exigências legais aplicáveis à área da saúde.',
-    'O compartilhamento de dados ocorrerá apenas quando necessário a laboratórios, convênios, operadoras ou autoridades, sempre em conformidade com a legislação.',
-    'O CONTRATANTE poderá exercer seus direitos de acesso, correção e demais previstos na LGPD mediante solicitação formal à CONTRATADA.',
-  ],
+  imageUse: 'Autorização para registro fotográfico, videográfico ou de imagem clínica para fins de prontuário, controle de qualidade, documentação técnica e, quando autorizado abaixo, divulgação institucional sem identificação do paciente:',
 
-  imageUse: 'O CONTRATANTE, quando aplicável, autoriza ou não autoriza o registro e uso de imagens clínicas para fins de prontuário, controle de qualidade e divulgação institucional, conforme opção expressa abaixo:',
-
-  forum: 'Fica eleito o foro da comarca da sede da CONTRATADA para dirimir quaisquer controvérsias oriundas deste contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.',
+  forum: 'Fica eleito o foro da comarca de',
 };
+
+export const CLINIC_FORUM_VALIDATION_MESSAGE =
+  'Cadastre a cidade e UF da clínica para gerar corretamente a cláusula de foro.';
+
+export function buildForumClauseText(clinicForumCity) {
+  return `Fica eleito o foro da comarca de ${clinicForumCity} para dirimir quaisquer dúvidas ou controvérsias oriundas do presente contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.`;
+}
 
 export function getTreatmentWarrantyText(treatmentType) {
   return TREATMENT_WARRANTY_CLAUSES[treatmentType] || null;
 }
 
-/** @deprecated Use LEGAL_CONTRACT_TEXTS */
-export const PROFESSIONAL_LEGAL_CLAUSES = [];
-
 export const LINKED_DOCUMENTS = [
-  'Termo LGPD — Tratamento de dados pessoais',
   'Termo de consentimento informado',
-  'Termo de uso de imagem',
   'Anamnese do paciente',
-  'Planejamento clínico',
   'Orçamento aprovado',
 ];
-
-export function getTreatmentSpecificClause() {
-  return null;
-}

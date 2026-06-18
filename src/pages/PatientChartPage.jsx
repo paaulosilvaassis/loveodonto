@@ -130,6 +130,7 @@ export default function PatientChartPage() {
   const [patient, setPatient] = useState(null);
   const [activeTab, setActiveTab] = useState('careCentral');
   const [careCentralFocusTab, setCareCentralFocusTab] = useState(null);
+  const [careCentralRefreshKey, setCareCentralRefreshKey] = useState(0);
   const [editingTab, setEditingTab] = useState(null);
   const [characteristics, setCharacteristics] = useState(null);
   const [clinicalAnswers, setClinicalAnswers] = useState([]);
@@ -227,7 +228,7 @@ export default function PatientChartPage() {
 
   const careCentralContext = useMemo(
     () => (patientId ? buildPatientCareContextByPatient(patientId) : null),
-    [patientId],
+    [patientId, careCentralRefreshKey],
   );
 
   const delinquency = useMemo(
@@ -415,6 +416,7 @@ export default function PatientChartPage() {
                 embedded
                 focusTab={careCentralFocusTab}
                 onFocusTabConsumed={() => setCareCentralFocusTab(null)}
+                onRefresh={() => setCareCentralRefreshKey((k) => k + 1)}
               />
             ) : null}
 

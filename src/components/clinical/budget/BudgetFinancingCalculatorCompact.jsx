@@ -12,6 +12,7 @@ import {
   getFinancialPartnerById,
   FINANCIAL_PARTNER_SPECIAL_IDS,
 } from '../../../services/financialPartnersService.js';
+import { BudgetFinancingMetrics } from './BudgetFinancingMetrics.jsx';
 
 function resolveActiveMode(option, treatmentTotal) {
   if (option.entryPercentMode) return option.entryPercentMode;
@@ -42,9 +43,6 @@ export function BudgetFinancingCalculatorCompact({
     option.downPaymentPercent ?? calcEntryPercentFromAmount(treatmentTotal, option.downPayment),
   );
   const percentError = validateEntryPercent(currentPercent, partner, treatmentTotal);
-  const displayPercent = Number.isFinite(currentPercent)
-    ? (currentPercent % 1 === 0 ? currentPercent : currentPercent.toFixed(1))
-    : 0;
 
   const applyPercent = (percent, mode) => {
     if (!isQuickPercentAllowed(percent, partner, treatmentTotal)) return;
@@ -163,7 +161,7 @@ export function BudgetFinancingCalculatorCompact({
         </div>
       ) : null}
 
-      <div className="budget-tab-fin-row">
+      <div className="budget-tab-fin-row budget-tab-fin-row--3">
         <label className="budget-tab-field">
           <span>Entrada R$</span>
           <input
@@ -175,10 +173,6 @@ export function BudgetFinancingCalculatorCompact({
             disabled={disabled}
           />
         </label>
-        <div className="budget-tab-field">
-          <span>Valor financiado</span>
-          <strong>{summary ? formatCurrencyBRL(summary.financedAmount) : '—'}</strong>
-        </div>
         <label className="budget-tab-field">
           <span>Parcelas</span>
           <input
@@ -201,7 +195,7 @@ export function BudgetFinancingCalculatorCompact({
         </label>
       </div>
 
-      <div className="budget-tab-fin-row">
+      <div className="budget-tab-fin-row budget-tab-fin-row--2">
         <label className="budget-tab-field">
           <span>Tipo de juros</span>
           <select
@@ -216,7 +210,7 @@ export function BudgetFinancingCalculatorCompact({
         </label>
         <label className="budget-tab-field">
           <span>Taxa aplicada</span>
-          <div className="budget-tab-inline-input">
+          <div className="budget-tab-suffix-input">
             <input
               type="number"
               min="0"
@@ -224,21 +218,19 @@ export function BudgetFinancingCalculatorCompact({
               value={option.interestRate || 0}
               onChange={(e) => onChange({ interestRate: Number(e.target.value) })}
               disabled={disabled || termsLocked || option.interestType === 'none'}
+              aria-label="Taxa aplicada em percentual"
             />
-            <span>%</span>
+            <span className="budget-tab-suffix" aria-hidden="true">%</span>
           </div>
         </label>
-        <div className="budget-tab-field">
-          <span>Valor parcela</span>
-          <strong className="budget-tab-highlight">
-            {summary ? formatCurrencyBRL(summary.installmentAmount) : '—'}
-          </strong>
-        </div>
-        <div className="budget-tab-field">
-          <span>Total financiado</span>
-          <strong>{summary ? formatCurrencyBRL(summary.netFinancedAmount) : '—'}</strong>
-        </div>
       </div>
+
+      <BudgetFinancingMetrics
+        summary={summary}
+        interestRate={option.interestRate}
+        option={option}
+        treatmentTotal={treatmentTotal}
+      />
 
       {percentError ? <p className="budget-tab-errors">{percentError}</p> : null}
 
@@ -252,15 +244,6 @@ export function BudgetFinancingCalculatorCompact({
         <p className="budget-tab-hint">
           Preencha manualmente juros, taxas e parcelas para parceiros não cadastrados.
         </p>
-      ) : null}
-
-      {summary ? (
-        <div className="budget-tab-fin-strip">
-          <span>Entrada: {formatCurrencyBRL(summary.entryAmount)} ({displayPercent}%)</span>
-          <span>Valor financiado: {formatCurrencyBRL(summary.financedAmount)}</span>
-          <span>Parcelas: {summary.installmentsCount}x de {formatCurrencyBRL(summary.installmentAmount)}</span>
-          <span>Total financiado: {formatCurrencyBRL(summary.netFinancedAmount)}</span>
-        </div>
       ) : null}
     </div>
   );

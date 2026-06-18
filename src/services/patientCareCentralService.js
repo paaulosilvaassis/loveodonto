@@ -16,6 +16,14 @@ import {
   buildPatientExecutiveSummary,
   buildIntelligenceAlerts,
 } from './patientCareExecutiveSummaryService.js';
+import {
+  getLatestApprovedBudget,
+  buildApprovedBudgetQuickSummaryText,
+} from './clinicalBudgetApprovedService.js';
+import { findPendingDecisionBudget, shouldPreferPendingBudgetOverApproved } from './clinicalAppointmentCloseService.js';
+import { listPatientBudgetHistory } from './clinicalBudgetLockService.js';
+import { formatFriendlyBudgetNumber } from '../utils/friendlyNumbers.js';
+import { formatBudgetStatusLabel } from './patientCareTimelineService.js';
 
 const ANAMNESIS_LABELS = {
   alergias: 'Alergias',
@@ -104,33 +112,53 @@ function buildFinancialAlerts(patientId) {
 }
 
 function buildBudgetAlerts(patientId, appointmentId) {
-  const overview = getPatientBudgetOverview(patientId);
-  const lockCtx = getBudgetLockContext(appointmentId);
+  const latestApproved = getLatestApprovedBudget(patientId);
+  const lockCtx = appointmentId ? getBudgetLockContext(appointmentId) : null;
   const alerts = [];
-  const approved = overview.history.find((b) => b.status === BUDGET_STATUS.APROVADO);
-  const withContract = overview.history.find(
-    (b) => b.status === BUDGET_STATUS.CONTRATO_GERADO || b.contractId,
-  );
-  if (withContract) {
+
+  const pendingDecision = findPendingDecisionBudget(patientId);
+  if (pendingDecision) {
+    const history = listPatientBudgetHistory(patientId);
+    const index = history.findIndex((b) => b.id === pendingDecision.id);
+    const label = formatFriendlyBudgetNumber(pendingDecision.budgetNumber, index >= 0 ? index + 1 : 1);
     alerts.push({
       type: 'budget',
-      tone: 'info',
-      text: `Paciente possui contrato gerado${withContract.planName ? ` para ${withContract.planName}` : ''}.`,
-    });
-  } else if (approved) {
-    alerts.push({
-      type: 'budget',
-      tone: 'info',
-      text: `Orçamento aprovado${approved.planName ? `: ${approved.planName}` : ''}.`,
+      tone: 'warning',
+      id: 'pending-budget-decision',
+      text: 'Existe orçamento pendente de decisão.',
+      detail: `${label} · Status: ${formatBudgetStatusLabel(pendingDecision.status)}`,
+      budgetId: pendingDecision.id,
+      appointmentId: pendingDecision.appointmentId,
+      actionLabel: 'Abrir orçamento',
     });
   }
-  if (lockCtx.isLocked) {
+
+  if (latestApproved) {
+    alerts.push({
+      type: 'budget',
+      tone: 'success',
+      id: 'approved-budget',
+      text: buildApprovedBudgetQuickSummaryText(latestApproved),
+      budgetId: latestApproved.id,
+      appointmentId: latestApproved.appointmentId,
+    });
+  } else {
+    alerts.push({
+      type: 'budget',
+      tone: 'muted',
+      id: 'approved-budget-none',
+      text: 'Nenhum orçamento aprovado',
+    });
+  }
+
+  if (lockCtx?.isLocked) {
     alerts.push({
       type: 'budget',
       tone: 'warning',
       text: 'Orçamento atual bloqueado por contrato gerado. Use "Criar novo orçamento" para nova negociação.',
     });
   }
+
   return alerts;
 }
 
@@ -145,17 +173,29 @@ function resolveActions(patientId, appointmentId) {
   const currentBudget = clinical?.budget;
   const hasDraft = currentBudget?.status === BUDGET_STATUS.RASCUNHO;
   const hasLocked = lockCtx.isLocked;
-  const hasApprovedOrContract = overview.history.some(
-    (b) => [BUDGET_STATUS.APROVADO, BUDGET_STATUS.CONTRATO_GERADO].includes(b.status) || b.contractId,
-  );
+  const latestApproved = getLatestApprovedBudget(patientId);
+  const hasApprovedOrContract = Boolean(latestApproved);
+  const pendingDecision = findPendingDecisionBudget(patientId);
+
+  const primaryBudget = shouldPreferPendingBudgetOverApproved(pendingDecision)
+    ? { id: pendingDecision.id, appointmentId: pendingDecision.appointmentId }
+    : latestApproved
+      ? { id: latestApproved.id, appointmentId: latestApproved.appointmentId }
+      : pendingDecision
+        ? { id: pendingDecision.id, appointmentId: pendingDecision.appointmentId }
+        : null;
 
   return {
     showOpenClinical: true,
-    showOpenExistingBudget: hasLocked || hasApprovedOrContract,
+    showOpenExistingBudget: hasLocked || hasApprovedOrContract || Boolean(pendingDecision),
     showCreateNewBudget: hasLocked || !hasDraft,
-    showViewContract: Boolean(lockCtx.contract || overview.contracts.length),
+    showViewContract: Boolean(lockCtx.contract || overview.contracts.length || latestApproved?.hasContract),
     showFullChart: true,
     showExams: true,
+    primaryBudgetId: primaryBudget?.id || null,
+    primaryBudgetAppointmentId: primaryBudget?.appointmentId || null,
+    latestApprovedBudget: latestApproved,
+    pendingDecisionBudget: pendingDecision,
     lockCtx,
     currentBudget,
     overview,
@@ -336,6 +376,12 @@ function buildPatientCareContextFromPatientOnly(patientId) {
     statusLabel: 'Sem atendimento ativo',
   };
 
+  const latestApproved = getLatestApprovedBudget(patientId);
+  const pendingDecision = findPendingDecisionBudget(patientId);
+  const primaryBudget = shouldPreferPendingBudgetOverApproved(pendingDecision)
+    ? pendingDecision
+    : (latestApproved || pendingDecision || null);
+
   return {
     appointmentId: null,
     patientId,
@@ -345,13 +391,15 @@ function buildPatientCareContextFromPatientOnly(patientId) {
     alerts,
     actions: {
       showOpenClinical: false,
-      showOpenExistingBudget: overview.history.some(
-        (b) => [BUDGET_STATUS.APROVADO, BUDGET_STATUS.CONTRATO_GERADO].includes(b.status) || b.contractId,
-      ),
+      showOpenExistingBudget: Boolean(primaryBudget),
       showCreateNewBudget: false,
-      showViewContract: overview.contracts.length > 0,
+      showViewContract: overview.contracts.length > 0 || Boolean(latestApproved?.hasContract),
       showFullChart: true,
       showExams: true,
+      primaryBudgetId: primaryBudget?.id || null,
+      primaryBudgetAppointmentId: primaryBudget?.appointmentId || null,
+      latestApprovedBudget: latestApproved,
+      pendingDecisionBudget: pendingDecision,
       currentBudget: null,
       overview,
     },

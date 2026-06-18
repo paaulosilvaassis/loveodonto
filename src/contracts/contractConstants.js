@@ -31,6 +31,13 @@ export const CONTRACT_STATUS = {
   GENERATED: 'generated',
   SENT: 'sent',
   VIEWED: 'viewed',
+  SIGNED_BY_PATIENT: 'signed_by_patient',
+  SIGNED_BY_CLINIC: 'signed_by_clinic',
+  COMPLETED: 'completed',
+  AWAITING_DATA: 'awaiting_data',
+  READY_TO_SEND: 'ready_to_send',
+  VIGENTE: 'vigente',
+  RESCINDIDO: 'rescindido',
   SIGNED: 'signed',
   REFUSED: 'refused',
   CANCELED: 'canceled',
@@ -42,11 +49,18 @@ export const CONTRACT_STATUS_LABELS = {
   [CONTRACT_STATUS.DRAFT]: 'Rascunho',
   [CONTRACT_STATUS.GENERATED]: 'Gerado',
   [CONTRACT_STATUS.SENT]: 'Enviado para assinatura',
-  [CONTRACT_STATUS.VIEWED]: 'Visualizado',
+  [CONTRACT_STATUS.VIEWED]: 'Visualizado pelo paciente',
+  [CONTRACT_STATUS.SIGNED_BY_PATIENT]: 'Assinado pelo paciente',
+  [CONTRACT_STATUS.SIGNED_BY_CLINIC]: 'Assinado pela clínica',
+  [CONTRACT_STATUS.COMPLETED]: 'Assinado por todos',
+  [CONTRACT_STATUS.AWAITING_DATA]: 'Aguardando dados obrigatórios',
+  [CONTRACT_STATUS.READY_TO_SEND]: 'Pronto para envio',
+  [CONTRACT_STATUS.VIGENTE]: 'Vigente',
+  [CONTRACT_STATUS.RESCINDIDO]: 'Rescindido',
   [CONTRACT_STATUS.SIGNED]: 'Assinado',
   [CONTRACT_STATUS.REFUSED]: 'Recusado',
   [CONTRACT_STATUS.CANCELED]: 'Cancelado',
-  [CONTRACT_STATUS.EXPIRED]: 'Vencido',
+  [CONTRACT_STATUS.EXPIRED]: 'Expirado',
   [CONTRACT_STATUS.REPLACED]: 'Substituído',
 };
 
@@ -55,6 +69,9 @@ export const CONTRACT_STATUS_VARIANT = {
   [CONTRACT_STATUS.GENERATED]: 'info',
   [CONTRACT_STATUS.SENT]: 'warning',
   [CONTRACT_STATUS.VIEWED]: 'warning',
+  [CONTRACT_STATUS.SIGNED_BY_PATIENT]: 'warning',
+  [CONTRACT_STATUS.SIGNED_BY_CLINIC]: 'warning',
+  [CONTRACT_STATUS.COMPLETED]: 'success',
   [CONTRACT_STATUS.SIGNED]: 'success',
   [CONTRACT_STATUS.REFUSED]: 'danger',
   [CONTRACT_STATUS.CANCELED]: 'muted',
@@ -67,9 +84,56 @@ export const PENDING_STATUSES = [
   CONTRACT_STATUS.GENERATED,
   CONTRACT_STATUS.SENT,
   CONTRACT_STATUS.VIEWED,
+  CONTRACT_STATUS.SIGNED_BY_PATIENT,
+  CONTRACT_STATUS.SIGNED_BY_CLINIC,
 ];
 
-export const SIGNED_STATUSES = [CONTRACT_STATUS.SIGNED];
+export const SIGNED_STATUSES = [
+  CONTRACT_STATUS.SIGNED,
+  CONTRACT_STATUS.COMPLETED,
+];
+
+export const SIGNATURE_PROVIDERS = {
+  INTERNAL: 'internal',
+  CLICKSIGN: 'clicksign',
+  DOCUSIGN: 'docusign',
+  ZAPSIGN: 'zapsign',
+  D4SIGN: 'd4sign',
+  ICP_BRASIL: 'icp_brasil',
+};
+
+export const SIGNATURE_PROVIDER_LABELS = {
+  [SIGNATURE_PROVIDERS.INTERNAL]: 'Love Odonto (link seguro)',
+  [SIGNATURE_PROVIDERS.CLICKSIGN]: 'Clicksign',
+  [SIGNATURE_PROVIDERS.DOCUSIGN]: 'DocuSign',
+  [SIGNATURE_PROVIDERS.ZAPSIGN]: 'ZapSign',
+  [SIGNATURE_PROVIDERS.D4SIGN]: 'D4Sign',
+  [SIGNATURE_PROVIDERS.ICP_BRASIL]: 'Gov.br / ICP-Brasil',
+};
+
+export const LEGAL_SIGNATURE_TYPES = {
+  SIMPLE: 'electronic_simple',
+  ADVANCED: 'electronic_advanced',
+  QUALIFIED: 'icp_qualified',
+};
+
+export const LEGAL_SIGNATURE_TYPE_LABELS = {
+  [LEGAL_SIGNATURE_TYPES.SIMPLE]: 'Assinatura eletrônica simples',
+  [LEGAL_SIGNATURE_TYPES.ADVANCED]: 'Assinatura eletrônica avançada',
+  [LEGAL_SIGNATURE_TYPES.QUALIFIED]: 'Assinatura qualificada ICP-Brasil',
+};
+
+export const SIGNATURE_WEBHOOK_EVENTS = {
+  DOCUMENT_SENT: 'document_sent',
+  DOCUMENT_VIEWED: 'document_viewed',
+  DOCUMENT_SIGNED: 'document_signed',
+  DOCUMENT_COMPLETED: 'document_completed',
+  DOCUMENT_EXPIRED: 'document_expired',
+  DOCUMENT_REFUSED: 'document_refused',
+  DOCUMENT_CANCELLED: 'document_cancelled',
+};
+
+export const SIGN_LINK_EXPIRY_OPTIONS = [7, 15, 30];
 
 export const SIGNATURE_TYPES = {
   ON_SCREEN: 'on_screen',
@@ -135,4 +199,16 @@ export const DEFAULT_CONTRACT_SETTINGS = {
   requireWitness: false,
   requireResponsibleProfessional: true,
   pendingAlertDays: 5,
+  signatureProvider: 'internal',
+  defaultSignatureType: 'electronic_simple',
+  requireCpfForSignature: true,
+  requireEmailForSignature: true,
+  requireSmsToken: false,
+  requireSelfie: false,
+  requireIcpCertificate: false,
+  clinicNotificationEmail: '',
+  technicalResponsibleEmail: '',
+  highValueRequireAdvancedSignature: true,
+  highValueThreshold: 10000,
+  financingRequireAdvancedSignature: true,
 };

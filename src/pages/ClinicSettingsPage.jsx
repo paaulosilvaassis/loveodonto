@@ -9,12 +9,10 @@ import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import {
   addClinicAddress,
   addClinicFile,
-  addClinicPhone,
   addMailServer,
   getClinic,
   removeClinicAddress,
   removeClinicFile,
-  removeClinicPhone,
   removeMailServer,
   testMailServer,
   updateAdditional,
@@ -28,7 +26,8 @@ import {
   updateNfse,
   updateWebPresence,
 } from '../services/clinicService.js';
-import { formatCep, formatCnpj, formatPhone, validateFileMeta } from '../utils/validators.js';
+import { ClinicPhonesSection } from '../components/clinic/ClinicPhonesSection.jsx';
+import { formatCep, formatCnpj, validateFileMeta } from '../utils/validators.js';
 
 const topTabs = [
   { value: 'cadastro', label: 'Dados Cadastrais' },
@@ -229,17 +228,8 @@ export default function ClinicSettingsPage() {
     reader.readAsDataURL(file);
   };
 
-  const addPhone = (event) => {
-    event.preventDefault();
-    setError('');
-    try {
-      if (editingSection !== 'Telefones') return;
-      addClinicPhone(user, draft.newPhone);
-      setDraft((prev) => ({ ...prev, newPhone: { tipo: '', ddd: '', numero: '', principal: false } }));
-      refresh();
-    } catch (err) {
-      setError(err.message);
-    }
+  const refreshClinicPhones = () => {
+    refresh();
   };
 
   const addAddress = (event) => {
@@ -590,63 +580,15 @@ export default function ClinicSettingsPage() {
             })()}
 
             {activeSection === 'Telefones' && (
-              <div className="stack">
-                <form className="form-grid" onSubmit={addPhone}>
-                  <Field label="Tipo">
-                    <select
-                      value={draft.newPhone?.tipo || ''}
-                      onChange={(event) => setDraft((prev) => ({ ...prev, newPhone: { ...prev.newPhone, tipo: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Telefones'}
-                    >
-                      <option value="">Selecione</option>
-                      <option value="whatsapp">WhatsApp</option>
-                      <option value="comercial">Comercial</option>
-                      <option value="financeiro">Financeiro</option>
-                      <option value="recepcao">Recepção</option>
-                      <option value="outros">Outros</option>
-                    </select>
-                  </Field>
-                  <Field label="DDD">
-                    <input
-                      value={draft.newPhone?.ddd || ''}
-                      onChange={(event) => setDraft((prev) => ({ ...prev, newPhone: { ...prev.newPhone, ddd: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Telefones'}
-                    />
-                  </Field>
-                  <Field label="Número">
-                    <input
-                      value={formatPhone(draft.newPhone?.numero || '')}
-                      onChange={(event) => setDraft((prev) => ({ ...prev, newPhone: { ...prev.newPhone, numero: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Telefones'}
-                    />
-                  </Field>
-                  <Field label="Principal">
-                    <input
-                      type="checkbox"
-                      checked={draft.newPhone?.principal || false}
-                      onChange={(event) => setDraft((prev) => ({ ...prev, newPhone: { ...prev.newPhone, principal: event.target.checked } }))}
-                      disabled={!isAdmin || editingSection !== 'Telefones'}
-                    />
-                  </Field>
-                  <button className="button primary" type="submit" disabled={!isAdmin || editingSection !== 'Telefones'}>
-                    Adicionar telefone
-                  </button>
-                </form>
-                <div className="card">
-                  <ul className="list">
-                    {clinic.phones.map((item) => (
-                      <li key={item.id} className="list-item">
-                        {item.tipo} · ({item.ddd}) {item.numero} {item.principal ? '★' : ''}
-                        {isAdmin ? (
-                          <button className="button secondary" type="button" onClick={() => removeClinicPhone(user, item.id)}>
-                            Remover
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
+              <ClinicPhonesSection
+                user={user}
+                phones={clinic.phones}
+                isAdmin={isAdmin}
+                isEditing={editingSection === 'Telefones'}
+                onRefresh={refreshClinicPhones}
+                onError={setError}
+                onSuccess={setSuccess}
+              />
             )}
 
             {activeSection === 'Endereços' && (

@@ -19,6 +19,7 @@ import {
   applyPartnerDefaultsToOption,
   canOverridePartnerTerms,
 } from '../../../services/financialPartnersService.js';
+import { presentPaymentCondition } from './budgetPaymentPresentationService.js';
 import {
   getPaymentCardPreview,
   getPaymentTypeLabel,
@@ -82,20 +83,20 @@ export function BudgetPaymentCommercialGrid({
   };
 
   const togglePresent = (opt) => {
-    if (opt.type === 'financiamento') {
-      const errors = validateFinancingPaymentOption(opt, originalValue);
-      if (errors.length) {
-        setFinancingErrors((prev) => ({ ...prev, [opt.id]: errors }));
-        return;
+    const result = presentPaymentCondition(budget, opt.id, { originalValue, user });
+    if (!result.ok) {
+      if (result.errors?.length) {
+        setFinancingErrors((prev) => ({ ...prev, [opt.id]: result.errors }));
       }
+      return;
     }
-    const nextPresent = !opt.presentToPatient;
-    const patch = { presentToPatient: nextPresent };
-    if (nextPresent && !opt.presentedAt) {
-      patch.presentedAt = new Date().toISOString();
+    setFinancingErrors((prev) => ({ ...prev, [opt.id]: null }));
+    setBudget(result.nextBudget);
+    if (onPresent && result.action === 'presented') {
+      onPresent(result.option, result.nextBudget);
+    } else if (onPresent && result.action === 'unpresented') {
+      onPresent(result.option, result.nextBudget, { action: 'unpresented' });
     }
-    updateOption(opt.id, patch);
-    if (onPresent && nextPresent) onPresent({ ...opt, ...patch });
   };
 
   const markChosen = (opt) => {

@@ -25,8 +25,10 @@ export function BudgetApprovalModal({
     <ModalRoot open={open} onOpenChange={(next) => { if (!next && !confirming) onClose(); }}>
       <ModalContent size="md" onInteractOutside={(e) => e.preventDefault()}>
         <ModalHeader>
-          <ModalTitle>Confirmar aprovação?</ModalTitle>
-          <ModalDescription>Esta ação libera o contrato e gera o financeiro automaticamente.</ModalDescription>
+          <ModalTitle>Confirmar aprovação do orçamento?</ModalTitle>
+          <ModalDescription>
+            Esta ação registra a aprovação, gera o financeiro e libera o contrato.
+          </ModalDescription>
         </ModalHeader>
         <ModalBody>
           <dl className="clinical-budget-approval-dl">
@@ -35,15 +37,11 @@ export function BudgetApprovalModal({
               <dd>{patientName || '—'}</dd>
             </div>
             <div>
-              <dt>Tratamento</dt>
-              <dd>{planName || 'Não informado'}</dd>
-            </div>
-            <div>
               <dt>Valor</dt>
               <dd className="clinical-budget-approval-value">{formatCurrencyBRL(finalValue)}</dd>
             </div>
             <div>
-              <dt>Forma escolhida</dt>
+              <dt>Condição escolhida</dt>
               <dd>{formatPaymentOptionLabel(acceptedOption)}</dd>
             </div>
           </dl>

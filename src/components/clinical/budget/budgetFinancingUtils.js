@@ -3,6 +3,7 @@ import {
   FINANCING_INTEREST_TYPES,
 } from '../../../services/financingCalculator.js';
 import { calcOptionFinalValue } from './budgetUtils.js';
+import { validateFinancingDataComplete } from './financingDisplayUtils.js';
 import {
   computeMinEntryAmount,
   getFinancialPartnerById,
@@ -99,8 +100,15 @@ export function validateFinancingPaymentOption(option, originalValue) {
     errors.push('Entrada não pode ser maior que o valor do tratamento.');
   }
 
+  const dataErrors = validateFinancingDataComplete(option, originalValue);
+  if (option?.partnerId && dataErrors.length) {
+    errors.push(...dataErrors);
+  }
+
   return errors;
 }
+
+export { validateFinancingDataComplete } from './financingDisplayUtils.js';
 
 export function buildFinancingHistoryPayload(option, originalValue) {
   const summary = getFinancingSummaryForOption(option, originalValue);

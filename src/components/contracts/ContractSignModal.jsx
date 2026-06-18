@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 import {
   ModalRoot,
   ModalContent,
@@ -64,7 +65,7 @@ export default function ContractSignModal({
         <ModalHeader>
           <ModalTitle>Assinar contrato</ModalTitle>
           <ModalDescription>
-            {contract?.contractNumber || contract?.id} — capture a assinatura do paciente ou responsável.
+            {formatFriendlyContractNumber(contract?.contractNumber, 1)} — capture a assinatura do paciente ou responsável.
           </ModalDescription>
         </ModalHeader>
         <ModalBody className="space-y-4">

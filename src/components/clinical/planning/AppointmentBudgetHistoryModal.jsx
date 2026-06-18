@@ -8,6 +8,7 @@ import {
 } from '../../ui/Modal.jsx';
 import { BudgetStatusBadge } from '../budget/BudgetStatusBadge.jsx';
 import { formatCurrencyBRL } from '../../../utils/currency.js';
+import { formatFriendlyBudgetNumber } from '../../../utils/friendlyNumbers.js';
 import { BUDGET_STATUS } from '../../../services/clinicalBudgetConstants.js';
 
 export function AppointmentBudgetHistoryModal({
@@ -29,7 +30,7 @@ export function AppointmentBudgetHistoryModal({
               {items.map((item) => (
                 <li key={item.id} className="clinical-budget-history-item">
                   <div>
-                    <strong>{item.budgetNumber || item.id}</strong>
+                    <strong>{formatFriendlyBudgetNumber(item.budgetNumber, 1)}</strong>
                     <BudgetStatusBadge status={item.status || BUDGET_STATUS.HISTORICO} />
                   </div>
                   <div className="clinical-budget-history-meta">

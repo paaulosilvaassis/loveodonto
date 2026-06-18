@@ -12,6 +12,7 @@ import {
 import { ContractTable, ContractStatusBadge, formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
 import ContractSignModal from '../../components/contracts/ContractSignModal.jsx';
 import ContractDetailModal from '../../components/contracts/ContractDetailModal.jsx';
+import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 
 export default function ContractsPendentesPage() {
   const { user } = useAuth();
@@ -30,9 +31,9 @@ export default function ContractsPendentesPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  const rows = contracts.map((c) => ({
+  const rows = contracts.map((c, index) => ({
     ...c,
-    number: c.contractNumber || c.id,
+    number: formatFriendlyContractNumber(c.contractNumber, index + 1),
     patient: c.patientSnapshotJson?.full_name || c.patientId,
     value: formatCtrCurrency(c.totalValueSnapshot),
     generated: c.generatedAt ? new Date(c.generatedAt).toLocaleDateString('pt-BR') : '—',

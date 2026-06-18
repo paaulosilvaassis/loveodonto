@@ -13,7 +13,7 @@ export async function readTenantAccessSnapshot(tenantId) {
   return {
     tenant: context?.tenant || null,
     modules: context?.modules || {},
-    featureFlags: context?.flags || {},
+    flags: context?.flags || {},
     subscription: context?.subscription || null,
     limits: context?.limits || {},
     warnings: Array.isArray(context?.warnings) ? context.warnings : [],

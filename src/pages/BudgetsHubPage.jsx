@@ -13,11 +13,12 @@ import {
   listAllClinicalBudgetRows,
   listBudgetHubProfessionals,
   computeBudgetHubKpis,
-  startNewBudgetForPatient,
   resolveRowPatientId,
   resolveRowPatientName,
   InactiveClinicalSessionError,
+  createNewBudget,
 } from '../services/clinicalBudgetHubService.js';
+import { openExistingBudget } from '../services/budgetNavigationService.js';
 import { buildFinanceNavigationUrl } from '../services/patientFinancialSummaryService.js';
 
 const DEFAULT_FILTERS = {
@@ -64,19 +65,23 @@ export default function BudgetsHubPage() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  const openClinical = (appointmentId, section = 'orcamento') => {
-    navigate(`/atendimento-clinico/${appointmentId}`, { state: { section } });
+  const openExistingBudgetRow = (row, section = 'orcamento') => {
+    openExistingBudget(navigate, {
+      budgetId: row.id,
+      patientId: resolveRowPatientId(row),
+      appointmentId: row.appointmentId,
+      section,
+    });
   };
 
   const handleCreateConfirm = async ({ patientId, importProcedures }) => {
     if (!patientId || !user) return;
     setBusy(true);
     try {
-      const result = startNewBudgetForPatient(user, patientId, { importProcedures });
+      createNewBudget(navigate, user, patientId, { importProcedures });
       setCreateOpen(false);
       setPrefillPatient(null);
       setRefreshKey((k) => k + 1);
-      openClinical(result.appointmentId, result.section);
     } catch (error) {
       if (error instanceof InactiveClinicalSessionError || error.code === 'INACTIVE_SESSION') {
         showToast(error.message, 'error');
@@ -113,10 +118,10 @@ export default function BudgetsHubPage() {
   };
 
   const cardHandlers = {
-    onOpen: (row) => openClinical(row.appointmentId, 'orcamento'),
-    onPrint: (row) => openClinical(row.appointmentId, 'orcamento'),
-    onHistory: (row) => openClinical(row.appointmentId, 'planejamento'),
-    onContract: (row) => openClinical(row.appointmentId, 'contratos'),
+    onOpen: (row) => openExistingBudgetRow(row, 'orcamento'),
+    onPrint: (row) => openExistingBudgetRow(row, 'orcamento'),
+    onHistory: (row) => openExistingBudgetRow(row, 'planejamento'),
+    onContract: (row) => openExistingBudgetRow(row, 'contratos'),
     onFinance: handleFinance,
     onCreateNew: handleRowCreateNew,
   };

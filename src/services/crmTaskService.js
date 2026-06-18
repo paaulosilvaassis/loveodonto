@@ -183,6 +183,11 @@ export function createTask(user, data) {
     const task = {
       id,
       clinicId,
+      tenant_id: data.tenant_id
+        || user?.tenant_id
+        || user?.tenantId
+        || db.clinicProfile?.tenant_id
+        || null,
       leadId: data.leadId || null,
       patientId: data.patientId || null,
       budgetId: data.budgetId || null,

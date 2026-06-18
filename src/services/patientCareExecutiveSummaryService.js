@@ -3,14 +3,22 @@ import { APPOINTMENT_STATUS } from './appointmentService.js';
 import { getClinicalAnamnesis } from './patientAnamnesisService.js';
 import { listFiles } from './patientFilesService.js';
 import { getPatientBudgetOverview } from './clinicalBudgetHubService.js';
-import { listPatientContracts } from './contractModuleService.js';
+import { listPatientContracts, getContractStatusForQuote } from './contractModuleService.js';
 import { getPatientFinancialSummary, getPatientDelinquencyInfo } from './patientFinancialSummaryService.js';
-import { formatFriendlyBudgetNumber } from './patientCareTimelineService.js';
+import { formatFriendlyBudgetNumber, formatFriendlyContractNumber } from '../utils/friendlyNumbers.js';
 import { listPatientBudgetHistory } from './clinicalBudgetLockService.js';
 import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
 import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
 import { formatBudgetStatusLabel } from './patientCareTimelineService.js';
 import { formatCurrencyBRL } from '../utils/currency.js';
+import { getLatestApprovedBudget } from './clinicalBudgetApprovedService.js';
+import { findPendingDecisionBudget, shouldPreferPendingBudgetOverApproved } from './clinicalAppointmentCloseService.js';
+
+/**
+ * Resumo executivo da Central do Paciente.
+ * Campos `budgetId` / `contractId` são ids internos para navegação.
+ * Campos `label` / `budgetNumber` / `contractNumber` são somente exibição (ORC-/CTR-).
+ */
 
 function formatDateBR(iso) {
   if (!iso) return '—';
@@ -21,18 +29,9 @@ function formatDateBR(iso) {
   }
 }
 
-function formatFriendlyContractNumber(raw, sequence) {
-  const value = String(raw || '').trim();
-  if (value && value.length <= 20 && !value.startsWith('budget-')) return value;
-  return `CTR-${String(sequence).padStart(3, '0')}`;
-}
-
 function getBudgetLabel(patientId, budget) {
-  const history = [...listPatientBudgetHistory(patientId)].sort(
-    (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
-  );
-  const index = history.findIndex((b) => b.id === budget?.id);
-  return formatFriendlyBudgetNumber(budget?.budgetNumber, index >= 0 ? index + 1 : 1);
+  const match = listPatientBudgetHistory(patientId).find((b) => b.id === budget?.id);
+  return match?.budgetNumber || formatFriendlyBudgetNumber(budget?.budgetNumber, 1);
 }
 
 export function buildIntelligenceAlerts(patientId) {
@@ -74,6 +73,50 @@ export function buildIntelligenceAlerts(patientId) {
   return alerts;
 }
 
+function resolveActiveBudgetRow(patientId, overview) {
+  const pendingDecision = findPendingDecisionBudget(patientId);
+  if (shouldPreferPendingBudgetOverApproved(pendingDecision)) {
+    return {
+      id: pendingDecision.id,
+      appointmentId: pendingDecision.appointmentId,
+      totalValue: pendingDecision.totalValue,
+      status: pendingDecision.status,
+      planName: pendingDecision.planName,
+      budgetNumber: pendingDecision.budgetNumber,
+      contractId: pendingDecision.contractId,
+      financialId: pendingDecision.financialId || null,
+    };
+  }
+
+  const latestApproved = getLatestApprovedBudget(patientId);
+  if (latestApproved?.id) {
+    return {
+      id: latestApproved.id,
+      appointmentId: latestApproved.appointmentId,
+      totalValue: latestApproved.totalAmount,
+      status: latestApproved.status,
+      planName: latestApproved.planName,
+      budgetNumber: latestApproved.budgetNumber,
+      contractId: latestApproved.contractId,
+      financialId: latestApproved.financialId || null,
+    };
+  }
+
+  const approvedStatuses = new Set([
+    BUDGET_STATUS.APROVADO,
+    BUDGET_STATUS.CONTRATO_GERADO,
+    BUDGET_STATUS.HISTORICO,
+  ]);
+
+  return overview.history.find((b) => approvedStatuses.has(b.status) && (b.totalValue || 0) > 0)
+    || overview.history.find((b) => b.contractId)
+    || overview.history.find(
+      (b) => !b.isHistorical && b.status !== BUDGET_STATUS.RASCUNHO && b.status !== BUDGET_STATUS.HISTORICO,
+    )
+    || overview.history[0]
+    || null;
+}
+
 export function buildPatientExecutiveSummary(patientId, header = {}) {
   if (!patientId) return null;
 
@@ -92,12 +135,22 @@ export function buildPatientExecutiveSummary(patientId, header = {}) {
   const delinquency = getPatientDelinquencyInfo(patientId);
   const contracts = listPatientContracts(patientId);
 
-  const activeBudget = overview.currentBudget
-    || overview.history.find((b) => !b.isHistorical && b.status !== BUDGET_STATUS.HISTORICO)
-    || overview.history[0]
-    || null;
+  const activeBudget = resolveActiveBudgetRow(patientId, overview);
 
-  const activeContract = contracts.find((c) => c.status !== CONTRACT_STATUS.CANCELED && c.status !== CONTRACT_STATUS.REPLACED)
+  const budgetLinkedContract = activeBudget?.id && activeBudget?.appointmentId
+    ? getContractStatusForQuote(
+      activeBudget.appointmentId,
+      'clinical_budget',
+      activeBudget.id,
+      patientId,
+    )
+    : null;
+
+  const activeContract = (activeBudget?.contractId
+    ? contracts.find((c) => c.id === activeBudget.contractId)
+    : null)
+    || budgetLinkedContract
+    || contracts.find((c) => c.status !== CONTRACT_STATUS.CANCELED && c.status !== CONTRACT_STATUS.REPLACED)
     || contracts[0]
     || null;
 
@@ -134,12 +187,23 @@ export function buildPatientExecutiveSummary(patientId, header = {}) {
       value: activeBudget.totalValue || 0,
       status: formatBudgetStatusLabel(activeBudget.status),
       appointmentId: activeBudget.appointmentId,
+      patientId,
+      budgetId: activeBudget.id,
+      budgetNumber: getBudgetLabel(patientId, activeBudget),
+      totalAmount: activeBudget.totalValue || 0,
+      contractId: activeBudget.contractId || budgetLinkedContract?.id || null,
+      financialId: activeBudget.financialId || null,
     } : null,
     activeContract: activeContract ? {
       label: formatFriendlyContractNumber(activeContract.contractNumber, contractIndex + 1),
       status: activeContract.status === CONTRACT_STATUS.SIGNED ? 'Assinado' : 'Pendente',
       isSigned: activeContract.status === CONTRACT_STATUS.SIGNED,
       appointmentId: activeContract.quoteId,
+      patientId,
+      contractId: activeContract.id,
+      budgetId: activeContract.budgetId || activeBudget?.id || null,
+      contractNumber: formatFriendlyContractNumber(activeContract.contractNumber, contractIndex + 1),
+      financialId: activeBudget?.financialId || null,
     } : null,
     financial: {
       totalContracted,

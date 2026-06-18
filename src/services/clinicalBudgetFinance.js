@@ -78,7 +78,8 @@ export function createReceivablesFromApprovedBudget(user, appointmentId, patient
 
   const installmentValue = installments > 0 ? remainder / installments : remainder;
 
-  const originId = budget.id || appointmentId;
+  const originId = budget.id;
+  const budgetIdForRecord = budget.id || null;
 
 
 
@@ -97,6 +98,14 @@ export function createReceivablesFromApprovedBudget(user, appointmentId, patient
         origin_type: RECEIVABLE_ORIGIN_TYPE.TREATMENT_PLAN,
 
         origin_id: originId,
+
+        budget_id: budgetIdForRecord,
+
+        treatment_plan_id: budgetIdForRecord,
+
+        installment_number: 0,
+
+        total_installments: installments,
 
         due_date: accepted.firstDueDate || new Date().toISOString().slice(0, 10),
 
@@ -123,6 +132,14 @@ export function createReceivablesFromApprovedBudget(user, appointmentId, patient
         origin_type: RECEIVABLE_ORIGIN_TYPE.TREATMENT_PLAN,
 
         origin_id: originId,
+
+        budget_id: budgetIdForRecord,
+
+        treatment_plan_id: budgetIdForRecord,
+
+        installment_number: i + 1,
+
+        total_installments: installments,
 
         due_date: due.toISOString().slice(0, 10),
 

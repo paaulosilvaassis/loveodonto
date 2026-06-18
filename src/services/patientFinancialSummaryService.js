@@ -11,7 +11,7 @@ import { listFinancings } from './financingsService.js';
 import { listFinancingInstallments } from './financingInstallmentsService.js';
 import { listPatientContracts } from './contractModuleService.js';
 import { listPatientBudgetHistory } from './clinicalBudgetLockService.js';
-import { formatFriendlyBudgetNumber } from './patientCareTimelineService.js';
+import { formatFriendlyBudgetNumber, formatFriendlyContractNumber, formatFriendlyFinancialNumber } from '../utils/friendlyNumbers.js';
 import { formatCurrencyBRL } from '../utils/currency.js';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
@@ -37,20 +37,6 @@ function resolvePaymentMethodLabel(method) {
   return RECEIVABLE_PAYMENT_METHODS.find((m) => m.value === method)?.label || method || '—';
 }
 
-function isTechnicalId(value) {
-  const s = String(value || '').trim();
-  if (!s) return true;
-  if (/^ORC-\d+/i.test(s)) return false;
-  if (/^CTR-/i.test(s)) return false;
-  return s.length > 18 && (/^[0-9a-f-]{8,}$/i.test(s) || /^budget-/i.test(s));
-}
-
-function formatFriendlyContractNumber(raw, sequence) {
-  const value = String(raw || '').trim();
-  if (value && !isTechnicalId(value)) return value;
-  return `CTR-${String(sequence).padStart(3, '0')}`;
-}
-
 function buildFinancialOriginContext(patientId) {
   const budgets = [...listPatientBudgetHistory(patientId)].sort(
     (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
@@ -74,7 +60,7 @@ function buildFinancialOriginContext(patientId) {
   const financingById = new Map();
   financings.forEach((financing, index) => {
     financingById.set(financing.id, {
-      label: `Financiamento ${String(index + 1).padStart(2, '0')}`,
+      label: formatFriendlyFinancialNumber(financing.financing_number || financing.number, index + 1),
       budgetId: financing.budget_id || null,
     });
   });
@@ -417,7 +403,7 @@ export function buildPatientFinancialTimelineEvents(patientId) {
         timestamp: contract.canceledAt || contract.updatedAt,
         title: 'Contrato cancelado',
         professionalName: '—',
-        summary: contract.title || contract.contractNumber || 'Contrato',
+        summary: contract.title || formatFriendlyContractNumber(contract.contractNumber, 1) || 'Contrato',
         actions: [{ key: 'contract', label: 'Ver contrato' }],
       });
     }

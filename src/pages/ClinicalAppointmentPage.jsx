@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useMemo, useRef, Component } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import { createId } from '../services/helpers.js';
@@ -60,15 +60,24 @@ import {
   sectionLockMessage,
   getClinicalWorkflowState,
 } from '../components/clinical/clinicalAppointmentConfig.js';
+import { findBudgetRecord, buildClinicalAppointmentUrl, resolveEffectiveViewBudgetId } from '../services/budgetNavigationService.js';
+import { getGeneratedContract } from '../services/contractService.js';
 import { createReceivablesFromApprovedBudget } from '../services/clinicalBudgetFinance.js';
 import { getLeadById } from '../services/crmService.js';
 import { RegisterPatientFromLeadModal } from '../components/agenda/RegisterPatientFromLeadModal.jsx';
 import { listProcedures, getPriceTableForPatient, getDefaultPriceTable, PROCEDURE_STATUS } from '../services/priceBaseService.js';
+import { formatBudgetEventLabel } from '../components/clinical/budget/budgetEventLabels.js';
+import { formatContractEventLabel } from '../components/clinical/contract/contractEventLabels.js';
 
 function ClinicalAppointmentPageContent() {
   const { appointmentId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const rawViewBudgetId = searchParams.get('budgetId') || location.state?.budgetId || null;
+  const forceHistoricalView = location.state?.viewMode === true;
+  const viewContractId = searchParams.get('contractId') || location.state?.contractId || null;
+  const sectionParam = searchParams.get('section') || location.state?.section || null;
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('planejamento');
   const [appointment, setAppointment] = useState(null);
@@ -80,6 +89,47 @@ function ClinicalAppointmentPageContent() {
   const [showRegisterFromLead, setShowRegisterFromLead] = useState(false);
   const [sectionToast, setSectionToast] = useState(null);
   const [planningRefreshKey, setPlanningRefreshKey] = useState(0);
+  const [workflowRefreshKey, setWorkflowRefreshKey] = useState(0);
+  const [isHistoricalBudgetView, setIsHistoricalBudgetView] = useState(false);
+
+  const viewBudgetId = useMemo(
+    () => resolveEffectiveViewBudgetId(appointmentId, rawViewBudgetId, {
+      forceHistorical: forceHistoricalView,
+      appointmentStatus: appointment?.status,
+    }),
+    [appointmentId, rawViewBudgetId, forceHistoricalView, appointment?.status],
+  );
+
+  const bumpWorkflow = () => setWorkflowRefreshKey((key) => key + 1);
+
+  const syncViewBudgetId = (nextBudgetId = null) => {
+    const section = searchParams.get('section');
+    const contractId = searchParams.get('contractId');
+    const url = buildClinicalAppointmentUrl({
+      appointmentId,
+      budgetId: nextBudgetId,
+      contractId,
+      section,
+    });
+    navigate(url, {
+      replace: true,
+      state: {
+        ...location.state,
+        budgetId: nextBudgetId || undefined,
+        section: section || location.state?.section,
+      },
+    });
+    bumpWorkflow();
+  };
+
+  useEffect(() => {
+    if (!appointmentId || !appointment) return;
+    if (appointment.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO) return;
+    if (forceHistoricalView) return;
+    if (!rawViewBudgetId || rawViewBudgetId === viewBudgetId) return;
+    syncViewBudgetId(viewBudgetId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointmentId, appointment?.status, rawViewBudgetId, viewBudgetId, forceHistoricalView]);
 
   useEffect(() => {
     if (location.state?.section) {
@@ -88,32 +138,38 @@ function ClinicalAppointmentPageContent() {
   }, [location.state?.section]);
 
   useEffect(() => {
+    if (!sectionParam) return;
+    const normalized = sectionParam === 'contrato' ? 'contratos' : sectionParam;
+    setActiveSection(normalized);
+  }, [sectionParam]);
+
+  useEffect(() => {
     try {
       if (appointmentId) {
         loadAppointmentData();
       } else {
-        setError('ID do atendimento nÃ£o fornecido');
+        setError('ID do atendimento não fornecido');
         setLoading(false);
       }
     } catch (err) {
       console.error('Erro no useEffect:', err);
-      setError(err.message || 'Erro ao inicializar pÃ¡gina');
+      setError(err.message || 'Erro ao inicializar página');
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appointmentId]);
+  }, [appointmentId, viewBudgetId]);
 
   const loadAppointmentData = () => {
     try {
       const db = loadDb();
       if (!db) {
-        throw new Error('Banco de dados nÃ£o disponÃ­vel');
+        throw new Error('Banco de dados não disponível');
       }
 
       const details = getAppointmentDetails(appointmentId);
       
       if (!details || !details.appointment) {
-        setError('Atendimento nÃ£o encontrado');
+        setError('Atendimento não encontrado');
         setLoading(false);
         setTimeout(() => {
           navigate('/gestao-comercial/jornada-do-paciente');
@@ -122,9 +178,15 @@ function ClinicalAppointmentPageContent() {
       }
 
       const apt = details.appointment;
+      const historicalBudgetRecord = viewBudgetId
+        ? findBudgetRecord({ budgetId: viewBudgetId, appointmentId })
+        : null;
+      const contractRecord = viewContractId ? getGeneratedContract(viewContractId) : null;
+      const allowHistoricalView = Boolean(historicalBudgetRecord?.budget?.id)
+        || Boolean(contractRecord && contractRecord.quoteId === appointmentId);
 
-      if (apt.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO) {
-        setError('Atendimento nÃ£o estÃ¡ em andamento');
+      if (apt.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO && !allowHistoricalView) {
+        setError('Atendimento não está em andamento');
         setLoading(false);
         setTimeout(() => {
           navigate('/gestao-comercial/jornada-do-paciente');
@@ -132,9 +194,10 @@ function ClinicalAppointmentPageContent() {
         return;
       }
 
+      setIsHistoricalBudgetView(allowHistoricalView && apt.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO);
       setAppointment(apt);
       
-      // Usar dados jÃ¡ retornados por getAppointmentDetails
+      // Usar dados já retornados por getAppointmentDetails
       const patientData = details.patient || null;
       setPatient(patientData);
 
@@ -149,7 +212,7 @@ function ClinicalAppointmentPageContent() {
       console.error('Erro ao carregar dados do atendimento:', err);
       setError(err.message || 'Erro ao carregar dados do atendimento');
       setLoading(false);
-      // Navegar apÃ³s um pequeno delay para evitar problemas de renderizaÃ§Ã£o
+      // Navegar após um pequeno delay para evitar problemas de renderização
       setTimeout(() => {
         navigate('/gestao-comercial/jornada-do-paciente');
       }, 2000);
@@ -157,8 +220,8 @@ function ClinicalAppointmentPageContent() {
   };
 
   const workflow = useMemo(
-    () => getClinicalWorkflowState(appointmentId),
-    [appointmentId, activeSection, sectionToast]
+    () => getClinicalWorkflowState(appointmentId, viewBudgetId),
+    [appointmentId, viewBudgetId, activeSection, sectionToast, workflowRefreshKey],
   );
 
   const handleNavClick = (sectionId) => {
@@ -225,9 +288,9 @@ function ClinicalAppointmentPageContent() {
               width: '100%',
             }}
           >
-            <strong>Paciente nÃ£o cadastrado</strong>
+            <strong>Paciente não cadastrado</strong>
             <br />
-            Este atendimento veio do Pipeline (CRM) e o lead ainda nÃ£o estÃ¡ vinculado ao cadastro. Cadastre o paciente para continuar o atendimento.
+            Este atendimento veio do Pipeline (CRM) e o lead ainda não está vinculado ao cadastro. Cadastre o paciente para continuar o atendimento.
           </div>
           <button
             type="button"
@@ -269,27 +332,27 @@ function ClinicalAppointmentPageContent() {
   }
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return 'Data nÃ£o disponÃ­vel';
+    if (!dateStr) return 'Data não disponível';
     try {
       const date = new Date(dateStr + 'T00:00:00');
-      if (isNaN(date.getTime())) return 'Data invÃ¡lida';
+      if (isNaN(date.getTime())) return 'Data inválida';
       return date.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     } catch (err) {
-      return 'Data invÃ¡lida';
+      return 'Data inválida';
     }
   };
 
   const formatTime = (timeStr) => {
-    if (!timeStr) return 'HorÃ¡rio nÃ£o disponÃ­vel';
+    if (!timeStr) return 'Horário não disponível';
     try {
       return timeStr.slice(0, 5);
     } catch (err) {
-      return 'HorÃ¡rio invÃ¡lido';
+      return 'Horário inválido';
     }
   };
 
   
-  // RenderizaÃ§Ã£o simplificada para debug
+  // Renderização simplificada para debug
   
   const formatDateShort = (dateStr) => {
     if (!dateStr) return 'â€”';
@@ -357,6 +420,7 @@ function ClinicalAppointmentPageContent() {
             <ClinicalPlanningSection
               key={planningRefreshKey}
               appointmentId={appointmentId}
+              viewBudgetId={viewBudgetId}
               user={user}
               appointment={appointment}
               patient={patient}
@@ -371,6 +435,7 @@ function ClinicalAppointmentPageContent() {
             canAccessClinicalSection('orcamento', workflow) ? (
               <ClinicalBudgetSection
                 appointmentId={appointmentId}
+                viewBudgetId={viewBudgetId}
                 user={user}
                 appointment={appointment}
                 patient={patient}
@@ -379,6 +444,9 @@ function ClinicalAppointmentPageContent() {
                   setPlanningRefreshKey((k) => k + 1);
                   setActiveSection('planejamento');
                 }}
+                onWorkflowRefresh={bumpWorkflow}
+                onActiveBudgetChange={syncViewBudgetId}
+                onAppointmentClosed={() => navigate('/gestao-comercial/jornada-do-paciente')}
               />
             ) : (
               <ClinicalSectionLocked message={sectionLockMessage('orcamento', workflow)} onGo={() => setActiveSection('planejamento')} />
@@ -388,12 +456,15 @@ function ClinicalAppointmentPageContent() {
             canAccessClinicalSection('contratos', workflow) ? (
               <ClinicalContractSection
                 appointmentId={appointmentId}
+                viewBudgetId={viewBudgetId}
+                viewContractId={viewContractId}
                 patientId={patient?.id}
                 user={user}
-                budgetApproved={workflow.budgetApproved}
+                contractAccessible={workflow.contractAccessible}
                 budget={workflow.budget}
                 appointment={appointment}
                 professional={professional}
+                onWorkflowRefresh={bumpWorkflow}
               />
             ) : (
               <ClinicalSectionLocked message={sectionLockMessage('contratos', workflow)} onGo={() => setActiveSection('orcamento')} />
@@ -435,7 +506,7 @@ function ClinicalSectionLocked({ message, onGo }) {
         <p>{message}</p>
         {onGo && (
           <ClinicalBtn variant="secondary" onClick={onGo}>
-            Voltar Ã  etapa anterior
+            Voltar à etapa anterior
           </ClinicalBtn>
         )}
       </div>
@@ -443,7 +514,7 @@ function ClinicalSectionLocked({ message, onGo }) {
   );
 }
 
-// SeÃ§Ã£o: ObservaÃ§Ãµes clÃ­nicas do atendimento
+// Seção: Observações clínicas do atendimento
 function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
   const [evolution, setEvolution] = useState('');
   const [saving, setSaving] = useState(false);
@@ -467,7 +538,7 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
       const allEvolutions = listClinicalEvolutions(patientId, appointmentId);
       setEvolutions(allEvolutions);
     } catch (error) {
-      console.error('Erro ao carregar observaÃ§Ãµes:', error);
+      console.error('Erro ao carregar observações:', error);
       setEvolutions([]);
     } finally {
       setLoadingEvolutions(false);
@@ -487,7 +558,7 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
       setEvolution('');
       loadEvolutions();
     } catch (error) {
-      console.error('Erro ao salvar observaÃ§Ã£o:', error);
+      console.error('Erro ao salvar observação:', error);
     } finally {
       setSaving(false);
     }
@@ -510,13 +581,13 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
   };
 
   const getProfessionalName = (professionalId) => {
-    if (!professionalId) return 'Profissional nÃ£o identificado';
+    if (!professionalId) return 'Profissional não identificado';
     try {
       const db = loadDb();
       const professional = db.collaborators?.find((c) => c.id === professionalId);
-      return professional?.nomeCompleto || professional?.name || 'Profissional nÃ£o identificado';
+      return professional?.nomeCompleto || professional?.name || 'Profissional não identificado';
     } catch {
-      return 'Profissional nÃ£o identificado';
+      return 'Profissional não identificado';
     }
   };
 
@@ -539,11 +610,11 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
       logClinicalEvent(appointmentId, 'evolution_edited', { evolutionId: editingEvolutionId }, user.id);
       setEditingEvolutionId(null);
       setEditingContent('');
-      loadEvolutions(); // Recarregar histÃ³rico
+      loadEvolutions(); // Recarregar histórico
       setSavingEdit(false);
     } catch (error) {
-      console.error('Erro ao editar evoluÃ§Ã£o:', error);
-      alert(error.message || 'Erro ao editar evoluÃ§Ã£o');
+      console.error('Erro ao editar evolução:', error);
+      alert(error.message || 'Erro ao editar evolução');
       setSavingEdit(false);
     }
   };
@@ -553,33 +624,33 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
 
   return (
     <ClinicalStageShell
-      title="ObservaÃ§Ãµes"
-      description="EvoluÃ§Ãµes e anotaÃ§Ãµes clÃ­nicas deste atendimento."
+      title="Observações"
+      description="Evoluções e anotações clínicas deste atendimento."
       primaryAction={
         <ClinicalBtn variant="primary" icon={Save} onClick={handleSave} disabled={saving || !(evolution || '').trim()}>
-          {saving ? 'Salvandoâ€¦' : 'Salvar'}
+          {saving ? 'Salvando...' : 'Salvar'}
         </ClinicalBtn>
       }
     >
-      <ClinicalBlock title="Nova observaÃ§Ã£o">
+      <ClinicalBlock title="Nova observação">
         <textarea
           className="clinical-evolution-textarea clinical-textarea-compact"
-          placeholder="Descreva evoluÃ§Ã£o clÃ­nica, cuidados ou orientaÃ§Ãµesâ€¦"
+          placeholder="Descreva evolução clínica, cuidados ou orientações..."
           value={evolution}
           onChange={(e) => setEvolution(e.target.value)}
           rows={4}
         />
       </ClinicalBlock>
 
-      {/* HistÃ³rico de observaÃ§Ãµes (mais recente primeiro) */}
+      {/* Histórico de observações (mais recente primeiro) */}
       <div className="clinical-evolutions-history">
-        <h3 className="clinical-evolutions-history-title">HistÃ³rico de observaÃ§Ãµes</h3>
+        <h3 className="clinical-evolutions-history-title">Histórico de observações</h3>
 
         {loadingEvolutions ? (
-          <div className="clinical-evolutions-loading">Carregando histÃ³rico...</div>
+          <div className="clinical-evolutions-loading">Carregando histórico...</div>
         ) : evolutions.length === 0 ? (
           <div className="clinical-evolutions-empty">
-            Nenhuma observaÃ§Ã£o registrada ainda.
+            Nenhuma observação registrada ainda.
           </div>
         ) : (
           <>
@@ -596,7 +667,7 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
                           (Editado em {formatDateTime(evo.updatedAt)})
                         </span>
                       )}
-                      <span className="clinical-evolution-professional" title="UsuÃ¡rio que registrou">
+                      <span className="clinical-evolution-professional" title="Usuário que registrou">
                         {getProfessionalName(evo.professionalId)}
                       </span>
                     </div>
@@ -605,7 +676,7 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
                         type="button"
                         className="button-icon clinical-evolution-edit-btn"
                         onClick={() => handleStartEdit(evo)}
-                        title="Editar observaÃ§Ã£o"
+                        title="Editar observação"
                       >
                         <Edit size={16} />
                       </button>
@@ -665,7 +736,7 @@ function DesenvolvimentoClinicoSection({ appointmentId, user, patient }) {
   );
 }
 
-// SeÃ§Ã£o: Procedimentos a Realizar
+// Seção: Procedimentos a Realizar
 function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
   const [procedures, setProcedures] = useState([]);
   const [showProcedureSelector, setShowProcedureSelector] = useState(false);
@@ -709,7 +780,7 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
 
         setProcedures(mappedProcedures);
       } catch (error) {
-        console.error('Erro ao carregar procedimentos do orÃ§amento:', error);
+        console.error('Erro ao carregar procedimentos do orçamento:', error);
         setProcedures([]);
       }
     };
@@ -719,7 +790,7 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
 
   const handleSelectProcedure = (procedureData) => {
     if (!user) return;
-    // Adaptar estrutura para o formato esperado pelo serviÃ§o
+    // Adaptar estrutura para o formato esperado pelo serviço
     const adaptedProcedure = {
       name: procedureData.title,
       tooth: procedureData.tooth,
@@ -752,13 +823,13 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
         }
       >
         <div className="clinical-section-filter-label">
-          Exibindo: aguardando inÃ­cio, em andamento e concluÃ­dos (Ãºltimos 30 dias)
+          Exibindo: aguardando início, em andamento e concluídos (últimos 30 dias)
         </div>
         {procedures.length === 0 ? (
           <div className="clinical-empty-state">
             <ClipboardList size={48} />
             <p>Nenhum procedimento encontrado para o filtro atual.</p>
-            <p className="clinical-empty-hint">SÃ£o exibidos apenas contratos aguardando inÃ­cio, em andamento ou concluÃ­dos nos Ãºltimos 30 dias.</p>
+            <p className="clinical-empty-hint">São exibidos apenas contratos aguardando início, em andamento ou concluídos nos últimos 30 dias.</p>
           </div>
         ) : (
           <div className="clinical-procedures-list">
@@ -770,7 +841,7 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
                   <span className="clinical-procedure-value">R$ {proc.value?.toFixed(2) || '0,00'}</span>
                 </div>
                 <span className={`clinical-procedure-status clinical-procedure-status--${proc.status || 'pending'}`}>
-                  {proc.status === 'completed' ? 'ConcluÃ­do' : 'Pendente'}
+                  {proc.status === 'completed' ? 'Concluído' : 'Pendente'}
                 </span>
               </div>
             ))}
@@ -793,7 +864,7 @@ function ProcedimentosSection({ appointmentId, user, appointment, patient }) {
   );
 }
 
-// SeÃ§Ã£o: Planejamento (estrutura clÃ­nica; sem valores; precificaÃ§Ã£o na aba OrÃ§amento)
+// Seção: Planejamento (estrutura clínica; sem valores; precificação na aba Orçamento)
 function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavigateToOrcamento, onShowToast }) {
   const [plannedProcedures, setPlannedProcedures] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -825,7 +896,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
     loadPlanned();
   }, [appointmentId]);
 
-  // Carregar procedimentos cadastrados (Base de PreÃ§o) quando o form de adicionar ou ediÃ§Ã£o estiver ativo
+  // Carregar procedimentos cadastrados (Base de Preço) quando o form de adicionar ou edição estiver ativo
   useEffect(() => {
     if (!showAddForm && !editingId) return;
     const priceTable = patient ? getPriceTableForPatient(patient) : getDefaultPriceTable();
@@ -863,11 +934,11 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
     const name = (addName || '').trim();
     const toothRegion = (addToothOrRegion || '').trim();
     if (!name) {
-      setError('Procedimento Ã© obrigatÃ³rio.');
+      setError('Procedimento é obrigatório.');
       return;
     }
     if (!toothRegion) {
-      setError('Dente / RegiÃ£o Ã© obrigatÃ³rio.');
+      setError('Dente / Região é obrigatório.');
       return;
     }
     setSaving(true);
@@ -909,7 +980,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
     const name = (editName || '').trim();
     const toothRegion = (editToothOrRegion || '').trim();
     if (!name || !toothRegion) {
-      setError('Procedimento e Dente/RegiÃ£o sÃ£o obrigatÃ³rios.');
+      setError('Procedimento e Dente/Região são obrigatórios.');
       return;
     }
     setSaving(true);
@@ -979,9 +1050,9 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
         plannedProceduresCount: plannedProcedures.length,
       }, user.id);
       if (onNavigateToOrcamento) onNavigateToOrcamento();
-      if (onShowToast) onShowToast('OrÃ§amento gerado a partir do planejamento.');
+      if (onShowToast) onShowToast('Orçamento gerado a partir do planejamento.');
     } catch (err) {
-      setError(err?.message || 'Erro ao gerar orÃ§amento.');
+      setError(err?.message || 'Erro ao gerar orçamento.');
     }
   };
 
@@ -1006,7 +1077,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
               onClick={handleGenerateBudgetFromPlan}
             >
               <DollarSign size={16} />
-              Gerar OrÃ§amento a partir do Planejamento
+              Gerar Orçamento a partir do Planejamento
             </button>
           )}
         </div>
@@ -1068,7 +1139,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
             </div>
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.875rem' }}>
-            <span>Dente / RegiÃ£o</span>
+            <span>Dente / Região</span>
             <input
               type="text"
               value={addToothOrRegion}
@@ -1078,11 +1149,11 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
             />
           </label>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.875rem' }}>
-            <span>ObservaÃ§Ãµes clÃ­nicas (opcional)</span>
+            <span>Observações clínicas (opcional)</span>
             <textarea
               value={addNotes}
               onChange={(e) => setAddNotes(e.target.value)}
-              placeholder="ObservaÃ§Ãµes"
+              placeholder="Observações"
               rows={2}
               style={{ padding: '0.5rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', resize: 'vertical' }}
             />
@@ -1093,7 +1164,7 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
             disabled={saving || !addName.trim() || !addToothOrRegion.trim()}
             onClick={handleAddProcedure}
           >
-            {saving ? 'Salvandoâ€¦' : 'Salvar no Planejamento'}
+            {saving ? 'Salvando...' : 'Salvar no Planejamento'}
           </button>
         </div>
       )}
@@ -1167,13 +1238,13 @@ function PlanejamentoSection({ appointmentId, user, appointment, patient, onNavi
                     type="text"
                     value={editToothOrRegion}
                     onChange={(e) => setEditToothOrRegion(e.target.value)}
-                    placeholder="Dente / RegiÃ£o"
+                    placeholder="Dente / Região"
                     style={{ padding: '0.5rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem' }}
                   />
                   <textarea
                     value={editNotes}
                     onChange={(e) => setEditNotes(e.target.value)}
-                    placeholder="ObservaÃ§Ãµes"
+                    placeholder="Observações"
                     rows={2}
                     style={{ padding: '0.5rem 0.75rem', border: '1px solid #e2e8f0', borderRadius: '0.5rem', resize: 'vertical' }}
                   />
@@ -1220,12 +1291,12 @@ function ConveniosSection({ patient }) {
   if (!patient) {
     return (
       <SectionCard
-        title="ConvÃªnios"
-        description="InformaÃ§Ãµes sobre o convÃªnio do paciente"
+        title="Convênios"
+        description="Informações sobre o convênio do paciente"
       >
         <div className="clinical-empty-state">
           <Activity size={48} />
-          <p>Dados do paciente nÃ£o disponÃ­veis.</p>
+          <p>Dados do paciente não disponíveis.</p>
         </div>
       </SectionCard>
     );
@@ -1233,42 +1304,42 @@ function ConveniosSection({ patient }) {
 
   return (
     <SectionCard
-      title="ConvÃªnios"
-      description="InformaÃ§Ãµes sobre o convÃªnio do paciente"
+      title="Convênios"
+      description="Informações sobre o convênio do paciente"
     >
       {patient.insurance_provider ? (
         <div className="clinical-insurance-info">
           <h3>{patient.insurance_provider}</h3>
-          {patient.insurance_number && <p>NÃºmero: {patient.insurance_number}</p>}
+          {patient.insurance_number && <p>Número: {patient.insurance_number}</p>}
           {patient.insurance_plan && <p>Plano: {patient.insurance_plan}</p>}
         </div>
       ) : (
         <div className="clinical-empty-state">
           <CreditCard size={48} />
-          <p>Paciente nÃ£o possui convÃªnio cadastrado.</p>
+          <p>Paciente não possui convênio cadastrado.</p>
         </div>
       )}
     </SectionCard>
   );
 }
 
-// SeÃ§Ã£o: Dados ClÃ­nicos
+// Seção: Dados Clínicos
 function DadosClinicosSection({ appointmentId, patientId }) {
   const [activeSubmenu, setActiveSubmenu] = useState('odontograma');
   const navigate = useNavigate();
 
   const submenuItems = [
     { id: 'odontograma', label: 'Odontograma' },
-    { id: 'situacao-bucal', label: 'SituaÃ§Ã£o Bucal' },
-    { id: 'situacao-facial', label: 'SituaÃ§Ã£o Facial' },
-    { id: 'situacao-fisica', label: 'SituaÃ§Ã£o FÃ­sica' },
-    { id: 'historico-eventos', label: 'HistÃ³rico de Eventos' },
+    { id: 'situacao-bucal', label: 'Situação Bucal' },
+    { id: 'situacao-facial', label: 'Situação Facial' },
+    { id: 'situacao-fisica', label: 'Situação Física' },
+    { id: 'historico-eventos', label: 'Histórico de Eventos' },
   ];
 
   return (
     <SectionCard
-      title="Dados ClÃ­nicos"
-      description="Acesse odontograma, histÃ³rico e informaÃ§Ãµes clÃ­nicas do paciente"
+      title="Dados Clínicos"
+      description="Acesse odontograma, histórico e informações clínicas do paciente"
     >
       <div className="clinical-submenu">
         {submenuItems.map((item) => (
@@ -1294,7 +1365,7 @@ function DadosClinicosSection({ appointmentId, patientId }) {
         {activeSubmenu !== 'historico-eventos' && (
           <div className="clinical-empty-state">
             <Activity size={48} />
-            <p>ConteÃºdo em desenvolvimento.</p>
+            <p>Conteúdo em desenvolvimento.</p>
           </div>
         )}
       </div>
@@ -1302,29 +1373,59 @@ function DadosClinicosSection({ appointmentId, patientId }) {
   );
 }
 
-// Componente: HistÃ³rico de Eventos
+// Mapeamento estático de fallback para tipos não cobertos pelos formatters específicos
+const STATIC_EVENT_LABELS = {
+  clinical_appointment_opened: 'Atendimento clínico iniciado',
+  evolution_saved: 'Evolução clínica registrada',
+  evolution_edited: 'Evolução clínica editada',
+  procedure_added: 'Procedimento adicionado',
+  procedure_planned: 'Procedimento planejado',
+  planning_procedure_removed: 'Procedimento removido do planejamento',
+  budget_generated: 'Orçamento gerado a partir do planejamento',
+  budget_created: 'Orçamento criado',
+  budget_updated: 'Orçamento atualizado',
+  budget_sent: 'Orçamento enviado ao paciente',
+  budget_approved: 'Orçamento aprovado',
+  budget_rejected: 'Orçamento reprovado',
+  budget_cancelled: 'Orçamento cancelado',
+  budget_pdf_generated: 'PDF do orçamento gerado',
+  budget_payment_presented: 'Condição de pagamento apresentada ao paciente',
+  budget_payment_chosen: 'Paciente escolheu forma de pagamento',
+  budget_status_changed: 'Status do orçamento alterado',
+  contract_pdf_generated: 'PDF do contrato gerado',
+  contract_canceled: 'Contrato cancelado',
+  appointment_finished: 'Atendimento encerrado',
+};
+
+function resolveEventLabel(event) {
+  if (!event?.type) return 'Evento';
+  // Tenta formatters específicos com dados enriquecidos
+  const fromBudget = formatBudgetEventLabel(event);
+  if (fromBudget) return fromBudget;
+  const fromContract = formatContractEventLabel(event);
+  if (fromContract) return fromContract;
+  // Fallback para mapa estático
+  return STATIC_EVENT_LABELS[event.type] || event.type;
+}
+
+function resolveEventDetail(event) {
+  const d = event?.data;
+  if (!d) return null;
+  if (d.procedureName) return `Procedimento: ${d.procedureName}`;
+  if (d.plannedProceduresCount) return `Procedimentos planejados: ${d.plannedProceduresCount}`;
+  if (d.totalValue != null) return `Valor total: R$ ${Number(d.totalValue).toFixed(2)}`;
+  if (d.status) return `Status: ${d.status}`;
+  if (d.reasonLabel) return d.reasonLabel;
+  return null;
+}
+
+// Componente: Histórico de Eventos
 function HistoricoEventos({ appointmentId }) {
   const [events, setEvents] = useState([]);
 
   useEffect(() => {
-    // Carregar histÃ³rico de eventos
-    const clinicalEvents = getClinicalEvents(appointmentId);
-    setEvents(clinicalEvents);
+    setEvents(getClinicalEvents(appointmentId));
   }, [appointmentId]);
-
-  const getEventTypeLabel = (type) => {
-    const labels = {
-      'clinical_appointment_opened': 'Atendimento ClÃ­nico Aberto',
-      'evolution_saved': 'ObservaÃ§Ã£o do OrÃ§amento salva',
-      'evolution_edited': 'ObservaÃ§Ã£o do OrÃ§amento editada',
-      'procedure_added': 'Procedimento Adicionado',
-      'procedure_planned': 'Procedimento Planejado',
-      'budget_generated': 'OrÃ§amento Gerado',
-      'budget_approved': 'OrÃ§amento Aprovado',
-      'appointment_finished': 'Atendimento Finalizado',
-    };
-    return labels[type] || type;
-  };
 
   return (
     <div className="clinical-events-list">
@@ -1334,23 +1435,20 @@ function HistoricoEventos({ appointmentId }) {
           <p>Nenhum evento registrado ainda.</p>
         </div>
       ) : (
-        events.map((event) => (
-          <div key={event.id} className="clinical-event-item">
-            <div className="clinical-event-time">
-              {new Date(event.timestamp).toLocaleString('pt-BR')}
+        events.map((event) => {
+          const detail = resolveEventDetail(event);
+          return (
+            <div key={event.id} className="clinical-event-item">
+              <div className="clinical-event-time">
+                {new Date(event.timestamp).toLocaleString('pt-BR')}
+              </div>
+              <div className="clinical-event-content">
+                <strong>{resolveEventLabel(event)}</strong>
+                {detail && <p>{detail}</p>}
+              </div>
             </div>
-            <div className="clinical-event-content">
-              <strong>{getEventTypeLabel(event.type)}</strong>
-              {event.data && Object.keys(event.data).length > 0 && (
-                <p>
-                  {event.data.procedureName && `Procedimento: ${event.data.procedureName}`}
-                  {event.data.plannedProceduresCount && `Procedimentos planejados: ${event.data.plannedProceduresCount}`}
-                  {event.data.totalValue && `Valor total: R$ ${event.data.totalValue.toFixed(2)}`}
-                </p>
-              )}
-            </div>
-          </div>
-        ))
+          );
+        })
       )}
     </div>
   );
@@ -1403,7 +1501,7 @@ function AddProcedureModal({ onClose, onAdd }) {
             />
           </div>
           <div className="form-group">
-            <label>RegiÃ£o</label>
+            <label>Região</label>
             <input
               type="text"
               value={region}
@@ -1455,7 +1553,7 @@ class ClinicalAppointmentErrorBoundary extends Component {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', padding: '2rem' }}>
           <div style={{ color: 'var(--color-error)', marginBottom: '1rem' }}>
-            Erro ao carregar pÃ¡gina: {this.state.error?.message || 'Erro desconhecido'}
+            Erro ao carregar página: {this.state.error?.message || 'Erro desconhecido'}
           </div>
           <button 
             type="button" 
@@ -1472,7 +1570,7 @@ class ClinicalAppointmentErrorBoundary extends Component {
   }
 }
 
-// Export direto - renderizaÃ§Ã£o normal sem portal
+// Export direto - renderização normal sem portal
 export default function ClinicalAppointmentPage() {
   
   return <ClinicalAppointmentPageContent />;

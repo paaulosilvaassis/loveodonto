@@ -7,7 +7,14 @@ import { listPatientBudgetHistory } from './clinicalBudgetLockService.js';
 import { listPatientContracts } from './contractModuleService.js';
 import { CONTRACT_STATUS_LABELS } from '../contracts/contractConstants.js';
 import { formatCurrencyBRL } from '../utils/currency.js';
+import {
+  formatFriendlyBudgetNumber,
+  formatFriendlyContractNumber,
+  isTechnicalId,
+} from '../utils/friendlyNumbers.js';
 import { buildPatientFinancialTimelineEvents } from './patientFinancialSummaryService.js';
+
+export { formatFriendlyBudgetNumber, formatFriendlyContractNumber, isTechnicalId };
 
 export const CARE_INTELLIGENCE_FILTERS = [
   { id: 'all', label: 'Todos' },
@@ -206,31 +213,25 @@ const CLINICAL_EVENT_MAP = {
     ],
     actions: [{ key: 'open', label: 'Abrir atendimento' }],
   },
+  appointment_finished: {
+    title: 'Atendimento encerrado',
+    category: 'consultas',
+    buildDescription: (ctx) => [
+      'Atendimento encerrado.',
+      ctx.reason ? `Motivo: ${ctx.reason}` : null,
+      ctx.content ? `Obs.: ${ctx.content}` : null,
+      ctx.budgetLabel && ctx.statusLabel ? `${ctx.budgetLabel} permanece em ${ctx.statusLabel}.` : null,
+    ],
+    buildFields: (ctx, professionalName) => [
+      { label: 'Motivo', value: ctx.reason || '—' },
+      { label: 'Profissional', value: professionalName || '—' },
+      ctx.budgetLabel ? { label: 'Orçamento', value: ctx.budgetLabel } : null,
+    ].filter(Boolean),
+    actions: [{ key: 'budget', label: 'Abrir orçamento' }],
+  },
 };
 
 const HIDDEN_CLINICAL_EVENT_TYPES = new Set(['budget_updated']);
-
-function isTechnicalId(value) {
-  const s = String(value || '').trim();
-  if (!s) return true;
-  if (/^ORC-\d+/i.test(s)) return false;
-  if (/^CTR-/i.test(s)) return false;
-  return s.length > 18 && (/^[0-9a-f-]{8,}$/i.test(s) || /^budget-/i.test(s));
-}
-
-export function formatFriendlyBudgetNumber(raw, sequence) {
-  const value = String(raw || '').trim();
-  if (value && !isTechnicalId(value)) {
-    return value.toUpperCase().startsWith('ORC-') ? value.toUpperCase() : value;
-  }
-  return `ORC-${String(sequence).padStart(3, '0')}`;
-}
-
-function formatFriendlyContractNumber(raw, sequence) {
-  const value = String(raw || '').trim();
-  if (value && !isTechnicalId(value)) return value;
-  return `CTR-${String(sequence).padStart(3, '0')}`;
-}
 
 export function formatBudgetStatusLabel(status) {
   if (!status) return 'Em elaboração';
@@ -362,7 +363,15 @@ function mapClinicalEvent(evt, ctx) {
   if (!config) return null;
 
   const data = evt.data || {};
-  const budgetId = data.budgetId || data.budget_id;
+  let budgetId = data.budgetId || data.budget_id;
+  if (!budgetId && evt.appointmentId) {
+    const clinical = (ctx.db.clinicalAppointments || []).find(
+      (row) => row.appointmentId === evt.appointmentId,
+    );
+    budgetId = clinical?.budget?.id
+      || clinical?.budgetHistory?.[clinical.budgetHistory.length - 1]?.id
+      || null;
+  }
   const budgetLabel = data.budgetNumber && !isTechnicalId(data.budgetNumber)
     ? data.budgetNumber
     : (budgetId ? ctx.budgetNumberMap.get(budgetId) : null) || 'Orçamento';
@@ -376,9 +385,11 @@ function mapClinicalEvent(evt, ctx) {
     contractLabel: data.contractNumber
       ? formatFriendlyContractNumber(data.contractNumber, 1)
       : 'Contrato',
-    reason: data.reason || data.cancelReason || null,
+    reason: data.reasonLabel || data.reason || data.cancelReason || null,
     procedureName: data.procedureName || data.name || null,
-    content: data.content ? String(data.content).slice(0, 160) : null,
+    content: data.notes
+      ? String(data.notes).slice(0, 160)
+      : (data.content ? String(data.content).slice(0, 160) : null),
   };
 
   const professionalName = resolveProfessionalName(evt.userId, ctx.db);
@@ -398,6 +409,7 @@ function mapClinicalEvent(evt, ctx) {
     meta: {
       appointmentId: evt.appointmentId,
       budgetId,
+      budgetNumber: budgetLabel,
       contractId: data.contractId,
     },
   });
@@ -447,6 +459,7 @@ function mapBudgetHistoryItem(budget, ctx) {
     meta: {
       appointmentId: budget.appointmentId,
       budgetId: budget.id,
+      budgetNumber: budgetLabel,
       contractId: budget.contractId,
     },
   });

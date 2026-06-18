@@ -8,6 +8,7 @@ import {
   formatPresentedAt,
   chosenStatusLabel,
 } from './budgetCommercialUtils.js';
+import { getPresentedPaymentOptions } from './budgetPaymentPdfUtils.js';
 import { getPaymentOptionTitle } from './budgetEventLabels.js';
 
 export function BudgetNegotiationSidebar({
@@ -21,8 +22,7 @@ export function BudgetNegotiationSidebar({
   onDownloadDocument,
   readOnly,
 }) {
-  const options = budget?.paymentOptions || [];
-  const presented = options.filter((o) => o.presentToPatient || o.presentedAt);
+  const presented = getPresentedPaymentOptions(budget);
   const chosen = financials?.accepted;
 
   return (
@@ -47,6 +47,16 @@ export function BudgetNegotiationSidebar({
                 <li key={opt.id} className="clinical-budget-negotiation-item">
                   <strong>{preview.headline}</strong>
                   <span className="clinical-budget-negotiation-value">{preview.highlight}</span>
+                  <div className="clinical-budget-negotiation-fin-lines">
+                    {preview.lines.map((line) => (
+                      <span
+                        key={line.label}
+                        className={line.emphasis ? `is-${line.emphasis}` : ''}
+                      >
+                        {line.label}: <strong>{line.value}</strong>
+                      </span>
+                    ))}
+                  </div>
                   {when ? (
                     <span className="clinical-budget-negotiation-meta">
                       <Clock size={11} />
@@ -74,6 +84,15 @@ export function BudgetNegotiationSidebar({
             <div>
               <strong>{getPaymentOptionTitle(chosen)}</strong>
               <span>{getPaymentCardPreview(chosen, originalValue).highlight}</span>
+              {chosen.type === 'financiamento' ? (
+                <div className="clinical-budget-negotiation-fin-lines">
+                  {getPaymentCardPreview(chosen, originalValue).lines.map((line) => (
+                    <span key={line.label} className={line.emphasis ? `is-${line.emphasis}` : ''}>
+                      {line.label}: <strong>{line.value}</strong>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <span className="clinical-budget-negotiation-status">
                 {chosenStatusLabel(budget)}
               </span>

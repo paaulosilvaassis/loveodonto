@@ -11,10 +11,15 @@ import {
   filterBlocksForRender,
 } from './contractRenderService.js';
 import { findUnknownHashtags } from '../contracts/hashtagRegistry.js';
+import { validateContractGeneration } from './contractValidationService.js';
+import { mergeContractAttachedTcleIds } from './clinicalTcleAttachmentService.js';
 import { getPatient } from './patientService.js';
 import { BUDGET_LOCK_ERROR } from './clinicalBudgetLockService.js';
 
-const NON_EDITABLE_CONTRACT_STATUSES = new Set(['generated', 'sent', 'viewed', 'signed', 'canceled']);
+const NON_EDITABLE_CONTRACT_STATUSES = new Set([
+  'generated', 'sent', 'viewed', 'signed_by_patient', 'signed_by_clinic',
+  'completed', 'signed', 'canceled',
+]);
 
 function assertContractMutationAllowed(contract, { allowDraft = false } = {}) {
   if (!contract) throw new Error('Contrato não encontrado.');
@@ -340,6 +345,18 @@ export function createGeneratedContractDraft(user, payload) {
     if (unknown.length) {
       throw new Error(`Hashtags desconhecidas: ${unknown.join(', ')}`);
     }
+    const readiness = validateContractGeneration({
+      quoteSource,
+      quoteId,
+      patientId,
+      currentUser: user,
+      htmlPreview: merged,
+      strict: false,
+    });
+    if (!readiness.ok) {
+      const labels = readiness.missing.map((m) => m.label).slice(0, 5).join('; ');
+      throw new Error(`Contrato com dados obrigatórios pendentes: ${labels}`);
+    }
   }
   const ctx = buildContractContext({
     quoteSource,
@@ -433,6 +450,31 @@ export function finalizeGeneratedContract(user, contractId) {
     const c = arr[idx];
     if (c.status === 'canceled') throw new Error('Contrato cancelado.');
     if (c.status === 'generated') throw new Error('Contrato já finalizado.');
+
+    const attachedTcleIds = mergeContractAttachedTcleIds(c, {
+      patientId: c.patientId,
+      appointmentId: c.quoteId,
+    });
+    arr[idx] = {
+      ...c,
+      metadata: { ...(c.metadata || {}), attachedTcleIds },
+    };
+
+    const readiness = validateContractGeneration({
+      quoteSource: c.quoteSource,
+      quoteId: c.quoteId,
+      patientId: c.patientId,
+      currentUser: user,
+      htmlPreview: c.finalContent,
+      contractNumber: c.contractNumber,
+      strict: true,
+      attachedTcleIds,
+    });
+    if (!readiness.ok) {
+      const labels = readiness.missing.map((m) => m.label).slice(0, 6).join('; ');
+      throw new Error(`Contrato não pode ser finalizado. Pendências: ${labels}`);
+    }
+
     const rendered = applyHashtags(c.finalContent, buildContractContext({
       quoteSource: c.quoteSource,
       quoteId: c.quoteId,
@@ -440,12 +482,12 @@ export function finalizeGeneratedContract(user, contractId) {
       currentUser: user,
     }));
     arr[idx] = {
-      ...c,
+      ...arr[idx],
       status: 'generated',
       renderedHtml: rendered,
       generatedAt: new Date().toISOString(),
     };
-    audit(user, contractId, 'FINALIZE', {});
+    audit(user, contractId, 'FINALIZE', { readinessWarnings: readiness.warnings });
     return arr[idx];
   });
 }

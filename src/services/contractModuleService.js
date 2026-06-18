@@ -1,12 +1,13 @@
-/**
- * Módulo Contratos & Consentimentos — camada estendida (assinaturas, snapshots, configurações).
- */
 import { withDb, loadDb } from '../db/index.js';
+import { logSignatureAudit } from './contractSignatureAuditService.js';
+import { notifyClinicalBudgetUpdated } from './clinicalBudgetApprovedService.js';
+import { addFile } from './patientFilesService.js';
 import { createId } from './helpers.js';
 import { getPatient } from './patientService.js';
 import { buildContractContext } from './contractRenderService.js';
 import { seedDefaultContractsForDb } from '../contracts/defaultContractSeed.js';
 import { seedTreatmentContractTemplates } from '../contracts/treatmentContractSeed.js';
+import { mergeContractAttachedTcleIds } from './clinicalTcleAttachmentService.js';
 import {
   CONTRACT_STATUS,
   DEFAULT_CONTRACT_SETTINGS,
@@ -68,15 +69,47 @@ export function normalizeContract(row) {
   };
 }
 
-function buildSnapshots({ quoteSource, quoteId, patientId, currentUser }) {
+function matchesBudgetFinanceRow(row, budgetId, appointmentId) {
+  if (!row) return false;
+  const budgetKey = budgetId ? String(budgetId) : '';
+  if (budgetKey) {
+    if (String(row.origin_id || '') === budgetKey) return true;
+    if (String(row.budget_id || row.budgetId || '') === budgetKey) return true;
+    if (String(row.treatment_plan_id || '') === budgetKey) return true;
+    return false;
+  }
+  return appointmentId ? String(row.origin_id || '') === String(appointmentId) : true;
+}
+
+function listFinanceRowsForBudget(db, { patientId, budgetId, appointmentId }) {
+  const financings = (db.financings || []).filter(
+    (row) => row.patient_id === patientId
+      && budgetId
+      && String(row.budget_id || row.budgetId || '') === String(budgetId),
+  );
+  const financingIds = new Set(financings.map((row) => row.id));
+
+  const receivables = (db.accountsReceivable || []).filter((row) => {
+    if (row.patient_id !== patientId) return false;
+    if (matchesBudgetFinanceRow(row, budgetId, appointmentId)) return true;
+    if (row.financing_id && financingIds.has(row.financing_id)) return true;
+    return false;
+  });
+
+  return { receivables, financings };
+}
+
+function buildSnapshots({ quoteSource, quoteId, patientId, currentUser, budgetId = null }) {
   const db = loadDb();
   const ctx = buildContractContext({ quoteSource, quoteId, patientId, currentUser });
   const patientBundle = getPatient(patientId);
   const clinic = db.clinicProfile || {};
   const doc = db.clinicDocumentation || {};
-  const receivables = (db.accountsReceivable || []).filter(
-    (r) => r.patient_id === patientId && (!quoteId || String(r.origin_id) === String(quoteId)),
-  );
+  const { receivables, financings } = listFinanceRowsForBudget(db, {
+    patientId,
+    budgetId,
+    appointmentId: quoteId,
+  });
   return {
     patientSnapshotJson: {
       id: patientId,
@@ -100,18 +133,36 @@ function buildSnapshots({ quoteSource, quoteId, patientId, currentUser }) {
       observacoes: ctx['#orcamentoObservacoes'],
     },
     financialSnapshotJson: {
+      budgetId: budgetId || null,
       valorTotal: ctx['#valor_total'],
       entrada: ctx['#entrada'],
       formaPagamento: ctx['#forma_pagamento'],
+      financiamentos: financings.map((f) => ({
+        id: f.id,
+        budget_id: f.budget_id || f.budgetId || null,
+        entry_amount: f.entry_amount,
+        installments_count: f.installments_count,
+        interest_rate: f.interest_rate,
+        total_value: f.total_value || f.totalValue,
+        status: f.status,
+      })),
       parcelas: receivables.map((r) => ({
         due_date: r.due_date,
         description: r.description,
         net_amount: r.net_amount,
+        original_amount: r.original_amount,
+        installment_number: r.installment_number,
+        total_installments: r.total_installments,
+        financing_id: r.financing_id || null,
         status: r.status,
       })),
     },
     totalValueSnapshot: Number(ctx['#valor_total'] || 0),
   };
+}
+
+export function registerContractEvent(user, contractId, eventType, description, metadata = {}) {
+  registerEvent(user, contractId, eventType, description, metadata);
 }
 
 function registerEvent(user, contractId, eventType, description, metadata = {}) {
@@ -170,14 +221,24 @@ export function saveContractSettings(user, settings) {
 }
 
 export function createContractDraft(user, payload) {
+  if (payload.quoteSource === 'clinical_budget' && !payload.budgetId) {
+    if (import.meta.env?.DEV) {
+      console.debug('[contractModuleService] createContractDraft chamado sem budgetId — vínculo pode ser órfão.');
+    }
+  }
   ensureContractsModuleSeeded();
   const row = createGeneratedContractDraft(user, payload);
   const tpl = getContractTemplate(payload.templateId);
+  const attachedTcleIds = mergeContractAttachedTcleIds(
+    { metadata: {} },
+    { patientId: payload.patientId, appointmentId: payload.quoteId },
+  );
   const snaps = buildSnapshots({
     quoteSource: payload.quoteSource,
     quoteId: payload.quoteId,
     patientId: payload.patientId,
     currentUser: user,
+    budgetId: payload.budgetId || null,
   });
   return withDb((db) => {
     const arr = db.generatedContracts || [];
@@ -190,9 +251,17 @@ export function createContractDraft(user, payload) {
       category: tpl?.category || 'servicos',
       treatmentType: tpl?.treatmentType || null,
       ...snaps,
+      metadata: {
+        ...(arr[idx].metadata || {}),
+        attachedTcleIds,
+      },
       documentHash: simpleHash(arr[idx].renderedHtml || arr[idx].finalContent),
     };
-    registerEvent(user, row.id, 'CREATED', 'Contrato criado em rascunho', { templateId: payload.templateId });
+    registerEvent(user, row.id, 'CREATED', 'Contrato criado em rascunho', {
+      templateId: payload.templateId,
+      budgetId: payload.budgetId || null,
+      attachedTcleIds,
+    });
     return arr[idx];
   });
 }
@@ -200,7 +269,7 @@ export function createContractDraft(user, payload) {
 export function isContractEditable(contract) {
   const c = normalizeContract(contract);
   if (!c) return false;
-  return [CONTRACT_STATUS.DRAFT, CONTRACT_STATUS.GENERATED, CONTRACT_STATUS.SENT, CONTRACT_STATUS.VIEWED].includes(c.status);
+  return [CONTRACT_STATUS.DRAFT, CONTRACT_STATUS.GENERATED].includes(c.status);
 }
 
 export function listPatientContracts(patientId, filters = {}) {
@@ -240,10 +309,17 @@ export function sendContractForSignature(user, contractId) {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === contractId);
     if (idx < 0) throw new Error('Contrato não encontrado.');
-    if (!isContractEditable(arr[idx]) && arr[idx].status !== CONTRACT_STATUS.GENERATED) {
-      if (arr[idx].status === CONTRACT_STATUS.SIGNED) throw new Error('Contrato já assinado.');
+    if (arr[idx].status === CONTRACT_STATUS.SIGNED || arr[idx].status === CONTRACT_STATUS.COMPLETED) {
+      throw new Error('Contrato já assinado.');
     }
-    arr[idx] = { ...arr[idx], status: CONTRACT_STATUS.SENT };
+    if (arr[idx].status !== CONTRACT_STATUS.GENERATED) {
+      throw new Error('Somente contratos gerados podem ser enviados para assinatura.');
+    }
+    arr[idx] = {
+      ...arr[idx],
+      status: CONTRACT_STATUS.SENT,
+      lockedAt: arr[idx].lockedAt || new Date().toISOString(),
+    };
     if (!Array.isArray(db.contractSignLinks)) db.contractSignLinks = [];
     const link = {
       id: createId('clnk'),
@@ -355,8 +431,46 @@ export function signContractViaLink(token, {
     if (idx >= 0) {
       links[idx] = { ...links[idx], status: 'signed', signedAt: new Date().toISOString() };
     }
+    const requests = db.contractSignatureRequests || [];
+    const rIdx = requests.findIndex((r) => r.id === link.requestId);
+    if (rIdx >= 0) {
+      requests[rIdx] = {
+        ...requests[rIdx],
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+      };
+    }
     return db;
   });
+
+  logSignatureAudit({
+    contractId: contract.id,
+    requestId: link.requestId || null,
+    action: 'signed_via_link',
+    user: { id: 'public-signer', name: signerName },
+    payload: {
+      signerCpf,
+      authMethod: 'on_screen_link',
+      documentHash: result.contract?.documentHash,
+      ipAddress,
+      platform: 'internal',
+    },
+  });
+
+  if (signatureImageDataUrl && contract.patientId) {
+    addFile(
+      contract.patientId,
+      {
+        category: 'Contratos',
+        file_name: `Assinatura contrato ${contract.contractNumber || contract.id}.png`,
+        mime_type: 'image/png',
+        file_url: signatureImageDataUrl,
+      },
+      'public-signer',
+    );
+    notifyClinicalBudgetUpdated(contract.patientId);
+  }
+
   return result;
 }
 
@@ -418,6 +532,7 @@ export function createContractNewVersion(user, contractId) {
     quoteSource: original.quoteSource,
     quoteId: original.quoteId,
     patientId: original.patientId,
+    budgetId: original.budgetId || null,
     templateId: original.templateId,
     editedHtml: original.finalContent,
   });
@@ -456,19 +571,56 @@ export function hasSignedContractForQuote(quoteId, quoteSource = 'crm_budget', b
   );
 }
 
-export function getContractStatusForQuote(quoteId, quoteSource = 'crm_budget', budgetId = null) {
+export function getContractStatusForQuote(
+  quoteId,
+  quoteSource = 'crm_budget',
+  budgetId = null,
+  patientId = null,
+) {
   const cid = clinicId();
   const db = loadDb();
-  const list = (db.generatedContracts || [])
-    .filter((c) => c.clinicId === cid && c.quoteId === quoteId && c.quoteSource === quoteSource)
-    .filter((c) => c.status !== CONTRACT_STATUS.REPLACED)
-    .filter((c) => {
-      if (!budgetId) return true;
-      if (!c.budgetId) return false;
-      return c.budgetId === budgetId;
-    })
-    .sort((a, b) => new Date(b.generatedAt || 0) - new Date(a.generatedAt || 0));
-  return list[0] ? normalizeContract(list[0]) : null;
+  const contracts = (db.generatedContracts || []).filter(
+    (c) => c.clinicId === cid && c.quoteId === quoteId && c.quoteSource === quoteSource,
+  );
+  const matchesPatient = (c) => !patientId || c.patientId === patientId;
+  const sortByRecent = (list) => [...list].sort(
+    (a, b) => new Date(b.generatedAt || 0) - new Date(a.generatedAt || 0),
+  );
+
+  if (budgetId) {
+    const exactActive = sortByRecent(
+      contracts.filter(
+        (c) => matchesPatient(c)
+          && c.status !== CONTRACT_STATUS.REPLACED
+          && c.budgetId === budgetId,
+      ),
+    );
+    if (exactActive.length) return normalizeContract(exactActive[0]);
+
+    const legacyActive = sortByRecent(
+      contracts.filter(
+        (c) => matchesPatient(c)
+          && c.status !== CONTRACT_STATUS.REPLACED
+          && !c.budgetId,
+      ),
+    );
+    if (legacyActive.length === 1) return normalizeContract(legacyActive[0]);
+
+    const exactIncludingReplaced = sortByRecent(
+      contracts.filter((c) => matchesPatient(c) && c.budgetId === budgetId),
+    );
+    if (exactIncludingReplaced.length) return normalizeContract(exactIncludingReplaced[0]);
+
+    return null;
+  }
+
+  const fallbackActive = sortByRecent(
+    contracts.filter((c) => matchesPatient(c) && c.status !== CONTRACT_STATUS.REPLACED),
+  );
+  if (fallbackActive.length) return normalizeContract(fallbackActive[0]);
+
+  const fallbackAny = sortByRecent(contracts.filter(matchesPatient));
+  return fallbackAny[0] ? normalizeContract(fallbackAny[0]) : null;
 }
 
 export function canStartTreatmentWithoutContract(user, quoteId, quoteSource = 'crm_budget') {

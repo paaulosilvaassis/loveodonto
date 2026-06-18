@@ -1,7 +1,8 @@
 import { formatCurrencyBRL } from '../../../utils/currency.js';
 import { formatCpf, formatCnpj } from '../../../utils/validators.js';
+import { currencyToWordsPt } from '../../../utils/numberToWordsPt.js';
 import { calcProcedureTotal } from '../budget/budgetUtils.js';
-import { detectTreatmentType, getTreatmentTypeLabel } from './detectTreatmentType.js';
+import { detectTreatmentType, detectAllTreatmentTypes, getTreatmentTypeLabel } from './detectTreatmentType.js';
 import {
   LEGAL_CONTRACT_TEXTS,
   LINKED_DOCUMENTS,
@@ -9,6 +10,8 @@ import {
 } from './professionalContractClauses.js';
 import { buildFinancialSection } from './clinicalContractSchedule.js';
 import { CONTRACT_STATUS_LABELS } from '../../../contracts/contractConstants.js';
+import { formatFriendlyBudgetNumber } from '../../../utils/friendlyNumbers.js';
+import { listPatientBudgetHistory } from '../../../services/clinicalBudgetLockService.js';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -24,21 +27,47 @@ function hasText(value) {
 }
 
 function formatDateBR(value) {
-  if (!value) return '—';
+  if (!value) return '';
   const str = String(value).trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
-    const [y, m, d] = str.split('-');
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const [y, m, d] = str.slice(0, 10).split('-');
     return `${d}/${m}/${y}`;
   }
   const parsed = new Date(str.includes('T') ? str : `${str}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return str;
+  if (Number.isNaN(parsed.getTime())) return str.replace(/\s+00:00:00/g, '').trim();
   return parsed.toLocaleDateString('pt-BR');
 }
 
 function formatDateExtenso(value) {
-  const formatted = formatDateBR(value);
-  if (formatted === '—') return formatted;
-  return formatted;
+  const formatted = formatDateBR(value || new Date().toISOString());
+  if (!formatted) return formatDateBR(new Date().toISOString());
+  const [day, month, year] = formatted.split('/');
+  const months = [
+    'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+  ];
+  const monthName = months[Number(month) - 1] || month;
+  return `${Number(day)} de ${monthName} de ${year}`;
+}
+
+function resolveClinicForumCity(addr) {
+  if (!addr) return { city: '', state: '', clinicForumCity: '' };
+  const city = String(addr.cidade || addr.city || '').trim();
+  const state = String(addr.uf || addr.state || '').trim();
+  if (!hasText(city) || !hasText(state)) {
+    return { city, state, clinicForumCity: '' };
+  }
+  return {
+    city,
+    state,
+    clinicForumCity: `${city} - ${state}`,
+  };
+}
+
+export function getClinicForumCityFromDb(db) {
+  const addresses = db?.clinicAddresses || [];
+  const mainAddress = addresses.find((a) => a.principal) || addresses[0];
+  return resolveClinicForumCity(mainAddress);
 }
 
 function formatAddress(addr) {
@@ -57,10 +86,7 @@ function formatAddress(addr) {
 }
 
 function resolveCity(addr) {
-  if (!addr) return '—';
-  const city = addr.cidade || addr.city || '';
-  const uf = addr.uf || addr.state || '';
-  return [city, uf].filter(hasText).join(' — ') || '—';
+  return resolveClinicForumCity(addr).clinicForumCity;
 }
 
 function formatPhoneEntry(phone) {
@@ -80,14 +106,14 @@ function sanitizeLogoUrl(url) {
 }
 
 function resolveProfessional(professional) {
-  if (!professional) return { name: '—', cro: '—', specialty: '—' };
+  if (!professional) return { name: '', cro: '', specialty: '' };
   const profile = professional.profile || professional;
   const name =
     professional.nomeCompleto ||
     professional.name ||
     professional.apelido ||
     profile.nomeCompleto ||
-    '—';
+    '';
   const croRaw =
     profile.conselhoNumero ||
     profile.conselho_numero ||
@@ -96,7 +122,7 @@ function resolveProfessional(professional) {
     professional.cro ||
     '';
   const croUf = profile.conselhoUf || profile.uf || professional.conselhoUf || '';
-  let cro = '—';
+  let cro = '';
   if (hasText(croRaw)) {
     const num = String(croRaw).replace(/^CRO[-\s]*/i, '').trim();
     cro = croUf ? `CRO-${croUf} ${num}` : `CRO ${num}`;
@@ -107,35 +133,52 @@ function resolveProfessional(professional) {
     profile.especialidade ||
     professional.especialidade ||
     professional.specialty ||
-    '—';
+    '';
   return { name, cro, specialty };
 }
 
 function formatContractNumber(appointmentId, contractNumber) {
-  if (contractNumber) return contractNumber;
-  const year = new Date().getFullYear();
-  const suffix = String(appointmentId || '').slice(-6).toUpperCase() || '000000';
-  return `CTR-${year}-${suffix}`;
-}
-
-function buildValidationHash(context) {
-  const payload = [
-    context.meta.contractNumber,
-    context.patient.cpf,
-    context.financial.finalValue,
-    context.treatment.planName,
-    new Date().toISOString().slice(0, 10),
-  ].join('|');
-  let hash = 5381;
-  for (let i = 0; i < payload.length; i += 1) {
-    hash = ((hash << 5) + hash) + payload.charCodeAt(i);
-    hash &= 0xffffffff;
+  if (contractNumber && !/^[0-9a-f-]{20,}$/i.test(String(contractNumber))) {
+    return String(contractNumber).toUpperCase();
   }
-  return `LOVE-${Math.abs(hash).toString(16).toUpperCase().padStart(8, '0')}`;
+  const suffix = String(appointmentId || '').replace(/\D/g, '').slice(-6).padStart(6, '0') || '000001';
+  return `CTR-${suffix}`;
 }
 
-function regionLabel(proc) {
-  return proc.tooth || proc.region || proc.regiao || '—';
+function resolveBudgetFriendlyNumber(budget, patientId, db) {
+  if (!budget) return '';
+  const fromHistory = patientId
+    ? listPatientBudgetHistory(patientId).find((item) => item.id === budget.id)?.budgetNumber
+    : null;
+  if (fromHistory) return fromHistory;
+  const patientBudgets = (db?.clinicalAppointments || [])
+    .filter((appt) => appt.patientId === patientId && appt.budget?.id)
+    .map((appt) => appt.budget)
+    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+  const idx = patientBudgets.findIndex((item) => item.id === budget.id);
+  return formatFriendlyBudgetNumber(budget.budgetNumber, idx >= 0 ? idx + 1 : 1);
+}
+
+function enrichFinancialSection(financial, accepted) {
+  const enriched = { ...financial };
+  enriched.finalValueWords = currencyToWordsPt(enriched.finalValue);
+
+  const down = Number(accepted?.downPayment || 0);
+  if (down > 0) {
+    enriched.downPaymentWords = currencyToWordsPt(down);
+  }
+
+  if (enriched.installmentValue > 0) {
+    enriched.installmentValueWords = currencyToWordsPt(enriched.installmentValue);
+  }
+
+  return enriched;
+}
+
+function collectTreatmentWarranties(planName, procedures) {
+  return detectAllTreatmentTypes({ planName, procedures })
+    .map(getTreatmentWarrantyText)
+    .filter(Boolean);
 }
 
 export function buildProfessionalContractContext({
@@ -171,11 +214,14 @@ export function buildProfessionalContractContext({
   const accepted = financials?.accepted ?? null;
   const patientId = patientBundle?.id || appointment?.patientId;
 
-  const financial = buildFinancialSection(
+  const financial = enrichFinancialSection(
+    buildFinancialSection(
+      accepted,
+      originalValue,
+      patientId,
+      [appointment?.appointmentId, budget?.id].filter(Boolean),
+    ),
     accepted,
-    originalValue,
-    patientId,
-    [appointment?.appointmentId, budget?.id].filter(Boolean),
   );
 
   const treatmentType = detectTreatmentType({
@@ -196,51 +242,64 @@ export function buildProfessionalContractContext({
     clinic.representanteLegal ||
     prof.name;
 
+  const issueIso = new Date().toISOString().slice(0, 10);
+  const forumLocation = resolveClinicForumCity(mainAddress);
+  const cityLabel = forumLocation.clinicForumCity;
+
   const meta = {
     contractNumber: formatContractNumber(appointment?.appointmentId, contractNumber),
-    issueDate: formatDateBR(new Date().toISOString()),
-    issueDateExtenso: formatDateExtenso(new Date().toISOString()),
-    issueDateTime: new Date().toLocaleString('pt-BR'),
+    issueDate: formatDateBR(issueIso),
+    issueDateExtenso: formatDateExtenso(issueIso),
     status: statusLabel,
-    budgetNumber: budget?.id || appointment?.appointmentId || '—',
+    budgetNumber: resolveBudgetFriendlyNumber(budget, patientId, db),
     budgetDate: formatDateBR(budget?.approvedAt || budget?.updatedAt || budget?.createdAt),
-    city: resolveCity(mainAddress),
+    city: cityLabel,
+    clinicForumCity: forumLocation.clinicForumCity,
   };
 
-  const ctx = {
+  return {
     meta,
     clinic: {
       logoUrl: sanitizeLogoUrl(clinic.logoUrl),
       name: clinic.nomeClinica || clinic.nomeFantasia || clinic.razaoSocial || 'Clínica Odontológica',
+      fantasyName: clinic.nomeFantasia || clinic.nomeClinica || '',
       legalName: clinic.razaoSocial || clinic.nomeFantasia || clinic.nomeClinica || '',
-      cnpj: docs.cnpj ? formatCnpj(String(docs.cnpj).replace(/\D/g, '')) : '—',
-      address: formatAddress(mainAddress) || '—',
-      city: resolveCity(mainAddress),
-      phone: formatPhoneEntry(mainPhone) || '—',
-      email: clinic.emailPrincipal || correspondence.emailPrincipal || correspondence.email || '—',
-      site: web.site || web.website || web.url || '—',
-      legalRepresentative: legalRepresentative || '—',
+      cnpj: docs.cnpj ? formatCnpj(String(docs.cnpj).replace(/\D/g, '')) : '',
+      address: formatAddress(mainAddress),
+      city: forumLocation.city,
+      state: forumLocation.state,
+      clinicForumCity: forumLocation.clinicForumCity,
+      phone: formatPhoneEntry(mainPhone),
+      email: clinic.emailPrincipal || correspondence.emailPrincipal || correspondence.email || '',
+      site: web.site || web.website || web.url || '',
+      legalRepresentative,
+      technicalResponsible: docs.responsavelTecnico || docs.responsavel_tecnico || prof.name || '',
     },
     patient: {
-      name: profile.full_name || patientBundle?.full_name || '—',
-      cpf: profile.cpf ? formatCpf(String(profile.cpf).replace(/\D/g, '')) : '—',
-      rg: pdocs.rg || profile.rg || '—',
+      name: profile.full_name || patientBundle?.full_name || '',
+      cpf: profile.cpf ? formatCpf(String(profile.cpf).replace(/\D/g, '')) : '',
+      rg: pdocs.rg || profile.rg || '',
       birthDate: formatDateBR(profile.birth_date || profile.birthDate),
-      maritalStatus: profile.marital_status || profile.estadoCivil || '—',
-      profession: profile.profession || profile.profissao || '—',
-      address: formatAddress(paddr) || '—',
-      phone: formatPhoneEntry(primaryPhone) || '—',
-      email: profile.email || patientBundle?.email || '—',
+      maritalStatus: profile.marital_status || profile.estadoCivil || '',
+      profession: profile.profession || profile.profissao || '',
+      address: formatAddress(paddr),
+      phone: formatPhoneEntry(primaryPhone),
+      email: profile.email || patientBundle?.email || '',
       guardian:
         profile.guardian_full_name ||
         profile.legal_guardian_name ||
-        '—',
+        '',
     },
     professional: prof,
     treatment: {
       planName: budget?.planName || budget?.title || 'Plano de tratamento',
       typeLabel: getTreatmentTypeLabel(treatmentType),
       treatmentType,
+      treatmentTypes: detectAllTreatmentTypes({
+        planName: budget?.planName || budget?.title || '',
+        procedures,
+      }),
+      maintenanceMonths: budget?.maintenanceMonths || budget?.maintenance_months || null,
       startDate: formatDateBR(appointmentDate || budget?.startDate),
       endDate: formatDateBR(endDate),
       notes: budget?.commercialNotes || budget?.notes || '',
@@ -248,13 +307,16 @@ export function buildProfessionalContractContext({
     procedures,
     financial,
     legalTexts: LEGAL_CONTRACT_TEXTS,
-    treatmentWarranty: getTreatmentWarrantyText(treatmentType),
+    treatmentWarranties: collectTreatmentWarranties(
+      budget?.planName || budget?.title || '',
+      procedures,
+    ),
     linkedDocuments: LINKED_DOCUMENTS,
-    validationHash: '',
   };
+}
 
-  ctx.validationHash = buildValidationHash(ctx);
-  return ctx;
+function regionLabel(proc) {
+  return proc.tooth || proc.region || proc.regiao || '';
 }
 
 export { escapeHtml, hasText, formatDateBR, regionLabel, calcProcedureTotal };

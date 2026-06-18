@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useAuth } from '../../auth/useAuth.js';
 import { getContractDashboard } from '../../services/contractDashboardService.js';
 import { ContractKpiGrid, ContractTable, formatCtrCurrency, ContractStatusBadge } from '../../contracts/ui/ContractUi.jsx';
+import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 
 export default function ContractsDashboardPage() {
   const { user } = useAuth();
@@ -16,9 +17,9 @@ export default function ContractsDashboardPage() {
     { key: 'valor', label: 'Valor protegido', value: formatCtrCurrency(data.kpis.valorProtegido), variant: 'revenue' },
   ];
 
-  const recentRows = data.recentContracts.map((c) => ({
+  const recentRows = data.recentContracts.map((c, index) => ({
     id: c.id,
-    number: c.contractNumber || c.id,
+    number: formatFriendlyContractNumber(c.contractNumber, index + 1),
     patient: c.patientSnapshotJson?.full_name || c.patientId,
     status: c.status,
     value: formatCtrCurrency(c.totalValueSnapshot),

@@ -3,8 +3,12 @@ import { getPatient } from '../../../services/patientService.js';
 import { getBudget, BUDGET_STATUS } from '../../../services/clinicalService.js';
 import { getCollaborator } from '../../../services/collaboratorService.js';
 import { getAcceptedOption, resolveBudgetFinancials } from '../budget/budgetUtils.js';
-import { buildProfessionalContractContext } from './buildProfessionalContractContext.js';
+import { buildProfessionalContractContext, getClinicForumCityFromDb } from './buildProfessionalContractContext.js';
 import { buildProfessionalContractHtml } from './professionalContractTemplate.js';
+import { getContractReadinessChecklist } from '../../../services/contractValidationService.js';
+import { CLINIC_FORUM_VALIDATION_MESSAGE } from './professionalContractClauses.js';
+
+export { getContractReadinessChecklist };
 
 function resolveProfessionalForAppointment(appointment) {
   const professionalId = appointment?.professionalId;
@@ -18,7 +22,7 @@ function resolveProfessionalForAppointment(appointment) {
 /**
  * Valida pré-requisitos obrigatórios para geração de contrato clínico.
  */
-export function assertClinicalContractReady({ budget, financials }) {
+export function assertClinicalContractReady({ budget, financials, db }) {
   if (!budget) {
     throw new Error('Orçamento não encontrado. Elabore e aprove o orçamento antes de gerar o contrato.');
   }
@@ -31,6 +35,9 @@ export function assertClinicalContractReady({ budget, financials }) {
   }
   if (!(budget.procedures || []).length) {
     throw new Error('Orçamento sem procedimentos aprovados. Inclua procedimentos antes de gerar o contrato.');
+  }
+  if (db && !getClinicForumCityFromDb(db).clinicForumCity) {
+    throw new Error(CLINIC_FORUM_VALIDATION_MESSAGE);
   }
 }
 
@@ -54,7 +61,7 @@ export function buildClinicalProfessionalContractContext({
   const financials = resolveBudgetFinancials(budget || { procedures: [] });
 
   if (!skipValidation) {
-    assertClinicalContractReady({ budget, financials });
+    assertClinicalContractReady({ budget, financials, db });
   }
 
   return buildProfessionalContractContext({

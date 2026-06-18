@@ -9,6 +9,14 @@ import { calcPlannedValue } from '../components/clinical/budget/budgetUtils.js';
 
 import { createId } from './helpers.js';
 import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
+import {
+  isContractLinkedToBudget,
+  isBudgetLocked,
+  getBudgetLockMessage,
+  hasRealReceivableLinkedToBudget,
+  hasRealFinancingLinkedToBudget,
+} from '../components/clinical/budget/budgetEditAccessUtils.js';
+import { formatFriendlyBudgetNumber } from '../utils/friendlyNumbers.js';
 
 export const BUDGET_LOCK_ERROR = 'Registro bloqueado por contrato gerado.';
 
@@ -20,12 +28,14 @@ const CONTRACT_ACTIVE_STATUSES = new Set([
   CONTRACT_STATUS.DRAFT,
 ]);
 
-function hasLinkedReceivables(db, patientId, appointmentId, budgetId) {
-  if (!patientId) return false;
-  const originIds = new Set([appointmentId, budgetId].filter(Boolean).map(String));
-  return (db.accountsReceivable || []).some(
-    (r) => r.patient_id === patientId && originIds.has(String(r.origin_id || '')),
-  );
+function hasLinkedReceivables(_db, _patientId, _appointmentId, budgetId) {
+  return hasRealReceivableLinkedToBudget(budgetId);
+}
+
+function resolveClinicalPatientId(ca, db) {
+  if (ca?.patientId) return ca.patientId;
+  const apt = (db.appointments || []).find((a) => a.id === ca.appointmentId);
+  return apt?.patientId || null;
 }
 
 function getBudgetInline(appointmentId) {
@@ -45,53 +55,80 @@ function pushClinicalEvent(db, appointmentId, type, data, userId) {
   });
 }
 
-export function getBudgetLockContext(appointmentId) {
-  const budget = getBudgetInline(appointmentId);
-  const contract = getContractStatusForQuote(appointmentId, 'clinical_budget', budget?.id || null);
+function buildBudgetLockContext(appointmentId, budget, patientId) {
+  const contract = getContractStatusForQuote(
+    appointmentId,
+    'clinical_budget',
+    budget?.id || null,
+    patientId,
+  );
   const db = loadDb();
-  const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === appointmentId);
-  const patientId = clinical?.patientId || null;
 
   const contractStatus = contract?.status || null;
-  const hasActiveContract = Boolean(contract && CONTRACT_ACTIVE_STATUSES.has(contractStatus));
-  const contractSigned = contractStatus === CONTRACT_STATUS.SIGNED
-    || hasSignedContractForQuote(appointmentId, 'clinical_budget', budget?.id || null);
-  const hasFinancing = Boolean(budget?.financingId);
-  const hasReceivables = hasLinkedReceivables(db, patientId, appointmentId, budget?.id);
-
-  const isHistorical = budget?.status === BUDGET_STATUS.HISTORICO;
-  const isContractGeneratedStatus = budget?.status === BUDGET_STATUS.CONTRATO_GERADO;
-  const isApprovedWithLock = budget?.status === BUDGET_STATUS.APROVADO
-    && (hasActiveContract || contractSigned || hasFinancing || hasReceivables);
-
-  const isLocked = Boolean(
-    budget && (
-      isHistorical
-      || isContractGeneratedStatus
-      || budget.status === BUDGET_STATUS.CANCELADO
-      || isApprovedWithLock
-      || contractSigned
+  const contractApplies = isContractLinkedToBudget(contract, budget);
+  const hasActiveContract = Boolean(
+    contractApplies && contract && CONTRACT_ACTIVE_STATUSES.has(contractStatus),
+  );
+  const contractSigned = Boolean(
+    contractApplies && (
+      contractStatus === CONTRACT_STATUS.SIGNED
+      || hasSignedContractForQuote(appointmentId, 'clinical_budget', budget?.id || null)
     ),
   );
+  const contractCanceled = Boolean(
+    contractApplies && contractStatus === CONTRACT_STATUS.CANCELED,
+  );
+  const hasFinancing = hasRealFinancingLinkedToBudget(budget?.id);
+  const hasReceivables = hasLinkedReceivables(db, patientId, appointmentId, budget?.id);
+
+  const lockCtx = {
+    patientId,
+    contract,
+    contractApplies,
+    hasActiveContract,
+    contractSigned,
+    contractCanceled,
+    hasFinancing,
+    hasReceivables,
+  };
+
+  const isLocked = Boolean(budget && isBudgetLocked(budget, lockCtx));
+  const lockMessage = isLocked ? getBudgetLockMessage(budget, lockCtx) : null;
 
   return {
     isLocked,
     budget,
     contract,
+    contractApplies,
     contractSigned,
-    contractCanceled: contractStatus === CONTRACT_STATUS.CANCELED,
+    contractCanceled,
     hasFinancing,
     hasReceivables,
     hasActiveContract,
-    lockMessage: isLocked
-      ? 'Este orçamento está bloqueado porque já possui contrato gerado. Para alterar condições ou procedimentos, crie um novo orçamento.'
-      : null,
+    lockMessage,
   };
+}
+
+export function getBudgetLockContext(appointmentId) {
+  const db = loadDb();
+  const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === appointmentId);
+  const budget = clinical?.budget || null;
+  const patientId = clinical ? resolveClinicalPatientId(clinical, db) : null;
+  return buildBudgetLockContext(appointmentId, budget, patientId);
+}
+
+export function getBudgetLockContextForBudget(appointmentId, budget) {
+  const db = loadDb();
+  const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === appointmentId);
+  const patientId = clinical ? resolveClinicalPatientId(clinical, db) : null;
+  return buildBudgetLockContext(appointmentId, budget, patientId);
 }
 
 export function isBudgetEditable(appointmentId) {
   return !getBudgetLockContext(appointmentId).isLocked;
 }
+
+export { isBudgetLocked } from '../components/clinical/budget/budgetEditAccessUtils.js';
 
 function isDocumentsOnlyUpdate(existing, next) {
   if (!existing || !next) return false;
@@ -107,7 +144,7 @@ function isDocumentsOnlyUpdate(existing, next) {
 
 export function assertBudgetEditable(appointmentId, nextBudget, options = {}) {
   if (options.skipLockCheck) return;
-  const ctx = getBudgetLockContext(appointmentId);
+  const ctx = getBudgetLockContextForBudget(appointmentId, nextBudget);
   if (!ctx.isLocked) return;
   if (options.allowDocumentsOnly && isDocumentsOnlyUpdate(ctx.budget, nextBudget)) return;
   throw new Error(BUDGET_LOCK_ERROR);
@@ -181,18 +218,12 @@ function detachContractsFromArchivedBudget(db, appointmentId, archivedBudgetId) 
     if (contract.quoteId !== appointmentId || contract.quoteSource !== 'clinical_budget') continue;
     if (contract.budgetId && contract.budgetId !== archivedBudgetId) continue;
 
-    const keepStatus = [CONTRACT_STATUS.SIGNED, CONTRACT_STATUS.CANCELED].includes(contract.status);
-    db.generatedContracts[i] = {
-      ...contract,
-      budgetId: archivedBudgetId,
-      ...(!keepStatus && contract.status !== CONTRACT_STATUS.REPLACED
-        ? {
-          status: CONTRACT_STATUS.REPLACED,
-          replacedAt: new Date().toISOString(),
-          replacedReason: 'new_budget_created',
-        }
-        : {}),
-    };
+    if (!contract.budgetId) {
+      db.generatedContracts[i] = {
+        ...contract,
+        budgetId: archivedBudgetId,
+      };
+    }
   }
 }
 
@@ -212,6 +243,14 @@ function buildEmptyBudget(clinical, displayNumber, parentBudgetId, user) {
     validityDate: '',
     professionalId: clinical.professionalId || null,
     financingId: null,
+    financialId: null,
+    contractId: null,
+    generatedContractId: null,
+    generatedContract: null,
+    financeGenerated: false,
+    contractStatus: null,
+    lockReason: null,
+    accountsReceivable: null,
     documents: [],
     createdAt: new Date().toISOString(),
     createdBy: user?.id || null,
@@ -299,10 +338,14 @@ export function getPreviousBudgetImportContext(appointmentId) {
 
   const procedureCount = previous.procedures?.length || 0;
   const plannedCount = clinical?.plannedProcedures?.length || 0;
+  const patientId = clinical?.patientId || null;
+  const friendlyNumber = patientId
+    ? listPatientBudgetHistory(patientId).find((b) => b.id === previous.id)?.budgetNumber
+    : null;
 
   return {
     hasPrevious: true,
-    budgetNumber: previous.budgetNumber || previous.id,
+    budgetNumber: friendlyNumber || formatFriendlyBudgetNumber(previous.budgetNumber, 1),
     procedureCount,
     canImport: procedureCount > 0 && plannedCount === 0 && isBudgetEditable(appointmentId),
     previousBudgetId: previous.id,
@@ -351,13 +394,13 @@ export function importProceduresFromPreviousBudget(user, appointmentId) {
 
     pushClinicalEvent(db, appointmentId, 'budget_procedures_imported', {
       fromBudgetId: previous.id,
-      fromBudgetNumber: previous.budgetNumber || previous.id,
+      fromBudgetNumber: ctx.budgetNumber,
       procedureCount: planned.length,
     }, user?.id);
 
     return {
       procedureCount: planned.length,
-      budgetNumber: previous.budgetNumber || previous.id,
+      budgetNumber: ctx.budgetNumber,
     };
   });
 }
@@ -368,15 +411,19 @@ export function listPatientBudgetHistory(patientId) {
   const rows = [];
 
   for (const ca of db.clinicalAppointments || []) {
-    if (ca.patientId !== patientId) continue;
+    const clinicalPatientId = resolveClinicalPatientId(ca, db);
+    if (clinicalPatientId !== patientId) continue;
     for (const archived of ca.budgetHistory || []) {
-      const archivedContract = (db.generatedContracts || []).find(
-        (c) => c.budgetId === archived.id && c.quoteSource === 'clinical_budget',
+      const archivedContract = getContractStatusForQuote(
+        ca.appointmentId,
+        'clinical_budget',
+        archived.id,
+        patientId,
       );
       rows.push({
         id: archived.id,
         appointmentId: ca.appointmentId,
-        budgetNumber: archived.budgetNumber || archived.id,
+        budgetNumber: archived.budgetNumber,
         status: archived.status || BUDGET_STATUS.HISTORICO,
         totalValue: archived.totalValue,
         createdAt: archived.createdAt,
@@ -387,11 +434,16 @@ export function listPatientBudgetHistory(patientId) {
       });
     }
     if (ca.budget) {
-      const contract = getContractStatusForQuote(ca.appointmentId, 'clinical_budget', ca.budget.id);
+      const contract = getContractStatusForQuote(
+        ca.appointmentId,
+        'clinical_budget',
+        ca.budget.id,
+        patientId,
+      );
       rows.push({
         id: ca.budget.id,
         appointmentId: ca.appointmentId,
-        budgetNumber: ca.budget.budgetNumber || ca.budget.id,
+        budgetNumber: ca.budget.budgetNumber,
         status: ca.budget.status,
         totalValue: ca.budget.totalValue,
         createdAt: ca.budget.createdAt,
@@ -403,7 +455,15 @@ export function listPatientBudgetHistory(patientId) {
     }
   }
 
-  return rows.sort(
+  const chronological = [...rows].sort(
+    (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
+  );
+  const numbered = chronological.map((row, index) => ({
+    ...row,
+    budgetNumber: formatFriendlyBudgetNumber(row.budgetNumber, index + 1),
+  }));
+
+  return numbered.sort(
     (a, b) => new Date(b.archivedAt || b.createdAt || 0) - new Date(a.archivedAt || a.createdAt || 0),
   );
 }

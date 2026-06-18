@@ -6,11 +6,13 @@ import {
 } from './budgetUtils.js';
 import {
   getFinancingSummaryForOption,
-  INTEREST_TYPE_OPTIONS,
-  calcEntryPercentFromAmount,
 } from './budgetFinancingUtils.js';
-import { getFinancialPartnerById } from '../../../services/financialPartnersService.js';
 import { getPaymentOptionTitle } from './budgetEventLabels.js';
+import {
+  buildFinancingDisplayLines,
+  resolvePartnerName,
+} from './financingDisplayUtils.js';
+import { calcEntryPercentFromAmount } from '../../../services/financialPartnersService.js';
 
 export const PAYMENT_PRESENTATION_STATUS = {
   APRESENTADA: 'apresentada',
@@ -52,19 +54,6 @@ function calcInstallment(total, down, installments) {
   return rest / n;
 }
 
-function interestTypeLabel(type) {
-  return INTEREST_TYPE_OPTIONS.find((item) => item.value === type)?.label || '';
-}
-
-function resolvePartnerName(opt) {
-  return (
-    opt.partner
-    || opt.customPartnerName
-    || getFinancialPartnerById(opt.partnerId)?.name
-    || ''
-  );
-}
-
 export function buildPaymentOptionSnapshot(opt, originalValue, user) {
   const treatmentValue = calcOptionFinalValue(opt, originalValue);
   const summary = opt.type === 'financiamento'
@@ -95,6 +84,8 @@ export function buildPaymentOptionSnapshot(opt, originalValue, user) {
     firstDueDate: opt.firstDueDate || null,
     financing: summary
       ? {
+          totalAmount: summary.totalAmount,
+          entryAmount: summary.entryAmount,
           financedAmount: summary.financedAmount,
           installmentAmount: summary.installmentAmount,
           installmentsCount: summary.installmentsCount,
@@ -102,6 +93,8 @@ export function buildPaymentOptionSnapshot(opt, originalValue, user) {
           totalPayableAmount: summary.totalPayableAmount,
           totalInterest: summary.totalInterest,
           adminFee: summary.adminFee,
+          interestType: summary.interestType,
+          interestRate: summary.interestRate,
         }
       : null,
     capturedAt: new Date().toISOString(),
@@ -125,7 +118,7 @@ export function buildPaymentDetailRows(opt, originalValue) {
     const discountPct = snapshot?.discountPercent ?? Number(opt.discountPercent || 0);
     rows.push({ label: 'Forma', value: methods.join(', ') || 'À vista' });
     rows.push({ label: 'Valor original', value: formatCurrencyBRL(originalValue) });
-    if (discountPct > 0) rows.push({ label: 'Desconto', value: `${discountPct}%` });
+    rows.push({ label: 'Desconto', value: `${discountPct}%` });
     rows.push({ label: 'Valor final', value: formatCurrencyBRL(finalVal), highlight: true });
     return rows;
   }
@@ -153,49 +146,23 @@ export function buildPaymentDetailRows(opt, originalValue) {
   }
 
   if (opt.type === 'financiamento') {
-    const summary = snapshot?.financing
-      ? {
-          financedAmount: snapshot.financing.financedAmount,
-          installmentAmount: snapshot.financing.installmentAmount,
-          installmentsCount: snapshot.financing.installmentsCount,
-          netFinancedAmount: snapshot.financing.netFinancedAmount,
-          totalPayableAmount: snapshot.financing.totalPayableAmount,
-        }
-      : getFinancingSummaryForOption(opt, originalValue);
+    const display = buildFinancingDisplayLines(opt, originalValue, snapshot?.financing ? {
+      totalAmount: snapshot.treatmentValue ?? treatmentValue,
+      entryAmount: snapshot.downPayment ?? Number(opt.downPayment || 0),
+      financedAmount: snapshot.financing.financedAmount,
+      installmentAmount: snapshot.financing.installmentAmount,
+      installmentsCount: snapshot.financing.installmentsCount,
+      netFinancedAmount: snapshot.financing.netFinancedAmount,
+      totalPayableAmount: snapshot.financing.totalPayableAmount,
+      interestType: snapshot.interestType || opt.interestType,
+      interestRate: snapshot.interestRate ?? opt.interestRate,
+    } : null);
 
-    const partner = snapshot?.partnerName || resolvePartnerName(opt);
-    const entryAmount = snapshot?.downPayment ?? Number(opt.downPayment || 0);
-    const entryPct = snapshot?.downPaymentPercent ?? (
-      summary?.totalAmount > 0
-        ? calcEntryPercentFromAmount(summary.totalAmount, entryAmount)
-        : calcEntryPercentFromAmount(treatmentValue, entryAmount)
-    );
-    const pctLabel = entryPct % 1 === 0 ? entryPct : Number(entryPct).toFixed(1);
-
-    if (partner) rows.push({ label: 'Parceiro financeiro', value: partner });
-    rows.push({ label: 'Valor do tratamento', value: formatCurrencyBRL(treatmentValue) });
-    if (entryAmount > 0) {
-      rows.push({ label: 'Entrada', value: `${formatCurrencyBRL(entryAmount)} (${pctLabel}%)` });
-    }
-    if (summary) {
-      rows.push({ label: 'Valor financiado', value: formatCurrencyBRL(summary.financedAmount) });
-      const typeLabel = interestTypeLabel(snapshot?.interestType || opt.interestType);
-      if (typeLabel) rows.push({ label: 'Tipo de juros', value: typeLabel });
-      const rate = snapshot?.interestRate ?? opt.interestRate;
-      if (Number(rate) > 0) rows.push({ label: 'Taxa aplicada', value: `${rate}%` });
-      rows.push({
-        label: 'Parcelamento',
-        value: `${summary.installmentsCount}x de ${formatCurrencyBRL(summary.installmentAmount)}`,
-        highlight: true,
-      });
-      rows.push({ label: 'Total financiado', value: formatCurrencyBRL(summary.netFinancedAmount) });
-      rows.push({
-        label: 'Total geral',
-        value: formatCurrencyBRL(summary.totalPayableAmount),
-        highlight: true,
-      });
-    }
-    return rows;
+    return display.lines.map((line) => ({
+      label: line.label,
+      value: line.value,
+      highlight: line.emphasis === 'installment' || line.emphasis === 'totalFinal',
+    }));
   }
 
   return [{ label: 'Valor', value: formatCurrencyBRL(finalVal), highlight: true }];

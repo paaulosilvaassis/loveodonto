@@ -8,6 +8,12 @@ import {
 } from 'lucide-react';
 import { BUDGET_STATUS } from '../../services/clinicalService.js';
 import { getBudget, getClinicalData } from '../../services/clinicalService.js';
+import { getBudgetLockContext, getBudgetLockContextForBudget } from '../../services/clinicalBudgetLockService.js';
+import { resolveBudgetForView } from '../../services/budgetNavigationService.js';
+import {
+  canAccessContract,
+  isBudgetApprovedStatus,
+} from './contract/contractAccessUtils.js';
 
 /** Etapas do fluxo clínico comercial (header). */
 export const CLINICAL_WORKFLOW_STEPS = [
@@ -133,16 +139,30 @@ export const DEFAULT_PAYMENT_OPTIONS = () => ([
   },
 ]);
 
-export function getClinicalWorkflowState(appointmentId) {
+export function getClinicalWorkflowState(appointmentId, viewBudgetId = null) {
   const clinical = getClinicalData(appointmentId);
-  const planned = clinical?.plannedProcedures || [];
-  const budget = getBudget(appointmentId);
-  const hasPlanning = planned.length > 0;
-  const hasBudget = Boolean(budget?.id || (budget?.procedures || []).length);
-  const budgetApproved = budget?.status === BUDGET_STATUS.APROVADO;
+  const resolved = viewBudgetId
+    ? resolveBudgetForView(appointmentId, viewBudgetId)
+    : { budget: getBudget(appointmentId), isHistoricalView: false, isReadOnly: false, record: null };
+
+  const budget = resolved.budget;
+  const isHistoricalView = Boolean(resolved.isHistoricalView);
+  const isReadOnly = Boolean(resolved.isReadOnly);
+  const plannedFromClinical = clinical?.plannedProcedures || [];
+  const plannedFromBudget = budget?.procedures || [];
+  const hasPlanning = isHistoricalView
+    ? plannedFromBudget.length > 0
+    : plannedFromClinical.length > 0;
+  const lockCtx = viewBudgetId && budget
+    ? getBudgetLockContextForBudget(appointmentId, budget)
+    : getBudgetLockContext(appointmentId);
+  const hasBudget = Boolean(budget?.id || plannedFromBudget.length);
+  const budgetApproved = isBudgetApprovedStatus(budget?.status);
+  const contractAccessible = canAccessContract(budget, lockCtx);
+  const contractUnlocked = contractAccessible;
 
   let phase = 'planejamento';
-  if (budgetApproved) phase = 'contrato';
+  if (contractAccessible || budgetApproved) phase = 'contrato';
   else if (hasBudget) phase = 'orcamento';
   else if (hasPlanning) phase = 'planejamento';
 
@@ -150,27 +170,48 @@ export function getClinicalWorkflowState(appointmentId) {
     hasPlanning,
     hasBudget,
     budgetApproved,
+    contractAccessible,
+    contractUnlocked,
     budgetStatus: budget?.status || null,
     phase,
-    plannedCount: planned.length,
+    plannedCount: isHistoricalView ? plannedFromBudget.length : plannedFromClinical.length,
     budget,
+    lockCtx,
+    viewBudgetId: viewBudgetId || null,
+    isHistoricalView,
+    isReadOnly,
   };
 }
 
 export function canAccessClinicalSection(sectionId, workflow) {
   if (sectionId === 'planejamento') return true;
+  if (workflow.viewBudgetId) {
+    if (sectionId === 'orcamento') return workflow.hasBudget || workflow.hasPlanning;
+    if (sectionId === 'contratos') {
+      return Boolean(workflow.contractAccessible);
+    }
+    if (sectionId === 'documentos') return Boolean(workflow.budgetApproved || workflow.contractAccessible);
+    return true;
+  }
   if (sectionId === 'orcamento') return workflow.hasPlanning;
-  if (sectionId === 'contratos') return workflow.budgetApproved;
-  if (sectionId === 'documentos') return workflow.budgetApproved;
+  if (sectionId === 'contratos') return Boolean(workflow.contractAccessible);
+  if (sectionId === 'documentos') return Boolean(workflow.budgetApproved || workflow.contractAccessible);
   return true;
 }
 
 export function sectionLockMessage(sectionId, workflow) {
+  if (workflow.viewBudgetId) return null;
   if (sectionId === 'orcamento' && !workflow.hasPlanning) {
     return 'Cadastre ao menos um procedimento no Planejamento antes de montar o orçamento.';
   }
-  if ((sectionId === 'contratos' || sectionId === 'documentos') && !workflow.budgetApproved) {
-    return 'Contrato disponível somente após aprovação do orçamento.';
+  if (sectionId === 'contratos' && !workflow.contractAccessible) {
+    if (!workflow.budgetApproved) {
+      return 'Contrato disponível somente após aprovação do orçamento e escolha da forma de pagamento.';
+    }
+    return 'Selecione a condição de pagamento escolhida pelo paciente antes de acessar o contrato.';
+  }
+  if (sectionId === 'documentos' && !workflow.budgetApproved && !workflow.contractAccessible) {
+    return 'Documentos disponíveis somente após aprovação do orçamento.';
   }
   return null;
 }
@@ -193,9 +234,21 @@ export function getNavStepStatus(stepId, workflow, activeSection) {
     return STEP_STATUS.BLOCKED;
   }
 
-  if (stepId === 'contratos' || stepId === 'documentos') {
+  if (stepId === 'contratos') {
     if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
-    if (workflow.budgetApproved) return STEP_STATUS.PENDING;
+    if (
+      workflow.lockCtx?.contractApplies
+      && (workflow.lockCtx?.hasActiveContract || workflow.lockCtx?.contractSigned)
+    ) {
+      return STEP_STATUS.COMPLETED;
+    }
+    if (workflow.contractAccessible) return STEP_STATUS.PENDING;
+    return STEP_STATUS.BLOCKED;
+  }
+
+  if (stepId === 'documentos') {
+    if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
+    if (workflow.budgetApproved || workflow.contractAccessible) return STEP_STATUS.PENDING;
     return STEP_STATUS.BLOCKED;
   }
 

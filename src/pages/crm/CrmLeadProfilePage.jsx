@@ -170,8 +170,8 @@ export default function CrmLeadProfilePage() {
               <p className="muted">Nenhum orçamento vinculado.</p>
             ) : (
               <ul className="crm-budget-list">
-                {budgetLinks.map((b) => (
-                  <li key={b.id}>Orçamento {b.budgetId}</li>
+                {budgetLinks.map((b, index) => (
+                  <li key={b.id}>Orçamento {b.title || `ORC-${String(index + 1).padStart(3, '0')}`}</li>
                 ))}
               </ul>
             )}

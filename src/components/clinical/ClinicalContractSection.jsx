@@ -23,6 +23,7 @@ import { ContractBlockModal } from './contract/ContractBlockModal.jsx';
 import { formatContractEventLabel } from './contract/contractEventLabels.js';
 import { linkFinancingToClinicalContract } from '../../services/clinicalBudgetFinancingIntegration.js';
 import { markBudgetContractGenerated } from '../../services/clinicalBudgetLockService.js';
+import { notifyClinicalBudgetUpdated } from '../../services/clinicalBudgetApprovedService.js';
 import { cancelContractSecure } from '../../services/cancelContractSecureService.js';
 import { can } from '../../permissions/permissions.js';
 import { loadDb } from '../../db/index.js';
@@ -30,8 +31,9 @@ import { getPatient, PENDING_FIELDS_MAP } from '../../services/patientService.js
 import {
   getContractStatusForQuote,
   getContractDetails,
-  sendContractForSignature,
 } from '../../services/contractModuleService.js';
+import SendContractSignatureModal from '../contracts/SendContractSignatureModal.jsx';
+import { canSendContractForSignature } from '../../services/contractSignatureFlowService.js';
 import { CancelContractSecureModal } from './contract/CancelContractSecureModal.jsx';
 import {
   CONTRACT_STATUS,
@@ -40,31 +42,38 @@ import {
 import { formatCurrencyBRL } from '../../utils/currency.js';
 import { formatCpf, formatCnpj } from '../../utils/validators.js';
 import {
-  getAcceptedOption,
   resolveBudgetFinancials,
 } from './budget/budgetUtils.js';
 import { getPaymentOptionTitle } from './budget/budgetEventLabels.js';
 import { contractHtmlWithSignatures } from '../../services/contractPdfService.js';
 import { composeProfessionalClinicalContractHtml } from './contract/composeProfessionalClinicalContract.js';
+import { getClinicForumCityFromDb } from './contract/buildProfessionalContractContext.js';
+import { CLINIC_FORUM_VALIDATION_MESSAGE } from './contract/professionalContractClauses.js';
+import { ContractReadinessChecklist } from '../contracts/ContractReadinessChecklist.jsx';
+import { getContractReadinessChecklist } from '../../services/contractValidationService.js';
+import { getBudgetLockContext, getBudgetLockContextForBudget } from '../../services/clinicalBudgetLockService.js';
 import { generateProfessionalContractPdf } from './contract/generateProfessionalContractPdf.js';
 import { buildFinancialSection } from './contract/clinicalContractSchedule.js';
 import { LINKED_DOCUMENTS, LEGAL_CONTRACT_TEXTS } from './contract/professionalContractClauses.js';
 import { detectTreatmentType, getTreatmentTypeLabel } from './contract/detectTreatmentType.js';
+import { canAccessContract, getContractAccessBlockReasons } from './contract/contractAccessUtils.js';
+import { resolveAttachedTcleIdsFromClinicalDocuments } from '../../services/clinicalTcleAttachmentService.js';
 
 const CLAUSE_GROUPS = [
-  { title: '1. Das Partes', items: ['Qualificação da clínica e do paciente'] },
-  { title: '2. Do Objeto', items: [LEGAL_CONTRACT_TEXTS.object] },
-  { title: '3. Dos Procedimentos', items: ['Tabela de procedimentos aprovados'] },
-  { title: '4. Da Duração', items: [LEGAL_CONTRACT_TEXTS.duration] },
-  { title: '5. Do Pagamento', items: ['Condição financeira integral + cronograma de parcelas'] },
-  { title: '6. Das Garantias', items: [LEGAL_CONTRACT_TEXTS.warrantiesGeneral] },
-  { title: '7. Obrigações do Paciente', items: LEGAL_CONTRACT_TEXTS.patientObligations },
-  { title: '8. Obrigações da Clínica', items: LEGAL_CONTRACT_TEXTS.clinicObligations },
-  { title: '9. Da Inadimplência', items: LEGAL_CONTRACT_TEXTS.default },
-  { title: '10. Da Rescisão', items: LEGAL_CONTRACT_TEXTS.rescission },
-  { title: '11. Da LGPD', items: LEGAL_CONTRACT_TEXTS.lgpd },
-  { title: '12. Do Uso de Imagem', items: [LEGAL_CONTRACT_TEXTS.imageUse] },
-  { title: '13. Do Foro', items: [LEGAL_CONTRACT_TEXTS.forum] },
+  { title: 'Qualificação das partes', items: ['Texto corrido com clínica e paciente'] },
+  { title: 'Objeto', items: [LEGAL_CONTRACT_TEXTS.object] },
+  { title: 'Dos serviços', items: ['Lista de procedimentos contratados'] },
+  { title: 'Da duração do tratamento', items: [LEGAL_CONTRACT_TEXTS.duration] },
+  { title: 'Do pagamento', items: ['Valor por extenso, entrada, parcelas e financiamento'] },
+  { title: 'Cronograma de pagamento', items: ['Parcelas no formato CTR-XXX NN/TT'] },
+  { title: 'Da inadimplência', items: [LEGAL_CONTRACT_TEXTS.default] },
+  { title: 'Da rescisão', items: LEGAL_CONTRACT_TEXTS.rescission },
+  { title: 'Das garantias', items: [LEGAL_CONTRACT_TEXTS.warrantiesGeneral, ...LEGAL_CONTRACT_TEXTS.warranties] },
+  { title: 'Obrigações do paciente', items: LEGAL_CONTRACT_TEXTS.patientObligations },
+  { title: 'Obrigações da clínica', items: LEGAL_CONTRACT_TEXTS.clinicObligations },
+  { title: 'Do abandono de tratamento', items: [LEGAL_CONTRACT_TEXTS.abandonment] },
+  { title: 'LGPD e uso de imagem', items: [LEGAL_CONTRACT_TEXTS.lgpd, LEGAL_CONTRACT_TEXTS.imageUse] },
+  { title: 'Do foro', items: [LEGAL_CONTRACT_TEXTS.forum] },
 ];
 
 const LINKED_TERMS = LINKED_DOCUMENTS.map((label, index) => ({
@@ -106,45 +115,57 @@ function InfoGrid({ rows }) {
   );
 }
 
-function resolveContractReadiness({ budgetApproved, budget, professionalId, pendingCriticalFields }) {
+function resolveContractGenerateReadiness({
+  professionalId,
+  pendingCriticalFields,
+  clinicForumCity,
+  linkedContract,
+}) {
+  if (linkedContract) return { ready: true, reasons: [] };
   const reasons = [];
-  if (!budgetApproved) reasons.push('Orçamento não aprovado.');
-  if (!getAcceptedOption(budget)) reasons.push('Forma de pagamento não escolhida.');
   if (pendingCriticalFields.length) reasons.push('Cadastro do paciente incompleto.');
   if (!professionalId) reasons.push('Profissional responsável não definido.');
+  if (!clinicForumCity) reasons.push(CLINIC_FORUM_VALIDATION_MESSAGE);
   return { ready: reasons.length === 0, reasons };
 }
 
-function resolveUiStatus({ budgetApproved, readiness, linkedContract }) {
-  if (!budgetApproved) {
+function resolveUiStatus({ contractAccessible, generateReadiness, linkedContract, contractReadiness }) {
+  if (!contractAccessible && !linkedContract) {
     return { key: 'blocked', label: 'Bloqueado', tone: 'blocked' };
   }
-  if (!readiness.ready) {
-    return { key: 'blocked', label: 'Bloqueado', tone: 'blocked' };
-  }
-  if (!linkedContract) {
-    return { key: 'ready', label: 'Liberado para geração', tone: 'ready' };
-  }
-  if (linkedContract.status === CONTRACT_STATUS.DRAFT) {
+  if (linkedContract?.status === CONTRACT_STATUS.DRAFT) {
     return { key: 'draft', label: 'Em edição', tone: 'draft' };
   }
-  if ([CONTRACT_STATUS.SENT, CONTRACT_STATUS.VIEWED].includes(linkedContract.status)) {
+  if (linkedContract && [CONTRACT_STATUS.SENT, CONTRACT_STATUS.VIEWED, CONTRACT_STATUS.SIGNED_BY_PATIENT, CONTRACT_STATUS.SIGNED_BY_CLINIC].includes(linkedContract.status)) {
     return { key: 'waiting', label: 'Aguardando assinatura', tone: 'waiting' };
   }
-  if (linkedContract.status === CONTRACT_STATUS.SIGNED) {
+  if ([CONTRACT_STATUS.SIGNED, CONTRACT_STATUS.COMPLETED].includes(linkedContract?.status)) {
     return { key: 'signed', label: 'Assinado', tone: 'signed' };
   }
-  if (linkedContract.status === CONTRACT_STATUS.CANCELED) {
+  if (linkedContract?.status === CONTRACT_STATUS.CANCELED) {
     return { key: 'canceled', label: 'Cancelado', tone: 'canceled' };
   }
-  if (linkedContract.status === CONTRACT_STATUS.GENERATED) {
+  if (linkedContract?.status === CONTRACT_STATUS.GENERATED) {
     return { key: 'generated', label: 'Gerado', tone: 'ready' };
   }
-  return {
-    key: linkedContract.status,
-    label: CONTRACT_STATUS_LABELS[linkedContract.status] || 'Em andamento',
-    tone: 'draft',
-  };
+  if (linkedContract) {
+    return {
+      key: linkedContract.status,
+      label: CONTRACT_STATUS_LABELS[linkedContract.status] || 'Em andamento',
+      tone: 'draft',
+    };
+  }
+  if (!generateReadiness.ready) {
+    return { key: 'pending', label: 'Pendente', tone: 'draft' };
+  }
+  if (contractReadiness && !contractReadiness.canGenerate) {
+    const tclePending = (contractReadiness.groups?.tcle || []).length > 0;
+    if (tclePending) {
+      return { key: 'tcle-pending', label: 'TCLE pendente', tone: 'draft' };
+    }
+    return { key: 'pending-data', label: 'Dados pendentes', tone: 'draft' };
+  }
+  return { key: 'ready', label: 'Liberado para geração', tone: 'ready' };
 }
 
 function formatPhone(phones = []) {
@@ -164,12 +185,15 @@ function formatClinicAddress(addresses = []) {
 
 export function ClinicalContractSection({
   appointmentId,
+  viewBudgetId = null,
+  viewContractId = null,
   patientId,
   user,
-  budgetApproved,
+  contractAccessible: contractAccessibleProp,
   budget,
   appointment,
   professional,
+  onWorkflowRefresh,
 }) {
   const navigate = useNavigate();
   const db = loadDb();
@@ -178,14 +202,23 @@ export function ClinicalContractSection({
   const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [contractModalOpen, setContractModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [toast, setToast] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);
 
-  const linkedContract = useMemo(
-    () => getContractStatusForQuote(appointmentId, 'clinical_budget', budget?.id || null),
-    [appointmentId, budget?.id, historyKey],
-  );
+  const linkedContract = useMemo(() => {
+    if (viewContractId) {
+      const details = getContractDetails(viewContractId);
+      return details?.contract || null;
+    }
+    return getContractStatusForQuote(
+      appointmentId,
+      'clinical_budget',
+      budget?.id || null,
+      patientId,
+    );
+  }, [appointmentId, budget?.id, patientId, viewContractId, historyKey]);
 
   const contractDetails = useMemo(
     () => (linkedContract?.id ? getContractDetails(linkedContract.id) : null),
@@ -213,17 +246,63 @@ export function ClinicalContractSection({
     return getTreatmentTypeLabel(type);
   }, [budget?.planName, budget?.procedures]);
 
-  const readiness = useMemo(
-    () => resolveContractReadiness({
-      budgetApproved,
-      budget,
-      professionalId: appointment?.professionalId,
-      pendingCriticalFields,
-    }),
-    [budgetApproved, budget, appointment?.professionalId, pendingCriticalFields],
+  const clinicForumCity = useMemo(
+    () => getClinicForumCityFromDb(db).clinicForumCity,
+    [db],
   );
 
-  const uiStatus = resolveUiStatus({ budgetApproved, readiness, linkedContract });
+  const lockCtx = useMemo(
+    () => (budget
+      ? getBudgetLockContextForBudget(appointmentId, budget)
+      : getBudgetLockContext(appointmentId)),
+    [appointmentId, budget, historyKey],
+  );
+
+  const contractAccessible = useMemo(
+    () => contractAccessibleProp ?? (canAccessContract(budget, lockCtx) || Boolean(linkedContract)),
+    [contractAccessibleProp, budget, lockCtx, linkedContract],
+  );
+
+  const accessBlockReasons = useMemo(
+    () => getContractAccessBlockReasons(budget, lockCtx),
+    [budget, lockCtx],
+  );
+
+  const generateReadiness = useMemo(
+    () => resolveContractGenerateReadiness({
+      professionalId: appointment?.professionalId,
+      pendingCriticalFields,
+      clinicForumCity,
+      linkedContract,
+    }),
+    [appointment?.professionalId, pendingCriticalFields, clinicForumCity, linkedContract],
+  );
+
+  const attachedTcleIds = useMemo(
+    () => resolveAttachedTcleIdsFromClinicalDocuments({ patientId, appointmentId }),
+    [patientId, appointmentId, historyKey],
+  );
+
+  const contractReadiness = useMemo(
+    () => (patientId && appointmentId && budget
+      ? getContractReadinessChecklist({
+        quoteSource: 'clinical_budget',
+        quoteId: appointmentId,
+        patientId,
+        currentUser: user,
+        contractNumber: linkedContract?.contractNumber,
+        attachedTcleIds,
+      })
+      : null),
+    [patientId, appointmentId, budget, user, linkedContract?.contractNumber, attachedTcleIds, historyKey],
+  );
+
+  const uiStatus = resolveUiStatus({
+    contractAccessible,
+    generateReadiness,
+    linkedContract,
+    contractReadiness,
+  });
 
   const clinic = db.clinicProfile || {};
   const clinicDoc = db.clinicDocumentation || {};
@@ -247,9 +326,13 @@ export function ClinicalContractSection({
   };
 
   const openContractFlow = () => {
-    if (!readiness.ready) {
+    if (!contractAccessible) {
+      showToast(accessBlockReasons[0] || 'Contrato bloqueado.', 'error');
+      return;
+    }
+    if (!generateReadiness.ready) {
       if (pendingCriticalFields.length) setBlockModalOpen(true);
-      else showToast(readiness.reasons[0] || 'Contrato bloqueado.', 'error');
+      else showToast(generateReadiness.reasons[0] || 'Complete os requisitos para gerar o contrato.', 'error');
       return;
     }
     setContractModalOpen(true);
@@ -260,12 +343,13 @@ export function ClinicalContractSection({
     if (html) {
       const viewWindow = window.open('', '_blank');
       if (viewWindow) {
-        viewWindow.document.write(contractHtmlWithSignatures(html));
+        const isProfessional = html.includes('contract-document') || html.includes('Contrato de Prestação');
+        viewWindow.document.write(isProfessional ? html : contractHtmlWithSignatures(html));
         viewWindow.document.close();
       }
       return;
     }
-    if (!readiness.ready) {
+    if (!contractAccessible) {
       showToast('Complete os requisitos antes de visualizar.', 'error');
       return;
     }
@@ -291,7 +375,7 @@ export function ClinicalContractSection({
   };
 
   const handleDownloadPdf = async () => {
-    if (!readiness.ready || !user) return;
+    if (!user || (!canGenerate && !linkedContract)) return;
     try {
       await generateProfessionalContractPdf({
         user,
@@ -308,13 +392,14 @@ export function ClinicalContractSection({
 
   const handleSendSignature = () => {
     if (!linkedContract?.id || !user) return;
-    try {
-      sendContractForSignature(user, linkedContract.id);
-      setHistoryKey((k) => k + 1);
-      showToast('Contrato enviado para assinatura.');
-    } catch (error) {
-      showToast(error.message || 'Erro ao enviar contrato.', 'error');
-    }
+    setSignatureModalOpen(true);
+  };
+
+  const handleSignatureSent = () => {
+    setHistoryKey((k) => k + 1);
+    notifyClinicalBudgetUpdated(patientId);
+    onWorkflowRefresh?.();
+    showToast('Contrato enviado para assinatura por e-mail.');
   };
 
   const handleCancelContract = () => {
@@ -342,11 +427,15 @@ export function ClinicalContractSection({
   const canCancelAsAdmin = Boolean(
     user && (user.role === 'admin' || user.isMaster || can(user, 'admin_contratos:cancel')),
   );
-  const canGenerate = readiness.ready && !linkedContract;
+
+  const canGenerate = contractAccessible
+    && generateReadiness.ready
+    && !linkedContract
+    && (contractReadiness?.canGenerate ?? false);
   const canEdit = linkedContract?.status === CONTRACT_STATUS.DRAFT;
-  const canView = Boolean(linkedContract?.renderedHtml || linkedContract?.editedHtml || readiness.ready);
-  const canPreview = readiness.ready;
-  const canSend = linkedContract?.status === CONTRACT_STATUS.GENERATED;
+  const canView = Boolean(linkedContract?.renderedHtml || linkedContract?.editedHtml || contractAccessible);
+  const canPreview = contractAccessible && (generateReadiness.ready || linkedContract);
+  const canSend = canSendContractForSignature({ contract: linkedContract, budget });
   const canCancel = canCancelAsAdmin
     && linkedContract
     && ![CONTRACT_STATUS.SIGNED, CONTRACT_STATUS.CANCELED].includes(linkedContract.status);
@@ -395,25 +484,35 @@ export function ClinicalContractSection({
           </>
         )}
       >
-        {!budgetApproved ? (
+        {!contractAccessible && !linkedContract ? (
           <div className="clinical-contract-blocked-card">
             <Lock size={36} strokeWidth={1.25} />
             <h3>Contrato bloqueado</h3>
-            <p>Para gerar o contrato, aprove o orçamento e selecione a condição de pagamento.</p>
-          </div>
-        ) : !readiness.ready ? (
-          <div className="clinical-contract-blocked-card">
-            <Lock size={36} strokeWidth={1.25} />
-            <h3>Contrato bloqueado</h3>
-            <p>Para gerar o contrato, aprove o orçamento e selecione a condição de pagamento.</p>
+            <p>Para acessar o contrato, aprove o orçamento e selecione a condição de pagamento escolhida.</p>
             <ul className="clinical-contract-block-reasons">
-              {readiness.reasons.map((reason) => (
+              {accessBlockReasons.map((reason) => (
                 <li key={reason}>{reason}</li>
               ))}
             </ul>
           </div>
         ) : (
           <div className="clinical-contract-v2">
+            {!generateReadiness.ready && !linkedContract ? (
+              <div className="clinical-contract-canceled-banner" role="status">
+                <Lock size={18} aria-hidden />
+                <div>
+                  <strong>Requisitos pendentes para gerar o contrato</strong>
+                  <ul className="clinical-contract-block-reasons">
+                    {generateReadiness.reasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
+            {contractReadiness && !linkedContract ? (
+              <ContractReadinessChecklist checklist={contractReadiness} className="clinical-contract-readiness" />
+            ) : null}
             {isCanceled ? (
               <div className="clinical-contract-canceled-banner" role="status">
                 <XCircle size={18} aria-hidden />
@@ -591,7 +690,20 @@ export function ClinicalContractSection({
           }
           markBudgetContractGenerated(user, appointmentId);
           setHistoryKey((k) => k + 1);
+          notifyClinicalBudgetUpdated(patientId);
+          onWorkflowRefresh?.();
         }}
+      />
+
+      <SendContractSignatureModal
+        open={signatureModalOpen}
+        onOpenChange={setSignatureModalOpen}
+        user={user}
+        contract={linkedContract}
+        budget={budget}
+        professional={professional}
+        treatmentName={treatmentTypeLabel}
+        onSent={handleSignatureSent}
       />
 
       <CancelContractSecureModal

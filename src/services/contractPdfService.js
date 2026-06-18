@@ -4,7 +4,17 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
+function isProfessionalContractHtml(html) {
+  const value = String(html || '');
+  return value.includes('contract-document')
+    || value.includes('signature-section')
+    || value.includes('Serviços Odontológicos');
+}
+
 function appendSignatureBlock(html) {
+  const value = String(html || '');
+  if (isProfessionalContractHtml(value)) return value;
+  if (value.includes('contract-signatures')) return value;
   const sig = `
     <div class="contract-signatures">
       <div>
@@ -16,8 +26,7 @@ function appendSignatureBlock(html) {
         <small>Assinatura da clínica</small>
       </div>
     </div>`;
-  if (String(html || '').includes('contract-signatures')) return html;
-  return `${html || ''}${sig}`;
+  return `${value}${sig}`;
 }
 
 /**

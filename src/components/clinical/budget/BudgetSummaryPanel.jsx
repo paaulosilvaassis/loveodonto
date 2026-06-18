@@ -9,6 +9,7 @@ import { ClinicalBtn } from '../ClinicalStageShell.jsx';
 import { getPaymentOptionTitle } from './budgetEventLabels.js';
 
 import { getPaymentCardPreview, formatPresentedAt } from './budgetCommercialUtils.js';
+import { buildFinancingDisplayLines } from './financingDisplayUtils.js';
 
 import { BudgetNextSteps } from './BudgetNextSteps.jsx';
 
@@ -63,6 +64,10 @@ export function BudgetSummaryPanel({
 
     : null;
 
+  const financingBreakdown = chosenOption?.type === 'financiamento'
+    ? buildFinancingDisplayLines(chosenOption, originalValue)
+    : null;
+
 
 
   return (
@@ -110,6 +115,24 @@ export function BudgetSummaryPanel({
           <span>Valor final</span><strong>{formatCurrencyBRL(finalValue)}</strong>
 
         </div>
+
+        {financingBreakdown?.summary ? (
+          <div className="budget-tab-summary-financing">
+            {financingBreakdown.lines.map((line) => (
+              <div
+                key={line.key}
+                className={[
+                  'budget-tab-summary-fin-row',
+                  line.emphasis === 'treatment' ? 'is-treatment' : '',
+                  line.emphasis === 'totalFinal' ? 'is-total-final' : '',
+                ].filter(Boolean).join(' ')}
+              >
+                <span>{line.label}</span>
+                <strong>{line.value}</strong>
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         <div>
 
@@ -177,7 +200,14 @@ export function BudgetSummaryPanel({
 
             {chosenPreview?.lines?.map((line) => (
 
-              <span key={line.label} className="budget-tab-chosen-line">
+              <span
+                key={line.label}
+                className={[
+                  'budget-tab-chosen-line',
+                  line.emphasis === 'treatment' ? 'is-treatment' : '',
+                  line.emphasis === 'totalFinal' ? 'is-total-final' : '',
+                ].filter(Boolean).join(' ')}
+              >
 
                 {line.label}: {line.value}
 

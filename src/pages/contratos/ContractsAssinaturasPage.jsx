@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { loadDb } from '../../db/index.js';
 import { ContractTable } from '../../contracts/ui/ContractUi.jsx';
 import { getGeneratedContract } from '../../services/contractService.js';
+import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 
 export default function ContractsAssinaturasPage() {
   const signatures = useMemo(() => {
@@ -11,13 +12,13 @@ export default function ContractsAssinaturasPage() {
     );
   }, []);
 
-  const rows = signatures.map((s) => {
+  const rows = signatures.map((s, index) => {
     const contract = getGeneratedContract(s.contractId);
     return {
       id: s.id,
       signer: s.signerName,
       cpf: s.signerCpf || '—',
-      contract: contract?.contractNumber || s.contractId,
+      contract: formatFriendlyContractNumber(contract?.contractNumber, index + 1),
       type: s.signatureType,
       signed: new Date(s.signedAt).toLocaleString('pt-BR'),
       ip: s.ipAddress || '—',

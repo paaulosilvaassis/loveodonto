@@ -2,7 +2,12 @@ import { loadDb, loadDbAsync, withDb } from '../db/index.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
-import { isCepValid, isCnpjValid, isPhoneValid, onlyDigits } from '../utils/validators.js';
+import { isCepValid, isCnpjValid, onlyDigits } from '../utils/validators.js';
+import {
+  normalizeBrazilianPhoneParts,
+  isBrazilianPhonePartsValid,
+  phonePartsToKey,
+} from '../utils/phoneUtils.js';
 import { encryptSecret, decryptSecret } from '../utils/crypto.js';
 
 export const getClinic = () => {
@@ -95,27 +100,89 @@ export const updateClinicDocumentation = (user, payload) => {
 
 export const addClinicPhone = (user, payload) => {
   requirePermission(user, 'team:write');
-  const ddd = onlyDigits(payload.ddd);
-  const numero = onlyDigits(payload.numero);
-  if (!isPhoneValid(`${ddd}${numero}`)) {
-    throw new Error('Telefone inválido.');
+  const tipo = normalizeText(payload.tipo);
+  if (!tipo) throw new Error('Selecione o tipo do telefone.');
+
+  const { ddd, numero } = normalizeBrazilianPhoneParts(payload.ddd, payload.numero);
+  if (!ddd) throw new Error('Informe o DDD com 2 dígitos.');
+  if (!numero) throw new Error('Informe o número do telefone.');
+  if (!isBrazilianPhonePartsValid(ddd, numero)) {
+    throw new Error('Telefone inválido. Use 8 dígitos (fixo) ou 9 dígitos (celular).');
   }
+
+  const phoneKey = phonePartsToKey(ddd, numero);
   const phone = {
     id: createId('phone'),
     clinicId: 'clinic-1',
-    tipo: normalizeText(payload.tipo),
+    tipo,
     ddd,
     numero,
     principal: Boolean(payload.principal),
   };
+
   return withDb((db) => {
-    if (phone.principal) {
+    const duplicate = (db.clinicPhones || []).some(
+      (item) => phonePartsToKey(item.ddd, item.numero) === phoneKey && item.id !== payload.id,
+    );
+    if (duplicate) throw new Error('Este telefone já está cadastrado.');
+
+    if (!db.clinicPhones.length) {
+      phone.principal = true;
+    } else if (phone.principal) {
       db.clinicPhones.forEach((item) => {
         item.principal = false;
       });
     }
+
     db.clinicPhones.push(phone);
     logAction('clinic:add-phone', { phoneId: phone.id, userId: user.id });
+    return db.clinicPhones;
+  });
+};
+
+export const updateClinicPhone = (user, phoneId, payload) => {
+  requirePermission(user, 'team:write');
+  const tipo = normalizeText(payload.tipo);
+  if (!tipo) throw new Error('Selecione o tipo do telefone.');
+
+  const { ddd, numero } = normalizeBrazilianPhoneParts(payload.ddd, payload.numero);
+  if (!ddd) throw new Error('Informe o DDD com 2 dígitos.');
+  if (!numero) throw new Error('Informe o número do telefone.');
+  if (!isBrazilianPhonePartsValid(ddd, numero)) {
+    throw new Error('Telefone inválido. Use 8 dígitos (fixo) ou 9 dígitos (celular).');
+  }
+
+  const phoneKey = phonePartsToKey(ddd, numero);
+
+  return withDb((db) => {
+    const idx = (db.clinicPhones || []).findIndex((item) => item.id === phoneId);
+    if (idx < 0) throw new Error('Telefone não encontrado.');
+
+    const duplicate = db.clinicPhones.some(
+      (item) => item.id !== phoneId && phonePartsToKey(item.ddd, item.numero) === phoneKey,
+    );
+    if (duplicate) throw new Error('Este telefone já está cadastrado.');
+
+    const principal = Boolean(payload.principal);
+    if (principal) {
+      db.clinicPhones.forEach((item) => {
+        item.principal = false;
+      });
+    }
+
+    db.clinicPhones[idx] = {
+      ...db.clinicPhones[idx],
+      tipo,
+      ddd,
+      numero,
+      principal: principal || db.clinicPhones.length === 1,
+    };
+
+    if (!db.clinicPhones.some((item) => item.principal)) {
+      db.clinicPhones[0].principal = true;
+    }
+
+    logAction('clinic:update-phone', { phoneId, userId: user.id });
     return db.clinicPhones;
   });
 };
@@ -123,7 +190,11 @@ export const addClinicPhone = (user, payload) => {
 export const removeClinicPhone = (user, phoneId) => {
   requirePermission(user, 'team:write');
   return withDb((db) => {
+    const removed = (db.clinicPhones || []).find((item) => item.id === phoneId);
     db.clinicPhones = db.clinicPhones.filter((item) => item.id !== phoneId);
+    if (removed?.principal && db.clinicPhones.length) {
+      db.clinicPhones[0].principal = true;
+    }
     logAction('clinic:remove-phone', { phoneId, userId: user.id });
     return db.clinicPhones;
   });

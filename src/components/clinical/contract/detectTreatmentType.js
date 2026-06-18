@@ -19,18 +19,36 @@ const KEYWORD_MAP = [
   { type: TREATMENT_TYPES.RESTAURACAO, keys: ['restauração', 'restauracao', 'obturação'] },
 ];
 
+function matchTypesInBlob(blob) {
+  const lower = String(blob || '').toLowerCase();
+  const matched = [];
+  for (const entry of KEYWORD_MAP) {
+    if (entry.keys.some((k) => lower.includes(k))) {
+      matched.push(entry.type);
+    }
+  }
+  return matched;
+}
+
 export function detectTreatmentType({ planName = '', procedures = [] }) {
   const blob = [
     planName,
     ...(procedures || []).map((p) => `${p.name || ''} ${p.category || ''}`),
-  ].join(' ').toLowerCase();
+  ].join(' ');
+  const types = matchTypesInBlob(blob);
+  return types[0] || null;
+}
 
-  for (const entry of KEYWORD_MAP) {
-    if (entry.keys.some((k) => blob.includes(k))) {
-      return entry.type;
+/** Retorna todos os tipos de tratamento detectados no plano e procedimentos. */
+export function detectAllTreatmentTypes({ planName = '', procedures = [] }) {
+  const types = new Set();
+  for (const type of matchTypesInBlob(planName)) types.add(type);
+  for (const proc of procedures || []) {
+    for (const type of matchTypesInBlob(`${proc.name || ''} ${proc.category || ''}`)) {
+      types.add(type);
     }
   }
-  return null;
+  return [...types];
 }
 
 export function getTreatmentTypeLabel(type) {

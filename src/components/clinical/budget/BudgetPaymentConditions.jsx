@@ -9,7 +9,6 @@ import {
 } from './budgetUtils.js';
 import {
   getFinancingSummaryForOption,
-  validateFinancingPaymentOption,
   isPartnerManualMode,
   getPartnerMaxInstallments,
 } from './budgetFinancingUtils.js';
@@ -21,11 +20,12 @@ import {
 } from '../../../services/financialPartnersService.js';
 import { getPaymentOptionTitle } from './budgetEventLabels.js';
 import {
-  buildPaymentOptionSnapshot,
-  PAYMENT_PRESENTATION_STATUS,
-  isPaymentOptionPresented,
-} from './budgetPaymentPdfUtils.js';
+  markPaymentConditionAsChosen,
+  presentPaymentCondition,
+} from './budgetPaymentPresentationService.js';
+import { getPresentedPaymentOptions, isPaymentOptionChosen } from './budgetPaymentPdfUtils.js';
 import { formatPresentedAt, getPaymentCardPreview } from './budgetCommercialUtils.js';
+import { buildFinancingDisplayLines } from './financingDisplayUtils.js';
 
 const CARD_TITLES = {
   a_vista: 'À vista',
@@ -46,8 +46,13 @@ function calcInstallment(total, down, installments) {
   return rest / n;
 }
 
-function PresentedConditionsBlock({ options, originalValue }) {
-  const presented = options.filter((o) => o.presentToPatient || o.presentedAt);
+function PresentedConditionsBlock({
+  budget,
+  originalValue,
+  readOnly,
+  onMarkChosen,
+}) {
+  const presented = getPresentedPaymentOptions(budget);
   if (!presented.length) return null;
 
   return (
@@ -56,19 +61,66 @@ function PresentedConditionsBlock({ options, originalValue }) {
       <ul className="budget-tab-presented-list">
         {presented.map((opt) => {
           const preview = getPaymentCardPreview(opt, originalValue);
+          const isChosen = isPaymentOptionChosen(opt);
+          const cardClass = [
+            'budget-tab-presented-card',
+            isChosen ? 'is-chosen' : '',
+          ].filter(Boolean).join(' ');
+
           return (
-            <li key={opt.id} className="budget-tab-presented-card">
+            <li key={opt.id} className={cardClass}>
               <div className="budget-tab-presented-card-head">
-                <strong>{getPaymentOptionTitle(opt)}</strong>
+                <div className="budget-tab-presented-card-title">
+                  <strong>{getPaymentOptionTitle(opt)}</strong>
+                  {isChosen ? (
+                    <span className="budget-tab-badge budget-tab-badge--chosen">
+                      <Check size={12} aria-hidden />
+                      Escolhida pelo paciente
+                    </span>
+                  ) : null}
+                </div>
                 {opt.presentedAt ? (
                   <time>{formatPresentedAt(opt.presentedAt)}</time>
                 ) : null}
               </div>
               {preview.lines.map((line) => (
-                <span key={line.label} className="budget-tab-presented-line">
+                <span
+                  key={line.label}
+                  className={[
+                    'budget-tab-presented-line',
+                    line.emphasis === 'treatment' ? 'is-treatment' : '',
+                    line.emphasis === 'totalFinal' ? 'is-total-final' : '',
+                    line.emphasis === 'installment' ? 'is-installment' : '',
+                    line.strong ? 'is-strong' : '',
+                  ].filter(Boolean).join(' ')}
+                >
                   {line.label}: <strong>{line.value}</strong>
                 </span>
               ))}
+              {!readOnly ? (
+                <footer className="budget-tab-presented-card-actions">
+                  {isChosen ? (
+                    <button
+                      type="button"
+                      className="budget-tab-action budget-tab-action--primary is-active"
+                      disabled
+                      aria-pressed="true"
+                    >
+                      <Check size={14} aria-hidden />
+                      Condição escolhida
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="budget-tab-action budget-tab-action--primary"
+                      onClick={() => onMarkChosen(opt)}
+                    >
+                      <Check size={14} aria-hidden />
+                      Marcar como escolhida
+                    </button>
+                  )}
+                </footer>
+              ) : null}
             </li>
           );
         })}
@@ -116,6 +168,26 @@ function PaymentSummaryGrid({ opt, originalValue, finalVal }) {
         <div><dt>Parcelas</dt><dd>{inst}x</dd></div>
         <div><dt>Valor da parcela</dt><dd className="is-highlight">{formatCurrencyBRL(parcel)}</dd></div>
         <div><dt>Total</dt><dd>{formatCurrencyBRL(finalVal)}</dd></div>
+      </dl>
+    );
+  }
+
+  if (opt.type === 'financiamento') {
+    const display = buildFinancingDisplayLines(opt, originalValue);
+    if (!display.summary) return null;
+    return (
+      <dl className="budget-tab-pay-grid budget-tab-pay-grid--financing">
+        {display.lines.map((line) => (
+          <div
+            key={line.key}
+            className={line.emphasis ? `is-${line.emphasis}` : ''}
+          >
+            <dt>{line.label}</dt>
+            <dd className={line.emphasis === 'installment' || line.emphasis === 'totalFinal' ? 'is-highlight' : ''}>
+              {line.value}
+            </dd>
+          </div>
+        ))}
       </dl>
     );
   }
@@ -170,45 +242,32 @@ export function BudgetPaymentConditions({
   };
 
   const togglePresent = (opt) => {
-    if (opt.type === 'financiamento') {
-      const errors = validateFinancingPaymentOption(opt, originalValue);
-      if (errors.length) {
-        setFinancingErrors((prev) => ({ ...prev, [opt.id]: errors }));
-        return;
+    const result = presentPaymentCondition(budget, opt.id, { originalValue, user });
+    if (!result.ok) {
+      if (result.errors?.length) {
+        setFinancingErrors((prev) => ({ ...prev, [opt.id]: result.errors }));
       }
+      return;
     }
-    const nextPresent = !isPaymentOptionPresented(opt);
-    const patch = nextPresent
-      ? {
-          presentToPatient: true,
-          presentationStatus: PAYMENT_PRESENTATION_STATUS.APRESENTADA,
-          presentedAt: opt.presentedAt || new Date().toISOString(),
-          presentedBy: user?.id || null,
-          presentedByName: user?.name || user?.nome || null,
-          presentationSnapshot: buildPaymentOptionSnapshot(opt, originalValue, user),
-        }
-      : {
-          presentToPatient: false,
-          presentationStatus: null,
-        };
 
-    const nextOptions = options.map((item) => (
-      item.id === opt.id ? { ...item, ...patch } : item
-    ));
-    const nextBudget = { ...budget, paymentOptions: nextOptions };
-    setBudget(nextBudget);
-    onPresent?.({ ...opt, ...patch }, nextBudget);
+    setFinancingErrors((prev) => ({ ...prev, [opt.id]: null }));
+    setBudget(result.nextBudget);
+
+    if (result.action === 'presented') {
+      onPresent?.(result.option, result.nextBudget);
+    } else {
+      onPresent?.(result.option, result.nextBudget, { action: 'unpresented' });
+    }
   };
 
   const markChosen = (opt) => {
-    if (opt.type === 'financiamento') {
-      const errors = validateFinancingPaymentOption(opt, originalValue);
-      if (errors.length) {
+    markPaymentConditionAsChosen(opt, {
+      originalValue,
+      onChoose,
+      onFinancingErrors: (errors) => {
         setFinancingErrors((prev) => ({ ...prev, [opt.id]: errors }));
-        return;
-      }
-    }
-    onChoose?.(opt);
+      },
+    });
   };
 
   return (
@@ -220,7 +279,12 @@ export function BudgetPaymentConditions({
         </div>
       </header>
 
-      <PresentedConditionsBlock options={options} originalValue={originalValue} />
+      <PresentedConditionsBlock
+        budget={budget}
+        originalValue={originalValue}
+        readOnly={readOnly}
+        onMarkChosen={markChosen}
+      />
 
       <div className="budget-tab-pay-stack">
         {options.map((opt) => {
@@ -274,9 +338,7 @@ export function BudgetPaymentConditions({
                 ) : null}
               </div>
 
-              {opt.type !== 'financiamento' ? (
-                <PaymentSummaryGrid opt={opt} originalValue={originalValue} finalVal={finalVal} />
-              ) : null}
+              <PaymentSummaryGrid opt={opt} originalValue={originalValue} finalVal={finalVal} />
 
               {isExpanded ? (
                 <div className="budget-tab-pay-config">

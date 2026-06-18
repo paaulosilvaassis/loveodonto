@@ -10,6 +10,7 @@ import {
   resolvePdfPaymentSections,
 } from './budgetPaymentPdfUtils.js';
 import { BUDGET_STATUS_BADGES } from '../clinicalAppointmentConfig.js';
+import { formatFriendlyBudgetNumber } from '../../../utils/friendlyNumbers.js';
 
 const BRAND_PURPLE = '#6A00FF';
 const BRAND_PURPLE_SOFT = '#F3EEFF';
@@ -84,15 +85,7 @@ function regionLabel(proc) {
 }
 
 function formatBudgetDisplayNumber(budget) {
-  const base = budget?.createdAt || budget?.updatedAt || new Date().toISOString();
-  const date = new Date(String(base).includes('T') ? base : `${base}T12:00:00`);
-  if (Number.isNaN(date.getTime())) {
-    return `ORC-${new Date().getFullYear()}`;
-  }
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
-  return `ORC-${dd}${mm}${yyyy}`;
+  return formatFriendlyBudgetNumber(budget?.budgetNumber, 1);
 }
 
 function resolveBudgetStatusLabel(status) {

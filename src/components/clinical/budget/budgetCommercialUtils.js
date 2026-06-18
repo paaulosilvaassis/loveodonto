@@ -4,10 +4,14 @@ import {
   CASH_METHODS,
   CARD_BRANDS,
 } from './budgetUtils.js';
-import { getFinancingSummaryForOption } from './budgetFinancingUtils.js';
-import { getFinancialPartnerById } from '../../../services/financialPartnersService.js';
 import { getPaymentOptionTitle } from './budgetEventLabels.js';
-import { BUDGET_STATUS } from '../../../services/clinicalService.js';
+import { BUDGET_STATUS } from '../../../services/clinicalBudgetConstants.js';
+import { getAcceptedOption } from './budgetUtils.js';
+import { canAccessContract, isBudgetApprovedStatus } from '../contract/contractAccessUtils.js';
+import { isBudgetLocked, isRealFinanceLinkedToBudget } from './budgetEditAccessUtils.js';
+import {
+  buildFinancingDisplayLines,
+} from './financingDisplayUtils.js';
 
 function calcInstallment(total, down, installments) {
   const rest = Math.max(0, Number(total || 0) - Number(down || 0));
@@ -36,20 +40,22 @@ export function getPaymentCardPreview(opt, originalValue) {
       .filter(Boolean)
       .map((m) => CASH_METHODS.find((c) => c.value === m)?.label || m);
     headline = methods[0]?.toUpperCase() || 'À VISTA';
-    lines.push({ label: 'Valor', value: formatCurrencyBRL(originalValue) });
-    if (Number(opt.discountPercent) > 0) {
-      lines.push({ label: 'Desconto', value: `${opt.discountPercent}%` });
+    lines.push({ label: 'Valor original', value: formatCurrencyBRL(originalValue) });
+    lines.push({ label: 'Desconto', value: `${Number(opt.discountPercent || 0)}%` });
+    lines.push({ label: 'Valor final', value: formatCurrencyBRL(finalVal), strong: true });
+    if (methods.length) {
+      lines.push({ label: 'Formas aceitas', value: methods.join(', ') });
     }
     highlight = formatCurrencyBRL(finalVal);
-    lines.push({ label: 'Valor final', value: highlight, strong: true });
   }
 
   if (opt.type === 'parcelado_clinica') {
     const down = Number(opt.downPayment || 0);
     const inst = Math.max(1, Number(opt.installments || 1));
     const parcel = calcInstallment(finalVal, down, inst);
-    if (down > 0) lines.push({ label: 'Entrada', value: formatCurrencyBRL(down) });
-    lines.push({ label: 'Parcelamento', value: `${inst}x de ${formatCurrencyBRL(parcel)}` });
+    lines.push({ label: 'Entrada', value: formatCurrencyBRL(down) });
+    lines.push({ label: 'Parcelas', value: `${inst}x` });
+    lines.push({ label: 'Valor da parcela', value: formatCurrencyBRL(parcel), strong: true });
     lines.push({ label: 'Total', value: formatCurrencyBRL(finalVal), strong: true });
     highlight = `${inst}x de ${formatCurrencyBRL(parcel)}`;
   }
@@ -58,39 +64,24 @@ export function getPaymentCardPreview(opt, originalValue) {
     const brand = CARD_BRANDS.find((b) => b.value === opt.cardBrand)?.label || 'Cartão';
     const inst = Math.max(1, Number(opt.installments || 1));
     const parcel = finalVal / inst;
-    const downPct = originalValue > 0 ? Math.round((Number(opt.downPayment || 0) / originalValue) * 100) : 0;
-    if (downPct > 0) {
-      lines.push({ label: 'Entrada', value: `${downPct}% · ${formatCurrencyBRL(opt.downPayment || 0)}` });
-    }
     lines.push({ label: 'Bandeira', value: brand });
-    lines.push({ label: 'Parcelamento', value: `${inst}x de ${formatCurrencyBRL(parcel)}` });
+    lines.push({ label: 'Parcelas', value: `${inst}x` });
+    lines.push({ label: 'Valor da parcela', value: formatCurrencyBRL(parcel), strong: true });
     lines.push({ label: 'Total', value: formatCurrencyBRL(finalVal), strong: true });
     highlight = `${inst}x de ${formatCurrencyBRL(parcel)}`;
   }
 
   if (opt.type === 'financiamento') {
-    const summary = getFinancingSummaryForOption(opt, originalValue);
-    const partner =
-      opt.partner ||
-      opt.customPartnerName ||
-      getFinancialPartnerById(opt.partnerId)?.name ||
-      '—';
-    const pct = opt.downPaymentPercent ?? (
-      summary?.totalAmount > 0
-        ? ((summary.entryAmount / summary.totalAmount) * 100).toFixed(0)
-        : null
-    );
+    const display = buildFinancingDisplayLines(opt, originalValue);
     headline = 'FINANCIAMENTO';
-    lines.push({ label: 'Parceiro', value: partner });
-    if (pct) lines.push({ label: 'Entrada', value: `${pct}% · ${formatCurrencyBRL(opt.downPayment || 0)}` });
-    if (summary) {
-      lines.push({ label: 'Valor financiado', value: formatCurrencyBRL(summary.financedAmount) });
+    highlight = display.headline;
+    for (const line of display.lines) {
       lines.push({
-        label: 'Parcelamento',
-        value: `${summary.installmentsCount}x de ${formatCurrencyBRL(summary.installmentAmount)}`,
+        label: line.label,
+        value: line.value,
+        strong: line.emphasis === 'totalFinal' || line.emphasis === 'installment',
+        emphasis: line.emphasis,
       });
-      lines.push({ label: 'Total contrato', value: formatCurrencyBRL(summary.totalPayableAmount), strong: true });
-      highlight = `${summary.installmentsCount}x de ${formatCurrencyBRL(summary.installmentAmount)}`;
     }
   }
 
@@ -118,9 +109,11 @@ export function resolveFunnelSteps(budget, financials, lockCtx = {}) {
   const status = budget?.status;
   const hasTreatment = (budget?.procedures || []).length > 0;
   const hasPresented = options.some((o) => o.presentToPatient || o.presentedAt);
-  const isApproved = status === BUDGET_STATUS.APROVADO;
-  const financeDone = Boolean(lockCtx.hasReceivables || lockCtx.hasFinancing || budget?.financingId);
-  const contractDone = Boolean(lockCtx.hasActiveContract || lockCtx.contractSigned);
+  const isApproved = isBudgetApprovedStatus(status);
+  const financeDone = isRealFinanceLinkedToBudget(budget?.id);
+  const contractDone = Boolean(
+    lockCtx.contractApplies && (lockCtx.hasActiveContract || lockCtx.contractSigned),
+  );
 
   const raw = [
     { key: 'treatment', label: 'Tratamento definido', done: hasTreatment },
@@ -135,10 +128,14 @@ export function resolveFunnelSteps(budget, financials, lockCtx = {}) {
 
   return raw.map((step, index) => {
     let stepStatus = 'pending';
-    if (step.done) stepStatus = 'done';
-    else if (index === firstOpenIndex) stepStatus = 'current';
-    else if (firstOpenIndex >= 0 && index > firstOpenIndex) {
-      stepStatus = raw.slice(0, index).every((s) => s.done) ? 'pending' : 'blocked';
+    if (step.done) {
+      stepStatus = 'done';
+    } else if (step.key === 'finance' || step.key === 'contract') {
+      stepStatus = !isApproved ? 'blocked' : 'pending';
+    } else if (index === firstOpenIndex) {
+      stepStatus = 'current';
+    } else {
+      stepStatus = 'pending';
     }
     return { ...step, status: stepStatus };
   });
@@ -147,12 +144,12 @@ export function resolveFunnelSteps(budget, financials, lockCtx = {}) {
 export function resolveNextSteps(budget, financials, lockCtx = {}) {
   const steps = [];
   const accepted = financials?.accepted;
-  const isApproved = budget?.status === BUDGET_STATUS.APROVADO;
+  const isApproved = isBudgetApprovedStatus(budget?.status);
 
-  if (lockCtx?.isLocked) {
+  if (isBudgetLocked(budget, lockCtx)) {
     steps.push({
       id: 'new-budget',
-      label: 'Contrato gerado — use "Criar novo orçamento" para nova negociação.',
+      label: 'Orçamento bloqueado — use "Criar novo orçamento" para nova negociação.',
       tone: 'info',
     });
     return steps;
@@ -178,7 +175,7 @@ export function resolveNextSteps(budget, financials, lockCtx = {}) {
     return steps;
   }
 
-  if (!lockCtx?.hasReceivables && !lockCtx?.hasFinancing) {
+  if (!isRealFinanceLinkedToBudget(budget?.id)) {
     steps.push({ id: 'finance', label: 'Financeiro será gerado na aprovação — verifique Contas a Receber.', tone: 'info' });
   }
 
@@ -189,6 +186,46 @@ export function resolveNextSteps(budget, financials, lockCtx = {}) {
   }
 
   return steps;
+}
+
+export function validateBudgetForApproval({ budget, financials, patient, appointment }) {
+  const errors = [];
+
+  if (!budget) {
+    errors.push('Orçamento ativo não encontrado.');
+    return errors;
+  }
+
+  if (budget.status === BUDGET_STATUS.APROVADO) {
+    errors.push('Este orçamento já está aprovado.');
+    return errors;
+  }
+
+  if (!(budget.procedures || []).length) {
+    errors.push('Defina os procedimentos do tratamento antes de aprovar.');
+  }
+
+  const accepted = financials?.accepted || getAcceptedOption(budget);
+  if (!accepted) {
+    errors.push('Marque a condição de pagamento escolhida pelo paciente.');
+  }
+
+  const patientId = patient?.id || appointment?.patientId;
+  if (!patientId) {
+    errors.push('Paciente não vinculado ao atendimento.');
+  }
+
+  const professionalId = budget.professionalId || appointment?.professionalId;
+  if (!professionalId) {
+    errors.push('Informe o profissional responsável.');
+  }
+
+  const finalValue = Number(financials?.finalValue ?? 0);
+  if (!Number.isFinite(finalValue) || finalValue <= 0) {
+    errors.push('O valor final do orçamento deve ser maior que zero.');
+  }
+
+  return errors;
 }
 
 export function chosenStatusLabel(budget) {

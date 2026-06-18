@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/useAuth.js';
 import { useTenant } from '../tenant/useTenant.js';
+import { getTenant } from '../services/tenantService.js';
+import { DEV_BACKEND_NOT_RUNNING_MSG } from '../config/adminApiBase.js';
 import { Section } from '../components/Section.jsx';
 import { Field } from '../components/Field.jsx';
 import Button from '../components/Button.jsx';
@@ -21,7 +23,7 @@ import {
   setTenantUserSystemAccess,
 } from '../services/collaboratorAccessProvisionService.js';
 import { MEMBERSHIP_ROLE_LABELS, INVITABLE_ROLES } from '../constants/tenantRoles.js';
-import { UserPlus, Copy, Trash2, Pencil, Eye, Power, Mail } from 'lucide-react';
+import { UserPlus, Copy, Trash2, Pencil, Eye, Mail, MoreVertical, UserX, UserCheck } from 'lucide-react';
 
 function formatUpdatedAt(iso) {
   if (!iso) return '—';
@@ -70,9 +72,124 @@ function normalizeUiAccessErrorMessage(message) {
   return raw;
 }
 
+function UsuarioRowActions({
+  active,
+  canManageRow,
+  canResendInvite,
+  saving,
+  onView,
+  onEdit,
+  onToggleAccess,
+  onResendInvite,
+  onRemove,
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const hasSecondaryActions = canResendInvite || canManageRow;
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const handleOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [menuOpen]);
+
+  return (
+    <div className="collaborator-row-actions collaborator-row-actions--icons access-user-row-actions">
+      <button
+        type="button"
+        className="collaborator-icon-btn"
+        title="Ver detalhes"
+        aria-label="Ver detalhes"
+        onClick={onView}
+        disabled={saving}
+      >
+        <Eye size={16} strokeWidth={2} aria-hidden />
+      </button>
+      <button
+        type="button"
+        className="collaborator-icon-btn"
+        title="Editar"
+        aria-label="Editar"
+        onClick={onEdit}
+        disabled={saving}
+      >
+        <Pencil size={16} strokeWidth={2} aria-hidden />
+      </button>
+      {canManageRow ? (
+        <button
+          type="button"
+          className={`collaborator-icon-btn ${active ? 'collaborator-icon-btn--deactivate' : 'collaborator-icon-btn--activate'}`}
+          title={active ? 'Desativar acesso' : 'Ativar acesso'}
+          aria-label={active ? 'Desativar acesso' : 'Ativar acesso'}
+          onClick={onToggleAccess}
+          disabled={saving}
+        >
+          {active ? (
+            <UserX size={16} strokeWidth={2} aria-hidden />
+          ) : (
+            <UserCheck size={16} strokeWidth={2} aria-hidden />
+          )}
+        </button>
+      ) : null}
+      {hasSecondaryActions ? (
+        <div className="access-user-row-menu" ref={menuRef}>
+          <button
+            type="button"
+            className="collaborator-icon-btn"
+            title="Mais ações"
+            aria-label="Mais ações"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((prev) => !prev)}
+            disabled={saving}
+          >
+            <MoreVertical size={16} strokeWidth={2} aria-hidden />
+          </button>
+          {menuOpen ? (
+            <div className="access-user-row-menu-dropdown" role="menu">
+              {canResendInvite ? (
+                <button
+                  type="button"
+                  className="access-user-row-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    onResendInvite();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <Mail size={14} aria-hidden />
+                  <span>Reenviar convite</span>
+                </button>
+              ) : null}
+              {canManageRow ? (
+                <button
+                  type="button"
+                  className="access-user-row-menu-item access-user-row-menu-item--danger"
+                  role="menuitem"
+                  onClick={() => {
+                    onRemove();
+                    setMenuOpen(false);
+                  }}
+                >
+                  <Trash2 size={14} aria-hidden />
+                  <span>Remover vínculo</span>
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ConfiguracoesUsuariosPage() {
   const { user } = useAuth();
-  const { tenant } = useTenant();
+  const { tenant, loading: tenantLoading, error: tenantError, refreshTenantContext } = useTenant();
   const [members, setMembers] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -93,7 +210,11 @@ export default function ConfiguracoesUsuariosPage() {
   const [newUserRole, setNewUserRole] = useState('dentista');
   const [newUserStatus, setNewUserStatus] = useState('active');
 
-  const tenantId = tenant?.id;
+  const tenantId = tenant?.id || user?.tenantId || null;
+  const tenantLabel = tenant?.trade_name
+    || tenant?.name
+    || getTenant(tenantId)?.name
+    || 'Clínica';
   const isMaster = user?.isMaster || user?.role === 'admin';
 
   const pushToast = (type, message) => {
@@ -125,7 +246,7 @@ export default function ConfiguracoesUsuariosPage() {
           name: u.full_name || '',
           phone: u.phone || '',
           internal_notes: u.internal_notes || '',
-          tenant_name: tenant?.trade_name || tenant?.name || 'Clínica',
+          tenant_name: tenantLabel,
         })));
         const invs = users
           .map((u) => u?.invitation)
@@ -144,7 +265,7 @@ export default function ConfiguracoesUsuariosPage() {
     return () => {
       active = false;
     };
-  }, [tenantId, refreshKey, tenant?.trade_name, tenant?.name]);
+  }, [tenantId, refreshKey, tenantLabel]);
 
   const refresh = () => setRefreshKey((k) => k + 1);
 
@@ -314,10 +435,31 @@ export default function ConfiguracoesUsuariosPage() {
     setSaving(false);
   };
 
-  if (!tenantId) {
+  if (tenantLoading && !tenantId) {
     return (
       <div className="stack" style={{ padding: '2rem' }}>
-        <p className="muted">Nenhuma clínica encontrada.</p>
+        <p className="muted">Carregando dados da clínica…</p>
+      </div>
+    );
+  }
+
+  if (!tenantId) {
+    return (
+      <div className="stack" style={{ padding: '2rem', maxWidth: '36rem' }}>
+        <p className="muted">Nenhuma clínica encontrada para sua sessão.</p>
+        {tenantError ? (
+          <p className="error" style={{ marginTop: '0.75rem' }}>{tenantError}</p>
+        ) : null}
+        <p className="muted" style={{ marginTop: '0.75rem', fontSize: '0.9rem' }}>
+          {import.meta.env.DEV
+            ? DEV_BACKEND_NOT_RUNNING_MSG
+            : 'Verifique se sua conta está vinculada a uma clínica ativa.'}
+        </p>
+        <div className="flex gap-sm" style={{ marginTop: '1rem' }}>
+          <Button type="button" variant="primary" onClick={() => refreshTenantContext(false)}>
+            Tentar novamente
+          </Button>
+        </div>
       </div>
     );
   }
@@ -363,7 +505,7 @@ export default function ConfiguracoesUsuariosPage() {
                   <th>Perfil</th>
                   <th>Status</th>
                   <th>Última atualização</th>
-                  <th style={{ minWidth: '220px' }}>Ações</th>
+                  <th className="access-list-table__actions-col">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -398,69 +540,28 @@ export default function ConfiguracoesUsuariosPage() {
                         <td>{m.collaborator_id ? 'Vinculado' : 'Não vinculado'}</td>
                         <td>{MEMBERSHIP_ROLE_LABELS[m.role] || m.role || '—'}</td>
                         <td>
-                          <span className={active ? 'access-badge on' : 'access-badge off'}>
-                            {active ? 'Ativo' : 'Inativo'}
-                          </span>
-                          {' '}
-                          <span className={`access-badge ${inviteStatus === 'aceito' ? 'on' : inviteStatus === 'sem_convite' ? 'off' : 'on'}`}>
-                            {inviteStatus === 'sem_convite' ? 'Sem convite' : inviteStatus}
-                          </span>
-                        </td>
-                        <td className="muted" style={{ fontSize: '0.9rem' }}>{formatUpdatedAt(m.updated_at)}</td>
-                        <td>
-                          <div className="flex gap-sm" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-                            <button
-                              type="button"
-                              className="button secondary small"
-                              onClick={() => openMemberModal(m, 'view')}
-                              disabled={saving}
-                              title="Ver detalhes"
-                            >
-                              <Eye size={14} /> Ver
-                            </button>
-                            <button
-                              type="button"
-                              className="button secondary small"
-                              onClick={() => openMemberModal(m, 'edit')}
-                              disabled={saving}
-                              title="Editar"
-                            >
-                              <Pencil size={14} /> Editar
-                            </button>
-                            {canManageRow ? (
-                              <button
-                                type="button"
-                                className="button secondary small"
-                                onClick={() => handleToggleAccessClick(m)}
-                                disabled={saving}
-                                title={active ? 'Desativar acesso' : 'Ativar acesso'}
-                              >
-                                <Power size={14} /> {active ? 'Desativar' : 'Ativar'}
-                              </button>
-                            ) : null}
-                            {canResendInvite ? (
-                              <button
-                                type="button"
-                                className="button secondary small"
-                                onClick={() => handleResendInviteForMember(m)}
-                                disabled={saving}
-                                title="Reenviar convite"
-                              >
-                                <Mail size={14} /> Convite
-                              </button>
-                            ) : null}
-                            {canManageRow ? (
-                              <button
-                                type="button"
-                                className="button secondary small"
-                                onClick={() => handleRemove(m.user_id, m.full_name || m.email || 'Usuário')}
-                                disabled={saving}
-                                title="Remover vínculo com a clínica"
-                              >
-                                <Trash2 size={14} /> Remover
-                              </button>
-                            ) : null}
+                          <div className="access-user-status-stack">
+                            <span className={active ? 'access-badge on' : 'access-badge off'}>
+                              {active ? 'Ativo' : 'Inativo'}
+                            </span>
+                            <span className={`access-badge ${inviteStatus === 'aceito' ? 'on' : inviteStatus === 'sem_convite' ? 'off' : 'on'}`}>
+                              {inviteStatus === 'sem_convite' ? 'Sem convite' : inviteStatus}
+                            </span>
                           </div>
+                        </td>
+                        <td className="muted access-list-table__date-cell">{formatUpdatedAt(m.updated_at)}</td>
+                        <td className="access-list-table__actions-cell">
+                          <UsuarioRowActions
+                            active={active}
+                            canManageRow={canManageRow}
+                            canResendInvite={canResendInvite}
+                            saving={saving}
+                            onView={() => openMemberModal(m, 'view')}
+                            onEdit={() => openMemberModal(m, 'edit')}
+                            onToggleAccess={() => handleToggleAccessClick(m)}
+                            onResendInvite={() => handleResendInviteForMember(m)}
+                            onRemove={() => handleRemove(m.user_id, m.full_name || m.email || 'Usuário')}
+                          />
                         </td>
                       </tr>
                     );

@@ -22,19 +22,20 @@ export const documentTemplates = [
     key: 'atestado_odontologico',
     category: DOCUMENT_CATEGORIES.ATESTADOS,
     title: 'Atestado Odontológico',
+    printTemplate: 'atestado',
     body: `ATESTADO ODONTOLÓGICO
 
-Eu, {{PROFISSIONAL_NOME}}, CRO {{PROFISSIONAL_CRO}}, atesto que o(a) paciente {{PACIENTE_NOME}}, portador(a) do CPF {{PACIENTE_CPF}}, compareceu ao consultório odontológico em {{DATA_ATENDIMENTO}} às {{HORA_ATENDIMENTO}}.
-
-{{OBSERVACOES}}
+Atesto, para os devidos fins, que o(a) paciente {{PACIENTE_NOME}}, CPF nº {{PACIENTE_CPF}}, esteve em atendimento odontológico nesta clínica na data de {{DATA_ATENDIMENTO}}, no horário de {{HORA_ATENDIMENTO}}, necessitando de afastamento de suas atividades por {{DIAS_AFASTAMENTO}} dia(s), conforme avaliação profissional.
 
 {{CIDADE}}, {{DATA_EMISSAO}}.
 
 {{PROFISSIONAL_NOME}}
-CRO: {{PROFISSIONAL_CRO}}`,
+{{PROFISSIONAL_CRO}}`,
     fields: [
-      { key: 'OBSERVACOES', label: 'Observações', type: 'textarea', required: false },
-      { key: 'CIDADE', label: 'Cidade', type: 'text', required: true },
+      { key: 'DIAS_AFASTAMENTO', label: 'Dias de afastamento', type: 'number', required: true, defaultValue: '1' },
+      { key: 'CID', label: 'CID (opcional)', type: 'text', required: false, placeholder: 'Ex: K08.8' },
+      { key: 'OBSERVACOES', label: 'Observações clínicas', type: 'textarea', required: false },
+      { key: 'CIDADE', label: 'Cidade (local da assinatura)', type: 'text', required: true },
     ],
   },
   {

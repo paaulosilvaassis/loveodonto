@@ -7,6 +7,7 @@ import {
   CASH_METHODS,
   CARD_BRANDS,
 } from './budget/budgetUtils.js';
+import { presentPaymentCondition } from './budget/budgetPaymentPresentationService.js';
 import { getPaymentOptionTitle } from './budget/budgetEventLabels.js';
 import {
   getFinancingSummaryForOption,
@@ -83,16 +84,20 @@ export function BudgetPaymentOptionsPanel({
   };
 
   const togglePresent = (opt) => {
-    if (opt.type === 'financiamento') {
-      const errors = validateFinancingPaymentOption(opt, originalValue);
-      if (errors.length) {
-        setFinancingErrors((prev) => ({ ...prev, [opt.id]: errors }));
-        return;
+    const result = presentPaymentCondition(budget, opt.id, { originalValue, user });
+    if (!result.ok) {
+      if (result.errors?.length) {
+        setFinancingErrors((prev) => ({ ...prev, [opt.id]: result.errors }));
       }
+      return;
     }
-    const nextPresent = !opt.presentToPatient;
-    updateOption(opt.id, { presentToPatient: nextPresent });
-    if (onPresent && nextPresent) onPresent(opt);
+    setFinancingErrors((prev) => ({ ...prev, [opt.id]: null }));
+    setBudget(result.nextBudget);
+    if (onPresent && result.action === 'presented') {
+      onPresent(result.option, result.nextBudget);
+    } else if (onPresent && result.action === 'unpresented') {
+      onPresent(result.option, result.nextBudget, { action: 'unpresented' });
+    }
   };
 
   const markChosen = (opt) => {

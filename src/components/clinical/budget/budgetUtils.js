@@ -72,7 +72,12 @@ export function formatPaymentOptionLabel(opt) {
 }
 
 export function getAcceptedOption(budget) {
-  return (budget?.paymentOptions || []).find((o) => o.accepted) || null;
+  return (budget?.paymentOptions || []).find((option) => {
+    if (!option) return false;
+    if (option.accepted) return true;
+    const status = String(option.presentationStatus || '').trim().toLowerCase();
+    return ['escolhida', 'chosen', 'accepted', 'selected'].includes(status);
+  }) || null;
 }
 
 export function resolveBudgetFinancials(budget) {

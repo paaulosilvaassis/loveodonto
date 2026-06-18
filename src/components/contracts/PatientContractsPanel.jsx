@@ -3,6 +3,7 @@ import { listPatientContracts } from '../../services/contractModuleService.js';
 import { listPatientBudgetHistory } from '../../services/clinicalBudgetLockService.js';
 import { ContractTable, ContractStatusBadge, formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
 import { BudgetStatusBadge } from '../clinical/budget/BudgetStatusBadge.jsx';
+import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 
 export default function PatientContractsPanel({ patientId }) {
   const contracts = useMemo(() => {
@@ -15,9 +16,9 @@ export default function PatientContractsPanel({ patientId }) {
     return listPatientBudgetHistory(patientId);
   }, [patientId]);
 
-  const contractRows = contracts.map((c) => ({
+  const contractRows = contracts.map((c, index) => ({
     id: c.id,
-    number: c.contractNumber || c.id,
+    number: formatFriendlyContractNumber(c.contractNumber, index + 1),
     title: c.title || 'Contrato',
     status: c.status,
     value: formatCtrCurrency(c.totalValueSnapshot),

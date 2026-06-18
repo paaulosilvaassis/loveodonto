@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Lock } from 'lucide-react';
+import { Lock, DoorClosed } from 'lucide-react';
 import { loadDb } from '../../db/index.js';
 import { createId } from '../../services/helpers.js';
 import {
@@ -13,8 +13,17 @@ import {
 } from '../../services/clinicalService.js';
 import {
   getBudgetLockContext,
+  getBudgetLockContextForBudget,
   createNewBudgetForAppointment,
+  listPatientBudgetHistory,
 } from '../../services/clinicalBudgetLockService.js';
+import {
+  resolveBudgetForView,
+  validateBudgetConsistency,
+  BUDGET_CONSISTENCY_ALERT,
+} from '../../services/budgetNavigationService.js';
+import { formatFriendlyBudgetNumber } from '../../utils/friendlyNumbers.js';
+import { notifyClinicalBudgetUpdated } from '../../services/clinicalBudgetApprovedService.js';
 import { processApprovedBudgetFinance } from '../../services/clinicalBudgetFinance.js';
 import { BudgetPaymentConditions } from './budget/BudgetPaymentConditions.jsx';
 import { BudgetSummaryPanel } from './budget/BudgetSummaryPanel.jsx';
@@ -29,7 +38,12 @@ import { resolveNextSteps } from './budget/budgetCommercialUtils.js';
 import {
   calcPlannedValue,
   resolveBudgetFinancials,
+  getAcceptedOption,
+  formatPaymentOptionLabel,
 } from './budget/budgetUtils.js';
+import { validateBudgetForApproval } from './budget/budgetCommercialUtils.js';
+import { resolveBudgetReadOnlyState } from './budget/budgetEditAccessUtils.js';
+import { getChosenPaymentOption } from './contract/contractAccessUtils.js';
 import { generateBudgetPdf } from './budget/generateBudgetPdf.js';
 import { buildFinancingHistoryPayload } from './budget/budgetFinancingUtils.js';
 import {
@@ -37,7 +51,14 @@ import {
   PAYMENT_PRESENTATION_STATUS,
 } from './budget/budgetPaymentPdfUtils.js';
 import { DEFAULT_PAYMENT_OPTIONS } from './clinicalAppointmentConfig.js';
+import { ClinicalBtn } from './ClinicalStageShell.jsx';
 import { CreateNewBudgetModal } from './budget/CreateNewBudgetModal.jsx';
+import { FinishAppointmentModal } from './budget/FinishAppointmentModal.jsx';
+import { APPOINTMENT_STATUS } from '../../services/appointmentService.js';
+import {
+  APPOINTMENT_CLOSE_REASON,
+  closeClinicalAppointment,
+} from '../../services/clinicalAppointmentCloseService.js';
 
 function defaultValidityDate() {
   const d = new Date();
@@ -69,13 +90,18 @@ function mapProceduresFromPlanning(list) {
 
 export function ClinicalBudgetSection({
   appointmentId,
+  viewBudgetId = null,
   user,
   appointment,
   patient,
   onNavigateToContract,
   onNavigateToPlanning,
+  onWorkflowRefresh,
+  onAppointmentClosed,
+  onActiveBudgetChange,
 }) {
   const [budget, setBudget] = useState(null);
+  const [consistencyAlert, setConsistencyAlert] = useState(null);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [proceduresModalOpen, setProceduresModalOpen] = useState(false);
@@ -86,27 +112,46 @@ export function ClinicalBudgetSection({
   const [historyKey, setHistoryKey] = useState(0);
   const [newBudgetModalOpen, setNewBudgetModalOpen] = useState(false);
   const [creatingBudget, setCreatingBudget] = useState(false);
+  const [finishModalOpen, setFinishModalOpen] = useState(false);
+  const [finishingAppointment, setFinishingAppointment] = useState(false);
 
   const db = loadDb();
 
   useEffect(() => {
-    const budgetData = getBudget(appointmentId);
+    const { budget: budgetData, isHistoricalView: historical } = resolveBudgetForView(
+      appointmentId,
+      viewBudgetId,
+    );
     const clinicalData = getClinicalData(appointmentId);
     const planned = clinicalData?.plannedProcedures || [];
 
     if (budgetData) {
       const procedures = budgetData.procedures?.length
         ? budgetData.procedures
-        : mapProceduresFromPlanning(planned);
+        : (historical ? [] : mapProceduresFromPlanning(planned));
       const original = calcPlannedValue(procedures);
-      setBudget({
+      const nextBudget = {
         ...budgetData,
         procedures,
         validityDate: budgetData.validityDate || defaultValidityDate(),
         paymentOptions: budgetData.paymentOptions?.length
           ? budgetData.paymentOptions
           : DEFAULT_PAYMENT_OPTIONS().map((o) => ({ ...o, total: original })),
-      });
+      };
+      setBudget(nextBudget);
+
+      const consistency = validateBudgetConsistency(
+        nextBudget,
+        appointmentId,
+        patient?.id || clinicalData?.patientId,
+      );
+      setConsistencyAlert(consistency.isConsistent ? null : BUDGET_CONSISTENCY_ALERT);
+      return;
+    }
+
+    if (viewBudgetId) {
+      setBudget(null);
+      setConsistencyAlert(null);
       return;
     }
 
@@ -125,7 +170,8 @@ export function ClinicalBudgetSection({
       createdAt: new Date().toISOString(),
       createdBy: user?.id || null,
     });
-  }, [appointmentId, appointment?.professionalId, user?.id]);
+    setConsistencyAlert(null);
+  }, [appointmentId, viewBudgetId, appointment?.professionalId, user?.id, patient?.id]);
 
   const financials = useMemo(
     () => resolveBudgetFinancials(budget || { procedures: [] }),
@@ -139,16 +185,55 @@ export function ClinicalBudgetSection({
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   }, [appointmentId, historyKey, budget?.status]);
 
-  const lockCtx = useMemo(
-    () => getBudgetLockContext(appointmentId),
-    [appointmentId, budget?.status, budget?.id, historyKey],
+  const lockCtx = useMemo(() => {
+    if (budget) {
+      return getBudgetLockContextForBudget(appointmentId, budget);
+    }
+    return getBudgetLockContext(appointmentId);
+  }, [appointmentId, budget, historyKey]);
+
+  const viewAccess = useMemo(
+    () => resolveBudgetReadOnlyState(budget, lockCtx),
+    [budget, lockCtx],
   );
 
-  const isLocked = lockCtx.isLocked;
-  const isTerminalStatus =
-    budget?.status === BUDGET_STATUS.REPROVADO
-    || budget?.status === BUDGET_STATUS.CANCELADO;
-  const isEditBlocked = isLocked || isTerminalStatus;
+  const { isEditBlocked, isHistoricalView, isApprovedView, lockMessage: accessLockMessage } = viewAccess;
+  const isLocked = isEditBlocked;
+  const isCommercialReadOnly = viewAccess.isReadOnly;
+  const blockedMessage = lockCtx.lockMessage || accessLockMessage;
+  const chosenPaymentOption = useMemo(
+    () => getChosenPaymentOption(budget),
+    [budget],
+  );
+
+  const activeBudget = useMemo(
+    () => (viewBudgetId ? getBudget(appointmentId) : null),
+    [appointmentId, viewBudgetId, historyKey],
+  );
+
+  const activeBudgetDisplayNumber = useMemo(() => {
+    if (!activeBudget?.id) return '';
+    const patientId = patient?.id || appointment?.patientId;
+    if (patientId) {
+      const match = listPatientBudgetHistory(patientId).find((item) => item.id === activeBudget.id);
+      if (match?.budgetNumber) return match.budgetNumber;
+    }
+    return formatFriendlyBudgetNumber(activeBudget.budgetNumber, 1);
+  }, [activeBudget?.id, activeBudget?.budgetNumber, patient?.id, appointment?.patientId]);
+
+  const showGoToActiveBudget = isHistoricalView
+    && activeBudget?.id
+    && activeBudget.id !== budget?.id;
+
+  const budgetDisplayNumber = useMemo(() => {
+    if (!budget) return '';
+    const patientId = patient?.id || appointment?.patientId;
+    if (patientId) {
+      const match = listPatientBudgetHistory(patientId).find((item) => item.id === budget.id);
+      if (match?.budgetNumber) return match.budgetNumber;
+    }
+    return formatFriendlyBudgetNumber(budget.budgetNumber, 1);
+  }, [budget?.id, budget?.budgetNumber, patient?.id, appointment?.patientId]);
 
   const nextSteps = useMemo(
     () => resolveNextSteps(budget, financials, lockCtx),
@@ -209,8 +294,11 @@ export function ClinicalBudgetSection({
     }
   };
 
-  const handlePaymentPresented = (opt, nextBudget) => {
+  const handlePaymentPresented = (opt, nextBudget, meta = {}) => {
     persist(nextBudget);
+    if (meta.action === 'unpresented') {
+      return;
+    }
     logClinicalEvent(appointmentId, 'budget_payment_presented', {
       label: getPaymentOptionTitle(opt),
       optionId: opt.id,
@@ -254,25 +342,46 @@ export function ClinicalBudgetSection({
   };
 
   const handleApproveClick = () => {
-    const accepted = getAcceptedOption(budget);
-    if (!accepted) {
-      showToast('Marque a condição escolhida pelo paciente antes de aprovar.', 'error');
+    const errors = validateBudgetForApproval({ budget, financials, patient, appointment });
+    if (errors.length) {
+      showToast(`Não foi possível aprovar o orçamento: ${errors[0]}`, 'error');
       return;
     }
     setApprovalOpen(true);
   };
 
-  const handleConfirmApprove = () => {
+  const handleConfirmApprove = async () => {
     if (!budget || !user) return;
+
+    const errors = validateBudgetForApproval({ budget, financials, patient, appointment });
+    if (errors.length) {
+      showToast(`Não foi possível aprovar o orçamento: ${errors[0]}`, 'error');
+      setApprovalOpen(false);
+      return;
+    }
+
+    const accepted = financials.accepted || getAcceptedOption(budget);
+    const patientId = patient?.id || appointment?.patientId;
+
     setApproving(true);
     try {
-      saveBudget(user, appointmentId, budget);
-      updateBudgetStatus(user, appointmentId, BUDGET_STATUS.APROVADO);
-      const approvedBudget = { ...budget, status: BUDGET_STATUS.APROVADO };
-      setBudget(approvedBudget);
+      const budgetToSave = {
+        ...budget,
+        professionalId: budget.professionalId || appointment?.professionalId || null,
+        id: budget.id || createId('budget'),
+      };
 
-      const patientId = patient?.id || appointment?.patientId;
-      const { financing } = processApprovedBudgetFinance(user, {
+      saveBudget(user, appointmentId, budgetToSave);
+      updateBudgetStatus(user, appointmentId, BUDGET_STATUS.APROVADO);
+
+      const approvedBudget = {
+        ...budgetToSave,
+        status: BUDGET_STATUS.APROVADO,
+        approvedAt: new Date().toISOString(),
+        approvedBy: user.id,
+      };
+
+      const { receivables, financing } = processApprovedBudgetFinance(user, {
         appointmentId,
         patientId,
         patient,
@@ -280,29 +389,41 @@ export function ClinicalBudgetSection({
         professional: appointment?.professionalId ? { id: appointment.professionalId } : null,
       });
 
+      let nextBudget = approvedBudget;
       if (financing?.id) {
-        const withFinancing = { ...approvedBudget, financingId: financing.id };
-        saveBudget(user, appointmentId, withFinancing);
-        setBudget(withFinancing);
+        nextBudget = { ...approvedBudget, financingId: financing.id };
       }
 
+      saveBudget(user, appointmentId, nextBudget, { skipLockCheck: true });
+      setBudget(nextBudget);
       setApprovalOpen(false);
       refreshHistory();
+      onActiveBudgetChange?.(nextBudget.id);
 
-      const isFinancing = financials.accepted?.type === 'financiamento';
-      showToast(
-        isFinancing
-          ? 'Orçamento aprovado! Financiamento registrado em Financeiro > Financiamentos.'
-          : 'Orçamento aprovado! Financeiro e contrato liberados.',
-      );
+      const isFinancing = accepted?.type === 'financiamento';
+      if (isFinancing && financing?.id) {
+        showToast('Orçamento aprovado com sucesso. Financiamento registrado em Financeiro > Financiamentos.');
+      } else if (receivables?.length) {
+        showToast('Orçamento aprovado com sucesso. Financeiro gerado — contrato liberado.');
+      } else {
+        showToast('Orçamento aprovado com sucesso.');
+      }
 
       logClinicalEvent(appointmentId, 'budget_approved', {
-        budgetId: budget.id,
+        budgetId: nextBudget.id,
         totalValue: financials.finalValue,
+        paymentOptionId: accepted?.id || null,
+        paymentLabel: formatPaymentOptionLabel(accepted),
         financingId: financing?.id || null,
+        receivableCount: receivables?.length || 0,
       }, user.id);
+      notifyClinicalBudgetUpdated(patientId);
+      onWorkflowRefresh?.();
     } catch (error) {
-      showToast(`Erro ao aprovar: ${error.message}`, 'error');
+      if (import.meta.env?.DEV) {
+        console.debug('handleConfirmApprove:', error);
+      }
+      showToast(`Não foi possível aprovar o orçamento: ${error.message}`, 'error');
     } finally {
       setApproving(false);
     }
@@ -353,6 +474,7 @@ export function ClinicalBudgetSection({
       });
       setNewBudgetModalOpen(false);
       refreshHistory();
+      onActiveBudgetChange?.(created.id);
       showToast('Novo orçamento criado. Planejamento reiniciado do zero.');
       if (typeof onNavigateToPlanning === 'function') {
         onNavigateToPlanning();
@@ -385,6 +507,55 @@ export function ClinicalBudgetSection({
     }
     showToast('Abra a aba Contrato para visualizar o documento.', 'error');
   };
+
+  const canFinishAppointment = appointment?.status === APPOINTMENT_STATUS.EM_ATENDIMENTO
+    && !isHistoricalView;
+
+  const handleFinishAppointmentConfirm = async ({ reason, notes }) => {
+    if (!user || !appointmentId) return;
+    setFinishingAppointment(true);
+    try {
+      if (!isEditBlocked && budget) {
+        saveBudget(user, appointmentId, budget);
+      }
+      const result = closeClinicalAppointment(user, {
+        appointmentId,
+        patientId: patient?.id || appointment?.patientId,
+        budgetId: budget?.id || null,
+        reason,
+        notes,
+      });
+      setFinishModalOpen(false);
+      refreshHistory();
+      onWorkflowRefresh?.();
+      if (patient?.id || appointment?.patientId) {
+        notifyClinicalBudgetUpdated(patient?.id || appointment.patientId);
+      }
+      if (reason === APPOINTMENT_CLOSE_REASON.BUDGET_APPROVED
+        && result.budgetStatus !== BUDGET_STATUS.APROVADO
+        && result.budgetStatus !== BUDGET_STATUS.CONTRATO_GERADO) {
+        showToast(
+          'Atendimento encerrado. Use "Aprovar orçamento" quando o paciente confirmar formalmente.',
+          'success',
+        );
+      } else if (result.followUp) {
+        showToast(
+          `Atendimento encerrado. Follow-up agendado para ${result.followUp.dueInDays} dias.`,
+          'success',
+        );
+      } else {
+        showToast('Atendimento encerrado com sucesso.', 'success');
+      }
+      if (typeof onAppointmentClosed === 'function') {
+        onAppointmentClosed();
+      }
+    } catch (error) {
+      showToast(error?.message || 'Não foi possível encerrar o atendimento.', 'error');
+    } finally {
+      setFinishingAppointment(false);
+    }
+  };
+
   const handleDownloadDocument = (doc) => {
     if (!doc?.htmlContent) {
       showToast('Documento indisponível. Gere um novo PDF.', 'error');
@@ -401,7 +572,16 @@ export function ClinicalBudgetSection({
     URL.revokeObjectURL(url);
   };
 
-  if (!budget) return null;
+  if (!budget) {
+    if (viewBudgetId) {
+      return (
+        <div className="clinical-inline-error" role="alert">
+          Orçamento não encontrado. O identificador informado pode estar incorreto ou desatualizado.
+        </div>
+      );
+    }
+    return null;
+  }
 
   const patientName =
     patient?.full_name || patient?.nickname || patient?.social_name || 'Paciente';
@@ -418,6 +598,8 @@ export function ClinicalBudgetSection({
       <BudgetPremiumHeader
         isEditBlocked={isEditBlocked}
         isLocked={isLocked}
+        isApprovedView={isApprovedView}
+        hasChosenCondition={Boolean(chosenPaymentOption)}
         hasDocuments={(budget.documents?.length || 0) > 0}
         hasActiveContract={lockCtx.hasActiveContract}
         budgetStatus={budget.status}
@@ -430,12 +612,90 @@ export function ClinicalBudgetSection({
         onViewContract={handleViewContract}
         onCreateNew={() => setNewBudgetModalOpen(true)}
         onApprove={handleApproveClick}
+        onFinishAppointment={() => setFinishModalOpen(true)}
+        canFinishAppointment={canFinishAppointment}
+        onNavigateToContract={onNavigateToContract}
       />
 
-      {isLocked && lockCtx.lockMessage ? (
+      {isHistoricalView ? (
         <div className="clinical-budget-locked-banner" role="status">
           <Lock size={18} aria-hidden />
-          <p>{lockCtx.lockMessage}</p>
+          <p>
+            Visualizando orçamento
+            {' '}
+            {budgetDisplayNumber}
+            {' '}
+            — somente leitura. Para nova negociação, crie um novo orçamento.
+          </p>
+          {showGoToActiveBudget && typeof onActiveBudgetChange === 'function' ? (
+            <ClinicalBtn
+              variant="primary"
+              size="sm"
+              onClick={() => onActiveBudgetChange(activeBudget.id)}
+            >
+              Ir para orçamento atual
+              {activeBudgetDisplayNumber ? ` (${activeBudgetDisplayNumber})` : ''}
+            </ClinicalBtn>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!isEditBlocked && !isApprovedView ? (
+        <div className="clinical-budget-info-banner" role="status">
+          <p>
+            Orçamento em negociação. Você pode apresentar condições, marcar a condição escolhida e aprovar quando o paciente aceitar.
+          </p>
+        </div>
+      ) : null}
+
+      {isApprovedView ? (
+        <div className="clinical-budget-approved-banner" role="status">
+          <p>
+            Orçamento aprovado com sucesso. As condições comerciais estão protegidas — acesse a aba
+            {' '}
+            <strong>Contrato</strong>
+            {' '}
+            para gerar o documento.
+          </p>
+          {typeof onNavigateToContract === 'function' ? (
+            <ClinicalBtn variant="primary" size="sm" onClick={onNavigateToContract}>
+              Ir para Contrato
+            </ClinicalBtn>
+          ) : null}
+        </div>
+      ) : null}
+
+      {canFinishAppointment ? (
+        <div className="clinical-budget-session-bar" role="region" aria-label="Encerramento do atendimento">
+          <div className="clinical-budget-session-bar-text">
+            <strong>Atendimento em andamento</strong>
+            <p>
+              O orçamento permanece salvo. Finalize o atendimento agora e retome depois pela Central do Paciente para concluir a aprovação.
+            </p>
+          </div>
+          <ClinicalBtn
+            variant="secondary"
+            size="sm"
+            icon={DoorClosed}
+            className="budget-finish-appointment-btn"
+            onClick={() => setFinishModalOpen(true)}
+            disabled={finishingAppointment}
+          >
+            {finishingAppointment ? 'Finalizando…' : 'Finalizar atendimento'}
+          </ClinicalBtn>
+        </div>
+      ) : null}
+
+      {consistencyAlert ? (
+        <div className="clinical-inline-error" role="alert">
+          {consistencyAlert}
+        </div>
+      ) : null}
+
+      {isEditBlocked && !isHistoricalView ? (
+        <div className="clinical-budget-locked-banner" role="status">
+          <Lock size={18} aria-hidden />
+          <p>{blockedMessage}</p>
         </div>
       ) : null}
 
@@ -453,7 +713,7 @@ export function ClinicalBudgetSection({
             originalValue={financials.originalValue}
             onPresent={handlePaymentPresented}
             onChoose={handlePaymentChosen}
-            readOnly={isEditBlocked}
+            readOnly={isCommercialReadOnly}
             user={user}
           />
 
@@ -464,9 +724,9 @@ export function ClinicalBudgetSection({
               value={budget.commercialNotes || ''}
               onChange={(e) => patchBudget({ commercialNotes: e.target.value })}
               onBlur={(e) => {
-                if (!isEditBlocked) persist({ ...budget, commercialNotes: e.target.value });
+                if (!isCommercialReadOnly) persist({ ...budget, commercialNotes: e.target.value });
               }}
-              disabled={isEditBlocked}
+              disabled={isCommercialReadOnly}
               placeholder="Registre objeções, preferências do paciente e acordos verbais…"
             />
           </section>
@@ -491,7 +751,7 @@ export function ClinicalBudgetSection({
           onGeneratePdf={handleGeneratePDF}
           onDownloadDocument={handleDownloadDocument}
           onOpenFullHistory={() => setHistoryModalOpen(true)}
-          readOnly={isEditBlocked}
+          readOnly={isCommercialReadOnly}
         />
       </div>
 
@@ -511,7 +771,7 @@ export function ClinicalBudgetSection({
         open={validityModalOpen}
         onClose={() => setValidityModalOpen(false)}
         value={budget.validityDate}
-        readOnly={isEditBlocked}
+        readOnly={isCommercialReadOnly}
         onSave={(validityDate) => {
           patchBudget({ validityDate });
           persist({ ...budget, validityDate });
@@ -535,6 +795,13 @@ export function ClinicalBudgetSection({
         onOpenChange={setNewBudgetModalOpen}
         busy={creatingBudget}
         onConfirm={handleCreateNewBudget}
+      />
+
+      <FinishAppointmentModal
+        open={finishModalOpen}
+        onClose={() => setFinishModalOpen(false)}
+        onConfirm={handleFinishAppointmentConfirm}
+        confirming={finishingAppointment}
       />
 
       {toast ? (

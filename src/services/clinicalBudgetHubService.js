@@ -12,7 +12,7 @@ import {
 import { getContractStatusForQuote } from './contractModuleService.js';
 import { listPatientContracts } from './contractModuleService.js';
 import { calcPlannedValue, getAcceptedOption, formatPaymentOptionLabel } from '../components/clinical/budget/budgetUtils.js';
-import { formatFriendlyBudgetNumber } from './patientCareTimelineService.js';
+import { formatFriendlyBudgetNumber, formatFriendlyContractNumber } from '../utils/friendlyNumbers.js';
 import { createId } from './helpers.js';
 
 export class InactiveClinicalSessionError extends Error {
@@ -142,7 +142,7 @@ function mapBudgetRow({
     patientId,
     patientName: resolvePatientName(patientId, db),
     planName: budget.planName || '—',
-    budgetNumber: budget.budgetNumber || budget.id,
+    budgetNumber: budget.budgetNumber,
     status: budget.status,
     totalValue: resolveBudgetTotal(budget),
     createdAt: budget.createdAt,
@@ -419,6 +419,18 @@ export function startNewBudgetForPatient(user, patientId, { importProcedures = f
   }
 
   return { appointmentId, section: 'planejamento' };
+}
+
+/**
+ * Cria novo orçamento limpo e navega para planejamento — nunca reutiliza orçamento existente.
+ */
+export function createNewBudget(navigate, user, patientId, { importProcedures = false } = {}) {
+  if (!patientId) throw new Error('Paciente não informado.');
+  if (!user) throw new Error('Usuário não autenticado.');
+
+  const result = startNewBudgetForPatient(user, patientId, { importProcedures });
+  navigate(`/atendimento-clinico/${result.appointmentId}`, { state: { section: result.section } });
+  return result;
 }
 
 export const BUDGET_HUB_STATUS_FILTERS = [

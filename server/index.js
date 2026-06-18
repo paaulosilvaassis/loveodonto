@@ -1947,6 +1947,36 @@ app.post('/internal/app/contracts/generated', requireAppUser, async (req, res) =
   }
 });
 
+/** Webhook de plataformas de assinatura eletrônica (Clicksign, DocuSign, ZapSign, etc.) */
+app.post('/api/signature/webhook', (req, res) => {
+  try {
+    const secret = process.env.SIGNATURE_WEBHOOK_SECRET || '';
+    const headerSecret = req.headers['x-signature-secret'] || req.headers['x-webhook-secret'] || '';
+    if (secret && headerSecret !== secret) {
+      return res.status(401).json({ error: 'Webhook não autorizado.' });
+    }
+
+    const payload = req.body && typeof req.body === 'object' ? req.body : {};
+    const event = payload.event || payload.type || 'unknown';
+    const externalId = payload.externalId || payload.document_id || payload.data?.id || null;
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[signature-webhook]', { event, externalId, contractId: payload.contractId });
+    }
+
+    return res.status(200).json({
+      ok: true,
+      received: true,
+      event,
+      externalId,
+      message: 'Evento recebido. O app sincronizará o status via polling ou push interno.',
+    });
+  } catch (err) {
+    console.error('[signature-webhook]', err);
+    return res.status(400).json({ error: err?.message || 'Payload inválido.' });
+  }
+});
+
 const httpServer = app.listen(PORT, () => {
   console.log(`[SaaS Admin API] rodando na porta ${PORT}`);
 });

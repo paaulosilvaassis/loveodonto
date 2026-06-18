@@ -14,13 +14,11 @@ import { ClinicalBtn } from '../clinical/ClinicalStageShell.jsx';
 import { BudgetStatusBadge } from '../clinical/budget/BudgetStatusBadge.jsx';
 import { ContractTable, ContractStatusBadge, formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
 import { StartPatientBudgetModal } from './StartPatientBudgetModal.jsx';
-import {
-  getPatientBudgetOverview,
-  startNewBudgetForPatient,
-  InactiveClinicalSessionError,
-} from '../../services/clinicalBudgetHubService.js';
+import { InactiveClinicalSessionError, getPatientBudgetOverview, createNewBudget } from '../../services/clinicalBudgetHubService.js';
+import { openExistingBudget, openExistingContract } from '../../services/budgetNavigationService.js';
 import { getBudgetLockContext } from '../../services/clinicalBudgetLockService.js';
 import { BUDGET_STATUS } from '../../services/clinicalBudgetConstants.js';
+import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 
 function formatDate(value) {
   if (!value) return '—';
@@ -53,8 +51,13 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
     return lock.isLocked && row.id === lock.budget?.id;
   });
 
-  const openClinical = (appointmentId, section = 'orcamento') => {
-    navigate(`/atendimento-clinico/${appointmentId}`, { state: { section } });
+  const openExistingBudgetRow = (row, section = 'orcamento') => {
+    openExistingBudget(navigate, {
+      budgetId: row.id,
+      patientId,
+      appointmentId: row.appointmentId,
+      section,
+    });
   };
 
   const handleCreateConfirm = async ({ importProcedures }) => {
@@ -62,10 +65,9 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
     setBusy(true);
     setError('');
     try {
-      const result = startNewBudgetForPatient(user, patientId, { importProcedures });
+      createNewBudget(navigate, user, patientId, { importProcedures });
       setCreateOpen(false);
       setRefreshKey((k) => k + 1);
-      openClinical(result.appointmentId, result.section);
     } catch (err) {
       if (err instanceof InactiveClinicalSessionError || err.code === 'INACTIVE_SESSION') {
         setError(err.message);
@@ -87,14 +89,25 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
     date: formatDate(row.archivedAt || row.createdAt),
   }));
 
-  const contractRows = overview.contracts.map((c) => ({
+  const contractRows = overview.contracts.map((c, index) => ({
     id: c.id,
-    number: c.contractNumber || c.id,
+    budgetId: c.budgetId || null,
+    appointmentId: c.quoteId || null,
+    number: formatFriendlyContractNumber(c.contractNumber, index + 1),
     title: c.title || 'Contrato',
     status: c.status,
     value: formatCtrCurrency(c.totalValueSnapshot),
     date: formatDate(c.signedAt || c.generatedAt),
   }));
+
+  const openExistingContractRow = (row) => {
+    openExistingContract(navigate, {
+      contractId: row.id,
+      budgetId: row.budgetId,
+      patientId,
+      appointmentId: row.appointmentId,
+    });
+  };
 
   return (
     <div className="tab-content patient-budgets-contracts-tab">
@@ -123,7 +136,7 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
               <BudgetStatusBadge status={currentDraft.status} />
               <p>Em elaboração — {formatCtrCurrency(currentDraft.totalValue)}</p>
             </div>
-            <ClinicalBtn variant="secondary" icon={Eye} onClick={() => openClinical(currentDraft.appointmentId, 'planejamento')}>
+            <ClinicalBtn variant="secondary" icon={Eye} onClick={() => openExistingBudgetRow(currentDraft, 'planejamento')}>
               Continuar planejamento
             </ClinicalBtn>
           </div>
@@ -152,14 +165,14 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
               label: 'Ações',
               render: (r) => (
                 <div className="budgets-hub-actions">
-                  <button type="button" className="button ghost sm" onClick={() => openClinical(r.appointmentId, 'orcamento')}>
+                  <button type="button" className="button ghost sm" onClick={() => openExistingBudgetRow(r, 'orcamento')}>
                     <Eye size={14} /> Ver
                   </button>
-                  <button type="button" className="button ghost sm" onClick={() => openClinical(r.appointmentId, 'orcamento')}>
+                  <button type="button" className="button ghost sm" onClick={() => openExistingBudgetRow(r, 'orcamento')}>
                     <Printer size={14} /> PDF
                   </button>
                   {r.contractId ? (
-                    <button type="button" className="button ghost sm" onClick={() => openClinical(r.appointmentId, 'contratos')}>
+                    <button type="button" className="button ghost sm" onClick={() => openExistingBudgetRow(r, 'contratos')}>
                       <FileSignature size={14} /> Contrato
                     </button>
                   ) : null}
@@ -183,7 +196,7 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
               <li key={row.id}>
                 <span>{row.budgetNumber}</span>
                 <BudgetStatusBadge status={row.status} />
-                <button type="button" className="button ghost sm" onClick={() => openClinical(row.appointmentId, 'orcamento')}>
+                <button type="button" className="button ghost sm" onClick={() => openExistingBudgetRow(row, 'orcamento')}>
                   Visualizar
                 </button>
               </li>
@@ -205,7 +218,7 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
               key: 'actions',
               label: 'Ações',
               render: (r) => (
-                <button type="button" className="button ghost sm" onClick={() => openClinical(overview.history[0]?.appointmentId, 'contratos')}>
+                <button type="button" className="button ghost sm" onClick={() => openExistingContractRow(r)}>
                   <FileSignature size={14} /> Abrir
                 </button>
               ),

@@ -11,6 +11,7 @@ export const BUDGET_EVENT_LABELS = {
   budget_pdf_generated: 'PDF do orçamento gerado',
   budget_payment_presented: 'Condição apresentada ao paciente',
   budget_payment_chosen: 'Paciente escolheu forma de pagamento',
+  appointment_finished: 'Atendimento encerrado',
   procedure_planned: null,
 };
 
@@ -47,6 +48,12 @@ export function formatBudgetEventLabel(event) {
 
   if (event.type === 'budget_status_changed' && event.data?.status) {
     return `Status alterado para ${event.data.status}`;
+  }
+
+  if (event.type === 'appointment_finished') {
+    const reason = event.data?.reasonLabel || 'Atendimento encerrado';
+    const notes = event.data?.notes ? ` — ${event.data.notes}` : '';
+    return `${reason}${notes}`;
   }
 
   if (typeof base === 'string') return base;

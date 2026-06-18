@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Image,
   AlertTriangle,
+  CheckCircle2,
   DollarSign,
 } from 'lucide-react';
 import { useAuth } from '../../auth/useAuth.js';
@@ -20,15 +21,23 @@ import { PatientCareFinancialTab } from './PatientCareFinancialTab.jsx';
 import { PatientCareIntelligenceTimeline } from './PatientCareIntelligenceTimeline.jsx';
 import { PatientCareExecutiveSidebar } from './PatientCareExecutiveSidebar.jsx';
 import {
-  startNewBudgetForPatient,
   InactiveClinicalSessionError,
+  createNewBudget,
 } from '../../services/clinicalBudgetHubService.js';
+import {
+  openExistingBudget,
+  openExistingContract,
+  resolveBudgetNavigationId,
+} from '../../services/budgetNavigationService.js';
 import {
   getPatientDelinquencyInfo,
   buildFinanceNavigationUrl,
 } from '../../services/patientFinancialSummaryService.js';
 import { listFiles } from '../../services/patientFilesService.js';
 import { listPatientContracts } from '../../services/contractModuleService.js';
+import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
+import { CLINICAL_BUDGET_UPDATED_EVENT } from '../../services/clinicalBudgetApprovedService.js';
+import { shouldPreferPendingBudgetOverApproved } from '../../services/clinicalAppointmentCloseService.js';
 
 function PatientAvatar({ name, photoUrl }) {
   if (photoUrl) {
@@ -43,11 +52,27 @@ function PatientAvatar({ name, photoUrl }) {
   return <div className="care-central-avatar">{initials || 'P'}</div>;
 }
 
-function AlertCard({ alert }) {
+function AlertCard({ alert, onAction }) {
+  const Icon = alert.tone === 'success' ? CheckCircle2 : AlertTriangle;
   return (
     <div className={`care-central-alert tone-${alert.tone || 'info'}`}>
-      <AlertTriangle size={16} aria-hidden />
-      <span>{alert.text}</span>
+      <Icon size={16} aria-hidden />
+      <div className="care-central-alert-body">
+        <span className="care-central-alert-text">{alert.text}</span>
+        {alert.detail ? (
+          <span className="care-central-alert-detail muted">{alert.detail}</span>
+        ) : null}
+        {alert.actionLabel && onAction ? (
+          <button
+            type="button"
+            className="button secondary"
+            style={{ marginTop: '0.5rem' }}
+            onClick={() => onAction(alert)}
+          >
+            {alert.actionLabel}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -72,6 +97,31 @@ export function PatientCareCentralPanel({
       onFocusTabConsumed?.();
     }
   }, [focusTab, onFocusTabConsumed]);
+
+  useEffect(() => {
+    if (!context?.patientId || !onRefresh) return undefined;
+
+    const handleBudgetUpdated = (event) => {
+      const updatedPatientId = event.detail?.patientId;
+      if (!updatedPatientId || updatedPatientId === context.patientId) {
+        onRefresh();
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') onRefresh();
+    };
+
+    window.addEventListener(CLINICAL_BUDGET_UPDATED_EVENT, handleBudgetUpdated);
+    window.addEventListener('focus', onRefresh);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener(CLINICAL_BUDGET_UPDATED_EVENT, handleBudgetUpdated);
+      window.removeEventListener('focus', onRefresh);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [context?.patientId, onRefresh]);
 
   const delinquency = useMemo(
     () => (context?.patientId ? getPatientDelinquencyInfo(context.patientId) : null),
@@ -116,14 +166,164 @@ export function PatientCareCentralPanel({
     navigate(`/atendimento-clinico/${appointmentId}`, { state: { section } });
   };
 
+  /**
+   * Central do Paciente → atendimento clínico.
+   * "Ver orçamento" envia budgetId interno (budget.id); label ORC-XXX é só exibição.
+   * "Abrir contrato" envia contractId interno (contract.id); CTR-XXX é só exibição.
+   * Números amigáveis são convertidos em ids reais por budgetNavigationService.
+   */
+  const resolveBudgetOpenTarget = (budgetRef = null) => {
+    const defaultRef = actions?.pendingDecisionBudget
+      && shouldPreferPendingBudgetOverApproved(actions.pendingDecisionBudget)
+      ? actions.pendingDecisionBudget
+      : (executiveSummary?.activeBudget || actions?.latestApprovedBudget || null);
+    const ref = budgetRef || defaultRef;
+    return {
+      budgetId: resolveBudgetNavigationId({
+        budgetId: ref?.budgetId || ref?.id || actions?.primaryBudgetId || null,
+        budgetNumber: ref?.budgetNumber || ref?.label || null,
+        patientId,
+        appointmentId: ref?.appointmentId || actions?.primaryBudgetAppointmentId || appointmentId,
+      }),
+      appointmentId: ref?.appointmentId || actions?.primaryBudgetAppointmentId || appointmentId,
+    };
+  };
+
+  const resolveContractOpenTarget = (contractRef = null) => {
+    const budgetRef = (actions?.pendingDecisionBudget
+      && shouldPreferPendingBudgetOverApproved(actions.pendingDecisionBudget)
+      ? actions.pendingDecisionBudget
+      : null)
+      || executiveSummary?.activeBudget
+      || actions?.latestApprovedBudget
+      || null;
+    const ref = contractRef
+      || executiveSummary?.activeContract
+      || (budgetRef?.contractId ? { contractId: budgetRef.contractId } : null);
+
+    const contractId = ref?.contractId || ref?.id || null;
+    const targetAppointmentId = ref?.appointmentId
+      || ref?.quoteId
+      || budgetRef?.appointmentId
+      || actions?.primaryBudgetAppointmentId
+      || appointmentId;
+
+    return {
+      contractId,
+      budgetId: resolveBudgetNavigationId({
+        budgetId: ref?.budgetId || budgetRef?.budgetId || budgetRef?.id || actions?.primaryBudgetId || null,
+        budgetNumber: budgetRef?.budgetNumber || budgetRef?.label || null,
+        patientId,
+        appointmentId: targetAppointmentId,
+      }),
+      appointmentId: targetAppointmentId,
+    };
+  };
+
+  const openExistingContractSafe = (contractRef = null) => {
+    const target = resolveContractOpenTarget(contractRef);
+
+    if (target.contractId) {
+      try {
+        openExistingContract(navigate, {
+          contractId: target.contractId,
+          budgetId: target.budgetId,
+          patientId,
+          appointmentId: target.appointmentId,
+        });
+      } catch (error) {
+        setToast({ message: error.message || 'Erro ao abrir contrato.', type: 'error' });
+      }
+      return;
+    }
+
+    if (target.budgetId) {
+      openExistingBudgetSafe({
+        budgetId: target.budgetId,
+        appointmentId: target.appointmentId,
+      }, 'contratos');
+      return;
+    }
+
+    setToast({
+      message: 'Não foi possível localizar este contrato. Verifique o vínculo no histórico do paciente.',
+      type: 'error',
+    });
+  };
+
+  const openExistingBudgetSafe = (budgetRefOrId, section = 'orcamento', itemAppointmentId = null, { mode = null } = {}) => {
+    const ref = typeof budgetRefOrId === 'object' && budgetRefOrId !== null
+      ? budgetRefOrId
+      : {
+        budgetId: budgetRefOrId,
+        appointmentId: itemAppointmentId,
+      };
+
+    const budgetId = resolveBudgetNavigationId({
+      budgetId: ref.budgetId || ref.id || actions?.primaryBudgetId || null,
+      budgetNumber: ref.budgetNumber || ref.label || null,
+      patientId,
+      appointmentId: ref.appointmentId || itemAppointmentId || appointmentId,
+    });
+
+    if (!budgetId) {
+      setToast({
+        message: 'Não foi possível localizar este orçamento. Verifique o vínculo no histórico do paciente.',
+        type: 'error',
+      });
+      return;
+    }
+    try {
+      openExistingBudget(navigate, {
+        budgetId,
+        patientId,
+        appointmentId: ref.appointmentId || itemAppointmentId || appointmentId,
+        section,
+        mode,
+      });
+    } catch (error) {
+      setToast({ message: error.message || 'Erro ao abrir orçamento.', type: 'error' });
+    }
+  };
+
   const handleTimelineAction = (item, actionKey) => {
-    if (actionKey === 'budget' || actionKey === 'budget_print') openClinical('orcamento');
-    else if (actionKey === 'contract' || actionKey === 'contract_pdf') openClinical('contratos');
+    if (actionKey === 'budget' || actionKey === 'budget_print') {
+      openExistingBudgetSafe({
+        budgetId: item.meta?.budgetId,
+        budgetNumber: item.meta?.budgetNumber,
+        appointmentId: item.meta?.appointmentId,
+      }, 'orcamento');
+      return;
+    }
+    if (actionKey === 'contract' || actionKey === 'contract_pdf') {
+      openExistingContractSafe({
+        contractId: item.meta?.contractId,
+        budgetId: item.meta?.budgetId,
+        appointmentId: item.meta?.appointmentId,
+      });
+      return;
+    }
     else if (actionKey === 'finance' || actionKey === 'finance_installments') setActiveTab('financeiro');
     else if (actionKey === 'chart') navigate(`/prontuario/${patientId}`);
     else if (actionKey === 'file' || actionKey === 'exam') setActiveTab('exames');
     else if (actionKey === 'open') openClinical('planejamento');
     else openClinical('planejamento');
+  };
+
+  const handleAlertAction = (alert) => {
+    if (alert.id === 'pending-budget-decision') {
+      openExistingBudgetSafe({
+        budgetId: alert.budgetId,
+        appointmentId: alert.appointmentId,
+      }, 'orcamento', null, { mode: 'edit' });
+      return;
+    }
+    if (alert.budgetId) {
+      openExistingBudgetSafe({
+        budgetId: alert.budgetId,
+        appointmentId: alert.appointmentId,
+      }, 'orcamento');
+    }
   };
 
   const openFinanceTab = () => setActiveTab('financeiro');
@@ -135,10 +335,9 @@ export function PatientCareCentralPanel({
   const handleCreateBudget = async ({ importProcedures }) => {
     setBusy(true);
     try {
-      const result = startNewBudgetForPatient(user, patientId, { importProcedures });
+      createNewBudget(navigate, user, patientId, { importProcedures });
       setCreateOpen(false);
       onRefresh?.();
-      navigate(`/atendimento-clinico/${result.appointmentId}`, { state: { section: result.section } });
     } catch (error) {
       if (error instanceof InactiveClinicalSessionError) {
         setToast({ message: 'Inicie o atendimento na Jornada do Paciente antes de criar um orçamento.', type: 'error' });
@@ -180,7 +379,11 @@ export function PatientCareCentralPanel({
         <h2>Resumo rápido para o dentista</h2>
         <div className="care-central-alerts-grid">
           {alerts.length ? alerts.map((alert, index) => (
-            <AlertCard key={`${alert.type}-${index}`} alert={alert} />
+            <AlertCard
+              key={`${alert.id || alert.type}-${index}`}
+              alert={alert}
+              onAction={alert.actionLabel ? handleAlertAction : undefined}
+            />
           )) : (
             <p className="care-central-muted">Nenhum alerta clínico ou financeiro registrado.</p>
           )}
@@ -197,7 +400,11 @@ export function PatientCareCentralPanel({
           Abrir prontuário
         </ClinicalBtn>
         {actions.showOpenExistingBudget ? (
-          <ClinicalBtn variant="secondary" icon={FileText} onClick={() => openClinical('orcamento')}>
+          <ClinicalBtn
+            variant="secondary"
+            icon={FileText}
+            onClick={() => openExistingBudgetSafe(resolveBudgetOpenTarget())}
+          >
             Abrir orçamento
           </ClinicalBtn>
         ) : null}
@@ -207,7 +414,7 @@ export function PatientCareCentralPanel({
           </ClinicalBtn>
         ) : null}
         {actions.showViewContract ? (
-          <ClinicalBtn variant="secondary" icon={FileSignature} onClick={() => openClinical('contratos')}>
+          <ClinicalBtn variant="secondary" icon={FileSignature} onClick={() => openExistingContractSafe()}>
             Abrir contrato
           </ClinicalBtn>
         ) : null}
@@ -255,15 +462,23 @@ export function PatientCareCentralPanel({
 
           {activeTab === 'contratos' ? (
             <div className="care-central-list-section">
-              {contracts.length ? contracts.map((contract) => (
+              {contracts.length ? contracts.map((contract, index) => (
                 <article key={contract.id} className="care-central-list-card">
                   <div>
-                    <strong>{contract.contractNumber || contract.id}</strong>
+                    <strong>{formatFriendlyContractNumber(contract.contractNumber, index + 1)}</strong>
                     <ContractStatusBadge status={contract.status} />
                     <p>{contract.title || 'Contrato'}</p>
                   </div>
                   <div className="care-central-list-actions">
-                    <button type="button" className="button ghost sm" onClick={() => openClinical('contratos')}>
+                    <button
+                      type="button"
+                      className="button ghost sm"
+                      onClick={() => openExistingContractSafe({
+                        contractId: contract.id,
+                        budgetId: contract.budgetId,
+                        appointmentId: contract.quoteId,
+                      })}
+                    >
                       Visualizar
                     </button>
                     <button type="button" className="button ghost sm" onClick={() => navigate('/financeiro/contas-receber')}>
@@ -314,8 +529,8 @@ export function PatientCareCentralPanel({
 
         <PatientCareExecutiveSidebar
           summary={executiveSummary}
-          onOpenBudget={() => openClinical('orcamento')}
-          onOpenContract={() => openClinical('contratos')}
+          onOpenBudget={() => openExistingBudgetSafe(executiveSummary?.activeBudget)}
+          onOpenContract={() => openExistingContractSafe(executiveSummary?.activeContract)}
           onOpenFinance={openFinanceTab}
         />
       </div>
