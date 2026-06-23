@@ -3,6 +3,7 @@
  * que `server/.env` (service role). `VITE_PLATFORM_API_KEY` deve coincidir com `PLATFORM_API_KEY` no server.
  */
 import { supabaseConsole } from '../lib/supabaseConsole.js';
+import { mapAuditLogForDisplay } from '../utils/auditLogDisplay.js';
 import {
   ALLOWED_ONBOARDING_ROLES,
   integrationKeyToLabel,
@@ -11,6 +12,8 @@ import {
   PLAN_MODULES,
   PLAN_PRICES_CENTS,
   INTEGRATION_KEYS,
+  getPlanLimits,
+  resolvePlanCode,
 } from './platformConsoleConstants.js';
 
 const DEV_DEFAULT_PLATFORM_API_BASE_URL = 'http://127.0.0.1:3001';
@@ -111,11 +114,7 @@ function normalizeText(value) {
 }
 
 function normalizePlanForProvision(planCode) {
-  const value = String(planCode || '').trim().toLowerCase();
-  if (value === 'start') return 'Start';
-  if (value === 'growth') return 'Growth';
-  if (value === 'scale') return 'Scale';
-  return '';
+  return resolvePlanCode(planCode);
 }
 
 function mapPlatformApiErrorMessage(error) {
@@ -182,9 +181,7 @@ async function callPlatformApi(path, { method = 'POST', body } = {}) {
 }
 
 function getDefaultPlanLimits(planCode) {
-  if (planCode === 'Start') return { patients: 500, users: 10, storage_gb: 5 };
-  if (planCode === 'Growth') return { patients: 1500, users: 30, storage_gb: 20 };
-  return { patients: 5000, users: 100, storage_gb: 50 };
+  return getPlanLimits(planCode);
 }
 
 function includeQuery(values, query) {
@@ -202,6 +199,12 @@ function mapTenantRow(row) {
     name: row.legal_name,
     tradeName: row.trade_name || row.legal_name,
     cnpj: row.cnpj || '',
+    phone: row.phone || '',
+    zipCode: row.zip_code || '',
+    street: row.street || '',
+    streetNumber: row.street_number || '',
+    addressComplement: row.address_complement || '',
+    neighborhood: row.neighborhood || '',
     city: row.city || '',
     state: row.state || '',
     ownerName: row.owner_name || '',
@@ -241,6 +244,12 @@ function ensureCanCreateClinic(actor) {
   if (!ALLOWED_ONBOARDING_ROLES.has(role)) {
     throw new Error('Somente owner ou super_admin pode criar nova clínica.');
   }
+}
+
+function ensureCanManageMasterAccess(actor) {
+  const role = String(actor?.role || '').toLowerCase();
+  if (ALLOWED_ONBOARDING_ROLES.has(role)) return;
+  throw new Error('Somente owner ou super_admin pode gerenciar acesso master.');
 }
 
 export function listCatalogs() {
@@ -308,20 +317,7 @@ export async function getPlatformDashboardSnapshot() {
     createdAt: row.created_at,
   }));
 
-  const recentAudits = (auditRes.data || []).map((log) => {
-    const meta = log.metadata && typeof log.metadata === 'object' ? log.metadata : {};
-    const actorLabel = meta.actor_email || log.actor_role || '—';
-    return {
-      id: log.id,
-      actor: actorLabel,
-      actorRole: log.actor_role,
-      action: log.action,
-      targetType: log.target_type,
-      targetId: log.target_id,
-      metadata: typeof log.metadata === 'object' ? JSON.stringify(log.metadata) : String(log.metadata || ''),
-      createdAt: log.created_at,
-    };
-  });
+  const recentAudits = (auditRes.data || []).map(mapAuditLogForDisplay);
 
   return {
     cards: [
@@ -363,7 +359,7 @@ export async function getClinicDetail(tenantId) {
   const { data: tenant, error: tErr } = await client
     .from('tenants')
     .select(
-      'id, legal_name, trade_name, cnpj, status, billing_status, plan_code, owner_name, owner_email, city, state, created_at, updated_at, tenant_modules(module_key, enabled), tenant_integrations(integration_key, status, last_sync_at)',
+      'id, legal_name, trade_name, cnpj, phone, zip_code, street, street_number, address_complement, neighborhood, status, billing_status, plan_code, owner_name, owner_email, city, state, created_at, updated_at, tenant_modules(module_key, enabled), tenant_integrations(integration_key, status, last_sync_at)',
     )
     .eq('id', tenantId)
     .maybeSingle();
@@ -445,7 +441,61 @@ export async function getClinicDetail(tenantId) {
     checkedAt: h.checked_at,
   }));
 
-  return { clinic, subscription, billingHistory, supportHistory, recentErrors };
+  const { data: legalRow, error: legalErr } = await client
+    .from('tenant_legal_profiles')
+    .select(
+      'legal_representative_name, legal_representative_cpf, legal_representative_email, legal_representative_phone, legal_representative_role, billing_contact_name, billing_contact_email, billing_contact_phone, billing_same_as_legal, liability_terms_version, liability_status, liability_accepted_at, liability_acceptance_expires_at, onboarding_email_sent_at, liability_accepted_by_name',
+    )
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (legalErr) throw new Error(legalErr.message);
+  const legalProfile = legalRow
+    ? {
+        legalRepresentativeName: legalRow.legal_representative_name,
+        legalRepresentativeCpf: legalRow.legal_representative_cpf,
+        legalRepresentativeEmail: legalRow.legal_representative_email,
+        legalRepresentativePhone: legalRow.legal_representative_phone,
+        legalRepresentativeRole: legalRow.legal_representative_role,
+        billingContactName: legalRow.billing_contact_name,
+        billingContactEmail: legalRow.billing_contact_email,
+        billingContactPhone: legalRow.billing_contact_phone,
+        billingSameAsLegal: legalRow.billing_same_as_legal,
+        liabilityTermsVersion: legalRow.liability_terms_version,
+        liabilityStatus: legalRow.liability_status,
+        liabilityAcceptedAt: legalRow.liability_accepted_at,
+        liabilityAcceptanceExpiresAt: legalRow.liability_acceptance_expires_at,
+        onboardingEmailSentAt: legalRow.onboarding_email_sent_at,
+        liabilityAcceptedByName: legalRow.liability_accepted_by_name,
+      }
+    : null;
+
+  const { data: masterRows, error: masterErr } = await client
+    .from('tenant_users')
+    .select('id, email, full_name, role, role_slug, user_id, is_active, status, has_system_access')
+    .eq('tenant_id', tenantId)
+    .in('role_slug', ['master', 'owner'])
+    .order('created_at', { ascending: true })
+    .limit(1);
+  if (masterErr) throw new Error(masterErr.message);
+  const masterRow = masterRows?.[0] || null;
+  const masterAccess = masterRow
+    ? {
+        id: masterRow.id,
+        email: masterRow.email,
+        fullName: masterRow.full_name,
+        role: masterRow.role_slug || masterRow.role,
+        authLinked: Boolean(masterRow.user_id),
+        isActive: masterRow.is_active !== false,
+      }
+    : {
+        email: legalProfile?.legalRepresentativeEmail || clinic.ownerEmail || '',
+        fullName: legalProfile?.legalRepresentativeName || clinic.ownerName || '',
+        role: 'master',
+        authLinked: false,
+        isActive: false,
+      };
+
+  return { clinic, subscription, billingHistory, supportHistory, recentErrors, legalProfile, masterAccess };
 }
 
 export async function listSubscriptions() {
@@ -547,22 +597,10 @@ export async function listAuditLogs({ query = '' } = {}) {
     .order('created_at', { ascending: false })
     .limit(400);
   if (error) throw new Error(error.message);
-  const rows = (data || []).map((log) => {
-    const meta = log.metadata && typeof log.metadata === 'object' ? log.metadata : {};
-    return {
-      id: log.id,
-      actor: meta.actor_email || log.actor_role || '—',
-      actorRole: log.actor_role,
-      action: log.action,
-      targetType: log.target_type,
-      targetId: log.target_id,
-      metadata: typeof log.metadata === 'object' ? JSON.stringify(log.metadata) : String(log.metadata || ''),
-      createdAt: log.created_at,
-    };
-  });
+  const rows = (data || []).map(mapAuditLogForDisplay);
   if (!query) return rows;
   return rows.filter((item) =>
-    includeQuery([item.actor, item.action, item.targetType, item.targetId, item.metadata], query),
+    includeQuery([item.actor, item.action, item.actionCode, item.target, item.metadata], query),
   );
 }
 
@@ -586,31 +624,13 @@ export async function listFeatureFlags() {
 export async function createClinicOnboarding(actor, payload) {
   ensureCanCreateClinic(actor);
   const client = getClient();
-
-  const clinicName = normalizeText(payload?.clinicName);
-  const city = normalizeText(payload?.city);
-  const ownerName = normalizeText(payload?.ownerName);
-  const adminName = normalizeText(payload?.adminName);
-  const adminEmail = normalizeEmail(payload?.adminEmail);
-  const adminPassword = normalizeText(payload?.adminPassword);
-  const planCode = normalizeText(payload?.planCode);
-
-  if (!clinicName) throw new Error('Nome da clínica é obrigatório.');
-  if (!adminName) throw new Error('Nome do administrador é obrigatório.');
-  if (!adminEmail) throw new Error('E-mail do administrador é obrigatório.');
-  if (adminPassword && adminPassword.length < 8) {
-    throw new Error('Senha do administrador deve ter pelo menos 8 caracteres ou ficar vazia.');
-  }
+  const planCode = normalizeText(payload?.plan || payload?.planCode);
   if (!PLAN_CATALOG.includes(planCode)) throw new Error('Plano inválido.');
+
   const provisioned = await callPlatformApi('/internal/platform/tenants/provision', {
     method: 'POST',
     body: {
-      tradeName: clinicName,
-      legalName: clinicName,
-      responsibleName: ownerName || adminName,
-      responsibleEmail: adminEmail,
-      ...(adminPassword ? { responsiblePassword: adminPassword } : {}),
-      city: city || null,
+      ...payload,
       plan: normalizePlanForProvision(planCode),
       status: 'active',
     },
@@ -634,9 +654,21 @@ export async function createClinicOnboarding(actor, payload) {
 
   const detail = await getClinicDetail(tenantId);
   return {
-    clinic: detail?.clinic || { id: tenantId, name: clinicName },
+    clinic: detail?.clinic || { id: tenantId, name: payload?.tradeName || payload?.legalName },
     temporaryPassword: provisioned?.temporaryPassword || null,
+    onboardingEmail: provisioned?.onboarding_email || null,
+    accessEmailSent: Boolean(provisioned?.access_email_sent),
+    accessSetupLink: provisioned?.access_setup_link || provisioned?.onboarding_email?.setupLink || null,
+    accessEmailDelivery: provisioned?.accessEmailDelivery || null,
   };
+}
+
+export async function resendClinicOwnerAccess(actor, tenantId) {
+  ensureCanManageMasterAccess(actor);
+  return callPlatformApi(`/internal/platform/tenants/${tenantId}/resend-access`, {
+    method: 'POST',
+    body: {},
+  });
 }
 
 export async function toggleClinicStatus(actor, tenantId) {

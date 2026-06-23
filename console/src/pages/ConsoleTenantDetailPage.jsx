@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { usePlatformAuth } from '../auth/usePlatformAuth.js';
 import {
@@ -9,6 +9,9 @@ import {
   toggleClinicStatus,
 } from '../services/platformConsoleService.js';
 import { PageHeader, Panel, StatusBadge, EmptyState } from '../components/ConsoleUi.jsx';
+import ConsoleMasterAccessPanel from '../components/ConsoleMasterAccessPanel.jsx';
+import { formatCep, formatCnpj, formatCpf, formatPhone } from '../utils/validators.js';
+import { formatPlanPrice, getPlanLabel } from '../services/platformConsoleConstants.js';
 
 function toFriendlyBillingEvent(type) {
   const normalized = String(type || '').trim().toLowerCase();
@@ -32,6 +35,8 @@ export default function ConsoleTenantDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const catalogs = useMemo(() => listCatalogs(), []);
+  const canManageMasterAccess = ['owner', 'super_admin'].includes(String(platformUser?.role || '').toLowerCase())
+    || hasPermission('clinics:write');
 
   useEffect(() => {
     let cancelled = false;
@@ -54,6 +59,14 @@ export default function ConsoleTenantDetailPage() {
       cancelled = true;
     };
   }, [id, reloadKey]);
+
+  useLayoutEffect(() => {
+    if (loading || !detail) return;
+    if (window.location.hash !== '#acesso-master') return;
+    window.requestAnimationFrame(() => {
+      document.getElementById('acesso-master')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [loading, detail, id]);
 
   if (loading) {
     return (
@@ -84,7 +97,7 @@ export default function ConsoleTenantDetailPage() {
     );
   }
 
-  const { clinic, subscription, billingHistory, supportHistory, recentErrors } = detail;
+  const { clinic, subscription, billingHistory, supportHistory, recentErrors, legalProfile, masterAccess } = detail;
 
   const safeAction = async (actionId, callback) => {
     try {
@@ -120,11 +133,20 @@ export default function ConsoleTenantDetailPage() {
 
       {error ? <p className="pc-error">{error}</p> : null}
 
+      <ConsoleMasterAccessPanel
+        clinic={clinic}
+        legalProfile={legalProfile}
+        masterAccess={masterAccess}
+        platformUser={platformUser}
+        canManage={canManageMasterAccess}
+        onResent={() => setReloadKey((k) => k + 1)}
+      />
+
       <div className="pc-grid-3">
         <Panel title="Conta">
           <ul className="pc-info-list">
             <li><span>Status</span><StatusBadge status={clinic.status} /></li>
-            <li><span>Plano atual</span><strong>{clinic.plan}</strong></li>
+            <li><span>Plano atual</span><strong>{getPlanLabel(clinic.plan)}</strong></li>
             <li><span>Situação da cobrança</span><StatusBadge status={clinic.billingStatus} /></li>
           </ul>
         </Panel>
@@ -133,8 +155,12 @@ export default function ConsoleTenantDetailPage() {
           <ul className="pc-info-list">
             <li><span>Nome</span><strong>{clinic.ownerName || '—'}</strong></li>
             <li><span>Email</span><strong>{clinic.ownerEmail || '—'}</strong></li>
-            <li><span>Cidade</span><strong>{clinic.city}/{clinic.state}</strong></li>
+            <li><span>CNPJ</span><strong>{clinic.cnpj ? formatCnpj(clinic.cnpj) : '—'}</strong></li>
+            <li><span>Telefone</span><strong>{clinic.phone ? formatPhone(clinic.phone) : '—'}</strong></li>
           </ul>
+          <div className="pc-inline-actions" style={{ marginTop: '0.75rem' }}>
+            <a className="pc-link-button" href="#acesso-master">Acesso master / reenviar e-mail</a>
+          </div>
         </Panel>
 
         <Panel title="Assinatura">
@@ -151,19 +177,55 @@ export default function ConsoleTenantDetailPage() {
                 <li><span>Próxima cobrança</span><strong>{subscription.nextBillingAt ? String(subscription.nextBillingAt).slice(0, 10) : '—'}</strong></li>
               </ul>
               <div className="pc-inline-actions">
-                {catalogs.plans.map((plan) => (
+                {catalogs.plans.map((planCode) => (
                   <button
-                    key={plan}
+                    key={planCode}
                     type="button"
-                    className={`pc-button ${plan === clinic.plan ? 'pc-button--active' : ''}`}
-                    disabled={!hasPermission('billing:write') || saving === `plan-${plan}`}
-                    onClick={() => safeAction(`plan-${plan}`, () => changeClinicPlan(platformUser, clinic.id, plan))}
+                    className={`pc-button ${planCode === clinic.plan ? 'pc-button--active' : ''}`}
+                    disabled={!hasPermission('billing:write') || saving === `plan-${planCode}`}
+                    onClick={() => safeAction(`plan-${planCode}`, () => changeClinicPlan(platformUser, clinic.id, planCode))}
+                    title={formatPlanPrice(planCode)}
                   >
-                    {saving === `plan-${plan}` ? '...' : plan}
+                    {saving === `plan-${planCode}` ? '...' : getPlanLabel(planCode)}
                   </button>
                 ))}
               </div>
             </>
+          )}
+        </Panel>
+      </div>
+
+      <div className="pc-grid-2">
+        <Panel title="Endereço fiscal" description="Base para cobrança, contrato e comunicações formais">
+          <ul className="pc-info-list">
+            <li><span>CEP</span><strong>{clinic.zipCode ? formatCep(clinic.zipCode) : '—'}</strong></li>
+            <li><span>Logradouro</span><strong>{clinic.street ? `${clinic.street}, ${clinic.streetNumber || 'S/N'}` : '—'}</strong></li>
+            <li><span>Complemento</span><strong>{clinic.addressComplement || '—'}</strong></li>
+            <li><span>Bairro</span><strong>{clinic.neighborhood || '—'}</strong></li>
+            <li><span>Cidade/UF</span><strong>{clinic.city || '—'}/{clinic.state || '—'}</strong></li>
+          </ul>
+        </Panel>
+
+        <Panel title="Responsabilidade legal" description="Vínculo registrado para inadimplência e compliance">
+          {!legalProfile ? (
+            <EmptyState
+              title="Perfil legal não cadastrado"
+              description="Clínicas provisionadas antes da nova política não possuem tenant_legal_profiles."
+            />
+          ) : (
+            <ul className="pc-info-list">
+              <li><span>Representante</span><strong>{legalProfile.legalRepresentativeName}</strong></li>
+              <li><span>CPF</span><strong>{formatCpf(legalProfile.legalRepresentativeCpf)}</strong></li>
+              <li><span>E-mail</span><strong>{legalProfile.legalRepresentativeEmail}</strong></li>
+              <li><span>Telefone</span><strong>{legalProfile.legalRepresentativePhone ? formatPhone(legalProfile.legalRepresentativePhone) : '—'}</strong></li>
+              <li><span>Cobrança</span><strong>{legalProfile.billingContactName} · {legalProfile.billingContactEmail}</strong></li>
+              <li><span>Termos aceitos</span><strong>{legalProfile.liabilityStatus === 'accepted' ? `${legalProfile.liabilityTermsVersion} · ${legalProfile.liabilityAcceptedAt ? String(legalProfile.liabilityAcceptedAt).replace('T', ' ').slice(0, 19) : '—'}` : 'Pendente — aguardando aceite por e-mail'}</strong></li>
+              {legalProfile.onboardingEmailSentAt ? (
+                <li><span>E-mail enviado</span><strong>{String(legalProfile.onboardingEmailSentAt).replace('T', ' ').slice(0, 19)}</strong></li>
+              ) : (
+                <li><span>E-mail enviado</span><strong>Pendente</strong></li>
+              )}
+            </ul>
           )}
         </Panel>
       </div>
