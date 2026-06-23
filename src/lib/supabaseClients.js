@@ -36,7 +36,8 @@ export const supabasePlatformClient =
           storageKey: 'appgestaoodonto-platform-auth',
           persistSession: true,
           autoRefreshToken: true,
-          detectSessionInUrl: true,
+          // Tokens de convite/recovery são processados em firstAccessSession.js (/primeiro-acesso).
+          detectSessionInUrl: false,
         },
       })
     : null;

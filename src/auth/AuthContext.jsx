@@ -25,6 +25,7 @@ import {
   getPlatformSession,
   resolveSaasUser,
 } from './saasSessionResolver.js';
+import { auditFirstAccess, isFirstAccessFlow } from '../utils/firstAccessSession.js';
 
 const AUTH_LOCAL_DB_TIMEOUT_MS = 20000;
 const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
@@ -158,6 +159,15 @@ export const AuthProvider = ({ children }) => {
     let cancelled = false;
 
     if (session.authMode === 'saas') {
+      if (isFirstAccessFlow()) {
+        auditFirstAccess('AuthContext hydrate skipped', {
+          reason: 'fluxo de primeiro acesso — não invalidar sessão Supabase',
+        });
+        setUser(null);
+        return () => {
+          cancelled = true;
+        };
+      }
       hydrateSaasUser({
         stored: session,
         isCancelled: () => cancelled,
@@ -166,6 +176,10 @@ export const AuthProvider = ({ children }) => {
         },
         onLogout: (reason) => {
           if (cancelled) return; // execução abortada não pode apagar sessão válida
+          if (isFirstAccessFlow()) {
+            auditFirstAccess('AuthContext onLogout suppressed', { reason: reason || null });
+            return;
+          }
           clearStoredSession();
           if (reason) {
             try { sessionStorage.setItem(LOGOUT_REASON_KEY, reason); } catch { /* ignore */ }
@@ -215,6 +229,10 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (!supabasePlatformClient) return undefined;
     const { data: { subscription } } = supabasePlatformClient.auth.onAuthStateChange((event, authSession) => {
+      if (isFirstAccessFlow()) {
+        auditFirstAccess('AuthContext onAuthStateChange ignored', { event });
+        return;
+      }
       const stored = readStoredSession();
       if (!stored || stored.authMode !== 'saas') return;
       if (event === 'INITIAL_SESSION') return;

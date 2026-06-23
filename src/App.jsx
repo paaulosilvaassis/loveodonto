@@ -6,10 +6,12 @@ import RequireTenantAccess from './auth/RequireTenantAccess.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ActivatePage from './pages/ActivatePage.jsx';
 import PrimeiroAcessoPage from './pages/PrimeiroAcessoPage.jsx';
+import AceitarTermosPage from './pages/AceitarTermosPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ConvitePage from './pages/ConvitePage.jsx';
 import ContractSignPublicPage from './pages/contratos/ContractSignPublicPage.jsx';
 import { PlatformAuthProvider } from './auth/PlatformAuthContext.jsx';
+import FirstAccessRedirectGuard from './auth/FirstAccessRedirectGuard.jsx';
 import RequirePlatformAuth from './auth/RequirePlatformAuth.jsx';
 import { TenantProvider } from './tenant/TenantContext.jsx';
 import PlatformLayout from './platform/PlatformLayout.jsx';
@@ -33,6 +35,7 @@ export default function App() {
     <AuthProvider>
       <TenantProvider>
         <BrowserRouter>
+          <FirstAccessRedirectGuard />
           <PlatformAuthProvider>
             <Routes>
             {import.meta.env?.DEV ? (
@@ -53,6 +56,7 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/activate" element={<ActivatePage />} />
             <Route path="/primeiro-acesso" element={<PrimeiroAcessoPage />} />
+            <Route path="/aceitar-termos" element={<AceitarTermosPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/convite" element={<ConvitePage />} />
             <Route path="/assinatura/:token" element={<ContractSignPublicPage />} />
