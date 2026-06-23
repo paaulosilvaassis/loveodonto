@@ -56,7 +56,12 @@ app.use(express.json());
 
 /** Health check leve (sem Supabase) — usado pelo script `npm run console:stack` para saber quando a API está escutando. */
 app.get('/health', (_req, res) => {
-  res.status(200).json({ ok: true, service: 'saas-admin-api' });
+  res.status(200).json({
+    ok: true,
+    service: 'saas-admin-api',
+    version: '2026-06-24',
+    features: { resendAccess: true },
+  });
 });
 
 const SUPABASE_URL = process.env.SUPABASE_URL;

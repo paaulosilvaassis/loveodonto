@@ -120,6 +120,18 @@ function normalizePlanForProvision(planCode) {
 function mapPlatformApiErrorMessage(error) {
   const raw = String(error?.message || error || '').trim();
   const lower = raw.toLowerCase();
+  if (lower.includes('cannot post') && lower.includes('resend-access')) {
+    return (
+      'A Admin API em produção ainda não foi atualizada (rota resend-access ausente). '
+      + 'Faça redeploy do serviço server/ no Railway com o commit mais recente da branch main.'
+    );
+  }
+  if (raw.startsWith('<!doctype') || raw.startsWith('<html')) {
+    return (
+      'A Admin API respondeu HTML em vez de JSON. '
+      + 'Verifique VITE_PLATFORM_API_BASE_URL e se o backend no Railway foi redeployado.'
+    );
+  }
   if (lower.includes('stack depth limit exceeded')) {
     return (
       'O backend local respondeu com "stack depth limit exceeded". '
@@ -172,8 +184,9 @@ async function callPlatformApi(path, { method = 'POST', body } = {}) {
     }
   }
   if (!response.ok) {
+    const rawError = json?.error || json?.message || text || `Erro HTTP ${response.status}`;
     throw new Error(
-      mapPlatformApiErrorMessage(json?.error || json?.message || `Erro HTTP ${response.status}`)
+      mapPlatformApiErrorMessage(rawError)
       || `Erro HTTP ${response.status}`,
     );
   }

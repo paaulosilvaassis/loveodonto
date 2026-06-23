@@ -104,6 +104,20 @@ if (payload.ok !== true) {
 
 ok(`Backend acessível: ${payload.service} (${baseUrl.origin})`);
 process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+
+const probeUrl = new URL('/internal/platform/tenants/probe/resend-access', baseUrl.origin).toString();
+info(`POST ${probeUrl} (probe rota resend-access)`);
+const probeResponse = await fetch(probeUrl, { method: 'POST', headers: { Accept: 'application/json' } });
+const probeText = await probeResponse.text().catch(() => '');
+const probeIsJson = probeText.trim().startsWith('{');
+if (!probeIsJson && probeText.toLowerCase().includes('cannot post')) {
+  fail(
+    'Rota POST /internal/platform/tenants/:id/resend-access ausente no backend publicado.',
+    'Faça redeploy do serviço server/ no Railway (Root Directory = server) com o commit mais recente da main.',
+  );
+}
+ok(`Rota resend-access presente (HTTP ${probeResponse.status}, resposta JSON)`);
+
 process.stdout.write(`\nPróximos passos:\n`);
 process.stdout.write(`  1. Vercel → Project Settings → Environment Variables (Production)\n`);
 process.stdout.write(`     VITE_PLATFORM_API_BASE_URL = ${baseUrl.origin}\n`);
