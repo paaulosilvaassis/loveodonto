@@ -25,7 +25,10 @@ import {
   getPlatformSession,
   resolveSaasUser,
 } from './saasSessionResolver.js';
-import { auditFirstAccess, isFirstAccessFlow } from '../utils/firstAccessSession.js';
+import {
+  auditFirstAccess,
+  isFirstAccessProtected,
+} from '../utils/firstAccessSession.js';
 
 const AUTH_LOCAL_DB_TIMEOUT_MS = 20000;
 const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
@@ -159,9 +162,9 @@ export const AuthProvider = ({ children }) => {
     let cancelled = false;
 
     if (session.authMode === 'saas') {
-      if (isFirstAccessFlow()) {
+      if (isFirstAccessProtected()) {
         auditFirstAccess('AuthContext hydrate skipped', {
-          reason: 'fluxo de primeiro acesso — não invalidar sessão Supabase',
+          reason: 'fluxo de primeiro acesso — sem tenant-context/hydrateSaasUser',
         });
         setUser(null);
         return () => {
@@ -176,7 +179,7 @@ export const AuthProvider = ({ children }) => {
         },
         onLogout: (reason) => {
           if (cancelled) return; // execução abortada não pode apagar sessão válida
-          if (isFirstAccessFlow()) {
+          if (isFirstAccessProtected()) {
             auditFirstAccess('AuthContext onLogout suppressed', { reason: reason || null });
             return;
           }
@@ -229,7 +232,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     if (!supabasePlatformClient) return undefined;
     const { data: { subscription } } = supabasePlatformClient.auth.onAuthStateChange((event, authSession) => {
-      if (isFirstAccessFlow()) {
+      if (isFirstAccessProtected()) {
         auditFirstAccess('AuthContext onAuthStateChange ignored', { event });
         return;
       }
@@ -321,6 +324,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    if (isFirstAccessProtected()) {
+      auditFirstAccess('AuthContext logout suppressed', { reason: 'manual logout during first access' });
+      return;
+    }
     clearStoredSession();
     try { localStorage.removeItem(PLATFORM_AUTH_STORAGE_KEY); } catch { /* ignore */ }
     if (session?.authMode === 'saas' && supabasePlatformClient) {
@@ -332,6 +339,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logoutWithReason = (reason) => {
+    if (isFirstAccessProtected()) {
+      auditFirstAccess('AuthContext logoutWithReason suppressed', { reason: reason || null });
+      return;
+    }
     if (reason) sessionStorage.setItem(LOGOUT_REASON_KEY, String(reason));
     logout();
   };

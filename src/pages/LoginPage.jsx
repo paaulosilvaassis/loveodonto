@@ -119,6 +119,15 @@ export default function LoginPage() {
   }, [location.state?.activated]);
 
   useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('firstAccess') !== 'success' || shownActivatedRef.current) return;
+    shownActivatedRef.current = true;
+    setToast({ message: 'Senha definida com sucesso! Faça login para acessar.', type: 'success' });
+    setTimeout(() => setToast(null), 5000);
+    window.history.replaceState({}, document.title, '/login');
+  }, [location.search]);
+
+  useEffect(() => {
     const reason = consumeLogoutReason();
     if (reason) setError(reason);
   }, []);

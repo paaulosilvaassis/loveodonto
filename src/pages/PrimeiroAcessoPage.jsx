@@ -1,13 +1,32 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import Button from '../components/Button.jsx';
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
+import { clearStoredSession } from '../auth/saasSessionResolver.js';
+import {
+  auditFirstAccess,
+  bootstrapFirstAccessSession,
+  classifyFirstAccessError,
+  completeFirstAccess,
+  EXPIRED_LINK_MESSAGE,
+  markFirstAccessPasswordPending,
+  NO_TOKEN_MESSAGE,
+} from '../utils/firstAccessSession.js';
 import appLogo from '../assets/love-odonto-logo.png';
 
 const MIN_PASSWORD_LENGTH = 8;
 
+function resolveBootstrapError({ supabaseError, errorCode, hadAuthParams }) {
+  if (supabaseError) {
+    return classifyFirstAccessError(supabaseError).message;
+  }
+  if (errorCode === 'expired_link' || hadAuthParams) {
+    return EXPIRED_LINK_MESSAGE;
+  }
+  return NO_TOKEN_MESSAGE;
+}
+
 export default function PrimeiroAcessoPage() {
-  const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,6 +35,7 @@ export default function PrimeiroAcessoPage() {
   const [email, setEmail] = useState('');
 
   useEffect(() => {
+    markFirstAccessPasswordPending(true);
     let active = true;
 
     async function bootstrap() {
@@ -25,30 +45,54 @@ export default function PrimeiroAcessoPage() {
         return;
       }
 
-      const { data, error: sessionError } = await supabasePlatformClient.auth.getSession();
-      if (!active) return;
+      try {
+        const {
+          session,
+          urlState,
+          supabaseError,
+          errorCode,
+        } = await bootstrapFirstAccessSession(supabasePlatformClient);
+        if (!active) return;
 
-      if (sessionError) {
-        setError(sessionError.message || 'Não foi possível validar o convite.');
+        const hadAuthParams = Boolean(
+          urlState.code
+          || (urlState.accessToken && urlState.refreshToken)
+          || urlState.hasHash,
+        );
+
+        if (supabaseError || errorCode || !session?.user) {
+          const message = resolveBootstrapError({ supabaseError, errorCode, hadAuthParams });
+          auditFirstAccess('PrimeiroAcessoPage blocked', {
+            setSessionError: supabaseError?.message || null,
+            errorCode: errorCode || classifyFirstAccessError(supabaseError)?.code || null,
+            hadAuthParams,
+          });
+          setError(message);
+          setLoading(false);
+          markFirstAccessPasswordPending(false);
+          return;
+        }
+
+        auditFirstAccess('PrimeiroAcessoPage ready', {
+          sessionUserId: session.user.id,
+          sessionUserEmail: session.user.email || null,
+        });
+        setEmail(session.user.email || '');
+        setReady(true);
         setLoading(false);
-        return;
-      }
-
-      const session = data?.session;
-      if (!session?.user) {
-        setError('Link inválido ou expirado. Solicite um novo convite ao administrador.');
+      } catch (err) {
+        if (!active) return;
+        const classified = classifyFirstAccessError(err);
+        setError(classified.message);
         setLoading(false);
-        return;
+        markFirstAccessPasswordPending(false);
       }
-
-      setEmail(session.user.email || '');
-      setReady(true);
-      setLoading(false);
     }
 
     bootstrap();
     return () => {
       active = false;
+      markFirstAccessPasswordPending(false);
     };
   }, []);
 
@@ -70,13 +114,26 @@ export default function PrimeiroAcessoPage() {
     }
 
     setLoading(true);
+    markFirstAccessPasswordPending(true);
     try {
-      const { error: updateError } = await supabasePlatformClient.auth.updateUser({ password });
-      if (updateError) throw updateError;
-      await supabasePlatformClient.auth.signOut();
-      navigate('/login', { replace: true, state: { passwordSet: true } });
+      const { data, error: updateError } = await supabasePlatformClient.auth.updateUser({ password });
+      auditFirstAccess('updateUser', {
+        updateUserError: updateError?.message || null,
+        updateUserSuccess: !updateError,
+        sessionUserId: data?.user?.id || null,
+        sessionUserEmail: data?.user?.email || null,
+      });
+      if (updateError) {
+        const classified = classifyFirstAccessError(updateError);
+        setError(classified.message);
+        return;
+      }
+
+      await completeFirstAccess(supabasePlatformClient, clearStoredSession);
     } catch (err) {
-      setError(err?.message || 'Não foi possível definir a senha.');
+      const classified = classifyFirstAccessError(err);
+      auditFirstAccess('updateUser exception', { updateUserError: err?.message || null });
+      setError(classified.message);
     } finally {
       setLoading(false);
     }

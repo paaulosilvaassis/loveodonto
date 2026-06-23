@@ -36,8 +36,10 @@ export const supabasePlatformClient =
           storageKey: 'appgestaoodonto-platform-auth',
           persistSession: true,
           autoRefreshToken: true,
-          // Tokens de convite/recovery são processados em firstAccessSession.js (/primeiro-acesso).
+          // Tokens de convite/recovery são processados manualmente em firstAccessSession.js.
+          // Evita corrida com AuthContext/hydrateSaasUser que consumiria o link antes da senha.
           detectSessionInUrl: false,
+          flowType: 'pkce',
         },
       })
     : null;
