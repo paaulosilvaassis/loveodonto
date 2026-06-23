@@ -1,4 +1,4 @@
-export const DB_VERSION = 53;
+export const DB_VERSION = 56;
 
 export const defaultDbState = () => ({
   version: DB_VERSION,
@@ -351,6 +351,10 @@ export const defaultDbState = () => ({
   contractSignLinks: [],
   contractSignatureRequests: [],
   contractSignatureAudits: [],
+  /** Guias clínicos educativos para apresentação ao paciente */
+  clinicalGuides: [],
+  clinicalGuideImages: [],
+  clinicalMediaLibrary: [],
   /** Configurações do módulo por clínica/tenant */
   contractSettings: [],
   /**

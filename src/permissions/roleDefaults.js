@@ -13,6 +13,8 @@ function p(mod, action) {
 export const ROLE_DEFAULT_PERMISSIONS = {
   administrativo: [
     p('dashboard', 'view'),
+    p('equipe', 'view'), p('equipe', 'create'), p('equipe', 'edit'),
+    p('configuracoes_usuarios_acessos', 'view'),
     p('patients', 'view'), p('patients', 'create'), p('patients', 'edit'),
     p('agenda', 'view'), p('agenda', 'create'), p('agenda', 'edit'),
     p('prontuario_documentos', 'view'), p('prontuario_documentos', 'export'),
@@ -27,12 +29,14 @@ export const ROLE_DEFAULT_PERMISSIONS = {
     p('admin_contratos', 'cancel'),
     p('admin_contratos', 'view_audit'),
     p('admin_contratos', 'edit_system_clause'),
+    p('prontuario_guia_clinico', 'view'), p('prontuario_guia_clinico', 'create'), p('prontuario_guia_clinico', 'edit'), p('prontuario_guia_clinico', 'delete'),
   ],
   comercial: [
     p('dashboard', 'view'),
     p('pipeline_crm', 'view'), p('pipeline_crm', 'create'), p('pipeline_crm', 'edit'),
     p('patients', 'view'),
     p('prontuario_orcamentos', 'view'), p('prontuario_orcamentos', 'create'),
+    p('prontuario_guia_clinico', 'view'),
     p('comercial', 'view'), p('comercial', 'create'), p('comercial', 'edit'), p('comercial', 'export'),
     p('admin_contratos', 'generate'),
     p('admin_contratos', 'view'),
@@ -60,6 +64,7 @@ export const ROLE_DEFAULT_PERMISSIONS = {
     p('prontuario_planejamento', 'view'), p('prontuario_planejamento', 'create'), p('prontuario_planejamento', 'edit'),
     p('prontuario_procedimentos', 'view'), p('prontuario_procedimentos', 'create'), p('prontuario_procedimentos', 'edit'),
     p('prontuario_orcamentos', 'view'),
+    p('prontuario_guia_clinico', 'view'), p('prontuario_guia_clinico', 'create'), p('prontuario_guia_clinico', 'edit'),
     p('prontuario_contratos', 'view'),
     p('prontuario_contratos', 'create'),
     p('admin_contratos', 'generate'),

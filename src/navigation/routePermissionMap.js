@@ -7,6 +7,8 @@ export function resolveRoutePermission(routePath) {
   if (path.startsWith('/orcamentos')) return 'comercial:view';
   if (path.startsWith('/pacientes')) return 'patients:view';
   if (path.startsWith('/prontuario')) return 'prontuario_atendimento:view';
+  if (path.startsWith('/admin/guia-clinico')) return 'prontuario_guia_clinico:view';
+  if (path.startsWith('/admin/biblioteca-imagens-clinicas')) return 'prontuario_guia_clinico:edit';
   if (path.startsWith('/gestao/agenda')) return 'agenda:view';
   if (path.startsWith('/gestao-atendimento')) return 'agenda:view';
   if (path.startsWith('/gestao/convenios')) return 'agenda:view';

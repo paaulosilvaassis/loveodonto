@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Button from '../Button.jsx';
 import { CollaboratorRhProfileFields } from './CollaboratorRhProfileFields.jsx';
-import { addCollaboratorPhone, createCollaborator } from '../../services/collaboratorService.js';
-import { provisionCollaboratorSystemAccess } from '../../services/collaboratorAccessProvisionService.js';
+import {
+  addCollaboratorPhone,
+  createCollaboratorWithSystemAccess,
+} from '../../services/collaboratorService.js';
+import { isCollaboratorEmailValid } from '../../utils/collaboratorAccessRole.js';
 import { onlyDigits, isPhoneValid } from '../../utils/validators.js';
 import {
   ModalBody,
@@ -34,9 +37,6 @@ const defaultForm = () => ({
   phoneTipo: 'Celular',
   phoneDdd: '',
   phoneNumero: '',
-  createSystemAccess: false,
-  accessProfileRole: 'atendimento',
-  sendInviteEmail: true,
 });
 
 export default function CollaboratorCreateModal({ open, user, onOpenChange, onSaved, onOpenExistingCollaborator }) {
@@ -88,7 +88,7 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
     return { ok: true, skip: false, ddd, numero };
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
     setLocalError('');
     setDuplicateRegistro(null);
@@ -100,6 +100,8 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
         .split(/\s+/)
         .filter(Boolean)[0] ||
       '';
+    const email = form.email.trim();
+    const hasValidEmail = isCollaboratorEmailValid(email);
 
     if (!nomeCompleto) {
       setLocalError('Nome completo é obrigatório.');
@@ -109,12 +111,8 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
       setLocalError('Informe um apelido ou um nome completo com pelo menos uma palavra.');
       return;
     }
-    if (form.createSystemAccess && !form.email.trim()) {
-      setLocalError('E-mail é obrigatório para criar acesso ao sistema.');
-      return;
-    }
-    if (form.createSystemAccess && !form.accessProfileRole.trim()) {
-      setLocalError('Perfil de acesso é obrigatório quando o acesso ao sistema está habilitado.');
+    if (email && !hasValidEmail) {
+      setLocalError('Informe um e-mail válido ou deixe o campo em branco para cadastrar sem acesso.');
       return;
     }
 
@@ -126,13 +124,13 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
 
     setSubmitting(true);
     try {
-      const created = createCollaborator(user, {
+      const result = await createCollaboratorWithSystemAccess(user, {
         nomeCompleto,
         apelido,
         nomeSocial: form.nomeSocial.trim(),
         sexo: form.sexo.trim(),
         dataNascimento: form.dataNascimento.trim(),
-        email: form.email.trim(),
+        email,
         rhCategoria: form.rhCategoria.trim(),
         cargo: form.cargo.trim(),
         rhFuncaoDescricao: form.rhFuncaoDescricao.trim(),
@@ -143,7 +141,13 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
         tipoVinculo: form.tipoVinculo.trim(),
         setor: form.setor.trim(),
         status: form.status || 'ativo',
+      }, {
+        tenant_id: user?.tenantId || '',
+        send_invite: true,
       });
+
+      const { collaborator: created, systemAccess, noAccess, accessError } = result;
+
       if (!phone.skip) {
         addCollaboratorPhone(user, created.id, {
           tipo: form.phoneTipo || 'Celular',
@@ -152,29 +156,32 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
           principal: true,
         });
       }
-      if (form.createSystemAccess) {
-        provisionCollaboratorSystemAccess({
-          tenant_id: user?.tenantId || '',
-          collaborator_id: created.id,
-          collaborator_full_name: nomeCompleto,
-          create_system_access: true,
-          email: form.email.trim().toLowerCase(),
-          profile_role: form.accessProfileRole,
-          send_invite: form.sendInviteEmail,
-        }).catch((err) => {
-          if (import.meta.env?.DEV) {
-            console.debug('[CollaboratorCreateModal] falha ao provisionar acesso no backend', err);
-          }
-        });
-      }
+
       setDirty(false);
-      onSaved(created.id);
+
+      const duplicateEmail = Boolean(
+        accessError
+        && String(accessError.message || '').toLowerCase().includes('já possui acesso nesta clínica'),
+      );
+
+      onSaved(created.id, {
+        noAccess,
+        systemAccess: Boolean(systemAccess),
+        inviteEmail: hasValidEmail ? email.toLowerCase() : '',
+        inviteFailed: Boolean(accessError && !duplicateEmail),
+        duplicateEmail,
+        accessErrorMessage: accessError?.message || '',
+      });
     } catch (err) {
       setLocalError(err?.message || 'Não foi possível salvar o colaborador.');
     } finally {
       setSubmitting(false);
     }
   };
+
+  const submitLabel = submitting
+    ? (isCollaboratorEmailValid(form.email) ? 'Criando colaborador e enviando convite...' : 'Salvando...')
+    : 'Salvar colaborador';
 
   return (
     <ModalRoot
@@ -283,46 +290,11 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
 
               <section className="collaborator-create-modal__section">
                 <h3 className="collaborator-create-modal__section-title">Acesso ao sistema</h3>
-                <p className="collaborator-create-modal__section-description">
-                  Defina se este colaborador receberá acesso ao Love Odonto agora.
+                <p className="collaborator-create-modal__section-description muted">
+                  Com e-mail válido, o Love Odonto cria automaticamente o usuário, envia o convite de acesso
+                  e vincula o colaborador à clínica. Sem e-mail, o cadastro fica apenas como registro RH
+                  (status &quot;Sem acesso&quot;).
                 </p>
-                <div className="stack" style={{ gap: '0.75rem' }}>
-                  <label className="flex" style={{ gap: '0.5rem', alignItems: 'center' }}>
-                    <input
-                      type="checkbox"
-                      checked={form.createSystemAccess}
-                      onChange={(e) => patchProfile({ createSystemAccess: e.target.checked })}
-                    />
-                    <span>Criar acesso para este colaborador</span>
-                  </label>
-                  {form.createSystemAccess ? (
-                    <>
-                      <div className="collaborator-create-modal__field">
-                        <label htmlFor="new-collab-access-role">Perfil de acesso</label>
-                        <select
-                          id="new-collab-access-role"
-                          className="collaborator-create-modal__control"
-                          value={form.accessProfileRole}
-                          onChange={(e) => patchProfile({ accessProfileRole: e.target.value })}
-                        >
-                          <option value="atendimento">Atendimento</option>
-                          <option value="dentista">Dentista</option>
-                          <option value="financeiro">Financeiro</option>
-                          <option value="gerente">Gerente</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                      </div>
-                      <label className="flex" style={{ gap: '0.5rem', alignItems: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={form.sendInviteEmail}
-                          onChange={(e) => patchProfile({ sendInviteEmail: e.target.checked })}
-                        />
-                        <span>Enviar convite por e-mail</span>
-                      </label>
-                    </>
-                  ) : null}
-                </div>
               </section>
             </div>
           </form>
@@ -333,7 +305,7 @@ export default function CollaboratorCreateModal({ open, user, onOpenChange, onSa
             Cancelar
           </Button>
           <Button type="submit" form="collaborator-create-form" disabled={submitting}>
-            {submitting ? 'Salvando...' : 'Salvar colaborador'}
+            {submitLabel}
           </Button>
         </ModalFooter>
       </ModalContent>

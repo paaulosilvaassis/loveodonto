@@ -3,6 +3,7 @@ import { DB_VERSION, defaultDbState } from './schema.js';
 import { buildPermissionsCatalog, permissionId } from '../permissions/catalog.js';
 import { ROLE_DEFAULT_PERMISSIONS, ROLES_FOR_SEED } from '../permissions/roleDefaults.js';
 import { seedDefaultContractsForDb } from '../contracts/defaultContractSeed.js';
+import { seedClinicalGuidesForDb, backfillClinicalGuideImages } from '../services/clinicalGuide/clinicalGuideSeed.js';
 import { DEFAULT_FINANCIAL_PARTNERS } from '../services/financialPartnersService.js';
 
 const migrations = {
@@ -1504,6 +1505,48 @@ const migrations = {
       contractSignatureAudits: ensureArray('contractSignatureAudits'),
       version: 53,
     };
+  },
+  /**
+   * 54: Biblioteca de Guias Clínicos do Dentista.
+   */
+  54: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 54 };
+    const ensureArray = (key) => (Array.isArray(db[key]) ? db[key] : []);
+    const next = {
+      ...db,
+      clinicalGuides: ensureArray('clinicalGuides'),
+      clinicalGuideImages: ensureArray('clinicalGuideImages'),
+      clinicalMediaLibrary: ensureArray('clinicalMediaLibrary'),
+      version: 54,
+    };
+    return seedClinicalGuidesForDb(next);
+  },
+  /**
+   * 55: Atualiza ilustrações SVG dos guias clínicos (substitui placeholders antigos).
+   */
+  55: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 55 };
+    const next = {
+      ...db,
+      clinicalGuides: Array.isArray(db.clinicalGuides) ? db.clinicalGuides : [],
+      clinicalGuideImages: Array.isArray(db.clinicalGuideImages) ? db.clinicalGuideImages : [],
+      version: 55,
+    };
+    return backfillClinicalGuideImages(next);
+  },
+  /**
+   * 56: Fotos clínicas profissionais + biblioteca de mídia.
+   */
+  56: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 56 };
+    const next = {
+      ...db,
+      clinicalGuides: Array.isArray(db.clinicalGuides) ? db.clinicalGuides : [],
+      clinicalGuideImages: Array.isArray(db.clinicalGuideImages) ? db.clinicalGuideImages : [],
+      clinicalMediaLibrary: Array.isArray(db.clinicalMediaLibrary) ? db.clinicalMediaLibrary : [],
+      version: 56,
+    };
+    return backfillClinicalGuideImages(next);
   },
 };
 

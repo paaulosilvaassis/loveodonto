@@ -35,6 +35,16 @@ function classifyTenantError(message) {
       help: import.meta.env.DEV ? DEV_BACKEND_NOT_RUNNING_MSG : 'Verifique se a API está ativa e tente novamente.',
     };
   }
+  if (
+    lower.includes('abort')
+    || lower.includes('signal is aborted')
+  ) {
+    return {
+      code: 'TENANT_CONTEXT_FAILED',
+      title: 'Validação da clínica interrompida',
+      help: 'Aguarde um instante e clique em Tentar novamente.',
+    };
+  }
   if (lower.includes('supabase') || lower.includes('vite_supabase') || lower.includes('configura')) {
     return {
       code: 'SUPABASE_CONFIG_FAILED',

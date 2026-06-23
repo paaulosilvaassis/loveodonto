@@ -8,6 +8,11 @@ import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
 import { isCepValid, isCpfValid, isPhoneValid, onlyDigits, validateFileMeta } from '../utils/validators.js';
+import {
+  isCollaboratorEmailValid,
+  resolveCollaboratorProfileRole,
+} from '../utils/collaboratorAccessRole.js';
+import { provisionCollaboratorSystemAccess, linkCollaboratorTenantAccess } from './collaboratorAccessProvisionService.js';
 
 /** Alterar estatus sozinho não exige revalidar RH completo (evita bloquear registros legados). */
 const RH_PROFILE_KEYS = new Set([
@@ -348,6 +353,90 @@ export const createCollaborator = (user, payload) => {
   });
   return collaborator;
 };
+
+/**
+ * Cria colaborador localmente e provisiona acesso SaaS quando houver e-mail válido.
+ * Falhas de provisionamento são retornadas em accessError (não silenciosas).
+ */
+export async function createCollaboratorWithSystemAccess(user, payload, options = {}) {
+  const collaborator = createCollaborator(user, payload);
+  const email = String(collaborator.email || '').trim().toLowerCase();
+
+  if (!isCollaboratorEmailValid(email)) {
+    return {
+      collaborator,
+      systemAccess: null,
+      noAccess: true,
+      accessError: null,
+    };
+  }
+
+  const tenantId = String(options.tenant_id || user?.tenantId || '').trim();
+  const profileRole = resolveCollaboratorProfileRole({
+    rhCategoria: collaborator.rhCategoria,
+    cargo: collaborator.cargo,
+  });
+
+  try {
+    const systemAccess = await provisionCollaboratorSystemAccess({
+      tenant_id: tenantId,
+      collaborator_id: collaborator.id,
+      collaborator_full_name: collaborator.nomeCompleto || collaborator.apelido || email,
+      create_system_access: true,
+      email,
+      profile_role: options.profile_role || profileRole,
+      send_invite: options.send_invite !== false,
+    });
+    return {
+      collaborator,
+      systemAccess,
+      noAccess: false,
+      accessError: null,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err || 'Falha ao provisionar acesso.');
+    const lower = message.toLowerCase();
+    if (lower.includes('já possui acesso nesta clínica')) {
+      try {
+        const linked = await linkCollaboratorTenantAccess({
+          tenant_id: tenantId,
+          collaborator_id: collaborator.id,
+          email,
+          full_name: collaborator.nomeCompleto || collaborator.apelido || email,
+        });
+        return {
+          collaborator,
+          systemAccess: linked,
+          noAccess: false,
+          accessError: null,
+          linkedExisting: true,
+        };
+      } catch (linkErr) {
+        const linkMessage = linkErr instanceof Error ? linkErr.message : String(linkErr || '');
+        const accessError = linkErr instanceof Error ? linkErr : new Error(linkMessage);
+        if (import.meta.env?.DEV) {
+          console.debug('[createCollaboratorWithSystemAccess] falha ao vincular acesso existente', accessError);
+        }
+        return {
+          collaborator,
+          systemAccess: null,
+          noAccess: false,
+          accessError,
+        };
+      }
+    }
+    const accessError = err instanceof Error ? err : new Error(message);
+    if (import.meta.env?.DEV) {
+      console.debug('[createCollaboratorWithSystemAccess] falha ao provisionar acesso', accessError);
+    }
+    return {
+      collaborator,
+      systemAccess: null,
+      noAccess: false,
+      accessError,
+    };
+  }
+}
 
 export const updateCollaborator = (user, collaboratorId, payload) => {
   requirePermission(user, 'collaborators:write');

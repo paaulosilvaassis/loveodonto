@@ -56,7 +56,9 @@ function persistResolvedSaasUser(resolved) {
     cachedUser: sanitizeCachedUser(resolved),
   });
   try { ensureSaasUserInLocalDb(resolved); } catch { /* non-blocking */ }
-  reconcileOwnInvitationAcceptance().catch(() => {});
+  window.setTimeout(() => {
+    reconcileOwnInvitationAcceptance().catch(() => {});
+  }, 2500);
 }
 
 /**
@@ -235,17 +237,29 @@ export const AuthProvider = ({ children }) => {
     return () => subscription.unsubscribe();
   }, []);
 
-  const login = async ({ userId, tenantId: explicitTenantId }) => {
+  const login = async ({
+    userId,
+    tenantId: explicitTenantId,
+    saasResolvedUser,
+    saasSession,
+  }) => {
     if (isSaasModeEnabled()) {
-      const currentSession = await getPlatformSession();
+      const currentSession = saasSession || await getPlatformSession();
       if (!currentSession?.user?.id) {
         throw new Error('Sessão SaaS ausente. Faça login novamente.');
       }
-      const resolved = await resolveSaasUser(currentSession);
+      let resolved = saasResolvedUser?.tenantId ? saasResolvedUser : null;
+      if (!resolved) {
+        resolved = await resolveSaasUser(currentSession);
+      }
       if (!resolved?.tenantId) {
         throw new Error('Usuário SaaS sem clínica vinculada.');
       }
-      await assertTenantAllowed(resolved.tenantId);
+      if (!saasResolvedUser?.tenantId) {
+        await assertTenantAllowed(resolved.tenantId);
+      } else if (saasResolvedUser.has_system_access === false) {
+        throw new Error('Seu acesso a esta clínica está desativado.');
+      }
       const next = {
         authMode: 'saas',
         userId: currentSession.user.id,
@@ -254,7 +268,9 @@ export const AuthProvider = ({ children }) => {
       };
       writeStoredSession(next);
       try { ensureSaasUserInLocalDb(resolved); } catch { /* non-blocking */ }
-      reconcileOwnInvitationAcceptance().catch(() => {});
+      window.setTimeout(() => {
+        reconcileOwnInvitationAcceptance().catch(() => {});
+      }, 2500);
       setSession(next);
       setUser(resolved);
       emitStabilityLog('AUTH_OK', { mode: 'saas', tenantId: resolved.tenantId });

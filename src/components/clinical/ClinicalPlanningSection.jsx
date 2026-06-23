@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { Calendar, DollarSign, Plus, ClipboardList } from 'lucide-react';
+import { Calendar, DollarSign, Plus, ClipboardList, BookOpen } from 'lucide-react';
 
 import ProcedureSelectorModal from '../ProcedureSelectorModal.jsx';
 
@@ -57,6 +57,7 @@ import {
 } from '../../services/budgetNavigationService.js';
 import { PreviousBudgetImportCard } from './planning/PreviousBudgetImportCard.jsx';
 import { AppointmentBudgetHistoryModal } from './planning/AppointmentBudgetHistoryModal.jsx';
+import { ClinicalGuideModal } from './guide/ClinicalGuideModal.jsx';
 
 
 export function ClinicalPlanningSection({
@@ -104,6 +105,7 @@ export function ClinicalPlanningSection({
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [importBusy, setImportBusy] = useState(false);
   const [planningRefreshKey, setPlanningRefreshKey] = useState(0);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
 
   const prevCountRef = useRef(0);
 
@@ -543,6 +545,10 @@ export function ClinicalPlanningSection({
 
           <>
 
+            <ClinicalBtn variant="secondary" icon={BookOpen} onClick={() => setGuideModalOpen(true)}>
+              Guia Clínico
+            </ClinicalBtn>
+
             <ClinicalBtn variant="secondary" icon={ClipboardList} onClick={() => setAnamnesisModalOpen(true)}>
 
               Anamnese
@@ -810,6 +816,12 @@ export function ClinicalPlanningSection({
 
         onConfirm={handleConfirmRemove}
 
+      />
+
+      <ClinicalGuideModal
+        open={guideModalOpen}
+        onOpenChange={setGuideModalOpen}
+        user={user}
       />
 
     </>

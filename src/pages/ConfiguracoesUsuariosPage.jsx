@@ -19,10 +19,19 @@ import {
   createTenantUserAccess,
   listTenantUsersAccess,
   provisionCollaboratorSystemAccess,
+  reconcileCollaboratorTenantLinks,
   resendCollaboratorInvite,
   setTenantUserSystemAccess,
+  removeTenantUserAccess,
 } from '../services/collaboratorAccessProvisionService.js';
+import { listCollaborators } from '../services/collaboratorService.js';
+import {
+  buildCollaboratorLookupMaps,
+  formatCollaboratorLinkLabel,
+  resolveCollaboratorForTenantUser,
+} from '../utils/collaboratorTenantLink.js';
 import { MEMBERSHIP_ROLE_LABELS, INVITABLE_ROLES } from '../constants/tenantRoles.js';
+import { notifyInviteDeliveryResult } from '../utils/inviteDeliveryFeedback.js';
 import { UserPlus, Copy, Trash2, Pencil, Eye, Mail, MoreVertical, UserX, UserCheck } from 'lucide-react';
 
 function formatUpdatedAt(iso) {
@@ -38,13 +47,27 @@ function isMemberAccessActive(m) {
   return m.has_system_access !== false && m.user_active !== false;
 }
 
-function resolveInvitationStatus(invitation) {
+function resolveInvitationStatus(invitation, member) {
+  if (member?.user_id && isMemberAccessActive(member)) {
+    if (!invitation || invitation.accepted_at || invitation.status === 'accepted') {
+      return 'aceito';
+    }
+  }
   if (!invitation) return 'sem_convite';
   if (invitation.accepted_at) return 'aceito';
   if (invitation.status === 'sent') return 'enviado';
   if (invitation.status === 'accepted') return 'aceito';
   if (invitation.expires_at && invitation.expires_at <= new Date().toISOString()) return 'expirado';
   return 'pendente';
+}
+
+function invitationStatusLabel(status) {
+  if (status === 'sem_convite') return 'Sem convite';
+  if (status === 'aceito') return 'Aceito';
+  if (status === 'enviado') return 'Convite enviado';
+  if (status === 'pendente') return 'Convite enviado';
+  if (status === 'expirado') return 'Convite expirado';
+  return status;
 }
 
 function normalizeUiAccessErrorMessage(message) {
@@ -56,6 +79,9 @@ function normalizeUiAccessErrorMessage(message) {
   }
   if (lower.includes('este e-mail já possui acesso')) {
     return 'Este e-mail já possui acesso.';
+  }
+  if (lower.includes('tenant_users_user_id_required') || lower.includes('sem conta no auth')) {
+    return 'Conta no Auth ausente. Tente convidar novamente — o sistema recria a conta automaticamente.';
   }
   if (lower.includes('convite') && lower.includes('sent')) {
     return 'Convite já enviado para este e-mail.';
@@ -237,7 +263,12 @@ export default function ConfiguracoesUsuariosPage() {
     if (!tenantId) return;
     let active = true;
     setSaving(true);
-    listTenantUsersAccess(tenantId)
+    const collaborators = listCollaborators();
+    const collaboratorMaps = buildCollaboratorLookupMaps(collaborators);
+
+    reconcileCollaboratorTenantLinks(tenantId, collaborators)
+      .then(({ users = [] }) => ({ users }))
+      .catch(() => listTenantUsersAccess(tenantId))
       .then((result) => {
         if (!active) return;
         const users = Array.isArray(result?.users) ? result.users : [];
@@ -247,6 +278,7 @@ export default function ConfiguracoesUsuariosPage() {
           phone: u.phone || '',
           internal_notes: u.internal_notes || '',
           tenant_name: tenantLabel,
+          linked_collaborator: resolveCollaboratorForTenantUser(u, collaboratorMaps),
         })));
         const invs = users
           .map((u) => u?.invitation)
@@ -288,14 +320,17 @@ export default function ConfiguracoesUsuariosPage() {
     setSaving(true);
     try {
       const email = inviteEmail.trim().toLowerCase();
-      await provisionCollaboratorSystemAccess({
+      const result = await provisionCollaboratorSystemAccess({
         tenant_id: tenantId,
         create_system_access: inviteAccess,
         email,
         profile_role: inviteRole,
         send_invite: true,
       });
-      pushToast('success', 'Convite enviado por e-mail com sucesso.');
+      notifyInviteDeliveryResult(result?.invite_delivery, {
+        onCopyLink: handleCopyInviteUrl,
+        pushToast,
+      });
       setModalInvite(false);
       setInviteEmail('');
       setInviteRole('atendimento');
@@ -372,12 +407,15 @@ export default function ConfiguracoesUsuariosPage() {
       if (!invitation?.email) {
         throw new Error('Convite não encontrado para reenviar.');
       }
-      await resendCollaboratorInvite({
+      const result = await resendCollaboratorInvite({
         tenant_id: tenantId,
         email: invitation.email,
         collaborator_id: invitation.collaborator_id || null,
       });
-      pushToast('success', 'Convite reenviado.');
+      notifyInviteDeliveryResult(result?.invite_delivery, {
+        onCopyLink: handleCopyInviteUrl,
+        pushToast,
+      });
       refresh();
     } catch (err) {
       showError(normalizeUiAccessErrorMessage(err?.message || 'Erro ao renovar convite.'));
@@ -414,12 +452,15 @@ export default function ConfiguracoesUsuariosPage() {
   const handleResendInviteForMember = async (m) => {
     setSaving(true);
     try {
-      await resendCollaboratorInvite({
+      const result = await resendCollaboratorInvite({
         tenant_id: tenantId,
         email: m.email,
         collaborator_id: m.collaborator_id || null,
       });
-      pushToast('success', 'Convite reenviado por e-mail.');
+      notifyInviteDeliveryResult(result?.invite_delivery, {
+        onCopyLink: handleCopyInviteUrl,
+        pushToast,
+      });
       refresh();
     } catch (err) {
       showError(normalizeUiAccessErrorMessage(err?.message || 'Não foi possível reenviar o convite.'));
@@ -428,11 +469,25 @@ export default function ConfiguracoesUsuariosPage() {
     }
   };
 
-  const handleRemove = (memberUserId, memberName) => {
-    if (!window.confirm(`Remover o vínculo de "${memberName}" com esta clínica? O usuário perderá o acesso mas o cadastro permanece.`)) return;
+  const handleRemove = async (member) => {
+    const memberName = member?.full_name || member?.email || 'Usuário';
+    if (!member?.id) {
+      showError('Não foi possível identificar o vínculo deste usuário.');
+      return;
+    }
+    if (!window.confirm(`Remover o vínculo de "${memberName}" com esta clínica? O usuário perderá o acesso aqui, mas a conta no Auth não será apagada.`)) {
+      return;
+    }
     setSaving(true);
-    showError('Remoção de vínculo ainda não está habilitada no backend canônico.');
-    setSaving(false);
+    try {
+      await removeTenantUserAccess(member.id, { tenant_id: tenantId });
+      pushToast('success', 'Vínculo removido. Você pode convidar este e-mail novamente.');
+      refresh();
+    } catch (err) {
+      showError(normalizeUiAccessErrorMessage(err?.message || 'Não foi possível remover o vínculo.'));
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (tenantLoading && !tenantId) {
@@ -486,10 +541,10 @@ export default function ConfiguracoesUsuariosPage() {
         )}
 
         <div className="list-actions" style={{ marginBottom: '1rem' }}>
-          <Button variant="primary" icon={UserPlus} onClick={() => setModalCreateUser(true)}>
+          <Button variant="primary" icon={UserPlus} onClick={() => { setError(''); setModalCreateUser(true); }}>
             Novo usuário
           </Button>
-          <Button variant="primary" icon={UserPlus} onClick={() => setModalInvite(true)}>
+          <Button variant="primary" icon={UserPlus} onClick={() => { setError(''); setModalInvite(true); }}>
             Convidar usuário
           </Button>
         </div>
@@ -522,8 +577,11 @@ export default function ConfiguracoesUsuariosPage() {
                     const invitationForMember = invitations
                       .filter((inv) => (inv.email || '').trim().toLowerCase() === (m.email || '').trim().toLowerCase())
                       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0] || null;
-                    const inviteStatus = resolveInvitationStatus(invitationForMember);
+                    const inviteStatus = resolveInvitationStatus(invitationForMember, m);
                     const canResendInvite = ['pendente', 'enviado', 'expirado'].includes(inviteStatus);
+                    const collaboratorLabel = m.linked_collaborator
+                      ? formatCollaboratorLinkLabel(m.linked_collaborator)
+                      : (m.collaborator_id ? 'Vinculado' : 'Não vinculado');
                     return (
                       <tr key={m.id}>
                         <td>
@@ -537,15 +595,15 @@ export default function ConfiguracoesUsuariosPage() {
                           </button>
                         </td>
                         <td>{m.email || '—'}</td>
-                        <td>{m.collaborator_id ? 'Vinculado' : 'Não vinculado'}</td>
+                        <td>{collaboratorLabel}</td>
                         <td>{MEMBERSHIP_ROLE_LABELS[m.role] || m.role || '—'}</td>
                         <td>
                           <div className="access-user-status-stack">
                             <span className={active ? 'access-badge on' : 'access-badge off'}>
                               {active ? 'Ativo' : 'Inativo'}
                             </span>
-                            <span className={`access-badge ${inviteStatus === 'aceito' ? 'on' : inviteStatus === 'sem_convite' ? 'off' : 'on'}`}>
-                              {inviteStatus === 'sem_convite' ? 'Sem convite' : inviteStatus}
+                            <span className={`access-badge ${inviteStatus === 'aceito' || inviteStatus === 'enviado' || inviteStatus === 'pendente' ? 'on' : inviteStatus === 'sem_convite' ? 'off' : 'off'}`}>
+                              {invitationStatusLabel(inviteStatus)}
                             </span>
                           </div>
                         </td>
@@ -560,7 +618,7 @@ export default function ConfiguracoesUsuariosPage() {
                             onEdit={() => openMemberModal(m, 'edit')}
                             onToggleAccess={() => handleToggleAccessClick(m)}
                             onResendInvite={() => handleResendInviteForMember(m)}
-                            onRemove={() => handleRemove(m.user_id, m.full_name || m.email || 'Usuário')}
+                            onRemove={() => handleRemove(m)}
                           />
                         </td>
                       </tr>

@@ -54,6 +54,9 @@ import { DEFAULT_PAYMENT_OPTIONS } from './clinicalAppointmentConfig.js';
 import { ClinicalBtn } from './ClinicalStageShell.jsx';
 import { CreateNewBudgetModal } from './budget/CreateNewBudgetModal.jsx';
 import { FinishAppointmentModal } from './budget/FinishAppointmentModal.jsx';
+import { ClinicalGuideModal } from './guide/ClinicalGuideModal.jsx';
+import { ClinicalGuideMatchBanner } from './guide/ClinicalGuideMatchBanner.jsx';
+import { matchGuidesForProcedures } from '../../services/clinicalGuide/clinicalGuideService.js';
 import { APPOINTMENT_STATUS } from '../../services/appointmentService.js';
 import {
   APPOINTMENT_CLOSE_REASON,
@@ -114,6 +117,8 @@ export function ClinicalBudgetSection({
   const [creatingBudget, setCreatingBudget] = useState(false);
   const [finishModalOpen, setFinishModalOpen] = useState(false);
   const [finishingAppointment, setFinishingAppointment] = useState(false);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [guideInitialId, setGuideInitialId] = useState(null);
 
   const db = loadDb();
 
@@ -239,6 +244,17 @@ export function ClinicalBudgetSection({
     () => resolveNextSteps(budget, financials, lockCtx),
     [budget, financials, lockCtx],
   );
+
+  const matchedGuides = useMemo(() => {
+    if (!budget?.procedures?.length) return [];
+    const names = budget.procedures.map((p) => p.name || p.description || '').filter(Boolean);
+    return matchGuidesForProcedures(user, names);
+  }, [budget?.procedures, user]);
+
+  const openClinicalGuide = (guideId = null) => {
+    setGuideInitialId(guideId);
+    setGuideModalOpen(true);
+  };
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -615,6 +631,12 @@ export function ClinicalBudgetSection({
         onFinishAppointment={() => setFinishModalOpen(true)}
         canFinishAppointment={canFinishAppointment}
         onNavigateToContract={onNavigateToContract}
+        onOpenClinicalGuide={() => openClinicalGuide()}
+      />
+
+      <ClinicalGuideMatchBanner
+        matches={matchedGuides}
+        onOpenGuide={(guideId) => openClinicalGuide(guideId)}
       />
 
       {isHistoricalView ? (
@@ -802,6 +824,16 @@ export function ClinicalBudgetSection({
         onClose={() => setFinishModalOpen(false)}
         onConfirm={handleFinishAppointmentConfirm}
         confirming={finishingAppointment}
+      />
+
+      <ClinicalGuideModal
+        open={guideModalOpen}
+        onOpenChange={setGuideModalOpen}
+        user={user}
+        initialGuideId={guideInitialId}
+        onAddToBudget={(guide) => {
+          showToast(`Guia "${guide.title}" vinculado ao contexto do orçamento.`);
+        }}
       />
 
       {toast ? (

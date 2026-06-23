@@ -1,5 +1,22 @@
 const store = new Map();
 
+if (typeof globalThis.window === 'undefined') {
+  globalThis.window = globalThis;
+}
+
+if (!globalThis.window.dispatchEvent) {
+  globalThis.window.dispatchEvent = () => true;
+}
+
+if (!globalThis.CustomEvent) {
+  globalThis.CustomEvent = class CustomEvent {
+    constructor(type, options = {}) {
+      this.type = type;
+      this.detail = options.detail;
+    }
+  };
+}
+
 global.localStorage = {
   getItem: (key) => (store.has(key) ? store.get(key) : null),
   setItem: (key, value) => store.set(key, String(value)),

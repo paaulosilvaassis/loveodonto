@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
 import { Field } from '../components/Field.jsx';
@@ -31,14 +31,19 @@ import {
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import { formatCep, formatCpf, formatPhone, validateFileMeta } from '../utils/validators.js';
 import { can } from '../permissions/permissions.js';
-import { canManageAccess } from '../services/accessService.js';
+import { canManageAccess, canCreateCollaborator } from '../services/accessService.js';
 import AccessTab from '../components/access/AccessTab.jsx';
 import { getUserAccess } from '../services/accessService.js';
 import { Eye, Pencil, UserCheck, UserX } from 'lucide-react';
 import { NewCollaboratorDialog } from '../components/collaborators/CollaboratorCreateModal.jsx';
 import { CollaboratorRhProfileFields } from '../components/collaborators/CollaboratorRhProfileFields.jsx';
 import { getAllCargosFlat } from '../constants/collaboratorRhCatalog.js';
-import { setCollaboratorSystemAccess } from '../services/collaboratorAccessProvisionService.js';
+import { setCollaboratorSystemAccess, reconcileCollaboratorTenantLinks } from '../services/collaboratorAccessProvisionService.js';
+import CollaboratorAccessActions from '../components/collaborators/CollaboratorAccessActions.jsx';
+import {
+  inviteStatusBadgeClass,
+  resolveCollaboratorAccessDisplayStatus,
+} from '../utils/inviteStatus.js';
 
 const topTabs = [
   { value: 'cadastro', label: 'Dados Cadastrais' },
@@ -115,6 +120,8 @@ export default function CollaboratorsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [hoursConflictModal, setHoursConflictModal] = useState({ open: false, conflicts: [] });
+  const [tenantAccessMap, setTenantAccessMap] = useState({ byCollaboratorId: {}, byEmail: {} });
+  const editFormRef = useRef(null);
 
   const [draft, setDraft] = useState({
     profile: {},
@@ -136,7 +143,8 @@ export default function CollaboratorsPage() {
     newInsurance: { convenioNome: '', detalhes: '', validade: '' },
   });
 
-  const isEditor = can(user, 'collaborators:write');
+  const isEditor = can(user, 'collaborators:write') || can(user, 'equipe', 'edit');
+  const canCreateNewCollaborator = canCreateCollaborator(user);
   const updateNewAddress = (updater) =>
     setDraft((prev) => ({
       ...prev,
@@ -172,6 +180,41 @@ export default function CollaboratorsPage() {
     const c = listCollaborators();
     setCollaborators(c);
   }, []);
+
+  const refreshTenantAccess = useCallback(async () => {
+    if (!user?.tenantId || !canEditAcessos) return;
+    try {
+      const { users = [] } = await reconcileCollaboratorTenantLinks(user.tenantId, listCollaborators());
+      const byCollaboratorId = {};
+      const byEmail = {};
+      for (const row of users) {
+        if (row.collaborator_id) byCollaboratorId[row.collaborator_id] = row;
+        const emailKey = String(row.email || '').trim().toLowerCase();
+        if (emailKey) byEmail[emailKey] = row;
+      }
+      setTenantAccessMap({ byCollaboratorId, byEmail });
+    } catch (err) {
+      if (import.meta.env?.DEV) {
+        console.debug('[CollaboratorsPage] falha ao carregar acessos do tenant', err);
+      }
+    }
+  }, [user?.tenantId, canEditAcessos]);
+
+  useEffect(() => {
+    refreshTenantAccess();
+  }, [refreshTenantAccess]);
+
+  const resolveCollaboratorTenantAccess = useCallback(
+    (item) => {
+      if (!item) return null;
+      return (
+        tenantAccessMap.byCollaboratorId[item.id]
+        || tenantAccessMap.byEmail[String(item.email || '').trim().toLowerCase()]
+        || null
+      );
+    },
+    [tenantAccessMap],
+  );
 
   /**
    * Reidrata o draft a partir do DB. Com preserveCurrentEdits, mantém fatias em edição (ex.: Dados Principais).
@@ -335,7 +378,7 @@ export default function CollaboratorsPage() {
     }, {});
   }, [db.collaboratorPhones]);
 
-  const handleCollaboratorCreated = (newId) => {
+  const handleCollaboratorCreated = async (newId, meta = {}) => {
     setOpenNewCollaborator(false);
     setSelectedId(newId);
     setActiveTab('cadastro');
@@ -344,8 +387,36 @@ export default function CollaboratorsPage() {
     setEditingTab('');
     setError('');
     refreshCollaboratorDraft(newId);
+    await refreshTenantAccess();
+    if (meta.duplicateEmail) {
+      setSuccess('Colaborador cadastrado. Este e-mail já possui acesso nesta clínica.');
+      return;
+    }
+    if (meta.noAccess) {
+      setSuccess('Colaborador cadastrado sem acesso ao sistema, pois nenhum e-mail foi informado.');
+      return;
+    }
+    if (meta.systemAccess && meta.inviteEmail) {
+      setSuccess('Colaborador cadastrado com sucesso. Um convite de acesso foi enviado para o e-mail informado.');
+      return;
+    }
+    if (meta.inviteFailed) {
+      setError('Colaborador cadastrado, mas não foi possível criar o acesso. Use a ação Reenviar/Criar acesso na linha do colaborador.');
+      return;
+    }
     setSuccess('Colaborador cadastrado com sucesso.');
   };
+
+  const handleEditCollaboratorAccess = useCallback((collaboratorId) => {
+    if (!collaboratorId) return;
+    setSelectedId(collaboratorId);
+    setActiveTab('acessos');
+    setActiveSection('Dados Principais');
+    setEditingSection('');
+    setEditingTab('');
+    setError('');
+    refreshCollaboratorDraft(collaboratorId);
+  }, [refreshCollaboratorDraft]);
 
   const jumpToExistingCollaborator = useCallback(
     ({ id, status }) => {
@@ -373,7 +444,7 @@ export default function CollaboratorsPage() {
 
   const selectCollaborator = (id) => {
     if (editingSection || editingTab) {
-      if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
+      if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return false;
     }
     setSelectedId(id);
     const data = getCollaborator(id);
@@ -382,6 +453,7 @@ export default function CollaboratorsPage() {
     }
     setEditingSection('');
     setEditingTab('');
+    return true;
   };
 
   const getCollaboratorInitials = (collaborator) => {
@@ -434,12 +506,19 @@ export default function CollaboratorsPage() {
     selectCollaborator(collaboratorId);
   };
 
+  const scrollToEditForm = useCallback(() => {
+    setTimeout(() => {
+      editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+  }, []);
+
   const handleEditCollaborator = (collaboratorId) => {
-    selectCollaborator(collaboratorId);
+    if (!selectCollaborator(collaboratorId)) return;
     setActiveTab('cadastro');
     setActiveSection('Dados Principais');
     setEditingTab('');
     setEditingSection('Dados Principais');
+    scrollToEditForm();
   };
 
   const handleToggleCollaboratorStatus = async (collaborator) => {
@@ -1389,8 +1468,14 @@ export default function CollaboratorsPage() {
             <button
               className="button primary"
               type="button"
-              title={isEditor ? undefined : 'Abrir cadastro. Salvar exige permissão de escrita em colaboradores.'}
+              title={
+                canCreateNewCollaborator
+                  ? undefined
+                  : 'Apenas administrador ou gerente podem cadastrar colaboradores.'
+              }
+              disabled={!canCreateNewCollaborator}
               onClick={() => {
+                if (!canCreateNewCollaborator) return;
                 setError('');
                 setSuccess('');
                 setOpenNewCollaborator(true);
@@ -1439,7 +1524,8 @@ export default function CollaboratorsPage() {
                       <div role="columnheader">Categoria</div>
                       <div role="columnheader">Cargo</div>
                       <div role="columnheader">Especialidade</div>
-                      <div role="columnheader">Status</div>
+                      <div role="columnheader">Status RH</div>
+                      <div role="columnheader">Acesso</div>
                       <div role="columnheader">Contato</div>
                       <div role="columnheader" className="collaborator-directory-header-actions">
                         Ações
@@ -1447,6 +1533,8 @@ export default function CollaboratorsPage() {
                     </div>
                     {filteredCollaborators.map((item) => {
                       const { primary: namePrimary, subtitle: nameSubtitle } = getCollaboratorNameDisplay(item);
+                      const tenantAccess = resolveCollaboratorTenantAccess(item);
+                      const accessStatus = resolveCollaboratorAccessDisplayStatus(tenantAccess);
                       return (
                       <div
                         key={item.id}
@@ -1489,6 +1577,11 @@ export default function CollaboratorsPage() {
                         <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--status">
                           <span className={`status-badge ${isCollaboratorActive(item) ? '' : 'inactive'}`}>
                             {getStatusLabel(item.status)}
+                          </span>
+                        </div>
+                        <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--access">
+                          <span className={`access-badge ${inviteStatusBadgeClass(accessStatus.key)}`}>
+                            {accessStatus.label}
                           </span>
                         </div>
                         <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--contact">
@@ -1548,6 +1641,21 @@ export default function CollaboratorsPage() {
                                 <UserCheck size={16} strokeWidth={2} aria-hidden />
                               )}
                             </button>
+                            {canEditAcessos ? (
+                              <CollaboratorAccessActions
+                                collaborator={item}
+                                tenantUser={tenantAccess}
+                                tenantId={user?.tenantId}
+                                canManage={canEditAcessos}
+                                disabled={!isEditor}
+                                onChanged={() => {
+                                  refreshTenantAccess();
+                                  setSuccess('Acesso do colaborador atualizado.');
+                                }}
+                                onError={(message) => setError(message)}
+                                onEditPermissions={() => handleEditCollaboratorAccess(item.id)}
+                              />
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -1559,6 +1667,8 @@ export default function CollaboratorsPage() {
                 <div className="collaborator-directory-cards">
                   {filteredCollaborators.map((item) => {
                     const { primary: namePrimary, subtitle: nameSubtitle } = getCollaboratorNameDisplay(item);
+                    const tenantAccess = resolveCollaboratorTenantAccess(item);
+                    const accessStatus = resolveCollaboratorAccessDisplayStatus(tenantAccess);
                     return (
                     <article
                       key={`${item.id}-card`}
@@ -1586,9 +1696,15 @@ export default function CollaboratorsPage() {
                         <span><strong>Especialidade:</strong> {getCollaboratorSpecialty(item)}</span>
                         <span><strong>Contato:</strong> {getCollaboratorContact(item)}</span>
                         <span>
-                          <strong>Status:</strong>{' '}
+                          <strong>Status RH:</strong>{' '}
                           <span className={`status-badge ${isCollaboratorActive(item) ? '' : 'inactive'}`}>
                             {getStatusLabel(item.status)}
+                          </span>
+                        </span>
+                        <span>
+                          <strong>Acesso:</strong>{' '}
+                          <span className={`access-badge ${inviteStatusBadgeClass(accessStatus.key)}`}>
+                            {accessStatus.label}
                           </span>
                         </span>
                       </div>
@@ -1639,6 +1755,21 @@ export default function CollaboratorsPage() {
                             <UserCheck size={16} strokeWidth={2} aria-hidden />
                           )}
                         </button>
+                        {canEditAcessos ? (
+                          <CollaboratorAccessActions
+                            collaborator={item}
+                            tenantUser={tenantAccess}
+                            tenantId={user?.tenantId}
+                            canManage={canEditAcessos}
+                            disabled={!isEditor}
+                            onChanged={() => {
+                              refreshTenantAccess();
+                              setSuccess('Acesso do colaborador atualizado.');
+                            }}
+                            onError={(message) => setError(message)}
+                            onEditPermissions={() => handleEditCollaboratorAccess(item.id)}
+                          />
+                        ) : null}
                       </div>
                     </article>
                     );
@@ -1651,10 +1782,12 @@ export default function CollaboratorsPage() {
       </Section>
 
       {selectedId ? (
-        <Section title="Ficha do Colaborador">
-          <Tabs tabs={topTabs} active={activeTab} onChange={handleTabChange} />
-          {tabContent()}
-        </Section>
+        <div ref={editFormRef} className="scroll-mt-24 collaborator-edit-form-anchor">
+          <Section title="Ficha do Colaborador">
+            <Tabs tabs={topTabs} active={activeTab} onChange={handleTabChange} />
+            {tabContent()}
+          </Section>
+        </div>
       ) : (
         <div className="card muted">Selecione um colaborador para visualizar os detalhes.</div>
       )}

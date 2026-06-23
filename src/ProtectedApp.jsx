@@ -25,6 +25,8 @@ import FinanceComissoesPage from './pages/FinanceComissoesPage.jsx';
 import FinanceDREPage from './pages/FinanceDREPage.jsx';
 import FornecedoresPage from './pages/administrativo/FornecedoresPage.jsx';
 import TreatmentPlanTypesAdminPage from './pages/admin/TreatmentPlanTypesAdminPage.jsx';
+import ClinicalGuidesAdminPage from './pages/admin/ClinicalGuidesAdminPage.jsx';
+import ClinicalMediaLibraryPage from './pages/admin/ClinicalMediaLibraryPage.jsx';
 import InventoryPage from './pages/InventoryPage.jsx';
 import AdminUsuariosPage from './pages/AdminUsuariosPage.jsx';
 import PatientsPage from './pages/PatientsPage.jsx';
@@ -188,6 +190,8 @@ export default function ProtectedApp() {
         <Route path="/admin/consentimentos" element={<Navigate to="/gestao/contratos/termos" replace />} />
         <Route path="/admin/fornecedores" element={withAdminGate(withRole('/admin/fornecedores', <FornecedoresPage />))} />
         <Route path="/admin/tipos-tratamento" element={withAdminGate(withRole('/admin/tipos-tratamento', <TreatmentPlanTypesAdminPage />))} />
+        <Route path="/admin/guia-clinico" element={withAdminGate(withRole('/admin/guia-clinico', <ClinicalGuidesAdminPage />))} />
+        <Route path="/admin/biblioteca-imagens-clinicas" element={withAdminGate(withRole('/admin/biblioteca-imagens-clinicas', <ClinicalMediaLibraryPage />))} />
         <Route path="/administrativo/fornecedores" element={<Navigate to="/admin/fornecedores" replace />} />
         <Route path="/financeiro/contas-pagar" element={withRole('/financeiro/contas-pagar', <FinancePayablesPage />)} />
         <Route path="/financeiro/contas-receber" element={withRole('/financeiro/contas-receber', <FinanceReceivablesPage />)} />

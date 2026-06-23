@@ -1,4 +1,5 @@
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
+import { getPlatformAccessToken } from '../auth/saasSessionResolver.js';
 import { getTenant } from './tenantService.js';
 import {
   createDefaultModuleMap,
@@ -86,11 +87,7 @@ async function runQuery(queryFactory) {
 
 async function fetchTenantContextViaAdminApiAttempt() {
   assertAdminApiFetchAllowed();
-  const { data: sessionData, error: sessionError } = await supabasePlatformClient.auth.getSession();
-  if (sessionError) {
-    throw new Error(sessionError.message || 'Falha ao obter sessão SaaS.');
-  }
-  const accessToken = sessionData?.session?.access_token || '';
+  const accessToken = await getPlatformAccessToken();
   if (!accessToken) {
     throw new Error('Sessão SaaS ausente para carregar contexto da clínica.');
   }
@@ -101,69 +98,65 @@ async function fetchTenantContextViaAdminApiAttempt() {
     },
   };
 
-  let response;
-  const primaryUrl = getTenantContextRequestUrl();
-  try {
-    response = await fetch(primaryUrl, fetchOpts);
-  } catch (error) {
-    const devDirectFallback =
-      import.meta.env.DEV
-      && !getConfiguredAdminApiBaseUrl()
-      && primaryUrl.startsWith('/')
-      && isLikelyNetworkFetchFailure(error);
-    if (devDirectFallback) {
+  const urls = [];
+  if (import.meta.env.DEV && !getConfiguredAdminApiBaseUrl()) {
+    urls.push(getDevDirectAdminApiUrl('/internal/app/tenant-context'));
+  }
+  urls.push(getTenantContextRequestUrl());
+
+  let lastError;
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, fetchOpts);
+      let json;
       try {
-        response = await fetch(getDevDirectAdminApiUrl('/internal/app/tenant-context'), fetchOpts);
-      } catch {
-        /* segue */
+        json = await response.json();
+      } catch (parseErr) {
+        if (isTransientTenantContextError(parseErr)) throw parseErr;
+        json = {};
       }
-    }
-    if (!response) {
-      if (isLikelyNetworkFetchFailure(error)) {
-        throw new Error(formatAdminApiNetworkError({ primaryUrl }));
+      if (!response.ok) {
+        emitStabilityLog('BACKEND_FAILED', {
+          status: response.status,
+          url,
+          backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
+        });
+        if (response.status === 401) {
+          throw new Error(
+            json?.error
+            || 'Sua sessão SaaS não foi aceita pelo backend local. '
+              + 'Alinhe `VITE_SUPABASE_PLATFORM_*` no app com `SUPABASE_URL` no server (mesmo projeto Supabase).',
+          );
+        }
+        if (response.status === 404) {
+          throw new Error(
+            json?.error
+            || 'Usuário sem vínculo em tenant_users ou clínica inexistente. '
+              + 'Provisione a clínica na Platform Console (5177) antes de usar o app.',
+          );
+        }
+        if (response.status === 502 || response.status === 503 || response.status === 504 || response.status >= 500) {
+          throw new Error(json?.error || formatAdminApiServerError(response.status));
+        }
+        throw new Error(json?.error || `Erro HTTP ${response.status} ao carregar contexto da clínica.`);
       }
-      throw error;
+      emitStabilityLog('BACKEND_OK', {
+        url,
+        backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
+      });
+      return json;
+    } catch (error) {
+      lastError = error;
+      if (!isTransientTenantContextError(error)) throw error;
     }
   }
-  let json;
-  try {
-    json = await response.json();
-  } catch (parseErr) {
-    if (String(parseErr?.name || '') === 'AbortError' || String(parseErr?.message || '').toLowerCase().includes('abort')) {
-      throw parseErr;
+  if (lastError) {
+    if (isLikelyNetworkFetchFailure(lastError)) {
+      throw new Error(formatAdminApiNetworkError({ primaryUrl: urls[0] }));
     }
-    json = {};
+    throw lastError;
   }
-  if (!response.ok) {
-    emitStabilityLog('BACKEND_FAILED', {
-      status: response.status,
-      url: primaryUrl,
-      backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
-    });
-    if (response.status === 401) {
-      throw new Error(
-        json?.error
-        || 'Sua sessão SaaS não foi aceita pelo backend local. '
-          + 'Alinhe `VITE_SUPABASE_PLATFORM_*` no app com `SUPABASE_URL` no server (mesmo projeto Supabase).',
-      );
-    }
-    if (response.status === 404) {
-      throw new Error(
-        json?.error
-        || 'Usuário sem vínculo em tenant_users ou clínica inexistente. '
-          + 'Provisione a clínica na Platform Console (5177) antes de usar o app.',
-      );
-    }
-    if (response.status === 502 || response.status === 503 || response.status === 504 || response.status >= 500) {
-      throw new Error(json?.error || formatAdminApiServerError(response.status));
-    }
-    throw new Error(json?.error || `Erro HTTP ${response.status} ao carregar contexto da clínica.`);
-  }
-  emitStabilityLog('BACKEND_OK', {
-    url: primaryUrl,
-    backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
-  });
-  return json;
+  throw new Error('Falha ao carregar contexto da clínica.');
 }
 
 function isTransientTenantContextError(err) {
@@ -181,26 +174,34 @@ function isTransientTenantContextError(err) {
   );
 }
 
-async function fetchTenantContextViaAdminApi() {
-  const maxAttempts = import.meta.env.DEV ? 1 : 4;
+async function fetchTenantContextViaAdminApiInternal() {
+  const maxAttempts = 3;
   let lastErr;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (attempt > 0) {
-      await new Promise((r) => setTimeout(r, 400 * attempt));
+      await new Promise((r) => setTimeout(r, 450 * attempt));
     }
     try {
       return await fetchTenantContextViaAdminApiAttempt();
     } catch (err) {
       lastErr = err;
-      if (import.meta.env.DEV && isDevBackendUnreachableError(err)) {
-        throw err;
-      }
       if (!isTransientTenantContextError(err) || attempt === maxAttempts - 1) {
         throw err;
       }
     }
   }
   throw lastErr;
+}
+
+let inFlightTenantContextApi = null;
+
+async function fetchTenantContextViaAdminApi() {
+  if (!inFlightTenantContextApi) {
+    inFlightTenantContextApi = fetchTenantContextViaAdminApiInternal().finally(() => {
+      inFlightTenantContextApi = null;
+    });
+  }
+  return inFlightTenantContextApi;
 }
 
 async function fetchOptionalTenantLimits(tenantId) {
@@ -265,7 +266,12 @@ export async function getTenantContext(tenantId) {
   try {
     apiContext = await runQuery(() => fetchTenantContextViaAdminApi());
   } catch (err) {
-    if (isDevBackendUnreachableError(err)) {
+    const useSupabaseFallback =
+      isDevBackendUnreachableError(err) || isTransientTenantContextError(err);
+    if (useSupabaseFallback) {
+      if (import.meta.env?.DEV) {
+        console.debug('[tenant-context] Admin API falhou — fallback Supabase direto:', err?.message);
+      }
       apiContext = null;
     } else {
       throw err;

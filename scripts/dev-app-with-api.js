@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   probeApiHealth,
+  probeAppDev,
   REPO_ROOT,
   validateEnvStackOrExit,
 } from './preflight-local.mjs';
@@ -90,6 +91,14 @@ async function main() {
     console.log('[app+api] API pronta.\n');
   } else {
     console.log(`[app+api] API já ativa :${PORT}\n`);
+  }
+
+  const viteUp = await probeAppDev(APP_DEV_PORT);
+  if (viteUp) {
+    console.log(`[app+api] App já ativo em http://localhost:${APP_DEV_PORT}/`);
+    console.log('[app+api] Não é necessário rodar npm run dev de novo.');
+    console.log('[app+api] Para reiniciar: pare o Vite existente (Ctrl+C no terminal dele) e rode npm run dev.\n');
+    process.exit(0);
   }
 
   console.log(`[app+api] A subir app em http://localhost:${APP_DEV_PORT} ...\n`);

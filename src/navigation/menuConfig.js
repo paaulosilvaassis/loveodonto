@@ -30,6 +30,7 @@ import {
   Users,
   Wallet,
   Activity,
+  BookOpen,
 } from 'lucide-react';
 
 export const menuSections = [
@@ -57,6 +58,8 @@ export const menuSections = [
       { id: 'usuarios', label: 'Usuários', route: '/admin/usuarios', icon: UserCog, rolesAllowed: ['admin', 'master'], description: 'Usuários e convites de ativação.' },
       { id: 'base-preco-admin', label: 'Base de Preços e Procedimentos', route: '/admin/base-precos', icon: BadgeDollarSign, rolesAllowed: ['admin', 'gerente'], description: 'Tabelas de preço e cadastro de procedimentos por tabela.' },
       { id: 'tipos-tratamento', label: 'Tipos de Tratamento', route: '/admin/tipos-tratamento', icon: Activity, rolesAllowed: ['admin', 'gerente'], description: 'Categorias de plano exibidas no orçamento clínico.' },
+      { id: 'guia-clinico', label: 'Guia Clínico do Dentista', route: '/admin/guia-clinico', icon: BookOpen, rolesAllowed: ['admin', 'gerente', 'profissional'], description: 'Biblioteca visual de tratamentos para apresentação ao paciente.' },
+      { id: 'biblioteca-imagens-clinicas', label: 'Biblioteca de Imagens Clínicas', route: '/admin/biblioteca-imagens-clinicas', icon: BookOpen, rolesAllowed: ['admin', 'gerente'], description: 'Fotos clínicas reais para os guias de tratamento.' },
       { id: 'contratos', label: 'Contratos e Consentimentos', route: '/gestao/contratos', icon: ScrollText, rolesAllowed: ['admin', 'gerente', 'recepcao'], description: 'Contratos, termos, assinatura digital e histórico jurídico.' },
       { id: 'fornecedores', label: 'Fornecedores', route: '/admin/fornecedores', icon: Landmark, rolesAllowed: ['admin', 'gerente'], description: 'Cadastro mestre de fornecedores da clínica.' },
     ],

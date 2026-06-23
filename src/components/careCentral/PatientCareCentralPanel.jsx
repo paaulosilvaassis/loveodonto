@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Stethoscope,
@@ -17,6 +17,8 @@ import { ContractStatusBadge } from '../../contracts/ui/ContractUi.jsx';
 import PatientBudgetsContractsTab from '../budgets/PatientBudgetsContractsTab.jsx';
 import { StartPatientBudgetModal } from '../budgets/StartPatientBudgetModal.jsx';
 import { PatientDelinquencyBanner } from './PatientDelinquencyBanner.jsx';
+import { ClinicalGuideModal } from '../clinical/guide/ClinicalGuideModal.jsx';
+import { ClinicalGuideOpenButton } from '../clinical/guide/ClinicalGuideMatchBanner.jsx';
 import { PatientCareFinancialTab } from './PatientCareFinancialTab.jsx';
 import { PatientCareIntelligenceTimeline } from './PatientCareIntelligenceTimeline.jsx';
 import { PatientCareExecutiveSidebar } from './PatientCareExecutiveSidebar.jsx';
@@ -90,13 +92,26 @@ export function PatientCareCentralPanel({
   const [createOpen, setCreateOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const financeSectionRef = useRef(null);
+  const shouldScrollToFinanceRef = useRef(false);
 
   useEffect(() => {
     if (focusTab) {
+      shouldScrollToFinanceRef.current = focusTab === 'financeiro';
       setActiveTab(focusTab);
       onFocusTabConsumed?.();
     }
   }, [focusTab, onFocusTabConsumed]);
+
+  useEffect(() => {
+    if (activeTab !== 'financeiro' || !shouldScrollToFinanceRef.current) return undefined;
+    shouldScrollToFinanceRef.current = false;
+    const frame = requestAnimationFrame(() => {
+      financeSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!context?.patientId || !onRefresh) return undefined;
@@ -303,7 +318,7 @@ export function PatientCareCentralPanel({
       });
       return;
     }
-    else if (actionKey === 'finance' || actionKey === 'finance_installments') setActiveTab('financeiro');
+    else if (actionKey === 'finance' || actionKey === 'finance_installments') openFinanceTab();
     else if (actionKey === 'chart') navigate(`/prontuario/${patientId}`);
     else if (actionKey === 'file' || actionKey === 'exam') setActiveTab('exames');
     else if (actionKey === 'open') openClinical('planejamento');
@@ -326,7 +341,10 @@ export function PatientCareCentralPanel({
     }
   };
 
-  const openFinanceTab = () => setActiveTab('financeiro');
+  const openFinanceTab = () => {
+    shouldScrollToFinanceRef.current = true;
+    setActiveTab('financeiro');
+  };
 
   const openNegotiation = () => {
     navigate(buildFinanceNavigationUrl(patientId, { tab: 'financing' }));
@@ -424,9 +442,10 @@ export function PatientCareCentralPanel({
         <ClinicalBtn variant="secondary" icon={Image} onClick={() => setActiveTab('exames')}>
           Abrir exames
         </ClinicalBtn>
+        <ClinicalGuideOpenButton onClick={() => setGuideModalOpen(true)} />
       </section>
 
-      <div className="care-central-body">
+      <div className="care-central-body" ref={financeSectionRef}>
         <div className="care-central-main">
           <div className="care-central-tabs">
             {[
@@ -545,6 +564,12 @@ export function PatientCareCentralPanel({
       />
 
       {toast ? <div className={`toast ${toast.type}`} role="status">{toast.message}</div> : null}
+
+      <ClinicalGuideModal
+        open={guideModalOpen}
+        onOpenChange={setGuideModalOpen}
+        user={user}
+      />
     </div>
   );
 }

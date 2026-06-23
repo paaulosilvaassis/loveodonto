@@ -29,6 +29,7 @@ import {
   getPatientDelinquencyInfo,
   buildFinanceNavigationUrl,
 } from '../services/patientFinancialSummaryService.js';
+import { ClinicalGuideModal } from '../components/clinical/guide/ClinicalGuideModal.jsx';
 
 const TAB_CONFIG = [
   { value: 'careCentral', label: 'Visão Geral' },
@@ -131,6 +132,7 @@ export default function PatientChartPage() {
   const [activeTab, setActiveTab] = useState('careCentral');
   const [careCentralFocusTab, setCareCentralFocusTab] = useState(null);
   const [careCentralRefreshKey, setCareCentralRefreshKey] = useState(0);
+  const [guideModalOpen, setGuideModalOpen] = useState(false);
   const [editingTab, setEditingTab] = useState(null);
   const [characteristics, setCharacteristics] = useState(null);
   const [clinicalAnswers, setClinicalAnswers] = useState([]);
@@ -386,6 +388,13 @@ export default function PatientChartPage() {
         )}
         <div className="prontuario-header">
           <Tabs tabs={TAB_CONFIG} active={activeTab} onChange={setActiveTab} />
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => setGuideModalOpen(true)}
+          >
+            Guia Clínico
+          </button>
           <button
             type="button"
             className="button secondary"
@@ -991,6 +1000,12 @@ export default function PatientChartPage() {
           </SectionCard>
         )}
       </Section>
+
+      <ClinicalGuideModal
+        open={guideModalOpen}
+        onOpenChange={setGuideModalOpen}
+        user={user}
+      />
     </div>
   );
 }

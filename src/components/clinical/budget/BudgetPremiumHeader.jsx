@@ -1,4 +1,4 @@
-import { Save, Send, FileText, CheckCircle2, XCircle, Eye, FilePlus2, DoorClosed } from 'lucide-react';
+import { Save, Send, FileText, CheckCircle2, XCircle, Eye, FilePlus2, DoorClosed, BookOpen } from 'lucide-react';
 import { ClinicalBtn } from '../ClinicalStageShell.jsx';
 import { BUDGET_STATUS } from '../../../services/clinicalService.js';
 
@@ -22,6 +22,7 @@ export function BudgetPremiumHeader({
   onFinishAppointment,
   canFinishAppointment = false,
   onNavigateToContract,
+  onOpenClinicalGuide,
 }) {
   return (
     <header className="budget-premium-header">
@@ -34,6 +35,11 @@ export function BudgetPremiumHeader({
         </p>
       </div>
       <div className="budget-premium-header-actions">
+        {typeof onOpenClinicalGuide === 'function' ? (
+          <ClinicalBtn variant="secondary" size="sm" icon={BookOpen} onClick={onOpenClinicalGuide}>
+            Guia Clínico
+          </ClinicalBtn>
+        ) : null}
         {isApprovedView ? (
           <>
             <ClinicalBtn variant="secondary" size="sm" icon={FileText} onClick={onGeneratePdf}>

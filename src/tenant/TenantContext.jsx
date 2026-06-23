@@ -5,6 +5,7 @@ import { subscribeTenantRealtimeChanges } from '../services/tenantContextService
 import { readTenantAccessSnapshot } from '../services/platformAccessService.js';
 import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
+import { isTransientAuthError } from '../auth/saasSessionResolver.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
 import { DEV_BACKEND_NOT_RUNNING_MSG } from '../config/adminApiBase.js';
 
@@ -28,6 +29,7 @@ export function TenantProvider({ children }) {
   const [error, setError] = useState('');
   const [tenantContext, setTenantContext] = useState(EMPTY_CONTEXT);
   const hasLoadedOnce = useRef(false);
+  const realtimeCleanupRef = useRef(null);
 
   const refreshTenantContext = async (isBackground = false) => {
     if (!user?.tenantId) {
@@ -43,7 +45,21 @@ export function TenantProvider({ children }) {
         setLoading(true);
       }
       const context = await raceWithTimeout(
-        readTenantAccessSnapshot(user.tenantId),
+        (async () => {
+          let lastErr;
+          for (let attempt = 0; attempt < 3; attempt += 1) {
+            if (attempt > 0) {
+              await new Promise((r) => { setTimeout(r, 500 * attempt); });
+            }
+            try {
+              return await readTenantAccessSnapshot(user.tenantId);
+            } catch (err) {
+              lastErr = err;
+              if (!isTransientAuthError(err) || attempt === 2) throw err;
+            }
+          }
+          throw lastErr;
+        })(),
         TENANT_SNAPSHOT_TIMEOUT_MS,
         TENANT_SNAPSHOT_TIMEOUT_MSG,
       );
@@ -80,10 +96,19 @@ export function TenantProvider({ children }) {
 
   useEffect(() => {
     if (!user?.tenantId) return undefined;
-    const unsubscribe = subscribeTenantRealtimeChanges(user.tenantId, () => {
-      refreshTenantContext(true);
-    });
-    return () => unsubscribe();
+    const timer = setTimeout(() => {
+      const unsubscribe = subscribeTenantRealtimeChanges(user.tenantId, () => {
+        refreshTenantContext(true);
+      });
+      realtimeCleanupRef.current = unsubscribe;
+    }, 3000);
+    return () => {
+      clearTimeout(timer);
+      if (realtimeCleanupRef.current) {
+        realtimeCleanupRef.current();
+        realtimeCleanupRef.current = null;
+      }
+    };
   }, [user?.tenantId]);
 
   const value = useMemo(

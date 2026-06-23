@@ -5,6 +5,7 @@ import { RequireAuth } from './auth/RequireAuth.jsx';
 import RequireTenantAccess from './auth/RequireTenantAccess.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import ActivatePage from './pages/ActivatePage.jsx';
+import PrimeiroAcessoPage from './pages/PrimeiroAcessoPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import ConvitePage from './pages/ConvitePage.jsx';
 import ContractSignPublicPage from './pages/contratos/ContractSignPublicPage.jsx';
@@ -51,6 +52,7 @@ export default function App() {
             />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/activate" element={<ActivatePage />} />
+            <Route path="/primeiro-acesso" element={<PrimeiroAcessoPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/convite" element={<ConvitePage />} />
             <Route path="/assinatura/:token" element={<ContractSignPublicPage />} />

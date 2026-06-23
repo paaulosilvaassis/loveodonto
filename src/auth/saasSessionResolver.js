@@ -13,6 +13,7 @@ import { fetchSaasAccessBootstrap } from '../services/saasAuthService.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
 
 export const SESSION_KEY = 'appgestaoodonto.session';
+const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
 
 const GET_SESSION_TIMEOUT_MS = 8000;
 const BOOTSTRAP_TIMEOUT_MS = 10000;
@@ -76,6 +77,7 @@ const TRANSIENT_PATTERNS = [
   'fetch failed',
   'load failed',
   'abort',
+  'signal is aborted',
 ];
 
 /** Erro transitório (rede/timeout) — vale repetir ou manter cache. */
@@ -86,19 +88,57 @@ export const isTransientAuthError = (err) => {
 
 // ─── Sessão Supabase ─────────────────────────────────────────────────────────
 
+/** Lê JWT do localStorage (evita getSession() paralelo que aborta no supabase-js). */
+export function readPlatformAccessTokenFromStorage() {
+  try {
+    const raw = localStorage.getItem(PLATFORM_AUTH_STORAGE_KEY);
+    if (!raw) return '';
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.access_token === 'string' && parsed.access_token) {
+      return parsed.access_token;
+    }
+    if (typeof parsed?.currentSession?.access_token === 'string') {
+      return parsed.currentSession.access_token;
+    }
+    if (typeof parsed?.session?.access_token === 'string') {
+      return parsed.session.access_token;
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+let inFlightGetSession = null;
+
 /**
- * getSession com timeout curto. Retorna a sessão Supabase ou null (sem sessão).
- * Lança erro apenas em falha de leitura/refresh (classificável como transitória).
+ * getSession com timeout curto e single-flight (evita AbortError por chamadas paralelas).
+ * Retorna a sessão Supabase ou null (sem sessão).
  */
 export async function getPlatformSession() {
   if (!supabasePlatformClient) return null;
-  const { data, error } = await raceWithTimeout(
-    supabasePlatformClient.auth.getSession(),
-    GET_SESSION_TIMEOUT_MS,
-    'timeout: getSession excedeu o tempo limite',
-  );
-  if (error) throw new Error(error.message || 'Falha ao obter sessão SaaS.');
-  return data?.session || null;
+  if (!inFlightGetSession) {
+    inFlightGetSession = (async () => {
+      const { data, error } = await raceWithTimeout(
+        supabasePlatformClient.auth.getSession(),
+        GET_SESSION_TIMEOUT_MS,
+        'timeout: getSession excedeu o tempo limite',
+      );
+      if (error) throw new Error(error.message || 'Falha ao obter sessão SaaS.');
+      return data?.session || null;
+    })().finally(() => {
+      inFlightGetSession = null;
+    });
+  }
+  return inFlightGetSession;
+}
+
+/** Token JWT da sessão platform — localStorage primeiro, getSession só se necessário. */
+export async function getPlatformAccessToken() {
+  const cached = readPlatformAccessTokenFromStorage();
+  if (cached) return cached;
+  const session = await getPlatformSession();
+  return session?.access_token || '';
 }
 
 // ─── Resolução do usuário (bootstrap RPC) ────────────────────────────────────
@@ -138,6 +178,8 @@ function buildResolvedUser(supaSession, bootstrap) {
     permissionOverrides,
   };
 }
+
+export { buildResolvedUser as buildResolvedSaasUser };
 
 let inFlightResolve = null;
 

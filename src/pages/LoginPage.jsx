@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
 import { consumeLogoutReason } from '../auth/logoutReason.js';
+import { clearStoredSession } from '../auth/saasSessionResolver.js';
 import { authenticateByEmailPassword } from '../services/userAuthService.js';
 import { isSaasModeEnabled, signInSaasWithPassword } from '../services/saasAuthService.js';
 import { getAdminApiBaseConfigError } from '../config/adminApiBase.js';
@@ -16,14 +17,15 @@ function isAbortLikeError(error) {
 }
 
 function formatLoginErrorMessage(error) {
-  if (String(error?.name || '') === 'AbortError') {
-    return 'A conexão foi interrompida ao validar o acesso. Tente entrar novamente.';
-  }
   const raw = String(error?.message || error || '').trim();
+  if (import.meta.env?.DEV && raw) return raw;
+  if (String(error?.name || '') === 'AbortError') {
+    return 'A validação do acesso demorou ou foi interrompida. Aguarde um instante e tente entrar novamente.';
+  }
   const lower = raw.toLowerCase();
   if (!raw) return 'Erro ao fazer login.';
   if (lower.includes('abort')) {
-    return 'A conexão foi interrompida ao validar o acesso. Tente entrar novamente.';
+    return 'A validação do acesso demorou ou foi interrompida. Aguarde um instante e tente entrar novamente.';
   }
   if (
     lower.includes('backend saas não configurado')
@@ -72,7 +74,13 @@ function formatLoginErrorMessage(error) {
       + 'Verifique se SUPABASE_SERVICE_ROLE_KEY no backend é a service role key correta do mesmo projeto Supabase.'
     );
   }
-  return raw;
+  if (lower.includes('timeout') || lower.includes('tempo limite')) {
+    return 'A validação do acesso demorou demais. Verifique sua conexão e tente novamente.';
+  }
+  if (lower.includes('abort')) {
+    return 'A validação do acesso demorou ou foi interrompida. Aguarde um instante e tente entrar novamente.';
+  }
+  return raw || 'Erro ao fazer login.';
 }
 
 export default function LoginPage() {
@@ -126,15 +134,27 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (saasEnabled) {
+        clearStoredSession();
         let lastErr;
-        for (let attempt = 0; attempt < 2; attempt++) {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          if (attempt > 0) {
+            await new Promise((resolve) => { setTimeout(resolve, 600); });
+          }
           try {
             const result = await signInSaasWithPassword(emailTrim, password);
-            await login({ userId: result.authUserId, tenantId: result.tenantId });
+            await login({
+              userId: result.authUserId,
+              tenantId: result.tenantId,
+              saasResolvedUser: result.resolvedUser,
+              saasSession: result.session,
+            });
             navigate('/gestao/dashboard');
             return;
           } catch (err) {
             lastErr = err;
+            if (import.meta.env?.DEV) {
+              console.error('[LoginPage] falha no login SaaS', err?.name, err?.message);
+            }
             if (attempt === 0 && isAbortLikeError(err)) continue;
             throw err;
           }

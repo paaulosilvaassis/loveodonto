@@ -198,6 +198,21 @@ export function probeConsoleLogin(port = DEFAULT_CONSOLE_PORT) {
   });
 }
 
+/** App principal (Vite :5176) — responde na raiz. */
+export function probeAppDev(port = 5176) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${port}/`, (res) => {
+      res.resume();
+      resolve(res.statusCode === 200);
+    });
+    req.on('error', () => resolve(false));
+    req.setTimeout(2200, () => {
+      req.destroy();
+      resolve(false);
+    });
+  });
+}
+
 export async function assertNoDuplicateApiOrExit(port = DEFAULT_API_PORT) {
   if (ALLOW_DUP) return;
   if (await probeApiHealth(port)) {

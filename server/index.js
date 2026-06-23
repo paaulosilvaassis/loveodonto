@@ -10,6 +10,8 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getInviteRedirectTo as resolveInviteRedirectTo } from './email/emailConfig.js';
+import { dispatchCollaboratorInvite } from './collaboratorInviteDispatch.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -120,6 +122,12 @@ function normalizeDatabaseError(error, fallbackMessage) {
     return (
       'Migration pendente: a coluna tenant_users.collaborator_id não existe no banco atual. '
       + 'Aplique a migration `005_app_collaborator_access_invites.sql` no mesmo projeto Supabase do backend.'
+    );
+  }
+  if (lower.includes('tenant_users_user_id_required')) {
+    return (
+      'Não foi possível vincular o e-mail: a conta no Auth ainda não existe. '
+      + 'Se você apagou o usuário manualmente no Supabase, tente convidar novamente — o sistema criará a conta antes do vínculo.'
     );
   }
   return raw || fallbackMessage;
@@ -409,21 +417,31 @@ async function getTenantAdminActorOrThrow(authUserId, explicitTenantId = '') {
 
 function getInviteRedirectTo() {
   if (APP_INVITE_REDIRECT_TO) return APP_INVITE_REDIRECT_TO;
-  return 'http://localhost:5176/login';
+  return resolveInviteRedirectTo();
 }
 
-async function sendSupabaseInvite({ email, tenantId, role, collaboratorId, collaboratorName }) {
-  const invitePayload = {
-    data: {
-      tenant_id: tenantId,
-      role,
-      collaborator_id: collaboratorId || null,
-      collaborator_name: collaboratorName || '',
-    },
-    redirectTo: getInviteRedirectTo(),
-  };
-  const { error } = await supabase.auth.admin.inviteUserByEmail(email, invitePayload);
-  if (error) throw error;
+function isInviteEmailDelivered(delivery) {
+  return ['supabase_auth', 'backend_resend'].includes(delivery?.emailDelivery);
+}
+
+async function sendCollaboratorInvite({
+  email,
+  tenantId,
+  role,
+  collaboratorId,
+  collaboratorName,
+  userName,
+  profileRole,
+}) {
+  return dispatchCollaboratorInvite(supabase, {
+    email,
+    tenantId,
+    role,
+    collaboratorId,
+    collaboratorName,
+    userName,
+    profileRole: profileRole || role,
+  });
 }
 
 async function upsertInvitationRecord({
@@ -608,6 +626,7 @@ async function upsertTenantUserAccess({
   role,
   hasSystemAccess = true,
   invitationStatus = 'none',
+  authUserId: explicitAuthUserId = null,
 }) {
   const roleSlug = normalizeRoleValue(role);
   const normalizedInvitationStatus = normalizeInvitationStatus(invitationStatus);
@@ -621,10 +640,16 @@ async function upsertTenantUserAccess({
     .maybeSingle();
   if (existingTenantUserError) throw existingTenantUserError;
 
-  let authUserId = existingTenantUser?.user_id || null;
+  let authUserId = normalizeText(explicitAuthUserId) || null;
   if (!authUserId) {
     const authUser = await findAuthUserByEmail(normalizedEmail);
-    authUserId = authUser?.id || null;
+    authUserId = authUser?.id || existingTenantUser?.user_id || null;
+  }
+  if (!authUserId) {
+    throw new Error(
+      'Não foi possível vincular o e-mail sem conta no Auth. '
+      + 'Envie o convite primeiro ou crie o usuário com senha.',
+    );
   }
 
   const payload = {
@@ -675,6 +700,153 @@ async function upsertTenantUserAccess({
   }
 }
 
+async function assertEmailAvailableForTenantInvite(resolvedTenantId, normalizedEmail, { collaboratorId } = {}) {
+  const { data: existing, error } = await supabase
+    .from('tenant_users')
+    .select('id, status, has_system_access, invitation_status, collaborator_id')
+    .eq('tenant_id', resolvedTenantId)
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+  if (error) throw error;
+  if (!existing?.id) return;
+
+  const normalizedCollaboratorId = normalizeText(collaboratorId) || null;
+  if (normalizedCollaboratorId) {
+    if (!existing.collaborator_id || existing.collaborator_id === normalizedCollaboratorId) {
+      return;
+    }
+    const linkConflictErr = new Error('Este e-mail já está vinculado a outro colaborador.');
+    linkConflictErr.code = 'EMAIL_LINKED_TO_OTHER_COLLABORATOR';
+    throw linkConflictErr;
+  }
+
+  const invitationStatus = normalizeInvitationStatus(existing.invitation_status);
+  const isRevoked = invitationStatus === 'revoked';
+  const isInactive = String(existing.status || '').toLowerCase() === 'inactive'
+    || existing.has_system_access === false;
+  if (isRevoked || isInactive) return;
+
+  const duplicateErr = new Error('Este e-mail já possui acesso nesta clínica.');
+  duplicateErr.code = 'EMAIL_ALREADY_HAS_ACCESS';
+  throw duplicateErr;
+}
+
+async function linkCollaboratorToTenantUser({
+  actorAuthUserId,
+  tenantId,
+  collaboratorId,
+  email,
+  fullName,
+}) {
+  const actorTenantUser = await getTenantAdminActorOrThrow(actorAuthUserId, tenantId);
+  const resolvedTenantId = actorTenantUser.tenant_id;
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedCollaboratorId = normalizeText(collaboratorId);
+
+  if (!normalizedEmail) throw new Error('E-mail é obrigatório para vincular colaborador.');
+  if (!normalizedCollaboratorId) throw new Error('collaborator_id é obrigatório para vincular colaborador.');
+
+  const { data: existing, error: existingError } = await supabase
+    .from('tenant_users')
+    .select('id, collaborator_id, email, full_name, tenant_id')
+    .eq('tenant_id', resolvedTenantId)
+    .eq('email', normalizedEmail)
+    .maybeSingle();
+  if (existingError) throw existingError;
+  if (!existing?.id) {
+    const notFoundErr = new Error('Nenhum usuário encontrado com este e-mail nesta clínica.');
+    notFoundErr.code = 'TENANT_USER_NOT_FOUND';
+    throw notFoundErr;
+  }
+
+  if (existing.collaborator_id && existing.collaborator_id !== normalizedCollaboratorId) {
+    const linkConflictErr = new Error('Este e-mail já está vinculado a outro colaborador.');
+    linkConflictErr.code = 'EMAIL_LINKED_TO_OTHER_COLLABORATOR';
+    throw linkConflictErr;
+  }
+
+  if (existing.collaborator_id === normalizedCollaboratorId) {
+    return { tenantUser: existing, linked: false };
+  }
+
+  const updatePayload = { collaborator_id: normalizedCollaboratorId };
+  const normalizedFullName = normalizeText(fullName);
+  if (normalizedFullName) updatePayload.full_name = normalizedFullName;
+
+  let tenantUser;
+  try {
+    const result = await supabase
+      .from('tenant_users')
+      .update(updatePayload)
+      .eq('id', existing.id)
+      .select(TENANT_USER_SELECT_WITH_ACCESS)
+      .single();
+    if (result.error) throw result.error;
+    tenantUser = result.data;
+  } catch (error) {
+    if (!isMissingCollaboratorIdColumnError(error)) throw error;
+    const fallbackResult = await supabase
+      .from('tenant_users')
+      .update(omitCollaboratorId(updatePayload))
+      .eq('id', existing.id)
+      .select(TENANT_USER_SELECT_BASE_LEGACY)
+      .single();
+    if (fallbackResult.error) throw fallbackResult.error;
+    tenantUser = fallbackResult.data;
+  }
+
+  const invUpdate = await supabase
+    .from('invitations')
+    .update({ collaborator_id: normalizedCollaboratorId })
+    .eq('tenant_id', resolvedTenantId)
+    .eq('email', normalizedEmail)
+    .is('collaborator_id', null);
+  if (invUpdate.error && process.env.NODE_ENV !== 'production') {
+    console.debug('[linkCollaboratorToTenantUser] falha ao atualizar invitations', invUpdate.error);
+  }
+
+  return { tenantUser, linked: true };
+}
+
+async function resolveAuthUserForInvite({
+  normalizedEmail,
+  sendInvite,
+  tenantId,
+  role,
+  collaboratorId,
+  collaboratorFullName,
+}) {
+  let authUser = await findAuthUserByEmail(normalizedEmail);
+  if (authUser?.id || !sendInvite) {
+    return { authUser, inviteDelivery: null };
+  }
+
+  const inviteDelivery = await sendCollaboratorInvite({
+    email: normalizedEmail,
+    tenantId,
+    role,
+    collaboratorId,
+    collaboratorName: collaboratorFullName,
+    userName: collaboratorFullName || normalizedEmail,
+    profileRole: role,
+  });
+
+  if (inviteDelivery?.user?.id) {
+    authUser = inviteDelivery.user;
+  } else {
+    authUser = await findAuthUserByEmail(normalizedEmail);
+  }
+
+  if (!authUser?.id) {
+    throw new Error(
+      'Não foi possível criar a conta no Auth para este e-mail. '
+      + 'Se você apagou o usuário manualmente no Supabase, aguarde alguns segundos e tente novamente.',
+    );
+  }
+
+  return { authUser, inviteDelivery };
+}
+
 async function provisionCollaboratorAccess({
   actorAuthUserId,
   tenantId,
@@ -692,6 +864,17 @@ async function provisionCollaboratorAccess({
   if (!normalizedEmail) throw new Error('E-mail é obrigatório para criar acesso.');
   if (!normalizedRole) throw new Error('Perfil de acesso é obrigatório.');
 
+  await assertEmailAvailableForTenantInvite(resolvedTenantId, normalizedEmail, { collaboratorId });
+
+  const { authUser, inviteDelivery: earlyInviteDelivery } = await resolveAuthUserForInvite({
+    normalizedEmail,
+    sendInvite,
+    tenantId: resolvedTenantId,
+    role: normalizedRole,
+    collaboratorId,
+    collaboratorFullName,
+  });
+
   const tenantUser = await upsertTenantUserAccess({
     tenantId: resolvedTenantId,
     collaboratorId,
@@ -700,9 +883,28 @@ async function provisionCollaboratorAccess({
     role: normalizedRole,
     hasSystemAccess: true,
     invitationStatus: sendInvite ? 'pending' : 'none',
+    authUserId: authUser?.id || null,
   });
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  let inviteDelivery = earlyInviteDelivery;
+  let invitationStatus = 'pending';
+
+  if (sendInvite) {
+    if (!inviteDelivery) {
+      inviteDelivery = await sendCollaboratorInvite({
+        email: normalizedEmail,
+        tenantId: resolvedTenantId,
+        role: normalizedRole,
+        collaboratorId,
+        collaboratorName: collaboratorFullName,
+        userName: collaboratorFullName || normalizedEmail,
+        profileRole: normalizedRole,
+      });
+    }
+    invitationStatus = isInviteEmailDelivered(inviteDelivery) ? 'sent' : 'pending';
+  }
+
   let invitation = await upsertInvitationRecord({
     tenantId: resolvedTenantId,
     tenantUserId: tenantUser.id,
@@ -710,44 +912,25 @@ async function provisionCollaboratorAccess({
     email: normalizedEmail,
     profileRole: normalizedRole,
     createdBy: actorAuthUserId,
-    status: sendInvite ? 'pending' : 'pending',
+    status: sendInvite ? invitationStatus : 'pending',
     expiresAt,
   });
 
   if (sendInvite) {
-    await sendSupabaseInvite({
-      email: normalizedEmail,
-      tenantId: resolvedTenantId,
-      role: normalizedRole,
-      collaboratorId,
-      collaboratorName: collaboratorFullName,
-    });
-
-    invitation = await upsertInvitationRecord({
-      tenantId: resolvedTenantId,
-      tenantUserId: tenantUser.id,
-      collaboratorId,
-      email: normalizedEmail,
-      profileRole: normalizedRole,
-      createdBy: actorAuthUserId,
-      status: 'sent',
-      expiresAt,
-    });
-
     const { data: updatedTenantUser, error: updatedTenantUserError } = await supabase
       .from('tenant_users')
-      .update({ invitation_status: 'sent' })
+      .update({ invitation_status: invitationStatus })
       .eq('id', tenantUser.id)
       .select(TENANT_USER_SELECT_BASE)
       .single();
     if (updatedTenantUserError) {
       if (!isMissingInvitationStatusColumnError(updatedTenantUserError)) throw updatedTenantUserError;
-      return { tenantUser, invitation };
+      return { tenantUser, invitation, inviteDelivery };
     }
-    return { tenantUser: updatedTenantUser, invitation };
+    return { tenantUser: updatedTenantUser, invitation, inviteDelivery };
   }
 
-  return { tenantUser, invitation };
+  return { tenantUser, invitation, inviteDelivery: null };
 }
 
 async function createTenantUserFromApp({
@@ -816,13 +999,16 @@ async function createTenantUserFromApp({
 
   let invitation = null;
   if (sendInvite) {
-    await sendSupabaseInvite({
+    const inviteDelivery = await sendCollaboratorInvite({
       email: normalizedEmail,
       tenantId: resolvedTenantId,
       role: normalizedRole,
       collaboratorId: normalizeText(collaboratorId) || null,
       collaboratorName: normalizedFullName,
+      userName: normalizedFullName,
+      profileRole: normalizedRole,
     });
+    const invitationStatus = isInviteEmailDelivered(inviteDelivery) ? 'sent' : 'pending';
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     invitation = await upsertInvitationRecord({
       tenantId: resolvedTenantId,
@@ -831,12 +1017,13 @@ async function createTenantUserFromApp({
       email: normalizedEmail,
       profileRole: normalizedRole,
       createdBy: actorAuthUserId,
-      status: 'sent',
+      status: invitationStatus,
       expiresAt,
     });
+    return { tenantUser, invitation, authUserId: authUser.id, inviteDelivery };
   }
 
-  return { tenantUser, invitation, authUserId: authUser.id };
+  return { tenantUser, invitation, authUserId: authUser.id, inviteDelivery: null };
 }
 
 async function ensureConsoleAdminCredentials({
@@ -1142,6 +1329,34 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
   }
 });
 
+app.post('/internal/app/collaborators/link', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const collaboratorId = normalizeText(req.body?.collaborator_id);
+    const email = normalizeEmail(req.body?.email);
+    const fullName = normalizeText(req.body?.full_name);
+
+    const linked = await linkCollaboratorToTenantUser({
+      actorAuthUserId: req.appAuthUser.id,
+      tenantId: explicitTenantId,
+      collaboratorId,
+      email,
+      fullName,
+    });
+
+    return res.status(200).json({
+      success: true,
+      linked: linked.linked,
+      tenant_user: linked.tenantUser,
+    });
+  } catch (err) {
+    console.error('[app-collaborators-link]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao vincular colaborador ao usuário.'),
+    });
+  }
+});
+
 app.post('/internal/app/collaborators/provision', requireAppUser, async (req, res) => {
   try {
     const explicitTenantId = normalizeText(req.body?.tenant_id);
@@ -1181,6 +1396,8 @@ app.post('/internal/app/collaborators/provision', requireAppUser, async (req, re
       create_system_access: true,
       tenant_user: provisioned.tenantUser,
       invitation: provisioned.invitation,
+      invite_delivery: provisioned.inviteDelivery || null,
+      email_sent: isInviteEmailDelivered(provisioned.inviteDelivery),
     });
   } catch (err) {
     console.error('[app-collaborators-provision]', err);
@@ -1370,13 +1587,16 @@ app.post('/internal/app/invitations/resend', requireAppUser, async (req, res) =>
 
     const role = normalizeRoleValue(tenantUser.role || tenantUser.role_slug || 'atendimento');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    await sendSupabaseInvite({
+    const inviteDelivery = await sendCollaboratorInvite({
       email: targetEmail,
       tenantId,
       role,
       collaboratorId: collaboratorId || tenantUser.collaborator_id,
       collaboratorName: tenantUser.full_name,
+      userName: tenantUser.full_name || targetEmail,
+      profileRole: role,
     });
+    const invitationStatus = isInviteEmailDelivered(inviteDelivery) ? 'sent' : 'pending';
 
     const invitation = await upsertInvitationRecord({
       tenantId,
@@ -1385,13 +1605,13 @@ app.post('/internal/app/invitations/resend', requireAppUser, async (req, res) =>
       email: targetEmail,
       profileRole: role,
       createdBy: req.appAuthUser.id,
-      status: 'sent',
+      status: invitationStatus,
       expiresAt,
     });
 
     const { data: updatedTenantUser, error: updateTenantUserError } = await supabase
       .from('tenant_users')
-      .update({ invitation_status: 'sent' })
+      .update({ invitation_status: invitationStatus })
       .eq('id', tenantUser.id)
       .select(TENANT_USER_SELECT_BASE)
       .single();
@@ -1401,6 +1621,8 @@ app.post('/internal/app/invitations/resend', requireAppUser, async (req, res) =>
         success: true,
         tenant_user: tenantUser,
         invitation,
+        invite_delivery: inviteDelivery,
+        email_sent: isInviteEmailDelivered(inviteDelivery),
       });
     }
 
@@ -1408,6 +1630,8 @@ app.post('/internal/app/invitations/resend', requireAppUser, async (req, res) =>
       success: true,
       tenant_user: updatedTenantUser,
       invitation,
+      invite_delivery: inviteDelivery,
+      email_sent: isInviteEmailDelivered(inviteDelivery),
     });
   } catch (err) {
     console.error('[app-invitations-resend]', err);
@@ -1594,6 +1818,72 @@ app.patch('/internal/app/users/:tenantUserId/access', requireAppUser, async (req
   } catch (err) {
     return res.status(400).json({
       error: normalizeDatabaseError(err, 'Falha ao atualizar status de acesso do usuário.'),
+    });
+  }
+});
+
+app.delete('/internal/app/users/:tenantUserId', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const tenantUserId = normalizeText(req.params?.tenantUserId);
+    if (!tenantUserId) return res.status(400).json({ error: 'tenantUserId é obrigatório.' });
+
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+
+    if (tenantUserId === actorTenantUser.id) {
+      return res.status(400).json({ error: 'Você não pode remover seu próprio vínculo com a clínica.' });
+    }
+
+    const { data: target, error: targetError } = await supabase
+      .from('tenant_users')
+      .select('id, tenant_id, user_id, email, role, role_slug')
+      .eq('id', tenantUserId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (targetError) throw targetError;
+    if (!target?.id) {
+      return res.status(404).json({ error: 'Usuário não encontrado nesta clínica.' });
+    }
+
+    if (target.user_id && target.user_id === req.appAuthUser.id) {
+      return res.status(400).json({ error: 'Você não pode remover seu próprio vínculo com a clínica.' });
+    }
+
+    const email = normalizeEmail(target.email);
+    const { error: revokeError } = await supabase
+      .from('invitations')
+      .update({
+        status: 'revoked',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('tenant_id', tenantId)
+      .eq('email', email)
+      .in('status', ['pending', 'sent']);
+    if (revokeError) {
+      const code = String(revokeError?.code || '').toUpperCase();
+      const msg = String(revokeError?.message || '').toLowerCase();
+      const missingInvitations = code === 'PGRST205' || code === '42P01'
+        || (msg.includes('relation') && msg.includes('does not exist'));
+      if (!missingInvitations) throw revokeError;
+    }
+
+    const { error: deleteError } = await supabase
+      .from('tenant_users')
+      .delete()
+      .eq('id', tenantUserId)
+      .eq('tenant_id', tenantId);
+    if (deleteError) throw deleteError;
+
+    return res.status(200).json({
+      success: true,
+      removed_tenant_user_id: tenantUserId,
+      email,
+    });
+  } catch (err) {
+    console.error('[app-users-unlink]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao remover vínculo do usuário.'),
     });
   }
 });

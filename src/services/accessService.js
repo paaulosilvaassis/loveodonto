@@ -84,6 +84,20 @@ export function can(user, moduleKey, actionKey) {
   return baseAllowed;
 }
 
+/**
+ * Usuário pode cadastrar novo colaborador (RH).
+ * Admin/master/owner/gerente: sempre; demais: permissão equipe:create ou colaboradores:create.
+ */
+export function canCreateCollaborator(user) {
+  if (!user) return false;
+  if (user.isMaster === true) return true;
+  const role = String(user.role || '').toLowerCase();
+  if (['admin', 'owner', 'master', 'gerente'].includes(role)) return true;
+  if (can(user, 'equipe', 'create')) return true;
+  if (can(user, 'colaboradores', 'create')) return true;
+  return false;
+}
+
 const LEGACY_ACTION_MAP = { read: 'view', write: 'edit' };
 
 /**

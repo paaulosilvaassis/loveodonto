@@ -106,6 +106,7 @@ export const MODULES_SPEC = [
       { key: 'prontuario_planejamento', label: 'Planejamento', actions: ['view', 'create', 'edit', 'approve'] },
       { key: 'prontuario_procedimentos', label: 'Procedimentos a Realizar', actions: ['view', 'create', 'edit', 'conclude'] },
       { key: 'prontuario_orcamentos', label: 'Orçamentos', actions: ['view', 'create', 'edit', 'approve', 'delete'] },
+      { key: 'prontuario_guia_clinico', label: 'Guia Clínico do Dentista', actions: ['view', 'create', 'edit', 'delete'] },
       { key: 'prontuario_contratos', label: 'Contratos', actions: ['view', 'create', 'edit', 'send', 'sign', 'delete'] },
       { key: 'prontuario_consentimentos', label: 'Consentimentos', actions: ['view', 'create', 'edit', 'send'] },
       { key: 'prontuario_documentos', label: 'Documentos do Paciente', actions: ['view', 'create', 'edit', 'delete', 'export'] },
