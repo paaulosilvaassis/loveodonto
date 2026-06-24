@@ -25,6 +25,7 @@ import {
   removePatientPhone,
   searchPatients,
   suggestPatients,
+  resolveUserTenantId,
   updatePatientPhone,
   updatePatientAccess,
   updatePatientBirth,
@@ -95,6 +96,7 @@ const emptyPhoneForm = () => ({
 
 export default function PatientsPage() {
   const { user } = useAuth();
+  const tenantId = resolveUserTenantId(user);
   const location = useLocation();
   const [dbSnapshot, setDbSnapshot] = useState(() => loadDb());
   const [searchType, setSearchType] = useState('name');
@@ -257,11 +259,11 @@ export default function PatientsPage() {
     setSuggestOpen(true);
     setActiveSuggestIndex(-1);
     suggestTimeoutRef.current = setTimeout(() => {
-      const { results } = suggestPatients(searchType, normalized, 10);
+      const { results } = suggestPatients(searchType, normalized, 10, tenantId);
       setSuggestions(results);
       setSuggestLoading(false);
     }, 320);
-  }, [searchQuery, searchType]);
+  }, [searchQuery, searchType, tenantId]);
 
   useEffect(() => {
     if (error) showToast('error', error);
@@ -335,7 +337,7 @@ export default function PatientsPage() {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => {
       try {
-        const { results, exactMatch: exact } = searchPatients(searchType, query);
+        const { results, exactMatch: exact } = searchPatients(searchType, query, tenantId);
         setExactMatch(exact);
         setSearchSummary(buildSummary(results));
       } catch (err) {

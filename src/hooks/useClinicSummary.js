@@ -21,13 +21,24 @@ export const useClinicSummary = () => {
 
   useEffect(() => {
     let cancelled = false;
-    getClinicSummaryAsync().then((next) => {
-      if (!cancelled) {
-        setSummary(next);
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: next, timestamp: Date.now() }));
-      }
-    });
-    return () => { cancelled = true; };
+    const load = () => {
+      getClinicSummaryAsync().then((next) => {
+        if (!cancelled) {
+          setSummary(next);
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: next, timestamp: Date.now() }));
+        }
+      });
+    };
+    load();
+    const onBootstrap = () => {
+      try { sessionStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
+      load();
+    };
+    window.addEventListener('saas:tenant-bootstrapped', onBootstrap);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('saas:tenant-bootstrapped', onBootstrap);
+    };
   }, []);
 
   return summary;

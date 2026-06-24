@@ -81,12 +81,41 @@ export function Panel({ title, description, children, actions }) {
 
 export function StatusBadge({ status }) {
   const normalized = String(status || '').toLowerCase();
-  const tone = ['active', 'connected', 'healthy', 'paid', 'enabled', 'open', 'ok', 'resolved'].includes(normalized)
+  const tone = ['active', 'connected', 'healthy', 'paid', 'enabled', 'open', 'ok', 'resolved', 'active_trial'].includes(normalized)
     ? 'success'
-    : ['suspended', 'overdue', 'error', 'failed', 'disconnected'].includes(normalized)
+    : ['suspended', 'overdue', 'error', 'failed', 'disconnected', 'inadimplente', 'bloqueio_recomendado', 'critical', 'danger'].includes(normalized)
       ? 'danger'
-      : ['warning', 'pending', 'attention', 'past_due', 'paused'].includes(normalized)
+      : ['warning', 'pending', 'attention', 'past_due', 'paused', 'vencido', 'due_today', 'vencendo_em_5_dias'].includes(normalized)
         ? 'warning'
-        : 'neutral';
+        : ['billing_blocked', 'blocked', 'canceled', 'cancelled'].includes(normalized)
+          ? 'neutral'
+          : 'neutral';
   return <span className={`pc-badge pc-badge--${tone}`}>{toFriendlyStatusLabel(status)}</span>;
+}
+
+const BILLING_STATUS_LABELS = {
+  active_trial: 'Trial ativo',
+  trial: 'Trial',
+  active: 'Ativo',
+  vencido: 'Vencido',
+  inadimplente: 'Inadimplente',
+  bloqueio_recomendado: 'Bloqueio recomendado',
+  due_today: 'Vence hoje',
+  open: 'Em aberto',
+  paid: 'Pago',
+  billing_blocked: 'Bloqueado',
+  block_recommended: 'Bloqueio recomendado',
+  vencendo_em_5_dias: 'Vence em 5 dias',
+};
+
+export function BillingStatusBadge({ status }) {
+  const normalized = String(status || '').toLowerCase();
+  const label = BILLING_STATUS_LABELS[normalized] || toFriendlyStatusLabel(status);
+  let tone = 'neutral';
+  if (['active', 'paid', 'active_trial', 'trial', 'ok'].includes(normalized)) tone = 'success';
+  else if (['vencendo_em_5_dias', 'due_today', 'vencido', 'warning'].includes(normalized)) tone = 'warning';
+  else if (['inadimplente', 'overdue', 'past_due'].includes(normalized)) tone = 'orange';
+  else if (['bloqueio_recomendado', 'block_recommended', 'critical'].includes(normalized)) tone = 'danger';
+  else if (['billing_blocked', 'blocked', 'canceled'].includes(normalized)) tone = 'neutral';
+  return <span className={`pc-badge pc-badge--${tone}`}>{label}</span>;
 }

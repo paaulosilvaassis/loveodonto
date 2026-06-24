@@ -54,12 +54,126 @@ function isValidHttpUrl(value) {
 }
 
 function resolvePlatformApiUrl(path) {
-  const baseUrl = resolvePlatformApiBaseUrl();
   const normalizedPath = String(path || '').trim();
   if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
+
+  const configuredBase = normalizeEnvString(import.meta.env.VITE_PLATFORM_API_BASE_URL);
+  // Dev sem URL explícita: proxy Vite (5177 → 3001) evita CORS e API desatualizada
+  if (!import.meta.env.PROD && !configuredBase) {
+    return normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
+  }
+
+  const baseUrl = resolvePlatformApiBaseUrl();
   const base = baseUrl.replace(/\/+$/, '');
   const suffix = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
   return `${base}${suffix}`;
+}
+
+function pickMetricCents(metrics, centsKey, decimalKey) {
+  const raw = metrics?.[centsKey];
+  if (raw != null && Number.isFinite(Number(raw))) return Number(raw);
+  const fromDecimal = metrics?.[decimalKey];
+  if (fromDecimal != null && Number.isFinite(Number(fromDecimal))) return Math.round(Number(fromDecimal) * 100);
+  return 0;
+}
+
+function buildFunnelFromClinics(clinics) {
+  const funnel = {
+    active: { count: 0, amountCents: 0 },
+    trial: { count: 0, amountCents: 0 },
+    dueSoon: { count: 0, amountCents: 0 },
+    overdue: { count: 0, amountCents: 0 },
+    blockRecommended: { count: 0, amountCents: 0 },
+    blocked: { count: 0, amountCents: 0 },
+  };
+  for (const row of clinics || []) {
+    const amount = row.monthlyAmountCents || row.amountCents || 0;
+    const status = row.financialStatus || 'active';
+    const bucket = status === 'trial' ? 'trial' : status === 'due_soon' ? 'dueSoon' : status === 'block_recommended' ? 'blockRecommended' : status === 'blocked' ? 'blocked' : (status === 'overdue' || status === 'due_today') ? 'overdue' : 'active';
+    funnel[bucket].count += 1;
+    funnel[bucket].amountCents += amount;
+  }
+  return funnel;
+}
+
+function buildMetricsFromClinics(clinics) {
+  let mrrCents = 0;
+  let trialClinics = 0;
+  let activeClinics = 0;
+  let blockedClinics = 0;
+  let forecastCents = 0;
+  for (const row of clinics || []) {
+    const amount = row.monthlyAmountCents || row.amountCents || 0;
+    forecastCents += row.amountCents || 0;
+    if (row.financialStatus === 'blocked' || row.isBlocked) {
+      blockedClinics += 1;
+      continue;
+    }
+    if (row.financialStatus === 'trial') trialClinics += 1;
+    else activeClinics += 1;
+    mrrCents += amount;
+  }
+  return {
+    mrrCents,
+    arrCents: mrrCents * 12,
+    receivedThisMonthCents: 0,
+    forecastCents,
+    delinquencyPct: 0,
+    activeClinics,
+    trialClinics,
+    blockedClinics,
+    totalClinics: clinics.length,
+  };
+}
+
+export function normalizeBillingOverview(raw) {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Resposta inválida do Revenue Center.');
+  }
+  if (raw.ok === false || (raw.error && !raw.metrics && !(raw.clinics?.length || raw.tenants?.length))) {
+    throw new Error(mapPlatformApiErrorMessage(raw.error || 'Falha ao carregar Revenue Center.'));
+  }
+
+  const clinics = Array.isArray(raw.clinics) ? raw.clinics : (Array.isArray(raw.tenants) ? raw.tenants : []);
+  const metricsRaw = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : {};
+  let metrics = {
+    mrrCents: pickMetricCents(metricsRaw, 'mrrCents', 'mrr'),
+    arrCents: pickMetricCents(metricsRaw, 'arrCents', 'arr'),
+    receivedThisMonthCents: pickMetricCents(metricsRaw, 'receivedThisMonthCents', 'receivedThisMonth'),
+    forecastCents: pickMetricCents(metricsRaw, 'forecastCents', 'forecastRevenue')
+      || pickMetricCents(metricsRaw, 'openReceivableCents', 'openReceivable'),
+    delinquencyPct: Number(metricsRaw.delinquencyPct ?? metricsRaw.delinquencyRate) || 0,
+    activeClinics: Number(metricsRaw.activeClinics) || 0,
+    trialClinics: Number(metricsRaw.trialClinics) || 0,
+    blockedClinics: Number(metricsRaw.blockedClinics) || 0,
+    totalClinics: Number(metricsRaw.totalClinics) || clinics.length,
+  };
+
+  if (!metrics.mrrCents && clinics.length > 0) {
+    metrics = buildMetricsFromClinics(clinics);
+  }
+
+  if (!metrics.arrCents && metrics.mrrCents) {
+    metrics.arrCents = metrics.mrrCents * 12;
+  }
+
+  const funnel = raw.funnel && typeof raw.funnel === 'object' && Object.keys(raw.funnel).length
+    ? raw.funnel
+    : buildFunnelFromClinics(clinics);
+
+  return {
+    ok: true,
+    metrics,
+    funnel,
+    charts: raw.charts || { monthlyRevenue: [], clientGrowth: [], revenueByPlan: [] },
+    clinics,
+    alerts: raw.alerts || [],
+    backfill: raw.backfill || null,
+    buckets: raw.buckets || {},
+    dataWarning: clinics.length === 0
+      ? 'Nenhuma clínica retornada pela Admin API. Execute npm run server:restart e clique em Sincronizar status.'
+      : '',
+  };
 }
 
 export function getPlatformApiConfigError() {
@@ -120,6 +234,18 @@ function normalizePlanForProvision(planCode) {
 function mapPlatformApiErrorMessage(error) {
   const raw = String(error?.message || error || '').trim();
   const lower = raw.toLowerCase();
+  if (lower.includes('cannot post') && lower.includes('billing/evaluate')) {
+    return (
+      'A Admin API local está desatualizada (rota POST /internal/platform/billing/evaluate ausente). '
+      + 'Na raiz do projeto execute: npm run server:restart'
+    );
+  }
+  if (lower.includes('cannot post') && lower.includes('/internal/platform')) {
+    return (
+      'A Admin API não reconhece esta rota da Console. '
+      + 'Reinicie o backend local com: npm run server:restart'
+    );
+  }
   if (lower.includes('cannot post') && lower.includes('resend-access')) {
     return (
       'A Admin API em produção ainda não foi atualizada (rota resend-access ausente). '
@@ -175,20 +301,30 @@ async function callPlatformApi(path, { method = 'POST', body } = {}) {
     throw new Error(mapPlatformApiErrorMessage(error) || fallback);
   }
   const text = await response.text();
+  const trimmedText = String(text || '').trim();
   let json = {};
-  if (text) {
+  if (trimmedText) {
     try {
-      json = JSON.parse(text);
+      json = JSON.parse(trimmedText);
     } catch {
-      json = { error: text };
+      const looksHtml = trimmedText.startsWith('<!') || trimmedText.startsWith('<html');
+      const routeMissing = /cannot\s+(get|post|put|patch|delete)\s+\//i.test(trimmedText);
+      json = {
+        error: looksHtml || routeMissing
+          ? trimmedText.slice(0, 120)
+          : trimmedText,
+      };
     }
   }
   if (!response.ok) {
-    const rawError = json?.error || json?.message || text || `Erro HTTP ${response.status}`;
+    const rawError = json?.error || json?.message || trimmedText || `Erro HTTP ${response.status}`;
     throw new Error(
       mapPlatformApiErrorMessage(rawError)
       || `Erro HTTP ${response.status}`,
     );
+  }
+  if (json?.ok === false && json?.error) {
+    throw new Error(mapPlatformApiErrorMessage(json.error));
   }
   return json;
 }
@@ -815,4 +951,56 @@ export async function updateFeatureFlag(actor, flagId, enabled) {
   if (uErr) throw new Error(uErr.message);
   await insertAudit(actor, 'feature_flag.updated', 'feature_flag', flag.id, { key: flag.flag_key, enabled }, null);
   return { ...flag, enabled: Boolean(enabled) };
+}
+
+export async function getBillingOverview() {
+  const raw = await callPlatformApi('/internal/platform/billing/overview', { method: 'GET' });
+  return normalizeBillingOverview(raw);
+}
+
+export async function getTenantBillingDetail(tenantId) {
+  return callPlatformApi(`/internal/platform/tenants/${tenantId}/billing`, { method: 'GET' });
+}
+
+export async function evaluateBillingStatus() {
+  return callPlatformApi('/internal/platform/billing/evaluate', { method: 'POST', body: {} });
+}
+
+export async function markInvoicePaid(tenantId, invoiceId, payload = {}) {
+  return callPlatformApi(
+    `/internal/platform/tenants/${tenantId}/invoices/${invoiceId}/mark-paid`,
+    { method: 'POST', body: payload },
+  );
+}
+
+export async function blockTenantForBilling(tenantId, reason = 'atraso_financeiro') {
+  return callPlatformApi(
+    `/internal/platform/tenants/${tenantId}/block-for-billing`,
+    { method: 'POST', body: { reason } },
+  );
+}
+
+export async function unblockTenantBilling(tenantId) {
+  return callPlatformApi(`/internal/platform/tenants/${tenantId}/unblock`, { method: 'POST', body: {} });
+}
+
+export async function updateInvoiceDueDate(tenantId, invoiceId, dueDate) {
+  return callPlatformApi(
+    `/internal/platform/tenants/${tenantId}/invoices/${invoiceId}/due-date`,
+    { method: 'PATCH', body: { dueDate } },
+  );
+}
+
+export async function updateSubscriptionPlanBilling(tenantId, planCode) {
+  return callPlatformApi(
+    `/internal/platform/tenants/${tenantId}/subscription/plan`,
+    { method: 'PATCH', body: { planCode } },
+  );
+}
+
+export async function applyInvoiceDiscount(tenantId, invoiceId, payload = {}) {
+  return callPlatformApi(
+    `/internal/platform/tenants/${tenantId}/invoices/${invoiceId}/discount`,
+    { method: 'POST', body: payload },
+  );
 }

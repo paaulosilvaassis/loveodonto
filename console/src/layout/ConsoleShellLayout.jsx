@@ -17,7 +17,7 @@ import {
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', route: '/dashboard', icon: LayoutDashboard },
   { id: 'tenants', label: 'Clínicas', route: '/tenants', icon: Building2 },
-  { id: 'billing', label: 'Cobranças', route: '/billing', icon: Receipt },
+  { id: 'billing', label: 'Revenue Center', route: '/billing', icon: Receipt },
   { id: 'subscriptions', label: 'Assinaturas', route: '/subscriptions', icon: CreditCard },
   { id: 'connectivities', label: 'Conectividades', route: '/connectivities', icon: PlugZap },
   { id: 'support', label: 'Suporte', route: '/support', icon: Headset },

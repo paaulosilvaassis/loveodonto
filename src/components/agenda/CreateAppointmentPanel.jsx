@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { addMinutesToTime, normalizeSlotCapacity } from '../../utils/agendaUtils.js';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
-import { createPatientQuick, searchPatients, suggestPatients } from '../../services/patientService.js';
+import { createPatientQuick, searchPatients, suggestPatients, resolveUserTenantId } from '../../services/patientService.js';
 import { normalizeText } from '../../services/helpers.js';
 import { formatCpf, isCpfValid, onlyDigits } from '../../utils/validators.js';
 import {
@@ -71,7 +71,7 @@ export const CreateAppointmentPanel = ({
     cpf: '',
   });
   const suggestWrapRef = useRef(null);
-  const tenantId = user?.tenant_id || user?.tenantId || null;
+  const tenantId = resolveUserTenantId(user);
 
   useEffect(() => {
     setDraft(buildDraft(appointment));

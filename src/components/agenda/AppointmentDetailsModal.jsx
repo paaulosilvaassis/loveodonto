@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getAppointmentDetails, updateAppointment, checkInAppointment, APPOINTMENT_STATUS } from '../../services/appointmentService.js';
 import { AGENDA_CONFIG } from '../../utils/agendaConfig.js';
 import { useAuth } from '../../auth/useAuth.js';
-import { suggestPatients, recalcAndPersistPendingData } from '../../services/patientService.js';
+import { suggestPatients, recalcAndPersistPendingData, resolveUserTenantId } from '../../services/patientService.js';
 import { getLeadById } from '../../services/crmService.js';
 import { RegisterPatientFromLeadModal } from './RegisterPatientFromLeadModal.jsx';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
@@ -40,7 +40,7 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
   const [patientSearchError, setPatientSearchError] = useState('');
   const suggestWrapRef = useRef(null);
   const debouncedQuery = useDebouncedValue(patientQuery, 400);
-  const tenantId = user?.tenant_id || user?.tenantId || null;
+  const tenantId = resolveUserTenantId(user);
 
   useEffect(() => {
     if (open && appointmentId) {

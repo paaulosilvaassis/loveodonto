@@ -3,6 +3,9 @@ import { useTenant } from '../tenant/useTenant.js';
 import { useAuth } from '../auth/useAuth.js';
 
 function resolveMessage(status) {
+  if (status === 'billing_blocked') {
+    return 'Acesso temporariamente suspenso. Entre em contato com o suporte Love Odonto.';
+  }
   if (status === 'blocked') {
     return 'A clínica está bloqueada na Platform Console. Entre em contato com o suporte para regularização.';
   }
@@ -20,6 +23,7 @@ export default function TenantAccessBlockedPage() {
   const { logout } = useAuth();
 
   const title = useMemo(() => {
+    if (tenantStatus === 'billing_blocked') return 'Acesso temporariamente suspenso';
     if (tenantStatus === 'blocked') return 'Clínica bloqueada';
     if (tenantStatus === 'suspended') return 'Clínica suspensa';
     return 'Acesso indisponível';

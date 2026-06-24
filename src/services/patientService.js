@@ -3,7 +3,15 @@ import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
 import { isCpfValid, isPhoneValid, onlyDigits, validateFileMeta } from '../utils/validators.js';
-import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
+import { resolveTenantIdForWrite, resolveUserTenantId } from './tenantWriteGuard.js';
+
+const LEGACY_LOCAL_TENANT_ID = 'tenant-1';
+
+export { resolveUserTenantId };
+
+export function clearPatientSuggestCache() {
+  suggestCache.clear();
+}
 
 const normalizeCpf = (value) => onlyDigits(value);
 const normalizePhoneDigits = (value) => onlyDigits(value);
@@ -72,15 +80,30 @@ const ensureCpfUnique = (db, cpf, ignorePatientId) => {
 
 export const listPatients = () => loadDb().patients;
 
-function filterPatientsByTenant(patients, tenantId) {
+function buildAllowedPatientTenantIds(db, tenantId) {
+  if (!tenantId) return null;
+  const allowed = new Set([tenantId]);
+  const tenants = Array.isArray(db?.tenants) ? db.tenants : [];
+  if (
+    tenants.length === 1
+    && tenants[0]?.id === tenantId
+    && tenantId !== LEGACY_LOCAL_TENANT_ID
+  ) {
+    allowed.add(LEGACY_LOCAL_TENANT_ID);
+  }
+  return allowed;
+}
+
+function filterPatientsByTenant(patients, tenantId, db) {
   const list = Array.isArray(patients) ? patients : [];
-  if (!tenantId) return list;
-  return list.filter((item) => !item.tenant_id || item.tenant_id === tenantId);
+  const allowed = buildAllowedPatientTenantIds(db, tenantId);
+  if (!allowed) return list;
+  return list.filter((item) => !item.tenant_id || allowed.has(item.tenant_id));
 }
 
 export const searchPatients = (type, query, tenantId = null) => {
   const db = loadDb();
-  const patients = filterPatientsByTenant(db.patients || [], tenantId);
+  const patients = filterPatientsByTenant(db.patients || [], tenantId, db);
   const patientPhones = db.patientPhones || [];
   const q = normalizeText(query);
   if (!q) return { results: [], exactMatch: null };
@@ -122,7 +145,7 @@ export const suggestPatients = (type, query, limit = 10, tenantId = null) => {
   }
 
   const db = loadDb();
-  const patients = filterPatientsByTenant(db.patients || [], tenantId);
+  const patients = filterPatientsByTenant(db.patients || [], tenantId, db);
   const patientPhones = db.patientPhones || [];
   let results = [];
 
@@ -234,7 +257,7 @@ export const createPatientQuick = (user, payload) => {
   assertRequired(patient.cpf, 'CPF é obrigatório.');
   if (!isCpfValid(patient.cpf)) throw new Error('CPF inválido.');
 
-  return withDbResult((db) => {
+  const result = withDbResult((db) => {
     ensureCpfUnique(db, patient.cpf);
     db.patients.push(patient);
     const documents = {
@@ -286,6 +309,8 @@ export const createPatientQuick = (user, payload) => {
       activity,
     };
   });
+  clearPatientSuggestCache();
+  return result;
 };
 
 /** Campos importantes para alerta de pendências (importação) */
@@ -734,7 +759,8 @@ export const createPatientFromLead = (user, lead) => {
 
 export const updatePatientProfile = (user, patientId, payload) => {
   requirePermission(user, 'patients:write');
-  return withDbResult((db) => {
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
+  const result = withDbResult((db) => {
     const existing = db.patients.find((item) => item.id === patientId);
     const basePatient = existing || {
       id: patientId,
@@ -746,6 +772,7 @@ export const updatePatientProfile = (user, patientId, payload) => {
       block_at: '',
       tags: [],
       lead_source: '',
+      tenant_id: tenantId,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       created_by_user_id: user.id,
@@ -783,16 +810,20 @@ export const updatePatientProfile = (user, patientId, payload) => {
       next.hasPendingData = existing.hasPendingData;
       next.pendingFields = existing.pendingFields || [];
       next.pendingCriticalFields = existing.pendingCriticalFields || [];
+      if (!next.tenant_id) next.tenant_id = tenantId;
     }
     if (existing) {
       db.patients = db.patients.map((item) => (item.id === patientId ? next : item));
     } else {
+      if (!next.tenant_id) next.tenant_id = tenantId;
       db.patients.push(next);
     }
     recalcPendingData(db, patientId);
     logAction('patients:update-profile', { patientId, userId: user.id });
     return next;
   });
+  clearPatientSuggestCache();
+  return result;
 };
 
 /**

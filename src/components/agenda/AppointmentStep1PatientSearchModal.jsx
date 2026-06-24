@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth.js';
 import { useDebouncedValue } from '../../hooks/useDebouncedValue.js';
-import { suggestPatients } from '../../services/patientService.js';
+import { suggestPatients, resolveUserTenantId } from '../../services/patientService.js';
 import { normalizeText } from '../../services/helpers.js';
 import { onlyDigits } from '../../utils/validators.js';
 import {
@@ -25,7 +25,7 @@ const PROCEED_ERROR = 'Selecione um paciente cadastrado na lista antes de prosse
 export const AppointmentStep1PatientSearchModal = ({ open, slot, onClose, onContinue, selectedProfessionalId }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const tenantId = user?.tenant_id || user?.tenantId || null;
+  const tenantId = resolveUserTenantId(user);
   const [patientQuery, setPatientQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [patientSuggestions, setPatientSuggestions] = useState([]);

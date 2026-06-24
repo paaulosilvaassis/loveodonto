@@ -13,6 +13,7 @@ import { LOGOUT_REASON_KEY } from './logoutReason.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
 import { AuthContext } from './authContext.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
+import { bootstrapSaasTenantLocalDb } from '../services/saasTenantBootstrapService.js';
 import { reconcileOwnInvitationAcceptance } from '../services/collaboratorAccessProvisionService.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
 import {
@@ -62,15 +63,21 @@ function shouldHydrateAsSaas(stored) {
 }
 
 /** Persiste sessão reduzida + cache de usuário e dispara sincronizações não bloqueantes. */
-function persistResolvedSaasUser(resolved) {
+async function persistResolvedSaasUser(resolved, { previousTenantId } = {}) {
   const enriched = enrichSaasUserPrivileges(resolved);
+  try {
+    await bootstrapSaasTenantLocalDb(enriched, { previousTenantId });
+    ensureSaasUserInLocalDb(enriched);
+  } catch (err) {
+    authDebug('persistResolvedSaasUser bootstrap', err?.message);
+    try { ensureSaasUserInLocalDb(enriched); } catch { /* non-blocking */ }
+  }
   writeStoredSession({
     authMode: 'saas',
     userId: enriched.id,
     tenantId: enriched.tenantId,
     cachedUser: sanitizeCachedUser(enriched),
   });
-  try { ensureSaasUserInLocalDb(enriched); } catch { /* non-blocking */ }
   window.setTimeout(() => {
     reconcileOwnInvitationAcceptance().catch(() => {});
   }, 2500);
@@ -125,7 +132,7 @@ async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
         onLogout('Seu acesso à clínica foi revogado. Faça login novamente.');
         return;
       }
-      persistResolvedSaasUser(fresh);
+      await persistResolvedSaasUser(fresh, { previousTenantId: stored.tenantId });
       onUser(enrichSaasUserPrivileges(fresh));
       authDebug('hydrate: acesso revalidado em segundo plano');
     } catch (err) {
@@ -147,7 +154,7 @@ async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
       onLogout('Seu usuário não está vinculado a nenhuma clínica ativa.');
       return;
     }
-    persistResolvedSaasUser(resolved);
+    await persistResolvedSaasUser(resolved, { previousTenantId: stored.tenantId });
     onUser(enrichSaasUserPrivileges(resolved));
     authDebug('hydrate: usuário e tenant resolvidos — fim do loading');
   } catch (err) {
@@ -297,21 +304,29 @@ export const AuthProvider = ({ children }) => {
       } else if (saasResolvedUser.has_system_access === false) {
         throw new Error('Seu acesso a esta clínica está desativado.');
       }
+      const previousTenantId = session?.tenantId;
+      const enriched = enrichSaasUserPrivileges(resolved);
       const next = {
         authMode: 'saas',
         userId: currentSession.user.id,
-        tenantId: resolved.tenantId,
-        cachedUser: sanitizeCachedUser(enrichSaasUserPrivileges(resolved)),
+        tenantId: enriched.tenantId,
+        cachedUser: sanitizeCachedUser(enriched),
       };
       writeStoredSession(next);
-      try { ensureSaasUserInLocalDb(enrichSaasUserPrivileges(resolved)); } catch { /* non-blocking */ }
+      try {
+        await bootstrapSaasTenantLocalDb(enriched, { previousTenantId });
+        ensureSaasUserInLocalDb(enriched);
+      } catch (err) {
+        authDebug('login bootstrap', err?.message);
+        try { ensureSaasUserInLocalDb(enriched); } catch { /* non-blocking */ }
+      }
       window.setTimeout(() => {
         reconcileOwnInvitationAcceptance().catch(() => {});
       }, 2500);
       setSession(next);
-      setUser(enrichSaasUserPrivileges(resolved));
-      emitStabilityLog('AUTH_OK', { mode: 'saas', tenantId: resolved.tenantId });
-      return resolved;
+      setUser(enriched);
+      emitStabilityLog('AUTH_OK', { mode: 'saas', tenantId: enriched.tenantId });
+      return enriched;
     }
     const db = loadDb();
     const baseUser = db.users.find((item) => item.id === userId && item.active !== false);

@@ -26,6 +26,8 @@ import {
   createAcceptanceToken,
   findLegalProfileByToken,
 } from './onboardingTerms.js';
+import { createPlatformBillingService } from './platformBillingService.js';
+import { formatBillingOverviewResponse } from './platformRevenueMetrics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,8 +61,8 @@ app.get('/health', (_req, res) => {
   res.status(200).json({
     ok: true,
     service: 'saas-admin-api',
-    version: '2026-06-24',
-    features: { resendAccess: true },
+    version: '2026-06-24-billing',
+    features: { resendAccess: true, billingEvaluate: true },
   });
 });
 
@@ -1128,6 +1130,12 @@ async function insertAuditLog({ actor, action, targetType, targetId, tenantId = 
   if (error) throw error;
 }
 
+const platformBilling = createPlatformBillingService({
+  supabase,
+  planConfig: PLAN_CONFIG,
+  insertAuditLog,
+});
+
 async function getConsoleActorFromBearerToken(accessToken) {
   const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
   if (userError || !userData?.user?.id) {
@@ -1313,10 +1321,13 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
     const warnings = [];
     const tenantStatus = normalizeStatus(tenant?.status);
     const billingStatus = normalizeStatus(tenant?.billing_status || subscription?.status);
-    if (['blocked', 'suspended', 'cancelled', 'canceled'].includes(tenantStatus)) {
+    if (['blocked', 'billing_blocked', 'suspended', 'cancelled', 'canceled'].includes(tenantStatus)) {
       warnings.push(`Status da clínica: ${tenantStatus}`);
     }
-    if (['overdue', 'past_due'].includes(billingStatus)) {
+    if (tenantStatus === 'billing_blocked') {
+      warnings.push('Acesso suspenso por inadimplência SaaS');
+    }
+    if (['overdue', 'past_due', 'block_recommended', 'due_today'].includes(billingStatus)) {
       warnings.push('Existem pendências de cobrança');
     }
 
@@ -2192,6 +2203,23 @@ app.post('/internal/platform/tenants/provision', requireConsoleAccess, async (re
     if (subscriptionError) throw subscriptionError;
     console.log('[Provision] assinatura criada', { subscriptionId: subscription.id, tenantId: createdTenantId });
 
+    let platformBillingRecord = null;
+    try {
+      platformBillingRecord = await platformBilling.provisionBillingForTenant({
+        tenantId: createdTenantId,
+        planCode,
+        actorId: actor?.id || null,
+        amountCents: PLAN_CONFIG[planCode].priceCents,
+      });
+      console.log('[Provision] cobrança SaaS criada', {
+        tenantId: createdTenantId,
+        subscriptionId: platformBillingRecord?.subscription?.id,
+        invoiceId: platformBillingRecord?.invoice?.id,
+      });
+    } catch (billingErr) {
+      console.warn('[Provision] falha ao criar cobrança SaaS (migração 015 aplicada?)', billingErr?.message || billingErr);
+    }
+
     const moduleRows = PLAN_CONFIG[planCode].modules.map((moduleKey) => ({
       tenant_id: createdTenantId,
       module_key: moduleKey,
@@ -2287,6 +2315,7 @@ app.post('/internal/platform/tenants/provision', requireConsoleAccess, async (re
         full_name: responsibleName,
       },
       subscription,
+      platformBilling: platformBillingRecord,
       tenantModules: tenantModules || [],
       onboarding_email: onboardingEmail,
       accessEmailDelivery: emailDelivery,
@@ -2384,6 +2413,187 @@ app.post('/internal/platform/tenants/:tenantId/resend-access', requireConsoleAcc
     console.error('[resend-access]', err?.message || err);
     return res.status(400).json({
       error: normalizeDatabaseError(err, 'Falha ao reenviar acesso da clínica.'),
+    });
+  }
+});
+
+app.get('/internal/platform/billing/overview', requireConsoleAccess, async (req, res) => {
+  try {
+    const overview = await platformBilling.getBillingOverview();
+    return res.status(200).json(formatBillingOverviewResponse(overview));
+  } catch (err) {
+    console.error('[billing/overview]', err);
+    return res.status(400).json({
+      ok: false,
+      error: normalizeDatabaseError(err, 'Falha ao carregar visão geral de cobrança.'),
+    });
+  }
+});
+
+app.get('/internal/platform/tenants/:tenantId/billing', requireConsoleAccess, async (req, res) => {
+  try {
+    const tenantId = normalizeText(req.params?.tenantId);
+    if (!tenantId) return res.status(400).json({ error: 'tenantId é obrigatório.' });
+    const detail = await platformBilling.getTenantBilling(tenantId);
+    if (!detail) return res.status(404).json({ error: 'Clínica não encontrada.' });
+    return res.status(200).json(detail);
+  } catch (err) {
+    console.error('[billing/tenant]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao carregar cobrança da clínica.'),
+    });
+  }
+});
+
+app.post('/internal/platform/tenants/:tenantId/invoices/:invoiceId/mark-paid', requireConsoleAccess, async (req, res) => {
+  try {
+    const tenantId = normalizeText(req.params?.tenantId);
+    const invoiceId = normalizeText(req.params?.invoiceId);
+    if (!tenantId || !invoiceId) {
+      return res.status(400).json({ error: 'tenantId e invoiceId são obrigatórios.' });
+    }
+    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const amountCents = body.amountCents != null ? Number(body.amountCents) : undefined;
+    const result = await platformBilling.markInvoicePaid({
+      tenantId,
+      invoiceId,
+      actor: req.platformActor,
+      amountCents,
+      paidAt: body.paidAt || body.data_pagamento || null,
+      paymentMethod: normalizeText(body.paymentMethod || body.metodo || ''),
+      notes: normalizeText(body.notes || body.observacao || ''),
+      nextDueRule: normalizeText(body.nextDueRule || 'from_payment') === 'from_previous_due'
+        ? 'from_previous_due'
+        : 'from_payment',
+    });
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    console.error('[billing/mark-paid]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao registrar pagamento.'),
+    });
+  }
+});
+
+app.post('/internal/platform/tenants/:tenantId/block-for-billing', requireConsoleAccess, async (req, res) => {
+  try {
+    const tenantId = normalizeText(req.params?.tenantId);
+    if (!tenantId) return res.status(400).json({ error: 'tenantId é obrigatório.' });
+    const reason = normalizeText(req.body?.reason) || 'atraso_financeiro';
+    const tenant = await platformBilling.blockTenantForBilling({
+      tenantId,
+      actor: req.platformActor,
+      reason,
+    });
+    return res.status(200).json({ success: true, tenant });
+  } catch (err) {
+    console.error('[billing/block]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao bloquear clínica por cobrança.'),
+    });
+  }
+});
+
+app.post('/internal/platform/tenants/:tenantId/unblock', requireConsoleAccess, async (req, res) => {
+  try {
+    const tenantId = normalizeText(req.params?.tenantId);
+    if (!tenantId) return res.status(400).json({ error: 'tenantId é obrigatório.' });
+    const tenant = await platformBilling.unblockTenant({
+      tenantId,
+      actor: req.platformActor,
+    });
+    return res.status(200).json({ success: true, tenant });
+  } catch (err) {
+    console.error('[billing/unblock]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao desbloquear clínica.'),
+    });
+  }
+});
+
+app.patch('/internal/platform/tenants/:tenantId/invoices/:invoiceId/due-date', requireConsoleAccess, async (req, res) => {
+  try {
+    const tenantId = normalizeText(req.params?.tenantId);
+    const invoiceId = normalizeText(req.params?.invoiceId);
+    const dueDate = req.body?.dueDate || req.body?.due_date;
+    if (!tenantId || !invoiceId || !dueDate) {
+      return res.status(400).json({ error: 'tenantId, invoiceId e dueDate são obrigatórios.' });
+    }
+    const invoice = await platformBilling.updateInvoiceDueDate({
+      tenantId,
+      invoiceId,
+      dueDate,
+      actor: req.platformActor,
+    });
+    return res.status(200).json({ success: true, invoice });
+  } catch (err) {
+    console.error('[billing/due-date]', err);
+    return res.status(400).json({ error: normalizeDatabaseError(err, 'Falha ao alterar vencimento.') });
+  }
+});
+
+app.patch('/internal/platform/tenants/:tenantId/subscription/plan', requireConsoleAccess, async (req, res) => {
+  try {
+    const tenantId = normalizeText(req.params?.tenantId);
+    const planCode = normalizeText(req.body?.planCode || req.body?.plan);
+    if (!tenantId || !planCode) {
+      return res.status(400).json({ error: 'tenantId e planCode são obrigatórios.' });
+    }
+    const result = await platformBilling.updateSubscriptionPlan({
+      tenantId,
+      planCode,
+      actor: req.platformActor,
+    });
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    console.error('[billing/plan]', err);
+    return res.status(400).json({ error: normalizeDatabaseError(err, 'Falha ao alterar plano.') });
+  }
+});
+
+app.post('/internal/platform/tenants/:tenantId/invoices/:invoiceId/discount', requireConsoleAccess, async (req, res) => {
+  try {
+    const tenantId = normalizeText(req.params?.tenantId);
+    const invoiceId = normalizeText(req.params?.invoiceId);
+    const discountCents = Number(req.body?.discountCents ?? req.body?.discount_cents ?? 0);
+    if (!tenantId || !invoiceId) {
+      return res.status(400).json({ error: 'tenantId e invoiceId são obrigatórios.' });
+    }
+    const invoice = await platformBilling.applyInvoiceDiscount({
+      tenantId,
+      invoiceId,
+      discountCents,
+      notes: normalizeText(req.body?.notes || ''),
+      actor: req.platformActor,
+    });
+    return res.status(200).json({ success: true, invoice });
+  } catch (err) {
+    console.error('[billing/discount]', err);
+    return res.status(400).json({ error: normalizeDatabaseError(err, 'Falha ao aplicar desconto.') });
+  }
+});
+
+app.post('/internal/platform/billing/evaluate', requireConsoleAccess, async (req, res) => {
+  try {
+    const result = await platformBilling.evaluateBillingStatus({
+      actorId: req.platformActor?.id || null,
+    });
+    return res.status(200).json({
+      ok: true,
+      evaluated: true,
+      summary: {
+        evaluated: result.evaluated ?? 0,
+        updated: result.updated ?? 0,
+        alertsCreated: result.alertsCreated ?? 0,
+        asOf: result.asOf ?? null,
+        skipped: Boolean(result.skipped),
+      },
+    });
+  } catch (err) {
+    console.error('[billing/evaluate]', err);
+    return res.status(400).json({
+      ok: false,
+      error: normalizeDatabaseError(err, 'Falha ao avaliar status de cobrança.'),
     });
   }
 });
@@ -2503,6 +2713,15 @@ app.post('/api/signature/webhook', (req, res) => {
     console.error('[signature-webhook]', err);
     return res.status(400).json({ error: err?.message || 'Payload inválido.' });
   }
+});
+
+/** Rotas internas desconhecidas — sempre JSON (evita "Cannot POST" em HTML no frontend). */
+app.use('/internal/platform', (req, res) => {
+  res.status(404).json({
+    ok: false,
+    error: `Rota não encontrada: ${req.method} ${req.originalUrl}`,
+    hint: 'Reinicie a Admin API local com npm run server:restart se a rota foi adicionada recentemente.',
+  });
 });
 
 const httpServer = app.listen(PORT, () => {

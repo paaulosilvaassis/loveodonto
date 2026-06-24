@@ -1,6 +1,6 @@
 import { getTenantContext } from './tenantContextService.js';
 
-const BLOCKED_STATUSES = new Set(['blocked', 'suspended', 'inactive', 'canceled']);
+const BLOCKED_STATUSES = new Set(['blocked', 'billing_blocked', 'suspended', 'inactive', 'canceled']);
 
 function normalizeStatus(value) {
   return String(value || '').trim().toLowerCase();

@@ -1548,6 +1548,24 @@ const migrations = {
     };
     return backfillClinicalGuideImages(next);
   },
+  /**
+   * 57: Alinha tenant_id dos pacientes com a clínica ativa (legado tenant-1 → SaaS UUID).
+   */
+  57: (db) => {
+    if (!db || typeof db !== 'object') return { ...db, version: 57 };
+    const tenants = Array.isArray(db.tenants) ? db.tenants : [];
+    const primaryTenantId = String(tenants[0]?.id || '').trim();
+    if (!primaryTenantId) return { ...db, version: 57 };
+    const patients = (db.patients || []).map((patient) => {
+      const current = String(patient?.tenant_id || '').trim();
+      if (!current) return { ...patient, tenant_id: primaryTenantId };
+      if (tenants.length === 1 && current === 'tenant-1' && primaryTenantId !== 'tenant-1') {
+        return { ...patient, tenant_id: primaryTenantId };
+      }
+      return patient;
+    });
+    return { ...db, patients, version: 57 };
+  },
 };
 
 /** Categorias padrão para Contas a Pagar (usado em migration 32 e applyPostMigrationFixes) */
