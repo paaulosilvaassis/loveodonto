@@ -118,6 +118,16 @@ export async function provisionCollaboratorSystemAccess(payload) {
   return postJson('/internal/app/collaborators/provision', payload);
 }
 
+export async function provisionCollaboratorAccessById(collaboratorId, payload) {
+  const id = String(collaboratorId || '').trim();
+  if (!id) throw new Error('collaboratorId é obrigatório.');
+  return postJson(`/internal/app/collaborators/${encodeURIComponent(id)}/provision-access`, {
+    ...payload,
+    collaborator_id: id,
+    create_system_access: payload?.create_system_access !== false,
+  });
+}
+
 export async function linkCollaboratorTenantAccess(payload) {
   return postJson('/internal/app/collaborators/link', payload);
 }

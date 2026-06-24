@@ -845,24 +845,30 @@ async function resolveAuthUserForInvite({
   collaboratorFullName,
 }) {
   let authUser = await findAuthUserByEmail(normalizedEmail);
-  if (authUser?.id || !sendInvite) {
-    return { authUser, inviteDelivery: null };
-  }
+  const authUserExisted = Boolean(authUser?.id);
+  let inviteDelivery = null;
 
-  const inviteDelivery = await sendCollaboratorInvite({
-    email: normalizedEmail,
-    tenantId,
-    role,
-    collaboratorId,
-    collaboratorName: collaboratorFullName,
-    userName: collaboratorFullName || normalizedEmail,
-    profileRole: role,
-  });
-
-  if (inviteDelivery?.user?.id) {
-    authUser = inviteDelivery.user;
-  } else {
-    authUser = await findAuthUserByEmail(normalizedEmail);
+  if (sendInvite) {
+    console.log('[COLLAB_ACCESS] sending invite', {
+      email: maskEmail(normalizedEmail),
+      tenantId,
+      collaboratorId,
+      authUserExisted,
+    });
+    inviteDelivery = await sendCollaboratorInvite({
+      email: normalizedEmail,
+      tenantId,
+      role,
+      collaboratorId,
+      collaboratorName: collaboratorFullName,
+      userName: collaboratorFullName || normalizedEmail,
+      profileRole: role,
+    });
+    if (inviteDelivery?.user?.id) {
+      authUser = inviteDelivery.user;
+    } else if (!authUser?.id) {
+      authUser = await findAuthUserByEmail(normalizedEmail);
+    }
   }
 
   if (!authUser?.id) {
@@ -872,7 +878,32 @@ async function resolveAuthUserForInvite({
     );
   }
 
-  return { authUser, inviteDelivery };
+  return { authUser, inviteDelivery, authUserExisted };
+}
+
+function formatCollaboratorProvisionResponse(provisioned, { authUserExisted = false } = {}) {
+  const inviteStatus = normalizeInvitationStatus(
+    provisioned.tenantUser?.invitation_status
+    || provisioned.invitation?.status
+    || 'none',
+  );
+  const emailSent = isInviteEmailDelivered(provisioned.inviteDelivery);
+  const message = authUserExisted
+    ? 'Usuário já existia. Acesso vinculado e convite reenviado.'
+    : 'Colaborador criado e convite de acesso enviado.';
+  return {
+    ok: true,
+    success: true,
+    authUserId: provisioned.tenantUser?.user_id || null,
+    tenantUserId: provisioned.tenantUser?.id || null,
+    emailSent,
+    inviteStatus,
+    linkedExisting: Boolean(authUserExisted),
+    message,
+    tenant_user: provisioned.tenantUser,
+    invitation: provisioned.invitation,
+    invite_delivery: provisioned.inviteDelivery || null,
+  };
 }
 
 async function provisionCollaboratorAccess({
@@ -884,6 +915,11 @@ async function provisionCollaboratorAccess({
   profileRole,
   sendInvite = true,
 }) {
+  console.log('[COLLAB_ACCESS] provisioning auth user', {
+    collaboratorId,
+    tenantId,
+    email: maskEmail(email),
+  });
   const actorTenantUser = await getTenantAdminActorOrThrow(actorAuthUserId, tenantId);
   const resolvedTenantId = actorTenantUser.tenant_id;
   const normalizedEmail = normalizeEmail(email);
@@ -894,13 +930,22 @@ async function provisionCollaboratorAccess({
 
   await assertEmailAvailableForTenantInvite(resolvedTenantId, normalizedEmail, { collaboratorId });
 
-  const { authUser, inviteDelivery: earlyInviteDelivery } = await resolveAuthUserForInvite({
+  const {
+    authUser,
+    inviteDelivery: earlyInviteDelivery,
+    authUserExisted = false,
+  } = await resolveAuthUserForInvite({
     normalizedEmail,
     sendInvite,
     tenantId: resolvedTenantId,
     role: normalizedRole,
     collaboratorId,
     collaboratorFullName,
+  });
+
+  console.log('[COLLAB_ACCESS] linking tenant user', {
+    collaboratorId,
+    authUserId: authUser?.id || null,
   });
 
   const tenantUser = await upsertTenantUserAccess({
@@ -915,21 +960,10 @@ async function provisionCollaboratorAccess({
   });
 
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  let inviteDelivery = earlyInviteDelivery;
-  let invitationStatus = 'pending';
+  const inviteDelivery = earlyInviteDelivery;
+  let invitationStatus = sendInvite ? 'pending' : 'none';
 
   if (sendInvite) {
-    if (!inviteDelivery) {
-      inviteDelivery = await sendCollaboratorInvite({
-        email: normalizedEmail,
-        tenantId: resolvedTenantId,
-        role: normalizedRole,
-        collaboratorId,
-        collaboratorName: collaboratorFullName,
-        userName: collaboratorFullName || normalizedEmail,
-        profileRole: normalizedRole,
-      });
-    }
     invitationStatus = isInviteEmailDelivered(inviteDelivery) ? 'sent' : 'pending';
   }
 
@@ -944,6 +978,7 @@ async function provisionCollaboratorAccess({
     expiresAt,
   });
 
+  let finalTenantUser = tenantUser;
   if (sendInvite) {
     const { data: updatedTenantUser, error: updatedTenantUserError } = await supabase
       .from('tenant_users')
@@ -953,12 +988,23 @@ async function provisionCollaboratorAccess({
       .single();
     if (updatedTenantUserError) {
       if (!isMissingInvitationStatusColumnError(updatedTenantUserError)) throw updatedTenantUserError;
-      return { tenantUser, invitation, inviteDelivery };
+    } else {
+      finalTenantUser = updatedTenantUser;
     }
-    return { tenantUser: updatedTenantUser, invitation, inviteDelivery };
   }
 
-  return { tenantUser, invitation, inviteDelivery: null };
+  console.log('[COLLAB_ACCESS] done', {
+    collaboratorId,
+    tenantUserId: finalTenantUser?.id,
+    inviteStatus: invitationStatus,
+  });
+
+  return {
+    tenantUser: finalTenantUser,
+    invitation,
+    inviteDelivery: inviteDelivery || null,
+    authUserExisted,
+  };
 }
 
 async function createTenantUserFromApp({
@@ -1394,29 +1440,41 @@ app.post('/internal/app/collaborators/link', requireAppUser, async (req, res) =>
   }
 });
 
-app.post('/internal/app/collaborators/provision', requireAppUser, async (req, res) => {
+async function handleCollaboratorProvisionAccess(req, res) {
   try {
     const explicitTenantId = normalizeText(req.body?.tenant_id);
     const createSystemAccess = Boolean(req.body?.create_system_access);
-    const collaboratorId = normalizeText(req.body?.collaborator_id);
-    const collaboratorFullName = normalizeText(req.body?.collaborator_full_name);
+    const collaboratorId = normalizeText(req.body?.collaborator_id || req.params?.collaboratorId);
+    const collaboratorFullName = normalizeText(
+      req.body?.collaborator_full_name || req.body?.full_name || req.body?.fullName,
+    );
     const email = normalizeEmail(req.body?.email);
-    const profileRoleRaw = normalizeText(req.body?.profile_role);
+    const profileRoleRaw = normalizeText(req.body?.profile_role || req.body?.role);
     const sendInvite = req.body?.send_invite !== false;
 
     if (!createSystemAccess) {
       return res.status(200).json({
+        ok: true,
         success: true,
         create_system_access: false,
         message: 'Colaborador criado sem acesso ao sistema.',
       });
     }
     if (!email) {
-      return res.status(400).json({ error: 'email é obrigatório quando create_system_access=true.' });
+      return res.status(400).json({ ok: false, error: 'E-mail inválido ou ausente. Informe um e-mail válido para criar acesso.' });
     }
     if (!profileRoleRaw) {
-      return res.status(400).json({ error: 'profile_role é obrigatório quando create_system_access=true.' });
+      return res.status(400).json({ ok: false, error: 'profile_role é obrigatório quando create_system_access=true.' });
     }
+    if (!collaboratorId) {
+      return res.status(400).json({ ok: false, error: 'collaborator_id é obrigatório.' });
+    }
+
+    console.log('[COLLAB_ACCESS] creating collaborator access', {
+      collaboratorId,
+      tenantId: explicitTenantId,
+      email: maskEmail(email),
+    });
 
     const provisioned = await provisionCollaboratorAccess({
       actorAuthUserId: req.appAuthUser.id,
@@ -1428,21 +1486,20 @@ app.post('/internal/app/collaborators/provision', requireAppUser, async (req, re
       sendInvite,
     });
 
-    return res.status(200).json({
-      success: true,
-      create_system_access: true,
-      tenant_user: provisioned.tenantUser,
-      invitation: provisioned.invitation,
-      invite_delivery: provisioned.inviteDelivery || null,
-      email_sent: isInviteEmailDelivered(provisioned.inviteDelivery),
-    });
+    return res.status(200).json(formatCollaboratorProvisionResponse(provisioned, {
+      authUserExisted: provisioned.authUserExisted,
+    }));
   } catch (err) {
-    console.error('[app-collaborators-provision]', err);
+    console.error('[COLLAB_ACCESS] error', err);
     return res.status(400).json({
+      ok: false,
       error: normalizeDatabaseError(err, 'Falha ao provisionar acesso do colaborador.'),
     });
   }
-});
+}
+
+app.post('/internal/app/collaborators/provision', requireAppUser, handleCollaboratorProvisionAccess);
+app.post('/internal/app/collaborators/:collaboratorId/provision-access', requireAppUser, handleCollaboratorProvisionAccess);
 
 /**
  * Persistência canónica (SaaS): credenciais, perfil e overrides de permissão no Supabase Auth + tenant_users.

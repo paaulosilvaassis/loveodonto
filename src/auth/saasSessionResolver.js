@@ -16,6 +16,7 @@ import {
   isMasterMembershipRole,
   normalizeSaasBootstrapRole,
 } from '../utils/rbacHelpers.js';
+import { resolveSessionDisplayName } from '../utils/userDisplayName.js';
 
 export const SESSION_KEY = 'appgestaoodonto.session';
 const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
@@ -181,7 +182,7 @@ function buildResolvedUser(supaSession, bootstrap) {
     : bootstrapRole;
   return {
     id: supaSession.user.id,
-    name: supaSession.user.user_metadata?.full_name || supaSession.user.email || 'Usuário',
+    name: resolveSessionDisplayName(supaSession.user, bootstrap) || 'Usuário',
     email: supaSession.user.email || '',
     role,
     saasAppRole: saasAppRole || bootstrapRole,

@@ -27,6 +27,7 @@ import {
   updateCollaboratorRelationships,
   updateCollaboratorWorkHours,
   uploadCollaboratorPhoto,
+  backfillCollaboratorsPendingAccess,
 } from '../services/collaboratorService.js';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import { formatCep, formatCpf, formatPhone, validateFileMeta } from '../utils/validators.js';
@@ -64,7 +65,6 @@ const cadastroSections = [
   'Características',
   'Dados Adicionais',
   'Convênios',
-  'Dados de Acesso',
 ];
 
 const defaultHours = [
@@ -205,6 +205,34 @@ export default function CollaboratorsPage() {
     refreshTenantAccess();
   }, [refreshTenantAccess]);
 
+  useEffect(() => {
+    if (!user?.tenantId || !canEditAcessos) return;
+    const flagKey = `collab-access-backfill:${user.tenantId}`;
+    try {
+      if (sessionStorage.getItem(flagKey) === 'done') return;
+    } catch {
+      return;
+    }
+    backfillCollaboratorsPendingAccess(user, { provisionMissing: false })
+      .then((result) => {
+        if ((result.linked || 0) > 0) {
+          refreshTenantAccess();
+        }
+        try {
+          sessionStorage.setItem(flagKey, 'done');
+        } catch {
+          /* ignore */
+        }
+      })
+      .catch(() => {
+        try {
+          sessionStorage.setItem(flagKey, 'done');
+        } catch {
+          /* ignore */
+        }
+      });
+  }, [user?.tenantId, canEditAcessos, refreshTenantAccess]);
+
   const resolveCollaboratorTenantAccess = useCallback(
     (item) => {
       if (!item) return null;
@@ -291,7 +319,7 @@ export default function CollaboratorsPage() {
           relationships: editingSection === 'Relacionamentos' ? prev.relationships : data.relationships,
           characteristics: editingSection === 'Características' ? prev.characteristics : data.characteristics,
           additional: editingSection === 'Dados Adicionais' ? prev.additional : data.additional,
-          access: editingSection === 'Dados de Acesso' ? prev.access : data.access,
+          access: data.access,
           education: pickEducation(),
           phones: pickPhones(),
           addresses: pickAddresses(),
@@ -414,16 +442,20 @@ export default function CollaboratorsPage() {
     setError('');
     refreshCollaboratorDraft(newId);
     await refreshTenantAccess();
+    if (meta.successMessage) {
+      setSuccess(meta.successMessage);
+      return;
+    }
     if (meta.duplicateEmail) {
       setSuccess('Colaborador cadastrado. Este e-mail já possui acesso nesta clínica.');
       return;
     }
     if (meta.noAccess) {
-      setSuccess('Colaborador cadastrado sem acesso ao sistema, pois nenhum e-mail foi informado.');
+      setSuccess('Colaborador cadastrado sem acesso ao sistema.');
       return;
     }
     if (meta.systemAccess && meta.inviteEmail) {
-      setSuccess('Colaborador cadastrado com sucesso. Um convite de acesso foi enviado para o e-mail informado.');
+      setSuccess('Colaborador criado e convite de acesso enviado.');
       return;
     }
     if (meta.inviteFailed) {
@@ -616,10 +648,6 @@ export default function CollaboratorsPage() {
       if (section === 'Relacionamentos') updateCollaboratorRelationships(user, selectedId, draft.relationships);
       if (section === 'Características') updateCollaboratorCharacteristics(user, selectedId, draft.characteristics);
       if (section === 'Dados Adicionais') updateCollaboratorAdditional(user, selectedId, draft.additional);
-      if (section === 'Dados de Acesso') {
-        updateCollaboratorAccess(user, selectedId, draft.access);
-        setActiveTab('acessos');
-      }
       setEditingSection('');
       refreshCollaboratorDraft();
       setSuccess('Dados salvos com sucesso.');
@@ -1152,28 +1180,6 @@ export default function CollaboratorsPage() {
                 ))}
               </ul>
             </div>
-          </div>
-        )}
-
-        {activeSection === 'Dados de Acesso' && (
-          <div className="form-grid">
-            <Field label="Usuário vinculado">
-              <select
-                value={draft.access.userId || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, access: { ...prev.access, userId: event.target.value } }))}
-                disabled={!canAccess || editingSection !== 'Dados de Acesso'}
-              >
-                <option value="">Selecione um usuário para login</option>
-                {db.users.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <p className="muted" style={{ marginTop: '0.25rem' }}>
-              Perfil e permissões são definidos na aba <strong>Acessos</strong>.
-            </p>
           </div>
         )}
       </div>

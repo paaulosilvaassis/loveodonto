@@ -2,6 +2,17 @@ import { isAgendaProfessional } from '../constants/collaboratorRhCatalog.js';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Perfis disponíveis na etapa de acesso ao sistema (slug → tenant_users.role). */
+export const COLLABORATOR_PROFILE_ROLE_OPTIONS = [
+  { value: 'master', label: 'Administrador (MASTER)' },
+  { value: 'gerente', label: 'Gestor' },
+  { value: 'dentista', label: 'Dentista' },
+  { value: 'atendimento', label: 'Recepção / Atendimento' },
+  { value: 'financeiro', label: 'Financeiro' },
+  { value: 'comercial', label: 'Comercial' },
+  { value: 'personalizado', label: 'Personalizado' },
+];
+
 export function isCollaboratorEmailValid(email) {
   const normalized = String(email || '').trim();
   if (!normalized) return false;
@@ -38,6 +49,14 @@ export function resolveCollaboratorProfileRole({ rhCategoria, cargo } = {}) {
     || category.includes('apoio clinico')
   ) {
     return 'dentista';
+  }
+
+  if (
+    category.includes('comercial')
+    || roleCargo.includes('comercial')
+    || roleCargo.includes('vendas')
+  ) {
+    return 'comercial';
   }
 
   if (

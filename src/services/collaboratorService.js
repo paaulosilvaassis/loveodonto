@@ -12,7 +12,24 @@ import {
   isCollaboratorEmailValid,
   resolveCollaboratorProfileRole,
 } from '../utils/collaboratorAccessRole.js';
-import { provisionCollaboratorSystemAccess, linkCollaboratorTenantAccess } from './collaboratorAccessProvisionService.js';
+import { provisionCollaboratorSystemAccess, linkCollaboratorTenantAccess, listTenantUsersAccess } from './collaboratorAccessProvisionService.js';
+
+function syncLocalCollaboratorAccess(collaboratorId, tenantUser, profileRole) {
+  const userId = String(tenantUser?.user_id || '').trim();
+  if (!userId) return;
+  const role = String(profileRole || tenantUser?.role || tenantUser?.role_slug || 'atendimento').trim();
+  withDb((db) => {
+    db.collaboratorAccess = (db.collaboratorAccess || []).filter((item) => item.collaboratorId !== collaboratorId);
+    db.collaboratorAccess.push({
+      collaboratorId,
+      userId,
+      role,
+      permissions: [],
+      lastLoginAt: '',
+    });
+    return db;
+  });
+}
 
 /** Alterar estatus sozinho não exige revalidar RH completo (evita bloquear registros legados). */
 const RH_PROFILE_KEYS = new Set([
@@ -359,6 +376,17 @@ export const createCollaborator = (user, payload) => {
  * Falhas de provisionamento são retornadas em accessError (não silenciosas).
  */
 export async function createCollaboratorWithSystemAccess(user, payload, options = {}) {
+  const requireSystemAccess = options.require_system_access !== false
+    && options.allow_system_access !== false;
+  const emailRaw = String(payload.email || '').trim().toLowerCase();
+  const hasValidEmail = isCollaboratorEmailValid(emailRaw);
+
+  if (requireSystemAccess && !hasValidEmail) {
+    const err = new Error('E-mail válido é obrigatório para colaboradores com acesso ao sistema.');
+    err.code = 'EMAIL_REQUIRED_FOR_ACCESS';
+    throw err;
+  }
+
   const collaborator = createCollaborator(user, payload);
   const email = String(collaborator.email || '').trim().toLowerCase();
 
@@ -372,10 +400,13 @@ export async function createCollaboratorWithSystemAccess(user, payload, options 
   }
 
   const tenantId = String(options.tenant_id || user?.tenantId || '').trim();
-  const profileRole = resolveCollaboratorProfileRole({
-    rhCategoria: collaborator.rhCategoria,
-    cargo: collaborator.cargo,
-  });
+  const profileRole = String(
+    options.profile_role
+    || resolveCollaboratorProfileRole({
+      rhCategoria: collaborator.rhCategoria,
+      cargo: collaborator.cargo,
+    }),
+  ).trim();
 
   try {
     const systemAccess = await provisionCollaboratorSystemAccess({
@@ -384,14 +415,16 @@ export async function createCollaboratorWithSystemAccess(user, payload, options 
       collaborator_full_name: collaborator.nomeCompleto || collaborator.apelido || email,
       create_system_access: true,
       email,
-      profile_role: options.profile_role || profileRole,
+      profile_role: profileRole,
       send_invite: options.send_invite !== false,
     });
+    syncLocalCollaboratorAccess(collaborator.id, systemAccess?.tenant_user, profileRole);
     return {
       collaborator,
       systemAccess,
       noAccess: false,
       accessError: null,
+      linkedExisting: Boolean(systemAccess?.linkedExisting),
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err || 'Falha ao provisionar acesso.');
@@ -404,6 +437,7 @@ export async function createCollaboratorWithSystemAccess(user, payload, options 
           email,
           full_name: collaborator.nomeCompleto || collaborator.apelido || email,
         });
+        syncLocalCollaboratorAccess(collaborator.id, linked?.tenant_user, profileRole);
         return {
           collaborator,
           systemAccess: linked,
@@ -436,6 +470,95 @@ export async function createCollaboratorWithSystemAccess(user, payload, options 
       accessError,
     };
   }
+}
+
+/**
+ * Backfill opcional: vincula ou provisiona acesso para colaboradores com e-mail e sem tenant_user.
+ */
+export async function backfillCollaboratorsPendingAccess(user, { provisionMissing = false } = {}) {
+  const tenantId = String(user?.tenantId || '').trim();
+  if (!tenantId) return { linked: 0, provisioned: 0, skipped: 0, errors: [] };
+
+  const collaborators = listCollaborators().filter((item) => isCollaboratorEmailValid(item.email));
+  if (collaborators.length === 0) return { linked: 0, provisioned: 0, skipped: 0, errors: [] };
+
+  let users = [];
+  try {
+    const result = await listTenantUsersAccess(tenantId);
+    users = result.users || [];
+  } catch (err) {
+    return {
+      linked: 0,
+      provisioned: 0,
+      skipped: collaborators.length,
+      errors: [err?.message || 'Falha ao listar usuários do tenant.'],
+    };
+  }
+
+  const byCollaboratorId = new Map(
+    users.filter((row) => row.collaborator_id).map((row) => [row.collaborator_id, row]),
+  );
+  const byEmail = new Map(
+    users.map((row) => [String(row.email || '').trim().toLowerCase(), row]),
+  );
+
+  let linked = 0;
+  let provisioned = 0;
+  let skipped = 0;
+  const errors = [];
+
+  for (const collaborator of collaborators) {
+    const email = String(collaborator.email || '').trim().toLowerCase();
+    if (byCollaboratorId.has(collaborator.id)) {
+      skipped += 1;
+      continue;
+    }
+
+    const existingByEmail = byEmail.get(email);
+    if (existingByEmail?.id) {
+      try {
+        await linkCollaboratorTenantAccess({
+          tenant_id: tenantId,
+          collaborator_id: collaborator.id,
+          email,
+          full_name: collaborator.nomeCompleto || collaborator.apelido || email,
+        });
+        syncLocalCollaboratorAccess(collaborator.id, existingByEmail, existingByEmail.role);
+        linked += 1;
+      } catch (err) {
+        errors.push(`${collaborator.nomeCompleto || collaborator.id}: ${err?.message || 'falha ao vincular'}`);
+      }
+      continue;
+    }
+
+    if (!provisionMissing) {
+      skipped += 1;
+      continue;
+    }
+
+    const profileRole = resolveCollaboratorProfileRole({
+      rhCategoria: collaborator.rhCategoria,
+      cargo: collaborator.cargo,
+    });
+
+    try {
+      const result = await provisionCollaboratorSystemAccess({
+        tenant_id: tenantId,
+        collaborator_id: collaborator.id,
+        collaborator_full_name: collaborator.nomeCompleto || collaborator.apelido || email,
+        create_system_access: true,
+        email,
+        profile_role: profileRole,
+        send_invite: true,
+      });
+      syncLocalCollaboratorAccess(collaborator.id, result?.tenant_user, profileRole);
+      provisioned += 1;
+    } catch (err) {
+      errors.push(`${collaborator.nomeCompleto || collaborator.id}: ${err?.message || 'falha ao provisionar'}`);
+    }
+  }
+
+  return { linked, provisioned, skipped, errors };
 }
 
 export const updateCollaborator = (user, collaboratorId, payload) => {

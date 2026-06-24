@@ -1,8 +1,8 @@
 const INVITE_LABELS = {
   no_access: 'Sem acesso',
   sent: 'Convite enviado',
-  pending: 'Convite enviado',
-  active: 'Ativo',
+  pending: 'Convite pendente',
+  active: 'Acesso ativo',
   expired: 'Convite expirado',
   revoked: 'Inativo',
   failed: 'Erro no envio',
@@ -36,8 +36,11 @@ export function resolveUserInviteDisplayStatus({
   ) {
     return { key: 'expired', label: INVITE_LABELS.expired };
   }
-  if (invStatus === 'sent' || invStatus === 'pending') {
+  if (invStatus === 'sent') {
     return { key: 'sent', label: INVITE_LABELS.sent };
+  }
+  if (invStatus === 'pending') {
+    return { key: 'pending', label: INVITE_LABELS.pending };
   }
   if (invStatus === 'revoked') {
     return { key: 'revoked', label: INVITE_LABELS.revoked };

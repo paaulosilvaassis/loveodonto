@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../auth/useAuth.js';
 import { 
   Area, 
   AreaChart, 
@@ -71,6 +72,7 @@ function DashboardChartTooltip({ active, payload, label }) {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const clinic = useClinicSummary();
   const kpiGridRef = useRef(null);
   const [db, setDb] = useState(null);
@@ -169,17 +171,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const fallbackName = currentUser?.name || '';
+    const fallbackName = user?.name || currentUser?.name || '';
 
     const loadNomeUsuario = async () => {
       try {
-        const nome = await getNomeUsuario(fallbackName);
+        const nome = await getNomeUsuario({
+          userId: user?.id || session?.userId,
+          email: user?.email || currentUser?.email,
+          fallbackName,
+        });
         if (!cancelled) {
           setNomeUsuario(nome);
         }
       } catch {
         if (!cancelled) {
-          setNomeUsuario(fallbackName || 'Usuário');
+          const safeFallback = fallbackName && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fallbackName)
+            ? fallbackName
+            : 'Usuário';
+          setNomeUsuario(safeFallback);
         }
       }
     };
@@ -189,7 +198,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.name]);
+  }, [user?.id, user?.name, user?.email, currentUser?.name, currentUser?.email, session?.userId]);
 
   const hasOpenTickets = useMemo(() => {
     if (!session?.userId) return false;

@@ -5,6 +5,7 @@ import { createCollaboratorWithSystemAccess } from '../services/collaboratorServ
 vi.mock('../services/collaboratorAccessProvisionService.js', () => ({
   provisionCollaboratorSystemAccess: vi.fn(),
   linkCollaboratorTenantAccess: vi.fn(),
+  listTenantUsersAccess: vi.fn(),
 }));
 
 import {
@@ -37,10 +38,19 @@ describe('createCollaboratorWithSystemAccess', () => {
     vi.mocked(linkCollaboratorTenantAccess).mockReset();
   });
 
-  it('sem e-mail não chama provisionamento e marca noAccess', async () => {
-    const result = await createCollaboratorWithSystemAccess(admin, basePayload);
+  it('exige e-mail quando require_system_access=true', async () => {
+    await expect(
+      createCollaboratorWithSystemAccess(admin, basePayload, { require_system_access: true }),
+    ).rejects.toThrow(/e-mail válido/i);
+    expect(provisionCollaboratorSystemAccess).not.toHaveBeenCalled();
+  });
+
+  it('sem e-mail e sem exigência de acesso não chama provisionamento', async () => {
+    const result = await createCollaboratorWithSystemAccess(admin, basePayload, {
+      require_system_access: false,
+      allow_system_access: false,
+    });
     expect(result.noAccess).toBe(true);
-    expect(result.systemAccess).toBeNull();
     expect(provisionCollaboratorSystemAccess).not.toHaveBeenCalled();
   });
 

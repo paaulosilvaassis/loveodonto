@@ -4,6 +4,7 @@ import {
   provisionCollaboratorSystemAccess,
   resendCollaboratorInvite,
   setCollaboratorSystemAccess,
+  removeTenantUserAccess,
 } from '../../services/collaboratorAccessProvisionService.js';
 import { resolveCollaboratorProfileRole } from '../../utils/collaboratorAccessRole.js';
 import { notifyInviteDeliveryResult } from '../../utils/inviteDeliveryFeedback.js';
@@ -61,7 +62,7 @@ function CollaboratorAccessActions({
   const showResend = canResendInvite(tenantUser, email);
   const showToggle = Boolean(tenantUser?.id);
   const showProvision = !tenantUser?.id && Boolean(email);
-  const showMenu = showResend || showProvision;
+  const showMenu = showResend || showProvision || Boolean(tenantUser?.id);
 
   const runAction = async (action) => {
     if (disabled || busy) return;
@@ -118,6 +119,14 @@ function CollaboratorAccessActions({
       onCopyLink: copyInviteLink,
       pushToast: () => {},
     });
+  });
+
+  const handleUnlinkAccess = () => runAction(async () => {
+    if (!tenantUser?.id) return;
+    if (!window.confirm('Desvincular o acesso deste colaborador? O usuário deixará de aparecer em Usuários e acessos desta clínica.')) {
+      return;
+    }
+    await removeTenantUserAccess(tenantUser.id, { tenant_id: tenantId });
   });
 
   return (
@@ -223,6 +232,21 @@ function CollaboratorAccessActions({
                 >
                   <Mail size={14} aria-hidden />
                   Reenviar convite
+                </button>
+              ) : null}
+              {tenantUser?.id ? (
+                <button
+                  type="button"
+                  className="access-user-row-menu-item"
+                  role="menuitem"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleUnlinkAccess();
+                  }}
+                  disabled={disabled || busy}
+                >
+                  <UserX size={14} aria-hidden />
+                  Desvincular acesso
                 </button>
               ) : null}
             </div>

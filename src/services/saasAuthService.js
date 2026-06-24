@@ -98,6 +98,7 @@ async function fetchSaasAccessBootstrapViaAdminApi(client, session = null) {
         tenantId,
         role: normalizeRole(json?.currentUser?.role || json?.access?.role),
         isActive: json?.access?.isActive !== false,
+        fullName: String(json?.currentUser?.fullName || json?.currentUser?.full_name || '').trim(),
       };
     } catch (err) {
       lastErr = err;

@@ -8,6 +8,7 @@
 import { loadDb, withDb } from '../db/index.js';
 import { ROLE_MASTER } from '../constants/tenantRoles.js';
 import { isMasterMembershipRole } from '../utils/rbacHelpers.js';
+import { looksLikeEmail } from '../utils/userDisplayName.js';
 
 const COLLABORATOR_PREFIX = 'col-saas-';
 
@@ -26,7 +27,17 @@ export function ensureSaasUserInLocalDb(user) {
   const authUserId = user.id;
   const tenantId = user.tenantId;
   const email = (user.email || '').trim().toLowerCase();
-  const fullName = user.name || email.split('@')[0] || 'Usuário';
+  const fullName = (() => {
+    const db = loadDb();
+    const collab = (db.collaborators || []).find(
+      (c) => (c.email || '').trim().toLowerCase() === email && email,
+    );
+    const fromRh = String(collab?.nomeCompleto || collab?.apelido || '').trim();
+    if (fromRh && !looksLikeEmail(fromRh)) return fromRh;
+    const fromUser = String(user.name || '').trim();
+    if (fromUser && !looksLikeEmail(fromUser)) return fromUser;
+    return email.split('@')[0] || 'Usuário';
+  })();
   const isMaster = user.isMaster || isMasterMembershipRole(user.role) || isMasterMembershipRole(user.saasAppRole);
   const membershipRole = isMaster ? ROLE_MASTER : (user.role || 'atendimento');
   const now = new Date().toISOString();
