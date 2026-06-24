@@ -104,6 +104,14 @@ export function buildAdminApiUrl(path) {
   return suffix;
 }
 
+/** Mensagem quando o snapshot do tenant estoura o tempo limite. */
+export function getTenantSnapshotTimeoutMessage() {
+  const hint = import.meta.env.PROD
+    ? formatAdminApiNetworkError()
+    : DEV_BACKEND_NOT_RUNNING_MSG;
+  return `Tempo esgotado ao carregar dados da clínica. ${hint}`;
+}
+
 export function getDevDirectAdminApiUrl(path) {
   const normalizedPath = String(path || '').trim();
   const suffix = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;

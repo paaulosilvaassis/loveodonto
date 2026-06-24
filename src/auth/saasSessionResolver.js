@@ -11,6 +11,7 @@
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { fetchSaasAccessBootstrap } from '../services/saasAuthService.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
+import { enrichSaasUserPrivileges, isMasterMembershipRole } from '../utils/rbacHelpers.js';
 
 export const SESSION_KEY = 'appgestaoodonto.session';
 const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
@@ -172,14 +173,14 @@ function buildResolvedUser(supaSession, bootstrap) {
     email: supaSession.user.email || '',
     role: bootstrap.role,
     has_system_access: bootstrap.isActive,
-    isMaster: bootstrap.role === 'admin',
+    isMaster: isMasterMembershipRole(bootstrap.role),
     tenantId: bootstrap.tenantId,
     authMode: 'saas',
     permissionOverrides,
   };
 }
 
-export { buildResolvedUser as buildResolvedSaasUser };
+export { buildResolvedUser as buildResolvedSaasUser, enrichSaasUserPrivileges };
 
 let inFlightResolve = null;
 

@@ -22,6 +22,8 @@ export const defaultDbState = () => ({
     cnes: '',
     nire: '',
     conselhoRegionalNumero: '',
+    responsavelTecnico: '',
+    croResponsavelTecnico: '',
     alvaraPrefeituraNumero: '',
     alvaraAutorizacao: '',
     alvaraValidade: '',

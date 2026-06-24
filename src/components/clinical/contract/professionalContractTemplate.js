@@ -32,10 +32,10 @@ function renderParagraphs(items) {
   return items.map((item) => `<p class="clause-p">${escapeHtml(item)}</p>`).join('');
 }
 
-function buildPartyQualification(clinic, patient, professional) {
+function buildPartyQualification(clinic, patient) {
   const clinicName = clinic.legalName || clinic.name;
-  const rtName = clinic.technicalResponsible || professional.name;
-  const rtCro = professional.cro;
+  const rtName = clinic.technicalResponsible;
+  const rtCro = clinic.technicalResponsibleCro;
 
   let contracted = `Pelo presente instrumento particular de prestação de serviços odontológicos, de um lado ${clinicName}`;
   if (hasText(clinic.cnpj)) {
@@ -136,19 +136,20 @@ function renderRunningHeader(clinic, meta) {
     </div>`;
 }
 
-function renderDocumentHeader(clinic, professional) {
+function renderDocumentHeader(clinic) {
   const logoBlock = clinic.logoUrl
     ? `<img src="${escapeHtml(clinic.logoUrl)}" alt="Logo da clínica" />`
+    : '';
+
+  const rtLine = hasText(clinic.technicalResponsible)
+    ? `Responsável Técnico: ${clinic.technicalResponsible}${hasText(clinic.technicalResponsibleCro) ? ` — ${clinic.technicalResponsibleCro}` : ''}`
     : '';
 
   const lines = [
     hasText(clinic.cnpj) ? `CNPJ: ${clinic.cnpj}` : '',
     clinic.address,
     hasText(clinic.phone) ? `Telefone: ${clinic.phone}` : '',
-    hasText(clinic.technicalResponsible || professional.name)
-      ? `Responsável Técnico: ${clinic.technicalResponsible || professional.name}`
-      : '',
-    hasText(professional.cro) ? professional.cro : '',
+    rtLine,
   ].filter(hasText);
 
   return `
@@ -232,8 +233,8 @@ function renderSignatures(ctx) {
         ${renderSignatureBlock({
           title: 'Responsável Técnico',
           lines: [
-            professional.name,
-            professional.cro,
+            clinic.technicalResponsible,
+            clinic.technicalResponsibleCro,
           ],
         })}
         ${renderSignatureBlock({
@@ -267,7 +268,7 @@ export function buildProfessionalContractHtml(context) {
 
   const objectText = `${legalTexts.object} Plano de tratamento: ${treatment.planName}.`;
 
-  const qualification = buildPartyQualification(clinic, patient, professional)
+  const qualification = buildPartyQualification(clinic, patient)
     .split('\n\n')
     .map((p) => `<p class="clause-p">${escapeHtml(p)}</p>`)
     .join('');
@@ -287,7 +288,7 @@ export function buildProfessionalContractHtml(context) {
 <body>
   ${renderRunningHeader(clinic, meta)}
   <div class="contract-document">
-    ${renderDocumentHeader(clinic, professional)}
+    ${renderDocumentHeader(clinic)}
 
     <div class="doc-title-block">
       <h1 class="doc-title">Contrato de Prestação de Serviços Odontológicos</h1>

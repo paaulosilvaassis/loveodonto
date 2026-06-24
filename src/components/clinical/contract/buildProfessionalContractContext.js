@@ -11,6 +11,7 @@ import {
 import { buildFinancialSection } from './clinicalContractSchedule.js';
 import { CONTRACT_STATUS_LABELS } from '../../../contracts/contractConstants.js';
 import { formatFriendlyBudgetNumber } from '../../../utils/friendlyNumbers.js';
+import { resolveClinicTechnicalResponsible } from '../../../contracts/clinicTechnicalResponsible.js';
 import { listPatientBudgetHistory } from '../../../services/clinicalBudgetLockService.js';
 
 function escapeHtml(value) {
@@ -209,6 +210,7 @@ export function buildProfessionalContractContext({
   const primaryPhone = patientPhones.find((p) => p.is_primary) || patientPhones[0];
 
   const prof = resolveProfessional(professional);
+  const { name: technicalResponsible, cro: technicalResponsibleCro } = resolveClinicTechnicalResponsible(docs, clinic);
   const procedures = budget?.procedures || [];
   const originalValue = financials?.originalValue ?? 0;
   const accepted = financials?.accepted ?? null;
@@ -236,11 +238,10 @@ export function buildProfessionalContractContext({
   const statusLabel = CONTRACT_STATUS_LABELS[statusKey] || 'Em elaboração';
 
   const legalRepresentative =
-    docs.responsavelTecnico ||
-    docs.responsavel_tecnico ||
     docs.representanteLegal ||
     clinic.representanteLegal ||
-    prof.name;
+    technicalResponsible ||
+    '';
 
   const issueIso = new Date().toISOString().slice(0, 10);
   const forumLocation = resolveClinicForumCity(mainAddress);
@@ -273,7 +274,8 @@ export function buildProfessionalContractContext({
       email: clinic.emailPrincipal || correspondence.emailPrincipal || correspondence.email || '',
       site: web.site || web.website || web.url || '',
       legalRepresentative,
-      technicalResponsible: docs.responsavelTecnico || docs.responsavel_tecnico || prof.name || '',
+      technicalResponsible,
+      technicalResponsibleCro,
     },
     patient: {
       name: profile.full_name || patientBundle?.full_name || '',

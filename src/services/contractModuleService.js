@@ -124,7 +124,7 @@ function buildSnapshots({ quoteSource, quoteId, patientId, currentUser, budgetId
     },
     professionalSnapshotJson: {
       name: currentUser?.name,
-      cro: doc.conselhoRegionalNumero || currentUser?.cro,
+      cro: currentUser?.cro || currentUser?.registroProfissional || currentUser?.conselhoNumero || '',
       userId: currentUser?.id,
     },
     clinicalSnapshotJson: {

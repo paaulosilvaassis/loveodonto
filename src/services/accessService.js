@@ -7,6 +7,7 @@ import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { logAction } from './logService.js';
 import { buildPermissionsCatalog } from '../permissions/catalog.js';
+import { ROLE_DEFAULT_PERMISSIONS } from '../permissions/roleDefaults.js';
 import { getDefaultTenant } from './tenantService.js';
 
 const ROLE_ADMIN = 'admin';
@@ -22,7 +23,7 @@ export function canManageAccess(user) {
   if (!user) return false;
   if (user.isMaster === true) return true;
   const role = (user.role || '').toLowerCase();
-  return role === ROLE_ADMIN || role === ROLE_MASTER;
+  return role === ROLE_ADMIN || role === ROLE_MASTER || role === 'owner' || role === 'gerente';
 }
 
 const ROLE_LABELS = {
@@ -59,21 +60,21 @@ export function getPermissionsCatalog() {
 export function can(user, moduleKey, actionKey) {
   if (!user || !moduleKey || !actionKey) return false;
   const db = loadDb();
-  const u = db.users?.find((x) => x.id === user.id) || user;
+  const u = resolveEffectiveUser(db, user);
   const hasAccess = u.has_system_access !== false && u.active !== false;
   if (!hasAccess) return false;
   const roleNorm = String(u.role || '').toLowerCase();
-  if (roleNorm === ROLE_ADMIN || roleNorm === 'master' || user.isMaster) return true;
+  if (roleNorm === ROLE_ADMIN || roleNorm === 'master' || roleNorm === 'owner' || u.isMaster) return true;
 
   const catalog = getPermissionsCatalog();
   const permission = catalog.find((p) => p.module_key === moduleKey && p.action_key === actionKey);
   const pid = permission?.id;
   if (!pid) return false;
 
-  const rolePerms = (db.rolePermissions || []).filter((r) => r.role === u.role).map((r) => r.permission_id);
+  const rolePerms = getRolePermissionIds(db, u.role);
   const baseAllowed = rolePerms.includes(pid);
-  const saasOverrides = user?.permissionOverrides && typeof user.permissionOverrides === 'object' && !Array.isArray(user.permissionOverrides)
-    ? user.permissionOverrides
+  const saasOverrides = u?.permissionOverrides && typeof u.permissionOverrides === 'object' && !Array.isArray(u.permissionOverrides)
+    ? u.permissionOverrides
     : null;
   if (saasOverrides && Object.prototype.hasOwnProperty.call(saasOverrides, pid)) {
     const overrideVal = saasOverrides[pid];
@@ -98,6 +99,26 @@ export function canCreateCollaborator(user) {
   return false;
 }
 
+function resolveEffectiveUser(db, user) {
+  if (!user?.id) return user;
+  const dbUser = db.users?.find((x) => x.id === user.id);
+  if (!dbUser) return user;
+  return {
+    ...dbUser,
+    role: user.role || dbUser.role,
+    isMaster: user.isMaster ?? dbUser.isMaster,
+    permissionOverrides: user.permissionOverrides ?? dbUser.permissionOverrides,
+    has_system_access: user.has_system_access ?? dbUser.has_system_access,
+    active: user.active ?? dbUser.active,
+  };
+}
+
+function getRolePermissionIds(db, role) {
+  const fromDb = (db.rolePermissions || []).filter((r) => r.role === role).map((r) => r.permission_id);
+  if (fromDb.length > 0) return fromDb;
+  return ROLE_DEFAULT_PERMISSIONS[role] || [];
+}
+
 const LEGACY_ACTION_MAP = { read: 'view', write: 'edit' };
 
 /**
@@ -107,14 +128,14 @@ const LEGACY_ACTION_MAP = { read: 'view', write: 'edit' };
 export function canByPermission(user, permission) {
   if (!user) return false;
   const db = loadDb();
-  const u = db.users?.find((x) => x.id === user.id) || user;
+  const u = resolveEffectiveUser(db, user);
   if (u.has_system_access === false || u.active === false) return false;
   const roleNorm = String(u.role || '').toLowerCase();
-  if (roleNorm === ROLE_ADMIN || roleNorm === 'master' || user.isMaster) return true;
+  if (roleNorm === ROLE_ADMIN || roleNorm === 'master' || roleNorm === 'owner' || u.isMaster) return true;
   if (permission === '*') return true;
   const [moduleKey, rawAction] = (permission || '').split(':');
   const actionKey = LEGACY_ACTION_MAP[rawAction] || rawAction;
-  if (moduleKey && actionKey) return can(user, moduleKey, actionKey);
+  if (moduleKey && actionKey) return can(u, moduleKey, actionKey);
   return false;
 }
 
@@ -123,7 +144,7 @@ export function canByPermission(user, permission) {
  */
 export function getRoleDefaultPermissionIds(role) {
   const db = loadDb();
-  return (db.rolePermissions || []).filter((r) => r.role === role).map((r) => r.permission_id);
+  return getRolePermissionIds(db, role);
 }
 
 /**
@@ -218,6 +239,13 @@ export function getUserAccess(userId) {
  * Payload: { has_system_access?, role?, overrides? } (overrides = { permission_id: boolean }).
  * Registra em access_audit_logs.
  */
+function countPrivilegedUsers(db) {
+  return (db.users || []).filter((u) => {
+    const role = String(u.role || '').toLowerCase();
+    return u.has_system_access !== false && (role === ROLE_ADMIN || role === 'master' || role === 'owner');
+  }).length;
+}
+
 export function updateUserAccess(actor, targetUserId, payload) {
   const db = loadDb();
   if (!canManageAccess(actor)) {
@@ -228,11 +256,38 @@ export function updateUserAccess(actor, targetUserId, payload) {
   const target = db.users?.find((x) => x.id === targetUserId);
   if (!target) throw new Error('Usuário não encontrado.');
 
-  /** ADMIN único: não permitir atribuir perfil Administrador a outro usuário pela UI/API. */
+  const targetRole = String(target.role || '').toLowerCase();
+  const actorIsTarget = actor.id === targetUserId;
+  const privilegedRoles = new Set([ROLE_ADMIN, 'master', 'owner']);
+
   if (payload.role === ROLE_ADMIN && targetUserId !== actor.id) {
     const err = new Error('Não é permitido atribuir o perfil Administrador.');
     err.code = 'ROLE_ADMIN_FORBIDDEN';
     throw err;
+  }
+
+  if (typeof payload.has_system_access === 'boolean' && payload.has_system_access === false) {
+    if (privilegedRoles.has(targetRole)) {
+      const remaining = countPrivilegedUsers(db) - (target.has_system_access !== false ? 1 : 0);
+      if (remaining < 1) {
+        const err = new Error('Não é possível desativar o único administrador da clínica.');
+        err.code = 'LAST_ADMIN_PROTECTED';
+        throw err;
+      }
+    }
+    if (actorIsTarget && privilegedRoles.has(targetRole)) {
+      const err = new Error('Você não pode remover seu próprio acesso administrativo.');
+      err.code = 'SELF_ADMIN_LOCKOUT';
+      throw err;
+    }
+  }
+
+  if (payload.role && privilegedRoles.has(targetRole) && payload.role !== target.role) {
+    if (actorIsTarget && countPrivilegedUsers(db) <= 1) {
+      const err = new Error('Você não pode remover seu próprio perfil administrativo por ser o único admin.');
+      err.code = 'SELF_ADMIN_LOCKOUT';
+      throw err;
+    }
   }
 
   const before = getUserAccess(targetUserId);

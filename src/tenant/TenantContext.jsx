@@ -7,11 +7,11 @@ import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
 import { isTransientAuthError } from '../auth/saasSessionResolver.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
-import { DEV_BACKEND_NOT_RUNNING_MSG } from '../config/adminApiBase.js';
+import { getTenantSnapshotTimeoutMessage } from '../config/adminApiBase.js';
 
 /** Curto o suficiente para não travar a tela; o erro oferece retry e volta ao login. */
 const TENANT_SNAPSHOT_TIMEOUT_MS = 20000;
-const TENANT_SNAPSHOT_TIMEOUT_MSG = `Tempo esgotado ao carregar dados da clínica. ${DEV_BACKEND_NOT_RUNNING_MSG}`;
+const TENANT_SNAPSHOT_TIMEOUT_MSG = getTenantSnapshotTimeoutMessage();
 
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const EMPTY_CONTEXT = {

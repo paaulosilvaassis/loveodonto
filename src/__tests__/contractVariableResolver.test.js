@@ -93,6 +93,31 @@ describe('contractVariableResolver', () => {
     });
   }
 
+  it('não usa CRO do dentista como responsável técnico quando RT não está cadastrado', () => {
+    seedBase();
+    withDb((db) => {
+      db.clinicDocumentation = {
+        ...db.clinicDocumentation,
+        responsavelTecnico: '',
+        croResponsavelTecnico: '',
+        conselhoRegionalNumero: '',
+      };
+    });
+    const { map, missing } = resolveContractVariables({
+      quoteSource: 'clinical_budget',
+      quoteId: 'apt-1',
+      patientId: 'p1',
+      currentUser: { name: 'Dr. Juliana', cro: 'CRO-MG 88888' },
+    });
+
+    expect(map['#responsavelTecnicoNome']).toBe('');
+    expect(map['#responsavelTecnicoCRO']).toBe('');
+    expect(map['#dentistaNomeCompleto']).toBe('Dr. Juliana');
+    expect(map['#dentistaConselhoNumero']).toBe('CRO-MG 88888');
+    expect(missing.some((m) => m.tag === '#responsavelTecnicoNome')).toBe(true);
+    expect(missing.some((m) => m.tag === '#responsavelTecnicoCRO')).toBe(true);
+  });
+
   it('resolve variáveis obrigatórias sem expor IDs técnicos', () => {
     seedBase();
     const { map } = resolveContractVariables({

@@ -25,6 +25,7 @@ const mockContext = {
     email: 'contato@sorriso.com',
     legalRepresentative: 'Dr. Admin',
     technicalResponsible: 'Dr. João Silva',
+    technicalResponsibleCro: 'CRO-SP 12345',
   },
   patient: {
     name: 'Maria Santos',

@@ -445,11 +445,27 @@ export default function ClinicSettingsPage() {
                     disabled={editingSection !== 'Documentação'}
                   />
                 </Field>
-                <Field label="Conselho Regional">
+                <Field label="Responsável técnico (nome)">
                   <input
-                    value={draft.documentation.conselhoRegionalNumero}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, conselhoRegionalNumero: event.target.value } }))}
+                    value={draft.documentation.responsavelTecnico || ''}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, responsavelTecnico: event.target.value } }))}
                     disabled={editingSection !== 'Documentação'}
+                    placeholder="Nome completo do responsável técnico (CRO)"
+                  />
+                </Field>
+                <Field label="CRO do responsável técnico">
+                  <input
+                    value={draft.documentation.croResponsavelTecnico || draft.documentation.conselhoRegionalNumero || ''}
+                    onChange={(event) => setDraft((prev) => ({
+                      ...prev,
+                      documentation: {
+                        ...prev.documentation,
+                        croResponsavelTecnico: event.target.value,
+                        conselhoRegionalNumero: event.target.value,
+                      },
+                    }))}
+                    disabled={editingSection !== 'Documentação'}
+                    placeholder="Ex.: CRO-MG 12345"
                   />
                 </Field>
                 <Field label="Observações">

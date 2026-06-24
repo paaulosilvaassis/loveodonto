@@ -32,7 +32,7 @@ import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import { formatCep, formatCpf, formatPhone, validateFileMeta } from '../utils/validators.js';
 import { can } from '../permissions/permissions.js';
 import { canManageAccess, canCreateCollaborator } from '../services/accessService.js';
-import AccessTab from '../components/access/AccessTab.jsx';
+import CollaboratorPermissionsPanel from '../components/collaborators/CollaboratorPermissionsPanel.jsx';
 import { getUserAccess } from '../services/accessService.js';
 import { Eye, Pencil, UserCheck, UserX } from 'lucide-react';
 import { NewCollaboratorDialog } from '../components/collaborators/CollaboratorCreateModal.jsx';
@@ -50,7 +50,7 @@ const topTabs = [
   { value: 'admissao', label: 'Dados Admissionais' },
   { value: 'horarios', label: 'Horários' },
   { value: 'financeiro', label: 'Financeiro' },
-  { value: 'acessos', label: 'Acessos' },
+  { value: 'acessos', label: 'Acessos e permissões' },
 ];
 
 const cadastroSections = [
@@ -182,7 +182,8 @@ export default function CollaboratorsPage() {
   }, []);
 
   const refreshTenantAccess = useCallback(async () => {
-    if (!user?.tenantId || !canEditAcessos) return;
+    if (!user?.tenantId) return;
+    if (!canEditAcessos && !canAccess && !isEditor) return;
     try {
       const { users = [] } = await reconcileCollaboratorTenantLinks(user.tenantId, listCollaborators());
       const byCollaboratorId = {};
@@ -198,7 +199,7 @@ export default function CollaboratorsPage() {
         console.debug('[CollaboratorsPage] falha ao carregar acessos do tenant', err);
       }
     }
-  }, [user?.tenantId, canEditAcessos]);
+  }, [user?.tenantId, canEditAcessos, canAccess, isEditor]);
 
   useEffect(() => {
     refreshTenantAccess();
@@ -307,6 +308,31 @@ export default function CollaboratorsPage() {
     },
     [editingSection, editingTab, selectedId]
   );
+
+  const selectedCollaboratorRow = useMemo(
+    () => collaborators.find((item) => item.id === selectedId) || null,
+    [collaborators, selectedId],
+  );
+
+  const selectedTenantAccess = useMemo(
+    () => (selectedCollaboratorRow ? resolveCollaboratorTenantAccess(selectedCollaboratorRow) : null),
+    [selectedCollaboratorRow, resolveCollaboratorTenantAccess],
+  );
+
+  useEffect(() => {
+    if (!selectedId || !user || !selectedTenantAccess?.user_id) return;
+    const current = getCollaborator(selectedId);
+    if (current?.access?.userId === selectedTenantAccess.user_id) return;
+    try {
+      updateCollaboratorAccess(user, selectedId, {
+        userId: selectedTenantAccess.user_id,
+        role: selectedTenantAccess.role || 'atendimento',
+      });
+      refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
+    } catch {
+      // Sem permissão collaborators:access — o painel SaaS continua via tenantUser.
+    }
+  }, [selectedId, selectedTenantAccess, user, refreshCollaboratorDraft]);
 
   const formatDatePtBr = (value) => {
     if (!value) return '—';
@@ -1399,36 +1425,44 @@ export default function CollaboratorsPage() {
 
   const accessContent = (
     <div className="stack">
-      <SectionHeaderActions
-        title="Acessos"
-        isEditing={editingTab === 'acessos'}
-        onEdit={canAccess ? () => startTabEdit('acessos') : null}
-        onCancel={cancelEdit}
-        onSave={null}
-        loading={false}
-      />
       {error ? <div className="error">{error}</div> : null}
       {success ? <div className="success">{success}</div> : null}
-      <AccessTab
-        collaboratorId={selectedId}
-        targetUserId={draft.access.userId || draft.profile?.user_id || null}
-        saasTenantId={user?.tenantId || ''}
-        linkedDisplayName={(draft.profile?.nomeCompleto || draft.profile?.apelido || '').trim()}
+      <CollaboratorPermissionsPanel
+        collaborator={selectedCollaboratorRow}
+        tenantUser={selectedTenantAccess}
+        tenantId={user?.tenantId || ''}
         currentUser={user}
         canEdit={canEditAcessos}
-        onVincularUsuario={canAccess ? () => { setActiveTab('cadastro'); setActiveSection('Dados de Acesso'); startEdit('Dados de Acesso'); } : undefined}
+        targetUserId={draft.access?.userId || draft.profile?.user_id || selectedTenantAccess?.user_id || null}
+        saasTenantId={user?.tenantId || ''}
+        linkedDisplayName={(draft.profile?.nomeCompleto || draft.profile?.apelido || selectedCollaboratorRow?.nomeCompleto || '').trim()}
+        onGoToProfile={() => {
+          setActiveTab('cadastro');
+          setActiveSection('Dados Principais');
+          startEdit('Dados Principais');
+        }}
         onSaveSuccess={() => {
           setError('');
-          if (draft.access.userId) {
-            const access = getUserAccess(draft.access.userId);
+          const effectiveUserId = draft.access?.userId || selectedTenantAccess?.user_id;
+          if (effectiveUserId) {
+            const access = getUserAccess(effectiveUserId);
             if (access) {
-              updateCollaboratorAccess(user, selectedId, { ...draft.access, role: access.role });
+              updateCollaboratorAccess(user, selectedId, {
+                ...draft.access,
+                userId: effectiveUserId,
+                role: access.role,
+              });
             }
           }
           refreshCollaboratorDraft();
-          setSuccess('Acessos salvos.');
+          refreshTenantAccess();
+          setSuccess('Permissões salvas com sucesso.');
         }}
         onSaveError={(msg) => setError(msg)}
+        onAccessChanged={() => {
+          refreshTenantAccess();
+          setSuccess('Acesso do colaborador atualizado.');
+        }}
       />
     </div>
   );

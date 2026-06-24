@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
+import { isPrivilegedUser } from '../utils/rbacHelpers.js';
 import { masterNavItems } from './masterConfig.js';
 import { ArrowLeft } from 'lucide-react';
 
@@ -15,7 +16,7 @@ export default function MasterShellLayout() {
   const navigate = useNavigate();
 
   const visibleItems = masterNavItems.filter((item) => isAllowed(user, item.rolesAllowed));
-  const isMaster = user?.role === 'master' || user?.role === 'admin';
+  const isMaster = isPrivilegedUser(user);
 
   const isActive = (item) => location.pathname === item.route || (item.route !== '/master' && location.pathname.startsWith(item.route));
 

@@ -24,6 +24,7 @@ import {
   isTransientAuthError,
   getPlatformSession,
   resolveSaasUser,
+  enrichSaasUserPrivileges,
 } from './saasSessionResolver.js';
 import {
   auditFirstAccess,
@@ -86,7 +87,7 @@ async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
     if (isTransientAuthError(err) && cached?.id && cached.id === stored.userId) {
       // Falha transitória com cache válido: libera o app; revalidação ocorre depois.
       authDebug('hydrate: liberando com usuário em cache (rede instável)');
-      onUser(cached);
+      onUser(enrichSaasUserPrivileges(cached));
       return;
     }
     onLogout('Não foi possível validar sua sessão. Faça login novamente.');
@@ -105,7 +106,7 @@ async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
   if (cached?.id === supaSession.user.id && cached?.tenantId) {
     // Fast-path: libera o app imediatamente e revalida acesso em segundo plano.
     authDebug('hydrate: fast-path (cache) — app liberado; revalidando em background');
-    onUser(cached);
+    onUser(enrichSaasUserPrivileges(cached));
     try {
       const fresh = await resolveSaasUser(supaSession);
       if (isCancelled()) return;

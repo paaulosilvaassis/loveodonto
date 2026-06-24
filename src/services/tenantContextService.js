@@ -73,8 +73,19 @@ function isLikelyNetworkFetchFailure(error) {
     || lower.includes('network request failed')
     || lower.includes('load failed')
     || lower.includes('abort')
+    || lower.includes('tempo esgotado')
   );
 }
+
+function shouldUseSupabaseFallback(err) {
+  if (isDevBackendUnreachableError(err)) return true;
+  if (isTransientTenantContextError(err)) return true;
+  if (String(err?.name || '') === 'AbortError') return true;
+  const lower = String(err?.message || '').toLowerCase();
+  return lower.includes('tempo esgotado') || lower.includes('não foi possível conectar');
+}
+
+const TENANT_CONTEXT_FETCH_TIMEOUT_MS = 8000;
 
 async function runQuery(queryFactory) {
   try {
@@ -106,8 +117,10 @@ async function fetchTenantContextViaAdminApiAttempt() {
 
   let lastError;
   for (const url of urls) {
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), TENANT_CONTEXT_FETCH_TIMEOUT_MS);
     try {
-      const response = await fetch(url, fetchOpts);
+      const response = await fetch(url, { ...fetchOpts, signal: controller.signal });
       let json;
       try {
         json = await response.json();
@@ -148,6 +161,8 @@ async function fetchTenantContextViaAdminApiAttempt() {
     } catch (error) {
       lastError = error;
       if (!isTransientTenantContextError(error)) throw error;
+    } finally {
+      clearTimeout(abortTimer);
     }
   }
   if (lastError) {
@@ -266,9 +281,7 @@ export async function getTenantContext(tenantId) {
   try {
     apiContext = await runQuery(() => fetchTenantContextViaAdminApi());
   } catch (err) {
-    const useSupabaseFallback =
-      isDevBackendUnreachableError(err) || isTransientTenantContextError(err);
-    if (useSupabaseFallback) {
+    if (shouldUseSupabaseFallback(err)) {
       if (import.meta.env?.DEV) {
         console.debug('[tenant-context] Admin API falhou — fallback Supabase direto:', err?.message);
       }

@@ -7,6 +7,7 @@
  */
 import { loadDb, withDb } from '../db/index.js';
 import { ROLE_MASTER } from '../constants/tenantRoles.js';
+import { isMasterMembershipRole } from '../utils/rbacHelpers.js';
 
 const COLLABORATOR_PREFIX = 'col-saas-';
 
@@ -26,7 +27,7 @@ export function ensureSaasUserInLocalDb(user) {
   const tenantId = user.tenantId;
   const email = (user.email || '').trim().toLowerCase();
   const fullName = user.name || email.split('@')[0] || 'Usuário';
-  const isMaster = user.isMaster || user.role === 'admin' || user.role === 'master';
+  const isMaster = user.isMaster || isMasterMembershipRole(user.role);
   const membershipRole = isMaster ? ROLE_MASTER : (user.role || 'atendimento');
   const now = new Date().toISOString();
 

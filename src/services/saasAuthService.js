@@ -35,7 +35,7 @@ function mapSaasAuthError(error) {
 function normalizeRole(value) {
   const role = String(value || '').trim().toLowerCase();
   if (!role) return 'recepcao';
-  if (['owner', 'admin'].includes(role)) return 'admin';
+  if (['owner', 'admin', 'master'].includes(role)) return 'admin';
   if (['manager', 'gerente'].includes(role)) return 'gerente';
   if (['finance', 'financial', 'financeiro'].includes(role)) return 'financeiro';
   if (['sales', 'commercial', 'comercial'].includes(role)) return 'comercial';

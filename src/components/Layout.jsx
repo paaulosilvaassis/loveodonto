@@ -9,6 +9,7 @@ import { navCategories, getActiveCategory, getActiveItem } from '../navigation/n
 import { resolveRoutePermission } from '../navigation/routePermissionMap.js';
 import { canAccessRoute } from '../tenant/tenantAccess.js';
 import { can as canByPermission } from '../permissions/permissions.js';
+import { isPrivilegedUser, isRoutePermissionAllowed } from '../utils/rbacHelpers.js';
 import { logAction } from '../services/logService.js';
 import PatientQuickCreateModal from './PatientQuickCreateModal.jsx';
 import OpeningScreen, { shouldShowOpening } from './OpeningScreen.jsx';
@@ -36,7 +37,7 @@ const isAllowed = (user, allowedRoles) => {
   if (!user) return false;
   if (!allowedRoles || allowedRoles.length === 0) return true;
   if (allowedRoles.includes('*')) return true;
-  if (user.role === 'master') return true;
+  if (user.role === 'master' || user.role === 'admin' || user.role === 'owner') return true;
   return allowedRoles.includes(user.role);
 };
 
@@ -45,8 +46,8 @@ const canSeeNavItem = (user, item, modules, flags) => {
   const roleAllowed = isAllowed(user, item.rolesAllowed);
   const moduleAllowed = canAccessRoute(item.route, modules, flags);
   const permission = resolveRoutePermission(item.route);
-  const permissionAllowed = permission ? canByPermission(user, permission) : false;
-  const isMaster = user.isMaster === true || String(user.role || '').toLowerCase() === 'master';
+  const permissionAllowed = isRoutePermissionAllowed(user, permission, canByPermission);
+  const isMaster = isPrivilegedUser(user);
   const allowed = isMaster
     ? moduleAllowed
     : moduleAllowed && permissionAllowed;

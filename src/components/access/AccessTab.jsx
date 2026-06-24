@@ -28,6 +28,10 @@ import { getDefaultTenant } from '../../services/tenantService.js';
 import { findPendingInvitationByEmail, listInvitations, refreshInvitation } from '../../services/invitationService.js';
 import { isSaasModeEnabled } from '../../services/saasAuthService.js';
 import { saveCollaboratorAccessBundle } from '../../services/collaboratorAccessProvisionService.js';
+import {
+  normalizeTenantAccessRole,
+  resolveAccessTargetUserId,
+} from '../../utils/collaboratorAccessPanel.js';
 
 const MIN_PASSWORD_LENGTH = 8;
 const FIXED_MATRIX_ACTIONS = ['view', 'create', 'edit', 'delete', 'export', 'send', 'cancel'];
@@ -49,6 +53,8 @@ const DEFAULT_EXPANDED_SECTORS = MODULES_SPEC.slice(0, 3).map((sector) => sector
 export default function AccessTab({
   collaboratorId,
   targetUserId,
+  tenantUser = null,
+  collaboratorEmail = '',
   saasTenantId,
   linkedDisplayName,
   currentUser,
@@ -72,44 +78,69 @@ export default function AccessTab({
   const [credMustChangePassword, setCredMustChangePassword] = useState(true);
 
   const catalog = useMemo(() => getPermissionsCatalog(), []);
+  const effectiveTargetUserId = useMemo(
+    () => resolveAccessTargetUserId({ localUserId: targetUserId, tenantUser }),
+    [targetUserId, tenantUser],
+  );
   const roleDefaultIds = useMemo(
     () => (role ? new Set(getRoleDefaultPermissionIds(role)) : new Set()),
     [role]
   );
 
   useEffect(() => {
-    if (!targetUserId) {
-      setHasSystemAccess(true);
-      setRole('');
+    const emailFromTenant = String(tenantUser?.email || collaboratorEmail || '').trim().toLowerCase();
+
+    if (!effectiveTargetUserId) {
+      setHasSystemAccess(tenantUser?.has_system_access !== false);
+      setRole(tenantUser?.role ? normalizeTenantAccessRole(tenantUser.role) : 'atendimento');
       setOverrides({});
       setInitialSnapshot(null);
       setDirty(false);
-      setCredEmail('');
+      setCredEmail(emailFromTenant);
       setCredPassword('');
       setCredConfirmPassword('');
       setCredMustChangePassword(true);
       return;
     }
-    const access = getUserAccess(targetUserId);
-    if (!access) return;
-    setHasSystemAccess(access.has_system_access);
-    setRole(access.role);
-    setOverrides(access.overrides || {});
-    setInitialSnapshot(JSON.stringify(access));
-    setDirty(false);
+
+    if (isSaasModeEnabled() && !getUserAccess(effectiveTargetUserId)) {
+      ensureLocalUserForSaasAccess(effectiveTargetUserId, {
+        email: emailFromTenant,
+        role: normalizeTenantAccessRole(tenantUser?.role),
+        has_system_access: tenantUser?.has_system_access !== false,
+        displayName: linkedDisplayName,
+        tenantId: saasTenantId || '',
+      });
+    }
+
+    const access = getUserAccess(effectiveTargetUserId);
+    if (access) {
+      setHasSystemAccess(access.has_system_access);
+      setRole(normalizeTenantAccessRole(access.role));
+      setOverrides(access.overrides || {});
+      setInitialSnapshot(JSON.stringify(access));
+      setDirty(false);
+    } else if (tenantUser) {
+      setHasSystemAccess(tenantUser.has_system_access !== false);
+      setRole(normalizeTenantAccessRole(tenantUser.role));
+      setOverrides({});
+      setInitialSnapshot(null);
+      setDirty(false);
+    }
+
     const auth = collaboratorId ? getUserAuthByCollaborator(collaboratorId) : null;
     if (auth) {
-      setCredEmail(auth.email || '');
+      setCredEmail(auth.email || emailFromTenant);
       setCredPassword('');
       setCredConfirmPassword('');
       setCredMustChangePassword(auth.mustChangePassword !== false);
     } else {
-      setCredEmail('');
+      setCredEmail(emailFromTenant);
       setCredPassword('');
       setCredConfirmPassword('');
       setCredMustChangePassword(true);
     }
-  }, [targetUserId, collaboratorId]);
+  }, [effectiveTargetUserId, tenantUser, collaboratorId, collaboratorEmail, linkedDisplayName, saasTenantId]);
 
   const effectivePermission = (permId) => {
     if (overrides[permId] !== undefined) return overrides[permId];
@@ -227,7 +258,11 @@ export default function AccessTab({
   };
 
   const handleSave = async () => {
-    if (!targetUserId || !currentUser || !canManageAccess(currentUser)) return;
+    if (!currentUser || !canManageAccess(currentUser)) return;
+    if (!effectiveTargetUserId) {
+      onSaveError?.('Crie o acesso do colaborador antes de salvar permissões individuais.');
+      return;
+    }
     const credErr = validateCredentials();
     if (credErr) {
       onSaveError?.(credErr);
@@ -242,7 +277,7 @@ export default function AccessTab({
         await saveCollaboratorAccessBundle({
           tenant_id: saasTenantId,
           collaborator_id: collaboratorId || '',
-          target_user_id: targetUserId,
+          target_user_id: effectiveTargetUserId,
           email: credEmail.trim().toLowerCase(),
           password: credPassword || '',
           role: role || 'atendimento',
@@ -250,8 +285,8 @@ export default function AccessTab({
           permission_overrides: overrides || {},
         });
       }
-      if (isSaasModeEnabled() && !getUserAccess(targetUserId)) {
-        ensureLocalUserForSaasAccess(targetUserId, {
+      if (isSaasModeEnabled() && !getUserAccess(effectiveTargetUserId)) {
+        ensureLocalUserForSaasAccess(effectiveTargetUserId, {
           email: (credEmail || '').trim().toLowerCase(),
           role: role || 'atendimento',
           has_system_access: hasSystemAccess,
@@ -259,7 +294,7 @@ export default function AccessTab({
           tenantId: saasTenantId || '',
         });
       }
-      updateUserAccess(currentUser, targetUserId, {
+      updateUserAccess(currentUser, effectiveTargetUserId, {
         has_system_access: hasSystemAccess,
         role: role || 'atendimento',
         overrides,
@@ -278,7 +313,7 @@ export default function AccessTab({
           isNewPassword
         );
       }
-      setInitialSnapshot(JSON.stringify(getUserAccess(targetUserId)));
+      setInitialSnapshot(JSON.stringify(getUserAccess(effectiveTargetUserId)));
       setDirty(false);
       setCredPassword('');
       setCredConfirmPassword('');
@@ -301,26 +336,11 @@ export default function AccessTab({
     } catch (_) {}
   };
 
-  if (!targetUserId) {
-    return (
-      <div className="access-tab access-tab-empty">
-        <p className="muted" style={{ marginBottom: '1rem' }}>
-          Nenhum usuário vinculado. Vincule para definir perfil e permissões de login.
-        </p>
-        {onVincularUsuario && (
-          <Button variant="primary" onClick={onVincularUsuario}>
-            Vincular usuário
-          </Button>
-        )}
-      </div>
-    );
-  }
-
   const roleOptions = ROLES.filter((r) => r !== ROLE_ADMIN);
   const canManage = canManageAccess(currentUser);
   const readOnly = !canEdit || !canManage;
-  const tenantId = getDefaultTenant()?.id || '';
-  const inviteTargetEmail = (credEmail || '').trim().toLowerCase();
+  const tenantId = getDefaultTenant()?.id || saasTenantId || '';
+  const inviteTargetEmail = (credEmail || collaboratorEmail || '').trim().toLowerCase();
   const invitationForEmail = useMemo(() => {
     if (!tenantId || !inviteTargetEmail) return null;
     const invitations = listInvitations(tenantId, false)
@@ -333,6 +353,7 @@ export default function AccessTab({
     ? 'Você não tem permissão para editar acessos. Entre em contato com o administrador.'
     : null;
   const canResendInvite = Boolean(tenantId && inviteTargetEmail && ['pendente', 'enviado', 'expirado'].includes(inviteStatus));
+  const canSavePermissions = Boolean(effectiveTargetUserId);
 
   const handleResendInvite = () => {
     if (!canResendInvite || !currentUser) return;
@@ -348,6 +369,14 @@ export default function AccessTab({
       onSaveError?.(err?.message || 'Erro ao reenviar convite.');
     }
   };
+
+  if (!collaboratorId && !collaboratorEmail && !tenantUser) {
+    return (
+      <div className="access-tab access-tab-empty">
+        <p className="muted">Selecione um colaborador para configurar permissões.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="access-tab access-tab-v2">
@@ -426,10 +455,10 @@ export default function AccessTab({
               icon={Save}
               loading={saving}
               onClick={handleSave}
-              disabled={readOnly || saving || !dirty}
-              title={disabledTooltip}
+              disabled={readOnly || saving || !dirty || !canSavePermissions}
+              title={!canSavePermissions ? 'Crie o acesso antes de salvar permissões.' : disabledTooltip}
             >
-              Salvar alterações
+              Salvar permissões
             </Button>
           </div>
         </div>
@@ -438,6 +467,11 @@ export default function AccessTab({
             <Info size={14} aria-hidden /> {disabledTooltip}
           </p>
         )}
+        {!canSavePermissions ? (
+          <p className="access-tab-disabled-hint" role="status">
+            <Info size={14} aria-hidden /> Use &quot;Criar acesso&quot; para habilitar o salvamento das permissões no servidor.
+          </p>
+        ) : null}
       </header>
 
       {hasSystemAccess && (

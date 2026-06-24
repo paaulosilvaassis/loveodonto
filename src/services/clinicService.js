@@ -89,6 +89,8 @@ export const updateClinicDocumentation = (user, payload) => {
       cnes: normalizeText(payload.cnes),
       nire: normalizeText(payload.nire),
       conselhoRegionalNumero: normalizeText(payload.conselhoRegionalNumero),
+      responsavelTecnico: normalizeText(payload.responsavelTecnico),
+      croResponsavelTecnico: normalizeText(payload.croResponsavelTecnico),
       alvaraPrefeituraNumero: normalizeText(payload.alvaraPrefeituraNumero),
       alvaraAutorizacao: normalizeText(payload.alvaraAutorizacao),
       observacoes: normalizeText(payload.observacoes),

@@ -13,6 +13,7 @@ import { PARTY_MODEL } from './contractQualificationTemplates.js';
 import { detectTreatmentType, detectAllTreatmentTypes } from '../components/clinical/contract/detectTreatmentType.js';
 import { buildInstallmentSchedule } from '../components/clinical/contract/clinicalContractSchedule.js';
 import { getAcceptedOption, calcPlannedValue, calcOptionFinalValue } from '../components/clinical/budget/budgetUtils.js';
+import { resolveClinicTechnicalResponsible, resolveAttendingProfessionalCro } from './clinicTechnicalResponsible.js';
 
 const EMPTY_MARKERS = new Set(['', '—', '-', '________________', 'N/A', 'n/a']);
 
@@ -283,9 +284,8 @@ export function resolveContractVariables(params) {
   const depNome = String(profile.dependent_full_name || pacNome).trim();
 
   const profName = String(currentUser?.name || currentUser?.nomeCompleto || '').trim();
-  const profCro = String(doc.conselhoRegionalNumero || currentUser?.cro || '').trim();
-  const respTecnico = String(doc.responsavelTecnico || doc.responsavel_tecnico || clinic.responsavelTecnico || '').trim();
-  const respTecnicoCro = String(doc.croResponsavelTecnico || doc.cro_responsavel || profCro).trim();
+  const profCro = resolveAttendingProfessionalCro(currentUser || {});
+  const { name: respTecnico, cro: respTecnicoCro } = resolveClinicTechnicalResponsible(doc, clinic);
 
   const budgetNumberRaw = clinicalBudget?.budgetNumber || crmBudget?.code || '';
   const budgetNumber = isTechnicalId(budgetNumberRaw)
@@ -521,6 +521,7 @@ export function fromProfessionalContext(ctx) {
     '#clinicaTelefone': c.phone || '',
     '#clinicaEmail': c.email || '',
     '#responsavelTecnicoNome': c.technicalResponsible || '',
+    '#responsavelTecnicoCRO': c.technicalResponsibleCro || '',
     '#totalContrato': String(f.finalValue || f.totalValue || 0),
     '#totalContratoExtenso': f.finalValueExtenso || '',
     '#formaPagamento': f.paymentLabel || '',

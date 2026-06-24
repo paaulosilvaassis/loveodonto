@@ -24,7 +24,7 @@ import {
   setTenantUserSystemAccess,
   removeTenantUserAccess,
 } from '../services/collaboratorAccessProvisionService.js';
-import { listCollaborators } from '../services/collaboratorService.js';
+import { isPrivilegedUser } from '../utils/rbacHelpers.js';
 import {
   buildCollaboratorLookupMaps,
   formatCollaboratorLinkLabel,
@@ -241,7 +241,7 @@ export default function ConfiguracoesUsuariosPage() {
     || tenant?.name
     || getTenant(tenantId)?.name
     || 'Clínica';
-  const isMaster = user?.isMaster || user?.role === 'admin';
+  const isMaster = isPrivilegedUser(user);
 
   const pushToast = (type, message) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
