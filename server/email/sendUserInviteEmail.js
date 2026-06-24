@@ -20,10 +20,13 @@ export async function generatePasswordSetupLink(supabase, {
   email,
   redirectTo,
   data = {},
+  existingUser = false,
 }) {
   const normalizedEmail = normalizeEmail(email);
   const targetRedirect = redirectTo || getInviteRedirectTo();
-  const linkTypes = ['invite', 'magiclink', 'recovery'];
+  const linkTypes = existingUser
+    ? ['recovery', 'magiclink']
+    : ['invite', 'recovery', 'magiclink'];
 
   let lastError = null;
   for (const type of linkTypes) {

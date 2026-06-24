@@ -403,23 +403,34 @@ body {
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  overflow-y: auto;
 }
 
 .pc-onboarding-panel {
   width: min(600px, 100%);
+  max-height: min(90dvh, 860px);
   border: 1px solid rgba(122, 146, 193, 0.35);
   border-radius: 18px;
   background: linear-gradient(180deg, #16223f 0%, #111a30 100%);
   box-shadow: 0 20px 55px rgba(2, 6, 23, 0.5);
   padding: 1.25rem;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   animation: pcWizardAppear 180ms ease-out;
+  overflow: hidden;
+  margin: auto;
 }
 
 .pc-onboarding-header h3 {
   margin: 0;
   font-size: 1.1rem;
+}
+
+.pc-onboarding-header,
+.pc-onboarding-steps,
+.pc-onboarding-actions {
+  flex-shrink: 0;
 }
 
 .pc-onboarding-header p {
@@ -432,6 +443,42 @@ body {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.4rem;
+}
+
+.pc-onboarding-steps--5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.pc-form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.pc-checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: #d3def5;
+  font-size: 0.84rem;
+}
+
+.pc-checkbox-field input {
+  margin-top: 0.15rem;
+}
+
+.pc-terms-box {
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  background: rgba(250, 204, 21, 0.08);
+  border-radius: 0.85rem;
+  padding: 0.85rem;
+  color: #fde68a;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.pc-terms-box p {
+  margin: 0;
 }
 
 .pc-onboarding-step {
@@ -468,7 +515,23 @@ body {
   border-radius: 14px;
   background: rgba(12, 20, 39, 0.55);
   padding: 1rem;
-  min-height: 260px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pc-onboarding-panel > .pc-error {
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.pc-admin-summary {
+  border: 1px solid rgba(122, 146, 193, 0.25);
+  border-radius: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  background: rgba(13, 22, 45, 0.45);
 }
 
 .pc-step-content {
@@ -540,6 +603,21 @@ body {
 
 .pc-plan-card strong {
   font-size: 0.95rem;
+}
+
+.pc-plan-card__price {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #7dd3fc;
+}
+
+.pc-plan-card__tagline {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.35;
 }
 
 .pc-plan-card ul {
@@ -705,8 +783,13 @@ body {
     padding: 0.95rem;
   }
 
-  .pc-onboarding-steps {
+  .pc-onboarding-steps,
+  .pc-onboarding-steps--5 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pc-form-grid-2 {
+    grid-template-columns: 1fr;
   }
 
   .pc-onboarding-actions .pc-button {

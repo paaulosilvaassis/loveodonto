@@ -16,9 +16,13 @@ O app é um **frontend Vite + React** que usa **Supabase** (auth e banco). O dep
 1. **Suba o código para um repositório Git** (GitHub, GitLab ou Bitbucket), se ainda não estiver.
 
 2. **No Supabase (Authentication → URL Configuration):**
-   - Adicione em **Redirect URLs** a URL de produção, por exemplo:  
-     `https://seu-app.vercel.app/**`  
-   - Assim o login e callbacks funcionam em produção.
+   - **Site URL:** `https://loveodonto.com.br`
+   - Adicione em **Redirect URLs** (todas obrigatórias para primeiro acesso):
+     - `https://loveodonto.com.br/primeiro-acesso`
+     - `https://loveodonto.com.br/**`
+     - `http://localhost:5176/primeiro-acesso`
+     - `http://localhost:5176/**`
+   - Assim o login, convites e recovery redirecionam com tokens ou `?code=` para `/primeiro-acesso`.
 
 3. **Na Vercel:**
    - **New Project** → importe o repositório do app.

@@ -58,7 +58,7 @@ export default function ConsoleAuditPage() {
                     <td>{item.actor}</td>
                     <td>{item.actorRole}</td>
                     <td>{item.action}</td>
-                    <td>{item.targetType}:{item.targetId}</td>
+                    <td>{item.target}</td>
                     <td>{item.metadata}</td>
                   </tr>
                 ))}

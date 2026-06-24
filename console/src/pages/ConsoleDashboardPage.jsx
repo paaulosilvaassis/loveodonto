@@ -2,15 +2,6 @@ import { useEffect, useState } from 'react';
 import { getPlatformDashboardSnapshot } from '../services/platformConsoleService.js';
 import { KpiGrid, PageHeader, Panel, StatusBadge, EmptyState } from '../components/ConsoleUi.jsx';
 
-function toFriendlyTargetType(targetType) {
-  const normalized = String(targetType || '').trim().toLowerCase();
-  if (normalized === 'tenant') return 'Clínica';
-  if (normalized === 'tenant_module') return 'Módulo da clínica';
-  if (normalized === 'tenant_subscription') return 'Assinatura da clínica';
-  if (normalized === 'feature_flag') return 'Funcionalidade';
-  return targetType || '—';
-}
-
 function formatLatency(ms) {
   if (ms == null || Number.isNaN(Number(ms))) return '—';
   return `${ms} ms`;
@@ -163,7 +154,7 @@ export default function ConsoleDashboardPage() {
                     <td>{log.createdAt ? String(log.createdAt).replace('T', ' ').slice(0, 19) : '—'}</td>
                     <td>{log.actor}</td>
                     <td>{log.action}</td>
-                    <td>{toFriendlyTargetType(log.targetType)}: {log.targetId}</td>
+                    <td>{log.target}</td>
                     <td>{log.metadata}</td>
                   </tr>
                 ))}
