@@ -100,6 +100,11 @@ function main() {
     assertFileContains(path.join(root, 'src/App.jsx'), '/login', 'Rotas app');
     assertFileContains(path.join(root, 'src/ProtectedApp.jsx'), '/gestao/dashboard', 'Rotas protegidas');
     assertFileContains(path.join(root, 'src/ProtectedApp.jsx'), '/configuracoes/usuarios', 'Rotas protegidas');
+    assertFileContains(
+      path.join(root, 'src/pages/ConfiguracoesUsuariosPage.jsx'),
+      'listCollaborators',
+      'ConfiguracoesUsuariosPage',
+    );
   });
   runStep('bloquear localhost sem guard de DEV', () => assertNoUnsafeLocalhostHardcode());
   runStep('compilar app', () => buildApp());

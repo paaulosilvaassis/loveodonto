@@ -224,3 +224,5 @@ async function deleteJson(path, payload) {
 export async function removeTenantUserAccess(tenantUserId, payload) {
   return deleteJson(`/internal/app/users/${encodeURIComponent(tenantUserId)}`, payload);
 }
+
+export { listCollaborators } from './collaboratorService.js';

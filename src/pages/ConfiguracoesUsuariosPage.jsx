@@ -17,6 +17,7 @@ import {
 } from '../components/ui/Modal.jsx';
 import {
   createTenantUserAccess,
+  listCollaborators,
   listTenantUsersAccess,
   provisionCollaboratorSystemAccess,
   reconcileCollaboratorTenantLinks,
@@ -26,7 +27,6 @@ import {
 } from '../services/collaboratorAccessProvisionService.js';
 import { canManageTenantUsers } from '../utils/rbacHelpers.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
-import { listCollaborators } from '../services/collaboratorService.js';
 import {
   buildCollaboratorLookupMaps,
   formatCollaboratorLinkLabel,
