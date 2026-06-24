@@ -25,6 +25,7 @@ import {
   getPlatformSession,
   resolveSaasUser,
   enrichSaasUserPrivileges,
+  readPlatformAccessTokenFromStorage,
 } from './saasSessionResolver.js';
 import {
   auditFirstAccess,
@@ -52,18 +53,28 @@ function resolveUserFromSession(session, loadDbFn) {
   };
 }
 
+/** Sessão legada (sem authMode) com JWT platform → tratar como SaaS. */
+function shouldHydrateAsSaas(stored) {
+  if (!stored?.userId) return false;
+  if (stored.authMode === 'saas') return true;
+  if (!isSaasModeEnabled()) return false;
+  return Boolean(readPlatformAccessTokenFromStorage());
+}
+
 /** Persiste sessão reduzida + cache de usuário e dispara sincronizações não bloqueantes. */
 function persistResolvedSaasUser(resolved) {
+  const enriched = enrichSaasUserPrivileges(resolved);
   writeStoredSession({
     authMode: 'saas',
-    userId: resolved.id,
-    tenantId: resolved.tenantId,
-    cachedUser: sanitizeCachedUser(resolved),
+    userId: enriched.id,
+    tenantId: enriched.tenantId,
+    cachedUser: sanitizeCachedUser(enriched),
   });
-  try { ensureSaasUserInLocalDb(resolved); } catch { /* non-blocking */ }
+  try { ensureSaasUserInLocalDb(enriched); } catch { /* non-blocking */ }
   window.setTimeout(() => {
     reconcileOwnInvitationAcceptance().catch(() => {});
   }, 2500);
+  return enriched;
 }
 
 /**
@@ -115,7 +126,7 @@ async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
         return;
       }
       persistResolvedSaasUser(fresh);
-      onUser(fresh);
+      onUser(enrichSaasUserPrivileges(fresh));
       authDebug('hydrate: acesso revalidado em segundo plano');
     } catch (err) {
       if (isCancelled()) return;
@@ -137,7 +148,7 @@ async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
       return;
     }
     persistResolvedSaasUser(resolved);
-    onUser(resolved);
+    onUser(enrichSaasUserPrivileges(resolved));
     authDebug('hydrate: usuário e tenant resolvidos — fim do loading');
   } catch (err) {
     if (isCancelled()) return;
@@ -162,7 +173,11 @@ export const AuthProvider = ({ children }) => {
     }
     let cancelled = false;
 
-    if (session.authMode === 'saas') {
+    if (shouldHydrateAsSaas(session)) {
+      if (session.authMode !== 'saas') {
+        authDebug('hydrate: migrando sessão legada para authMode saas');
+        writeStoredSession({ ...session, authMode: 'saas' });
+      }
       if (isFirstAccessProtected()) {
         auditFirstAccess('AuthContext hydrate skipped', {
           reason: 'fluxo de primeiro acesso — sem tenant-context/hydrateSaasUser',
@@ -286,15 +301,15 @@ export const AuthProvider = ({ children }) => {
         authMode: 'saas',
         userId: currentSession.user.id,
         tenantId: resolved.tenantId,
-        cachedUser: sanitizeCachedUser(resolved),
+        cachedUser: sanitizeCachedUser(enrichSaasUserPrivileges(resolved)),
       };
       writeStoredSession(next);
-      try { ensureSaasUserInLocalDb(resolved); } catch { /* non-blocking */ }
+      try { ensureSaasUserInLocalDb(enrichSaasUserPrivileges(resolved)); } catch { /* non-blocking */ }
       window.setTimeout(() => {
         reconcileOwnInvitationAcceptance().catch(() => {});
       }, 2500);
       setSession(next);
-      setUser(resolved);
+      setUser(enrichSaasUserPrivileges(resolved));
       emitStabilityLog('AUTH_OK', { mode: 'saas', tenantId: resolved.tenantId });
       return resolved;
     }

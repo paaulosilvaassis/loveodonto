@@ -1,5 +1,6 @@
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { buildResolvedSaasUser, getPlatformAccessToken, readPlatformAccessTokenFromStorage } from '../auth/saasSessionResolver.js';
+import { normalizeSaasBootstrapRole } from '../utils/rbacHelpers.js';
 import {
   assertAdminApiFetchAllowed,
   buildAdminApiUrl,
@@ -33,25 +34,17 @@ function mapSaasAuthError(error) {
 }
 
 function normalizeRole(value) {
-  const role = String(value || '').trim().toLowerCase();
-  if (!role) return 'recepcao';
-  if (['owner', 'admin', 'master'].includes(role)) return 'admin';
-  if (['manager', 'gerente'].includes(role)) return 'gerente';
-  if (['finance', 'financial', 'financeiro'].includes(role)) return 'financeiro';
-  if (['sales', 'commercial', 'comercial'].includes(role)) return 'comercial';
-  if (['doctor', 'dentist', 'dentista', 'professional', 'profissional'].includes(role)) return 'profissional';
-  if (['reception', 'recepcao', 'atendimento', 'support'].includes(role)) return 'recepcao';
-  return role;
+  return normalizeSaasBootstrapRole(value);
 }
 
+export { normalizeRole };
+
 export function isSaasModeEnabled() {
+  const hasPlatformClient = Boolean(import.meta.env.VITE_SUPABASE_PLATFORM_URL)
+    && Boolean(import.meta.env.VITE_SUPABASE_PLATFORM_ANON_KEY);
   return (
     import.meta.env.VITE_ACCESS_SAAS_ENABLED === '1'
-    || (
-      import.meta.env.DEV
-      && Boolean(import.meta.env.VITE_SUPABASE_PLATFORM_URL)
-      && Boolean(import.meta.env.VITE_SUPABASE_PLATFORM_ANON_KEY)
-    )
+    || hasPlatformClient
   );
 }
 

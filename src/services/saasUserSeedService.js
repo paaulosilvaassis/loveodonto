@@ -27,7 +27,7 @@ export function ensureSaasUserInLocalDb(user) {
   const tenantId = user.tenantId;
   const email = (user.email || '').trim().toLowerCase();
   const fullName = user.name || email.split('@')[0] || 'Usuário';
-  const isMaster = user.isMaster || isMasterMembershipRole(user.role);
+  const isMaster = user.isMaster || isMasterMembershipRole(user.role) || isMasterMembershipRole(user.saasAppRole);
   const membershipRole = isMaster ? ROLE_MASTER : (user.role || 'atendimento');
   const now = new Date().toISOString();
 

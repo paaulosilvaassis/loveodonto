@@ -11,7 +11,11 @@
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { fetchSaasAccessBootstrap } from '../services/saasAuthService.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
-import { enrichSaasUserPrivileges, isMasterMembershipRole } from '../utils/rbacHelpers.js';
+import {
+  enrichSaasUserPrivileges,
+  isMasterMembershipRole,
+  normalizeSaasBootstrapRole,
+} from '../utils/rbacHelpers.js';
 
 export const SESSION_KEY = 'appgestaoodonto.session';
 const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
@@ -59,6 +63,7 @@ export const sanitizeCachedUser = (u) => (u
     name: u.name,
     email: u.email,
     role: u.role,
+    saasAppRole: u.saasAppRole,
     has_system_access: u.has_system_access,
     isMaster: u.isMaster,
     tenantId: u.tenantId,
@@ -167,13 +172,21 @@ function buildResolvedUser(supaSession, bootstrap) {
   const permissionOverrides = rawOverrides && typeof rawOverrides === 'object' && !Array.isArray(rawOverrides)
     ? rawOverrides
     : {};
+  const saasAppRole = String(supaSession.user?.app_metadata?.role || '').trim().toLowerCase();
+  const bootstrapRole = bootstrap.role;
+  const roleFromAppMeta = saasAppRole ? normalizeSaasBootstrapRole(saasAppRole) : '';
+  const isMaster = isMasterMembershipRole(bootstrapRole) || isMasterMembershipRole(saasAppRole);
+  const role = isMaster
+    ? (isMasterMembershipRole(bootstrapRole) ? bootstrapRole : roleFromAppMeta || bootstrapRole)
+    : bootstrapRole;
   return {
     id: supaSession.user.id,
     name: supaSession.user.user_metadata?.full_name || supaSession.user.email || 'Usuário',
     email: supaSession.user.email || '',
-    role: bootstrap.role,
+    role,
+    saasAppRole: saasAppRole || bootstrapRole,
     has_system_access: bootstrap.isActive,
-    isMaster: isMasterMembershipRole(bootstrap.role),
+    isMaster,
     tenantId: bootstrap.tenantId,
     authMode: 'saas',
     permissionOverrides,

@@ -24,7 +24,9 @@ import {
   setTenantUserSystemAccess,
   removeTenantUserAccess,
 } from '../services/collaboratorAccessProvisionService.js';
-import { isPrivilegedUser } from '../utils/rbacHelpers.js';
+import { canManageTenantUsers } from '../utils/rbacHelpers.js';
+import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
+import { listCollaborators } from '../services/collaboratorService.js';
 import {
   buildCollaboratorLookupMaps,
   formatCollaboratorLinkLabel,
@@ -215,7 +217,7 @@ function UsuarioRowActions({
 
 export default function ConfiguracoesUsuariosPage() {
   const { user } = useAuth();
-  const { tenant, loading: tenantLoading, error: tenantError, refreshTenantContext } = useTenant();
+  const { tenant, currentUser, loading: tenantLoading, error: tenantError, refreshTenantContext } = useTenant();
   const [members, setMembers] = useState([]);
   const [invitations, setInvitations] = useState([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -241,7 +243,16 @@ export default function ConfiguracoesUsuariosPage() {
     || tenant?.name
     || getTenant(tenantId)?.name
     || 'Clínica';
-  const isMaster = isPrivilegedUser(user);
+  const isMaster = canManageTenantUsers(user, tenantId, currentUser);
+
+  useEffect(() => {
+    if (!user?.id || !tenantId || user.authMode !== 'saas') return;
+    try {
+      ensureSaasUserInLocalDb(user);
+    } catch {
+      /* non-blocking */
+    }
+  }, [user?.id, user?.role, user?.isMaster, user?.saasAppRole, tenantId, user?.authMode]);
 
   const pushToast = (type, message) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -515,6 +526,14 @@ export default function ConfiguracoesUsuariosPage() {
             Tentar novamente
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (!isMaster && tenantLoading) {
+    return (
+      <div className="stack" style={{ padding: '2rem' }}>
+        <p className="muted">Validando permissões de administrador…</p>
       </div>
     );
   }
