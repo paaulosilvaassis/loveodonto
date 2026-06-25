@@ -8,7 +8,9 @@ import {
 describe('collaboratorAccessPanel', () => {
   it('resolve target user id a partir do tenant_users', () => {
     expect(resolveAccessTargetUserId({ localUserId: null, tenantUser: { user_id: 'auth-1' } })).toBe('auth-1');
-    expect(resolveAccessTargetUserId({ localUserId: 'local-1', tenantUser: { user_id: 'auth-1' } })).toBe('local-1');
+    expect(resolveAccessTargetUserId({ localUserId: 'local-1', tenantUser: { user_id: 'auth-1' } })).toBe('auth-1');
+    expect(resolveAccessTargetUserId({ localUserId: 'stale-local', tenantUser: { id: 'tu-1' } })).toBe(null);
+    expect(resolveAccessTargetUserId({ localUserId: 'local-1', tenantUser: null })).toBe('local-1');
   });
 
   it('exibe painel quando há tenant user ou auth id', () => {

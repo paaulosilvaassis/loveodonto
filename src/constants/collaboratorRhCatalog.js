@@ -135,15 +135,49 @@ export const CARGOS_BY_CATEGORY = {
   ],
 };
 
-export const TIPO_VINCULO_OPTIONS = [
-  'CLT',
-  'PJ',
-  'Autônomo',
-  'Prestador de Serviço',
-  'Sócio',
-  'Estagiário',
-  'Terceirizado',
-  'Comissionado',
+/** Grupos de tipo de vínculo para selects (inclui classificações societárias). */
+export const TIPO_VINCULO_GROUPS = [
+  {
+    label: 'Societário e diretoria',
+    options: [
+      'Sócio',
+      'Sócio Administrador',
+      'Sócio Quotista',
+      'Pro-labore',
+      'Distribuição de Lucros',
+    ],
+  },
+  {
+    label: 'Empregatício',
+    options: ['CLT'],
+  },
+  {
+    label: 'Contratual e prestadores',
+    options: [
+      'PJ',
+      'Autônomo',
+      'Prestador de Serviço',
+      'Comissionado',
+      'Terceirizado',
+    ],
+  },
+  {
+    label: 'Aprendizagem',
+    options: ['Estagiário'],
+  },
+];
+
+export const TIPO_VINCULO_OPTIONS = TIPO_VINCULO_GROUPS.flatMap((group) => group.options);
+
+/**
+ * Opções do card "Vínculo" (tipo de contratação) — alinhado ao tipo de vínculo RH,
+ * com valores legados preservados para registros antigos.
+ */
+export const TIPO_CONTRATACAO_LEGACY = ['Prestador', 'Estágio'];
+
+export const TIPO_CONTRATACAO_OPTIONS = [
+  ...TIPO_VINCULO_OPTIONS,
+  ...TIPO_CONTRATACAO_LEGACY.filter((item) => !TIPO_VINCULO_OPTIONS.includes(item)),
 ];
 
 export const SETOR_OPTIONS = [

@@ -43,11 +43,13 @@ export default function ClinicCompactHeader({
         </div>
         <div className="clinic-header__stat">
           <span className="clinic-header__stat-label">E-mail</span>
-          <span className="clinic-header__stat-value">{email || '—'}</span>
+          <span className="clinic-header__stat-value clinic-header__stat-value--email" title={email || undefined}>
+            {email || '—'}
+          </span>
         </div>
         <div className="clinic-header__stat">
           <span className="clinic-header__stat-label">Telefone</span>
-          <span className="clinic-header__stat-value">{phone || '—'}</span>
+          <span className="clinic-header__stat-value" title={phone || undefined}>{phone || '—'}</span>
         </div>
       </div>
 

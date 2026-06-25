@@ -34,6 +34,7 @@ import {
 import { MEMBERSHIP_ROLE_LABELS, INVITABLE_ROLES } from '../constants/tenantRoles.js';
 import { notifyInviteDeliveryResult } from '../utils/inviteDeliveryFeedback.js';
 import AppAvatar from '../components/common/AppAvatar.jsx';
+import { getUserAvatarUrl } from '../utils/avatarUtils.js';
 import { looksLikeEmail } from '../utils/userDisplayName.js';
 import {
   UserPlus,
@@ -763,7 +764,7 @@ export default function ConfiguracoesUsuariosPage() {
                   <div key={member.id} className="tenant-users-grid__row" role="row">
                     <div className="tenant-users-grid__user" role="cell">
                       <AppAvatar
-                        user={member}
+                        photoUrl={getUserAvatarUrl(member)}
                         name={member.full_name || member.email}
                         email={member.email}
                         className="tenant-users-avatar"

@@ -10,6 +10,7 @@ import {
   updateCollaboratorFinance,
   uploadCollaboratorPhoto,
 } from '../services/collaboratorService.js';
+import { TIPO_VINCULO_OPTIONS } from '../constants/collaboratorRhCatalog.js';
 
 const admin = { id: 'user-admin', role: 'admin' };
 const recepcao = { id: 'user-2', role: 'recepcao' };
@@ -187,5 +188,20 @@ describe('Colaboradores', () => {
     expect(c.rhCategoria).toBe('Corpo Clínico');
     expect(c.cargo).toBe('Clínico Geral');
     expect(c.tipoVinculo).toBe('');
+  });
+
+  it('aceita vínculos societários como Pro-labore', () => {
+    expect(TIPO_VINCULO_OPTIONS).toContain('Pro-labore');
+    expect(TIPO_VINCULO_OPTIONS).toContain('Sócio');
+    const collaborator = createCollaborator(admin, {
+      apelido: 'João',
+      nomeCompleto: 'João Sócio',
+      rhCategoria: 'Gestão e Estratégia',
+      cargo: 'Sócio',
+      tipoVinculo: 'Pro-labore',
+      setor: 'Gestão',
+      status: 'ativo',
+    });
+    expect(collaborator.tipoVinculo).toBe('Pro-labore');
   });
 });

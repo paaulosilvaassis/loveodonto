@@ -30,27 +30,41 @@
 }
 
 .app-avatar__img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
   border-radius: inherit;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.app-avatar.is-loaded .app-avatar__img {
+  opacity: 1;
 }
 
 .app-avatar__initials {
+  position: absolute;
+  inset: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   height: 100%;
   user-select: none;
+  z-index: 0;
 }
 
 .app-avatar__skeleton {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 25%, color-mix(in srgb, #fff 55%, transparent) 50%, transparent 75%);
   background-size: 200% 100%;
   animation: app-avatar-shimmer 1.2s ease-in-out infinite;
 }
@@ -34151,9 +34165,14 @@ a.button {
 
 .clinic-header__center {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: auto minmax(0, 1.35fr) minmax(0, 0.9fr);
+  gap: 14px;
   min-width: 0;
+}
+
+.clinic-header__stat {
+  min-width: 0;
+  overflow: hidden;
 }
 
 .clinic-header__stat-label {
@@ -34165,11 +34184,17 @@ a.button {
 }
 
 .clinic-header__stat-value {
+  display: block;
   font-size: 0.8125rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.clinic-header__stat-value--email {
+  font-size: 0.75rem;
 }
 
 .clinic-header__badge {
@@ -34465,7 +34490,12 @@ a.button {
   }
 
   .clinic-header__center {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .clinic-header__stat:first-child {
+    grid-column: 1 / -1;
   }
 
   .clinic-body {

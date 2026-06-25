@@ -14,6 +14,24 @@ function isUserAlreadyRegisteredError(error) {
   );
 }
 
+async function findAuthUserByEmail(supabase, email) {
+  const target = String(email || '').trim().toLowerCase();
+  if (!target) return null;
+  let page = 1;
+  const perPage = 200;
+
+  while (true) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const users = Array.isArray(data?.users) ? data.users : [];
+    const match = users.find((u) => String(u?.email || '').trim().toLowerCase() === target);
+    if (match) return match;
+    if (users.length < perPage) break;
+    page += 1;
+  }
+  return null;
+}
+
 export async function dispatchCollaboratorInvite(supabase, {
   email,
   tenantId,
@@ -41,9 +59,13 @@ export async function dispatchCollaboratorInvite(supabase, {
   );
 
   if (!inviteError) {
+    let user = inviteData?.user || null;
+    if (!user?.id) {
+      user = await findAuthUserByEmail(supabase, normalizedEmail);
+    }
     return {
       emailDelivery: 'supabase_auth',
-      user: inviteData?.user || null,
+      user,
       setupLink: null,
     };
   }
@@ -52,10 +74,12 @@ export async function dispatchCollaboratorInvite(supabase, {
     throw inviteError;
   }
 
+  const existingUser = await findAuthUserByEmail(supabase, normalizedEmail);
   const setupLink = await generatePasswordSetupLink(supabase, {
     email: normalizedEmail,
     redirectTo,
     data: metadata,
+    existingUser: Boolean(existingUser?.id),
   });
 
   if (getEmailConfig().isConfigured) {
@@ -68,7 +92,7 @@ export async function dispatchCollaboratorInvite(supabase, {
     });
     return {
       emailDelivery: 'backend_resend',
-      user: null,
+      user: existingUser,
       setupLink: null,
     };
   }
@@ -82,7 +106,7 @@ export async function dispatchCollaboratorInvite(supabase, {
 
   return {
     emailDelivery: 'setup_link',
-    user: null,
+    user: existingUser,
     setupLink,
     message:
       'Este e-mail já está cadastrado no Auth. O Supabase não reenvia convite automaticamente — copie o link e envie manualmente, ou configure EMAIL_API_KEY no backend.',

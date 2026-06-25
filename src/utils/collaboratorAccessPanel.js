@@ -14,7 +14,9 @@ export function normalizeTenantAccessRole(role) {
 }
 
 export function resolveAccessTargetUserId({ localUserId, tenantUser } = {}) {
-  return localUserId || tenantUser?.user_id || null;
+  if (tenantUser?.user_id) return tenantUser.user_id;
+  if (tenantUser?.id) return null;
+  return localUserId || null;
 }
 
 export function canShowCollaboratorPermissionsPanel({ targetUserId, tenantUser, collaboratorEmail } = {}) {

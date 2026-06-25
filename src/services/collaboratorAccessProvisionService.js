@@ -30,7 +30,7 @@ function normalizeProvisionErrorMessage(message) {
     return 'Este e-mail já possui acesso.';
   }
   if (lower.includes('tenant_users_user_id_required') || lower.includes('sem conta no auth')) {
-    return 'Não foi possível vincular o e-mail: crie o convite novamente (conta no Auth ausente após exclusão manual).';
+    return 'Não foi possível vincular o e-mail: a conta no Auth não existe mais. Salve o acesso novamente para recriar o convite.';
   }
   if (lower.includes('já possui acesso nesta clínica')) {
     return 'Este e-mail já possui acesso nesta clínica.';

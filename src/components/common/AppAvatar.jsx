@@ -1,6 +1,12 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { getInitialsFromName, getUserAvatarUrl, getDisplayName } from '../../utils/avatarUtils.js';
+
+const LOAD_TIMEOUT_MS = 8000;
+
+function isEmbeddedImageUrl(url) {
+  return typeof url === 'string' && (url.startsWith('data:') || url.startsWith('blob:'));
+}
 
 function AppAvatar({
   name = '',
@@ -15,6 +21,7 @@ function AppAvatar({
   className = '',
   alt = '',
   title,
+  loading = 'eager',
 }) {
   const entity = user;
   const resolvedUrl = useMemo(
@@ -26,14 +33,50 @@ function AppAvatar({
   const initials = fallbackInitials || getInitialsFromName(displayName, resolvedEmail);
   const [loaded, setLoaded] = useState(false);
   const [broken, setBroken] = useState(false);
+  const imgRef = useRef(null);
+
+  const markLoaded = useCallback(() => setLoaded(true), []);
+  const markBroken = useCallback(() => {
+    setBroken(true);
+    setLoaded(true);
+  }, []);
 
   useEffect(() => {
     setLoaded(false);
     setBroken(false);
   }, [resolvedUrl]);
 
+  useEffect(() => {
+    if (!resolvedUrl) return undefined;
+
+    const syncFromImage = () => {
+      const img = imgRef.current;
+      if (!img?.complete) return;
+      if (img.naturalWidth > 0) markLoaded();
+      else markBroken();
+    };
+
+    syncFromImage();
+    const raf = window.requestAnimationFrame(syncFromImage);
+
+    const timer = window.setTimeout(() => {
+      setLoaded((wasLoaded) => {
+        if (wasLoaded) return wasLoaded;
+        setBroken(true);
+        return true;
+      });
+    }, LOAD_TIMEOUT_MS);
+
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [resolvedUrl, markLoaded, markBroken]);
+
   const showPhoto = Boolean(resolvedUrl) && !broken;
   const showSkeleton = showPhoto && !loaded;
+  const showInitials = !showPhoto || showSkeleton;
+  const imgLoading = isEmbeddedImageUrl(resolvedUrl) ? 'eager' : loading;
   const ariaLabel = alt || (displayName ? `Avatar de ${displayName}` : 'Avatar');
 
   return (
@@ -43,30 +86,30 @@ function AppAvatar({
         size !== 'inherit' && `app-avatar--${size}`,
         showPhoto && 'has-photo',
         showSkeleton && 'is-loading',
+        loaded && showPhoto && 'is-loaded',
         className,
       )}
       title={title || displayName || undefined}
       aria-label={!showPhoto ? ariaLabel : undefined}
     >
-      {showSkeleton ? <span className="app-avatar__skeleton" aria-hidden /> : null}
-      {showPhoto ? (
-        <img
-          src={resolvedUrl}
-          alt={ariaLabel}
-          className="app-avatar__img"
-          loading="lazy"
-          decoding="async"
-          onLoad={() => setLoaded(true)}
-          onError={() => {
-            setBroken(true);
-            setLoaded(true);
-          }}
-        />
-      ) : (
+      {showInitials ? (
         <span className="app-avatar__initials" aria-hidden>
           {initials}
         </span>
-      )}
+      ) : null}
+      {showSkeleton ? <span className="app-avatar__skeleton" aria-hidden /> : null}
+      {showPhoto ? (
+        <img
+          ref={imgRef}
+          src={resolvedUrl}
+          alt={ariaLabel}
+          className="app-avatar__img"
+          loading={imgLoading}
+          decoding={isEmbeddedImageUrl(resolvedUrl) ? 'sync' : 'async'}
+          onLoad={markLoaded}
+          onError={markBroken}
+        />
+      ) : null}
       {status ? (
         <span
           className={clsx('app-avatar__status', `app-avatar__status--${status}`)}

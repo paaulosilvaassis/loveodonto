@@ -16,7 +16,7 @@ import {
   removeCollaboratorPhone,
 } from '../../services/collaboratorService.js';
 import { formatCep, formatCpf, formatPhone } from '../../utils/validators.js';
-import { isCorpoClinicoCategory as isCorpoClinico } from '../../constants/collaboratorRhCatalog.js';
+import { isCorpoClinicoCategory as isCorpoClinico, TIPO_VINCULO_GROUPS, TIPO_CONTRATACAO_OPTIONS } from '../../constants/collaboratorRhCatalog.js';
 
 const CADASTRO_SECTIONS = ['all', 'pessoais', 'documentacao', 'endereco', 'contatos', 'profissional', 'geral'];
 
@@ -304,10 +304,24 @@ export default function CollaboratorCadastroTab({
           <Field label="Tipo de contratação">
             <select value={draft.documents.tipoContratacao || ''} onChange={(e) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, tipoContratacao: e.target.value } }))} disabled={disabled}>
               <option value="">Selecione</option>
-              <option value="CLT">CLT</option>
-              <option value="PJ">PJ</option>
-              <option value="Prestador">Prestador</option>
-              <option value="Estágio">Estágio</option>
+              {TIPO_VINCULO_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.options.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </optgroup>
+              ))}
+              <optgroup label="Outros">
+                {TIPO_CONTRATACAO_OPTIONS
+                  .filter((t) => !TIPO_VINCULO_GROUPS.some((g) => g.options.includes(t)))
+                  .map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+              </optgroup>
+              {draft.documents.tipoContratacao
+                && !TIPO_CONTRATACAO_OPTIONS.includes(draft.documents.tipoContratacao) ? (
+                  <option value={draft.documents.tipoContratacao}>{draft.documents.tipoContratacao}</option>
+              ) : null}
             </select>
           </Field>
           <Field label="Data de admissão">

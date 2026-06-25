@@ -2,6 +2,7 @@ import { Field } from '../Field.jsx';
 import {
   BR_UF_SIGLAS,
   COLLABORATOR_CATEGORIES,
+  TIPO_VINCULO_GROUPS,
   TIPO_VINCULO_OPTIONS,
   SETOR_OPTIONS,
   getCargosForCategory,
@@ -84,9 +85,16 @@ export function CollaboratorRoleCategoryFields({ profile, disabled, onPatch }) {
       <Field label="Tipo de vínculo *">
         <select value={profile.tipoVinculo || ''} onChange={(e) => onPatch({ tipoVinculo: e.target.value })} disabled={disabled}>
           <option value="">Selecione</option>
-          {TIPO_VINCULO_OPTIONS.map((t) => (
-            <option key={t} value={t}>{t}</option>
+          {TIPO_VINCULO_GROUPS.map((group) => (
+            <optgroup key={group.label} label={group.label}>
+              {group.options.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </optgroup>
           ))}
+          {profile.tipoVinculo && !TIPO_VINCULO_OPTIONS.includes(profile.tipoVinculo) ? (
+            <option value={profile.tipoVinculo}>{profile.tipoVinculo}</option>
+          ) : null}
         </select>
       </Field>
       <Field label="Setor *">
