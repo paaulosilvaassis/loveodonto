@@ -16,6 +16,7 @@ import { isSaasModeEnabled } from '../services/saasAuthService.js';
 import { isCollaboratorEmailValid } from '../utils/collaboratorAccessRole.js';
 import { resolveCollaboratorAccessDisplayStatus } from '../utils/inviteStatus.js';
 import { normalizeTenantAccessRole, resolveAccessTargetUserId } from '../utils/collaboratorAccessPanel.js';
+import { PERMS_CLIPBOARD_PREFIX } from '../components/collaborators/record/permissions/permissionsConstants.js';
 
 export function useCollaboratorAccessForm({
   collaboratorId,
@@ -92,20 +93,6 @@ export function useCollaboratorAccessForm({
     return roleDefaultIds.has(permId);
   }, [overrides, roleDefaultIds]);
 
-  const setPermission = useCallback((permId, allowed) => {
-    const base = roleDefaultIds.has(permId);
-    if (allowed === base) {
-      setOverrides((prev) => {
-        const next = { ...prev };
-        delete next[permId];
-        return next;
-      });
-    } else {
-      setOverrides((prev) => ({ ...prev, [permId]: allowed }));
-    }
-    setDirty(true);
-  }, [roleDefaultIds]);
-
   const sectorsWithPerms = useMemo(() => MODULES_SPEC.map((sector) => {
     const baseRows = (sector.children || []).map((base) => {
       const perms = catalog.filter((p) => p.module_key === base.key);
@@ -122,6 +109,114 @@ export function useCollaboratorAccessForm({
       allPerms: baseRows.flatMap((row) => row.perms),
     };
   }), [catalog]);
+
+  const applyPermissionUpdates = useCallback((entries) => {
+    setOverrides((prev) => {
+      const next = { ...prev };
+      for (const [permId, allowed] of entries) {
+        const base = roleDefaultIds.has(permId);
+        if (allowed === base) delete next[permId];
+        else next[permId] = allowed;
+      }
+      return next;
+    });
+    setDirty(true);
+  }, [roleDefaultIds]);
+
+  const setPermission = useCallback((permId, allowed) => {
+    applyPermissionUpdates([[permId, allowed]]);
+  }, [applyPermissionUpdates]);
+
+  const totalPerms = catalog.length;
+
+  const allowedCount = useMemo(() => {
+    let count = 0;
+    for (const perm of catalog) {
+      if (overrides[perm.id] !== undefined) {
+        if (overrides[perm.id]) count += 1;
+      } else if (roleDefaultIds.has(perm.id)) {
+        count += 1;
+      }
+    }
+    return count;
+  }, [catalog, overrides, roleDefaultIds]);
+
+  const selectAll = useCallback(() => {
+    applyPermissionUpdates(catalog.map((p) => [p.id, true]));
+    return catalog.length;
+  }, [applyPermissionUpdates, catalog]);
+
+  const clearAll = useCallback(() => {
+    applyPermissionUpdates(catalog.map((p) => [p.id, false]));
+  }, [applyPermissionUpdates, catalog]);
+
+  const selectAllInSector = useCallback((sectorKey) => {
+    const sector = sectorsWithPerms.find((s) => s.key === sectorKey);
+    if (!sector) return;
+    applyPermissionUpdates(sector.allPerms.map((p) => [p.id, true]));
+  }, [applyPermissionUpdates, sectorsWithPerms]);
+
+  const clearAllInSector = useCallback((sectorKey) => {
+    const sector = sectorsWithPerms.find((s) => s.key === sectorKey);
+    if (!sector) return;
+    applyPermissionUpdates(sector.allPerms.map((p) => [p.id, false]));
+  }, [applyPermissionUpdates, sectorsWithPerms]);
+
+  const setRowPermissions = useCallback((row, allowed) => {
+    applyPermissionUpdates(row.perms.map((p) => [p.id, allowed]));
+  }, [applyPermissionUpdates]);
+
+  const setActionInSector = useCallback((sectorKey, actionKey, allowed) => {
+    const sector = sectorsWithPerms.find((s) => s.key === sectorKey);
+    if (!sector) return;
+    const perms = sector.allPerms.filter((p) => p.action_key === actionKey);
+    applyPermissionUpdates(perms.map((p) => [p.id, allowed]));
+  }, [applyPermissionUpdates, sectorsWithPerms]);
+
+  const buildEffectiveMap = useCallback(() => {
+    const map = {};
+    for (const perm of catalog) {
+      map[perm.id] = overrides[perm.id] !== undefined
+        ? overrides[perm.id]
+        : roleDefaultIds.has(perm.id);
+    }
+    return map;
+  }, [catalog, overrides, roleDefaultIds]);
+
+  const copyPermissions = useCallback(async () => {
+    try {
+      const payload = JSON.stringify({
+        v: 1,
+        role,
+        effective: buildEffectiveMap(),
+      });
+      await navigator.clipboard.writeText(`${PERMS_CLIPBOARD_PREFIX}${payload}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [role, buildEffectiveMap]);
+
+  const pastePermissions = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.startsWith(PERMS_CLIPBOARD_PREFIX)) {
+        return { ok: false, error: 'Área de transferência sem permissões válidas.' };
+      }
+      const parsed = JSON.parse(text.slice(PERMS_CLIPBOARD_PREFIX.length));
+      const effective = parsed?.effective;
+      if (!effective || typeof effective !== 'object') {
+        return { ok: false, error: 'Formato de permissões inválido.' };
+      }
+      const entries = catalog
+        .filter((p) => typeof effective[p.id] === 'boolean')
+        .map((p) => [p.id, effective[p.id]]);
+      applyPermissionUpdates(entries);
+      return { ok: true, count: entries.length };
+    } catch {
+      return { ok: false, error: 'Não foi possível colar as permissões.' };
+    }
+  }, [catalog, applyPermissionUpdates]);
 
   const sectorCount = useCallback((sectorKey) => {
     const sector = sectorsWithPerms.find((s) => s.key === sectorKey);
@@ -150,24 +245,24 @@ export function useCollaboratorAccessForm({
 
   const validateCredentials = useCallback(() => {
     if (!hasSystemAccess) return null;
-    const email = (credEmail || '').trim().toLowerCase();
+    const email = (credEmail || collaboratorEmail || '').trim().toLowerCase();
     if (!email) return 'E-mail é obrigatório.';
     if (!isCollaboratorEmailValid(email)) return 'Informe um e-mail válido.';
     return null;
-  }, [hasSystemAccess, credEmail]);
+  }, [hasSystemAccess, credEmail, collaboratorEmail]);
 
   const handleSave = useCallback(async ({ onSaveSuccess, onSaveError } = {}) => {
-    if (!currentUser || !canManageAccess(currentUser)) return;
+    if (!currentUser || !canManageAccess(currentUser)) return false;
     const credErr = validateCredentials();
     if (credErr) {
       onSaveError?.(credErr);
-      return;
+      return false;
     }
     setSaving(true);
     let inviteSent = false;
     try {
       let resolvedTargetUserId = effectiveTargetUserId;
-      const normalizedEmail = (credEmail || '').trim().toLowerCase();
+      const normalizedEmail = (credEmail || collaboratorEmail || '').trim().toLowerCase();
 
       if (isSaasModeEnabled() && hasSystemAccess) {
         if (!saasTenantId) throw new Error('Clínica não identificada para salvar no servidor. Faça login novamente.');
@@ -198,7 +293,7 @@ export function useCollaboratorAccessForm({
         });
       } else if (hasSystemAccess && !resolvedTargetUserId) {
         onSaveError?.('Crie o acesso do colaborador antes de salvar permissões individuais.');
-        return;
+        return false;
       }
 
       if (resolvedTargetUserId) {
@@ -220,12 +315,14 @@ export function useCollaboratorAccessForm({
       }
       setDirty(false);
       onSaveSuccess?.({ inviteSent });
+      return true;
     } catch (err) {
       onSaveError?.(err?.message || 'Erro ao salvar');
+      return false;
     } finally {
       setSaving(false);
     }
-  }, [currentUser, validateCredentials, effectiveTargetUserId, credEmail, hasSystemAccess, saasTenantId, collaboratorId, linkedDisplayName, role, overrides, onAccessChanged]);
+  }, [currentUser, validateCredentials, effectiveTargetUserId, credEmail, collaboratorEmail, hasSystemAccess, saasTenantId, collaboratorId, linkedDisplayName, role, overrides, onAccessChanged]);
 
   const formatInviteDate = (value) => {
     if (!value) return '—';
@@ -292,6 +389,16 @@ export function useCollaboratorAccessForm({
     effectivePermission,
     setPermission,
     sectorCount,
+    totalPerms,
+    allowedCount,
+    selectAll,
+    clearAll,
+    selectAllInSector,
+    clearAllInSector,
+    setRowPermissions,
+    setActionInSector,
+    copyPermissions,
+    pastePermissions,
     restoreRoleDefaults,
     handleRevert,
     handleSave,

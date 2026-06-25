@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/useAuth.js';
 import { Field } from '../components/Field.jsx';
-import { Section } from '../components/Section.jsx';
-import { Tabs } from '../components/Tabs.jsx';
-import { SectionHeaderActions } from '../components/SectionHeaderActions.jsx';
 import { can } from '../permissions/permissions.js';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
+import ClinicRecordShell from '../components/clinic/record/ClinicRecordShell.jsx';
+import ClinicOverviewSection from '../components/clinic/record/ClinicOverviewSection.jsx';
+import ClinicFormCard from '../components/clinic/record/ClinicFormCard.jsx';
 import {
   addClinicAddress,
   addClinicFile,
@@ -29,26 +29,10 @@ import {
 import { ClinicPhonesSection } from '../components/clinic/ClinicPhonesSection.jsx';
 import { formatCep, formatCnpj, validateFileMeta } from '../utils/validators.js';
 
-const topTabs = [
-  { value: 'cadastro', label: 'Dados Cadastrais' },
-  { value: 'nfse', label: 'Dados NFSe' },
-  { value: 'integracoes', label: 'Integrações' },
-  { value: 'web', label: 'Presença Web' },
-  { value: 'licenca', label: 'Licença de Uso' },
-];
-
-const cadastroSections = [
-  'Dados Principais',
-  'Documentação',
-  'Tributação',
-  'Telefones',
-  'Endereços',
-  'Horários de Funcionamento',
-  'Arquivos e Documentos',
-  'Correspondências',
-  'Servidores de Email',
-  'Dados Adicionais',
-];
+const EDITABLE_SECTIONS = new Set([
+  'cadastro', 'documentacao', 'tributacao', 'horarios', 'correspondencias', 'adicionais',
+  'nfse', 'integracoes', 'web', 'licenca',
+]);
 
 const defaultHours = [
   { diaSemana: 0, abre: '08:00', fecha: '18:00', fechado: true, intervaloInicio: '', intervaloFim: '' },
@@ -64,10 +48,8 @@ const dayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 export default function ClinicSettingsPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('cadastro');
-  const [activeSection, setActiveSection] = useState('Dados Principais');
+  const [activeSection, setActiveSection] = useState('geral');
   const [editingSection, setEditingSection] = useState('');
-  const [editingTab, setEditingTab] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [clinic, setClinic] = useState(() => getClinic());
@@ -93,7 +75,7 @@ export default function ClinicSettingsPage() {
     isAutoFilled,
     lookupCep,
   } = useCepAutofill({
-    enabled: isAdmin && editingSection === 'Endereços',
+    enabled: isAdmin && editingSection === 'enderecos',
     getAddress: () => draft.newAddress,
     setAddress: updateNewAddress,
     fields: {
@@ -126,16 +108,6 @@ export default function ClinicSettingsPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [editingSection]);
 
-  useEffect(() => {
-    if (!editingTab) return undefined;
-    const handler = (event) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
-  }, [editingTab]);
-
   const refresh = () => {
     const snapshot = getClinic();
     setClinic(snapshot);
@@ -154,54 +126,38 @@ export default function ClinicSettingsPage() {
 
   const startEdit = (section) => {
     if (!isAdmin) return;
-    if ((editingTab && editingTab !== '') || (editingSection && editingSection !== section)) {
+    if (editingSection && editingSection !== section) {
       if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
     }
     setEditingSection(section);
-    setEditingTab('');
-    setError('');
-    setSuccess('');
-  };
-
-  const startTabEdit = (tab) => {
-    if (!isAdmin) return;
-    if ((editingSection && editingSection !== '') || (editingTab && editingTab !== tab)) {
-      if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
-    }
-    setEditingSection('');
-    setEditingTab(tab);
     setError('');
     setSuccess('');
   };
 
   const cancelEdit = () => {
     setEditingSection('');
-    setEditingTab('');
     setDraft(clinic);
   };
 
-  const saveSection = async (section) => {
+  const saveActiveSection = async () => {
     setError('');
     setSuccess('');
     try {
-      if (section === 'Dados Principais') {
-        updateClinicProfile(user, draft.profile);
-      }
-      if (section === 'Documentação') {
-        updateClinicDocumentation(user, draft.documentation);
-      }
-      if (section === 'Horários de Funcionamento') {
-        updateBusinessHours(user, draft.businessHours);
-      }
-      if (section === 'Correspondências') {
+      const section = editingSection || activeSection;
+      if (section === 'cadastro') updateClinicProfile(user, draft.profile);
+      else if (section === 'documentacao') updateClinicDocumentation(user, draft.documentation);
+      else if (section === 'tributacao') updateClinicTax(user, draft.tax);
+      else if (section === 'horarios') updateBusinessHours(user, draft.businessHours);
+      else if (section === 'correspondencias') {
         updateCorrespondence(user, draft.correspondence);
-      }
-      if (section === 'Dados Adicionais') {
         updateAdditional(user, draft.additional);
       }
-      if (section === 'Tributação') {
-        updateClinicTax(user, draft.tax);
-      }
+      else if (section === 'adicionais') updateAdditional(user, draft.additional);
+      else if (section === 'nfse') updateNfse(user, draft.nfse);
+      else if (section === 'integracoes') updateIntegrations(user, draft.integrations);
+      else if (section === 'web') updateWebPresence(user, draft.webPresence);
+      else if (section === 'licenca') updateLicense(user, draft.license);
+      else return;
       setEditingSection('');
       refresh();
       setSuccess('Dados salvos com sucesso.');
@@ -209,6 +165,40 @@ export default function ClinicSettingsPage() {
       setError(err.message);
     }
   };
+
+  const handleSectionChange = (next) => {
+    if (editingSection) {
+      if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
+      setEditingSection('');
+    }
+    setActiveSection(next);
+  };
+
+  const handleEditSection = (section) => {
+    setActiveSection(section);
+    if (EDITABLE_SECTIONS.has(section) || ['telefones', 'enderecos', 'arquivos', 'email'].includes(section)) {
+      startEdit(section);
+    }
+  };
+
+  const formatDatePtBr = (value) => {
+    if (!value) return '—';
+    const [year, month, day] = String(value).split('-');
+    if (!year || !month || !day) return value;
+    return `${day}/${month}/${year}`;
+  };
+
+  const primaryPhone = useMemo(() => {
+    const phones = clinic.phones || [];
+    const p = phones.find((item) => item.principal) || phones[0];
+    if (!p?.numero) return '—';
+    return p.ddd ? `(${p.ddd}) ${p.numero}` : p.numero;
+  }, [clinic.phones]);
+
+  const isRecordEditing = Boolean(editingSection && editingSection === activeSection);
+  const hasUnsavedChanges = Boolean(editingSection);
+  const canEditActiveSection = isAdmin && activeSection !== 'geral';
+  const canSaveFromHeader = isRecordEditing && (EDITABLE_SECTIONS.has(activeSection) || ['correspondencias'].includes(activeSection));
 
   const onUploadLogo = (event) => {
     const file = event.target.files?.[0];
@@ -236,7 +226,7 @@ export default function ClinicSettingsPage() {
     event.preventDefault();
     setError('');
     try {
-      if (editingSection !== 'Endereços') return;
+      if (editingSection !== 'enderecos') return;
       addClinicAddress(user, draft.newAddress);
       setDraft((prev) => ({ ...prev, newAddress: { tipo: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', principal: false } }));
       refresh();
@@ -249,7 +239,7 @@ export default function ClinicSettingsPage() {
     event.preventDefault();
     setError('');
     try {
-      if (editingSection !== 'Arquivos e Documentos') return;
+      if (editingSection !== 'arquivos') return;
       addClinicFile(user, draft.newFile);
       setDraft((prev) => ({ ...prev, newFile: { categoria: '', nomeArquivo: '', fileUrl: '', validade: '' } }));
       refresh();
@@ -262,7 +252,7 @@ export default function ClinicSettingsPage() {
     event.preventDefault();
     setError('');
     try {
-      if (editingSection !== 'Servidores de Email') return;
+      if (editingSection !== 'email') return;
       addMailServer(user, draft.newMailServer);
       setDraft((prev) => ({ ...prev, newMailServer: { provider: '', smtpHost: '', smtpPort: '', smtpUser: '', smtpPassword: '', fromName: '', fromEmail: '' } }));
       refresh();
@@ -271,57 +261,29 @@ export default function ClinicSettingsPage() {
     }
   };
 
-  const handleTabChange = (next) => {
-    if (editingSection || editingTab) {
-      if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
-      setEditingSection('');
-      setEditingTab('');
-    }
-    setActiveTab(next);
-  };
-
-  const content = useMemo(() => {
-    if (activeTab === 'cadastro') {
+  const sectionContent = useMemo(() => {
+    if (activeSection === 'geral') {
       return (
-        <div className="clinic-layout">
-          <aside className="clinic-menu">
-            {cadastroSections.map((section) => (
-              <button
-                key={section}
-                type="button"
-                className={`clinic-menu-item ${activeSection === section ? 'active' : ''}`}
-                onClick={() => {
-                  if (editingSection) {
-                    if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
-                  }
-                  setActiveSection(section);
-                  setEditingSection('');
-                }}
-              >
-                {section}
-              </button>
-            ))}
-          </aside>
-          <div className="clinic-content">
-            <SectionHeaderActions
-              title={activeSection}
-              isEditing={editingSection === activeSection}
-              onEdit={isAdmin ? () => startEdit(activeSection) : null}
-              onSave={() => saveSection(activeSection)}
-              onCancel={cancelEdit}
-              loading={false}
-            />
+        <ClinicOverviewSection
+          draft={draft}
+          clinic={clinic}
+          formatDate={formatDatePtBr}
+          canEdit={isAdmin}
+          onEditSection={handleEditSection}
+        />
+      );
+    }
 
-            {error ? <div className="error">{error}</div> : null}
-            {success ? <div className="success">{success}</div> : null}
-
-            {activeSection === 'Dados Principais' && (
-              <div className="form-grid">
+    if (activeSection === 'cadastro') {
+      return (
+        <div className="clinic-section-stack">
+          <ClinicFormCard title="Identificação da clínica" description="Dados principais exibidos no sistema e comunicações.">
+            <div className="form-grid clinic-form-grid">
                 <Field label="Pessoa">
                   <select
                     value={draft.profile.pessoa}
                     onChange={(event) => setDraft((prev) => ({ ...prev, profile: { ...prev.profile, pessoa: event.target.value } }))}
-                    disabled={editingSection !== 'Dados Principais'}
+                    disabled={editingSection !== 'cadastro'}
                   >
                     <option value="FISICA">Física</option>
                     <option value="JURIDICA">Jurídica</option>
@@ -331,28 +293,28 @@ export default function ClinicSettingsPage() {
                   <input
                     value={draft.profile.nomeMarca}
                     onChange={(event) => setDraft((prev) => ({ ...prev, profile: { ...prev.profile, nomeMarca: event.target.value } }))}
-                    disabled={editingSection !== 'Dados Principais'}
+                    disabled={editingSection !== 'cadastro'}
                   />
                 </Field>
                 <Field label="Nome Fantasia">
                   <input
                     value={draft.profile.nomeFantasia}
                     onChange={(event) => setDraft((prev) => ({ ...prev, profile: { ...prev.profile, nomeFantasia: event.target.value } }))}
-                    disabled={editingSection !== 'Dados Principais'}
+                    disabled={editingSection !== 'cadastro'}
                   />
                 </Field>
                 <Field label="Razão Social">
                   <input
                     value={draft.profile.razaoSocial}
                     onChange={(event) => setDraft((prev) => ({ ...prev, profile: { ...prev.profile, razaoSocial: event.target.value } }))}
-                    disabled={editingSection !== 'Dados Principais'}
+                    disabled={editingSection !== 'cadastro'}
                   />
                 </Field>
                 <Field label="Nome da Clínica (exibição)">
                   <input
                     value={draft.profile.nomeClinica}
                     onChange={(event) => setDraft((prev) => ({ ...prev, profile: { ...prev.profile, nomeClinica: event.target.value } }))}
-                    disabled={editingSection !== 'Dados Principais'}
+                    disabled={editingSection !== 'cadastro'}
                   />
                 </Field>
                 <Field label="E-mail principal">
@@ -360,30 +322,36 @@ export default function ClinicSettingsPage() {
                     type="email"
                     value={draft.profile.emailPrincipal}
                     onChange={(event) => setDraft((prev) => ({ ...prev, profile: { ...prev.profile, emailPrincipal: event.target.value } }))}
-                    disabled={editingSection !== 'Dados Principais'}
+                    disabled={editingSection !== 'cadastro'}
                   />
                 </Field>
                 <Field label="Logomarca">
-                  {draft.profile.logoUrl ? <img className="logo-preview" src={draft.profile.logoUrl} alt="Logo" /> : null}
-                  <input type="file" accept="image/png,image/svg+xml" onChange={onUploadLogo} disabled={editingSection !== 'Dados Principais'} />
+                  {draft.profile.logoUrl ? <img className="logo-preview clinic-logo-preview" src={draft.profile.logoUrl} alt="Logo" /> : null}
+                  <input type="file" accept="image/png,image/svg+xml" onChange={onUploadLogo} disabled={editingSection !== 'cadastro'} />
                 </Field>
-              </div>
-            )}
+            </div>
+          </ClinicFormCard>
+        </div>
+      );
+    }
 
-            {activeSection === 'Documentação' && (
-              <div className="form-grid">
+    if (activeSection === 'documentacao') {
+      return (
+        <div className="clinic-section-stack">
+          <ClinicFormCard title="Documentação legal" description="CNPJ, inscrições, alvarás e registros.">
+            <div className="form-grid clinic-form-grid">
                 <Field label="CNPJ">
                   <input
                     value={formatCnpj(draft.documentation.cnpj)}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, cnpj: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
                 <Field label="IE">
                   <input
                     value={draft.documentation.ie}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, ie: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
                 <Field label="E-mail principal">
@@ -391,21 +359,21 @@ export default function ClinicSettingsPage() {
                     type="email"
                     value={draft.profile.emailPrincipal}
                     onChange={(event) => setDraft((prev) => ({ ...prev, profile: { ...prev.profile, emailPrincipal: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
                 <Field label="Alvará Prefeitura (número)">
                   <input
                     value={draft.documentation.alvaraPrefeituraNumero}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, alvaraPrefeituraNumero: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
                 <Field label="Alvará Autorização">
                   <input
                     value={draft.documentation.alvaraAutorizacao}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, alvaraAutorizacao: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
                 <Field label="Alvará Validade">
@@ -413,14 +381,14 @@ export default function ClinicSettingsPage() {
                     type="date"
                     value={draft.documentation.alvaraValidade}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, alvaraValidade: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
                 <Field label="Vigilância Sanitária (número)">
                   <input
                     value={draft.documentation.vigilanciaSanitariaNumero}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, vigilanciaSanitariaNumero: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
                 <Field label="Vigilância Sanitária (validade)">
@@ -428,28 +396,39 @@ export default function ClinicSettingsPage() {
                     type="date"
                     value={draft.documentation.vigilanciaSanitariaValidade}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, vigilanciaSanitariaValidade: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
                 <Field label="CNES">
                   <input
                     value={draft.documentation.cnes}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, cnes: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
                 <Field label="NIRE">
                   <input
                     value={draft.documentation.nire}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, nire: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                   />
                 </Field>
+                <Field label="Observações">
+                  <textarea
+                    value={draft.documentation.observacoes}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, observacoes: event.target.value } }))}
+                    disabled={editingSection !== 'documentacao'}
+                  />
+                </Field>
+            </div>
+          </ClinicFormCard>
+          <ClinicFormCard title="Responsáveis" description="Responsável técnico e registros profissionais.">
+            <div className="form-grid clinic-form-grid">
                 <Field label="Responsável técnico (nome)">
                   <input
                     value={draft.documentation.responsavelTecnico || ''}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, responsavelTecnico: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                     placeholder="Nome completo do responsável técnico (CRO)"
                   />
                 </Field>
@@ -464,29 +443,26 @@ export default function ClinicSettingsPage() {
                         conselhoRegionalNumero: event.target.value,
                       },
                     }))}
-                    disabled={editingSection !== 'Documentação'}
+                    disabled={editingSection !== 'documentacao'}
                     placeholder="Ex.: CRO-MG 12345"
                   />
                 </Field>
-                <Field label="Observações">
-                  <textarea
-                    value={draft.documentation.observacoes}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, observacoes: event.target.value } }))}
-                    disabled={editingSection !== 'Documentação'}
-                  />
-                </Field>
-              </div>
-            )}
+            </div>
+          </ClinicFormCard>
+        </div>
+      );
+    }
 
-            {activeSection === 'Tributação' && (() => {
-              const tax = draft.tax || {};
-              return (
-                <div className="form-grid">
+    if (activeSection === 'tributacao') {
+      const tax = draft.tax || {};
+      return (
+        <ClinicFormCard title="Tributação" description="Regime tributário, ISS e configurações fiscais.">
+          <div className="form-grid clinic-form-grid">
                   <Field label="Regime tributário">
                     <select
                       value={tax.regime || 'simplesNacional'}
                       onChange={(e) => setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), regime: e.target.value } }))}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                     >
                       <option value="simplesNacional">Simples Nacional</option>
                       <option value="lucroPresumido">Lucro Presumido</option>
@@ -498,7 +474,7 @@ export default function ClinicSettingsPage() {
                     <input
                       value={tax.uf || 'SP'}
                       onChange={(e) => setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), uf: e.target.value } }))}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                       maxLength={2}
                     />
                   </Field>
@@ -507,7 +483,7 @@ export default function ClinicSettingsPage() {
                       type="number"
                       value={tax.iss ?? 5}
                       onChange={(e) => setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), iss: Number(e.target.value || 0) } }))}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                       min={0}
                       max={20}
                     />
@@ -517,7 +493,7 @@ export default function ClinicSettingsPage() {
                       type="number"
                       value={tax.baseTributavel ?? 100}
                       onChange={(e) => setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), baseTributavel: Number(e.target.value || 0) } }))}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                       min={0}
                       max={100}
                     />
@@ -526,7 +502,7 @@ export default function ClinicSettingsPage() {
                     <select
                       value={tax.simplesAnexo || 'anexo3'}
                       onChange={(e) => setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), simplesAnexo: e.target.value } }))}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                     >
                       <option value="anexo3">Anexo III</option>
                       <option value="anexo5">Anexo V</option>
@@ -537,7 +513,7 @@ export default function ClinicSettingsPage() {
                       type="number"
                       value={tax.simplesFaixa ?? 1}
                       onChange={(e) => setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), simplesFaixa: Number(e.target.value || 1) } }))}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                       min={1}
                       max={6}
                     />
@@ -547,7 +523,7 @@ export default function ClinicSettingsPage() {
                       type="number"
                       value={tax.aliquotaNominal ?? 6}
                       onChange={(e) => setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), aliquotaNominal: Number(e.target.value || 0) } }))}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                       min={0}
                       max={100}
                     />
@@ -560,7 +536,7 @@ export default function ClinicSettingsPage() {
                         const v = e.target.value;
                         setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), fatorR: v === '' ? null : Number(v) } }));
                       }}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                       min={0}
                       max={1}
                       step="0.01"
@@ -575,7 +551,7 @@ export default function ClinicSettingsPage() {
                         const v = e.target.value;
                         setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), deducaoPermitida: v === '' ? null : Number(v) } }));
                       }}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                       min={0}
                       max={100}
                       placeholder="Opcional"
@@ -585,36 +561,40 @@ export default function ClinicSettingsPage() {
                     <select
                       value={tax.tipoCalculo || 'embedded'}
                       onChange={(e) => setDraft((prev) => ({ ...prev, tax: { ...(prev.tax || {}), tipoCalculo: e.target.value } }))}
-                      disabled={editingSection !== 'Tributação'}
+                      disabled={editingSection !== 'tributacao'}
                     >
                       <option value="embedded">Embutido</option>
                       <option value="onRevenue">Por fora (sobre receita)</option>
                     </select>
                   </Field>
-                </div>
-              );
-            })()}
+          </div>
+        </ClinicFormCard>
+      );
+    }
 
-            {activeSection === 'Telefones' && (
+    if (activeSection === 'telefones') {
+      return (
               <ClinicPhonesSection
                 user={user}
                 phones={clinic.phones}
                 isAdmin={isAdmin}
-                isEditing={editingSection === 'Telefones'}
+                isEditing={editingSection === 'telefones'}
                 onRefresh={refreshClinicPhones}
                 onError={setError}
                 onSuccess={setSuccess}
               />
-            )}
+      );
+    }
 
-            {activeSection === 'Endereços' && (
-              <div className="stack">
+    if (activeSection === 'enderecos') {
+      return (
+              <div className="stack clinic-section-stack">
                 <form className="form-grid" onSubmit={addAddress}>
                   <Field label="Tipo">
                     <select
                       value={draft.newAddress?.tipo || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newAddress: { ...prev.newAddress, tipo: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Endereços'}
+                      disabled={!isAdmin || editingSection !== 'enderecos'}
                     >
                       <option value="">Selecione</option>
                       <option value="principal">Principal</option>
@@ -629,7 +609,7 @@ export default function ClinicSettingsPage() {
                         value={formatCep(draft.newAddress?.cep || '')}
                         onChange={(event) => handleCepChange(event.target.value)}
                         onBlur={handleCepBlur}
-                        disabled={!isAdmin || editingSection !== 'Endereços'}
+                        disabled={!isAdmin || editingSection !== 'enderecos'}
                       />
                       <span className="cep-spinner" aria-hidden="true" />
                     </div>
@@ -639,7 +619,7 @@ export default function ClinicSettingsPage() {
                       className="button secondary"
                       type="button"
                       onClick={() => lookupCep(draft.newAddress?.cep || '', { force: true })}
-                      disabled={!isAdmin || editingSection !== 'Endereços'}
+                      disabled={!isAdmin || editingSection !== 'enderecos'}
                     >
                       Consultar
                     </button>
@@ -649,21 +629,21 @@ export default function ClinicSettingsPage() {
                       value={draft.newAddress?.logradouro || ''}
                       onChange={(event) => handleAddressFieldChange('logradouro', event.target.value)}
                       className={isAutoFilled('logradouro') ? 'input-autofilled' : ''}
-                      disabled={!isAdmin || editingSection !== 'Endereços'}
+                      disabled={!isAdmin || editingSection !== 'enderecos'}
                     />
                   </Field>
                   <Field label="Número">
                     <input
                       value={draft.newAddress?.numero || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newAddress: { ...prev.newAddress, numero: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Endereços'}
+                      disabled={!isAdmin || editingSection !== 'enderecos'}
                     />
                   </Field>
                   <Field label="Complemento">
                     <input
                       value={draft.newAddress?.complemento || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newAddress: { ...prev.newAddress, complemento: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Endereços'}
+                      disabled={!isAdmin || editingSection !== 'enderecos'}
                     />
                   </Field>
                   <Field label="Bairro">
@@ -671,7 +651,7 @@ export default function ClinicSettingsPage() {
                       value={draft.newAddress?.bairro || ''}
                       onChange={(event) => handleAddressFieldChange('bairro', event.target.value)}
                       className={isAutoFilled('bairro') ? 'input-autofilled' : ''}
-                      disabled={!isAdmin || editingSection !== 'Endereços'}
+                      disabled={!isAdmin || editingSection !== 'enderecos'}
                     />
                   </Field>
                   <Field label="Cidade">
@@ -679,7 +659,7 @@ export default function ClinicSettingsPage() {
                       value={draft.newAddress?.cidade || ''}
                       onChange={(event) => handleAddressFieldChange('cidade', event.target.value)}
                       className={isAutoFilled('cidade') ? 'input-autofilled' : ''}
-                      disabled={!isAdmin || editingSection !== 'Endereços'}
+                      disabled={!isAdmin || editingSection !== 'enderecos'}
                     />
                   </Field>
                   <Field label="UF">
@@ -687,7 +667,7 @@ export default function ClinicSettingsPage() {
                       value={draft.newAddress?.uf || ''}
                       onChange={(event) => handleAddressFieldChange('uf', event.target.value)}
                       className={isAutoFilled('uf') ? 'input-autofilled' : ''}
-                      disabled={!isAdmin || editingSection !== 'Endereços'}
+                      disabled={!isAdmin || editingSection !== 'enderecos'}
                     />
                   </Field>
                   <Field label="Principal">
@@ -695,10 +675,10 @@ export default function ClinicSettingsPage() {
                       type="checkbox"
                       checked={draft.newAddress?.principal || false}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newAddress: { ...prev.newAddress, principal: event.target.checked } }))}
-                      disabled={!isAdmin || editingSection !== 'Endereços'}
+                      disabled={!isAdmin || editingSection !== 'enderecos'}
                     />
                   </Field>
-                  <button className="button primary" type="submit" disabled={!isAdmin || editingSection !== 'Endereços'}>
+                  <button className="button primary" type="submit" disabled={!isAdmin || editingSection !== 'enderecos'}>
                     Adicionar endereço
                   </button>
                 </form>
@@ -717,10 +697,13 @@ export default function ClinicSettingsPage() {
                   </ul>
                 </div>
               </div>
-            )}
+      );
+    }
 
-            {activeSection === 'Horários de Funcionamento' && (
-              <div className="stack">
+    if (activeSection === 'horarios') {
+      return (
+        <ClinicFormCard title="Horários de funcionamento" description="Grade semanal de abertura, fechamento e intervalos.">
+              <div className="clinic-hours-grid">
                 {(draft.businessHours?.length ? draft.businessHours : defaultHours).map((item, idx) => (
                   <div key={item.diaSemana} className="hours-row">
                     <strong>{dayLabels[item.diaSemana]}</strong>
@@ -733,7 +716,7 @@ export default function ClinicSettingsPage() {
                           next[idx] = { ...next[idx], fechado: !event.target.checked };
                           setDraft((prev) => ({ ...prev, businessHours: next }));
                         }}
-                        disabled={editingSection !== 'Horários de Funcionamento'}
+                        disabled={editingSection !== 'horarios'}
                       />
                       Aberto
                     </label>
@@ -745,7 +728,7 @@ export default function ClinicSettingsPage() {
                         next[idx] = { ...next[idx], abre: event.target.value };
                         setDraft((prev) => ({ ...prev, businessHours: next }));
                       }}
-                      disabled={editingSection !== 'Horários de Funcionamento' || item.fechado}
+                      disabled={editingSection !== 'horarios' || item.fechado}
                     />
                     <input
                       type="time"
@@ -755,7 +738,7 @@ export default function ClinicSettingsPage() {
                         next[idx] = { ...next[idx], fecha: event.target.value };
                         setDraft((prev) => ({ ...prev, businessHours: next }));
                       }}
-                      disabled={editingSection !== 'Horários de Funcionamento' || item.fechado}
+                      disabled={editingSection !== 'horarios' || item.fechado}
                     />
                     <input
                       type="time"
@@ -765,7 +748,7 @@ export default function ClinicSettingsPage() {
                         next[idx] = { ...next[idx], intervaloInicio: event.target.value };
                         setDraft((prev) => ({ ...prev, businessHours: next }));
                       }}
-                      disabled={editingSection !== 'Horários de Funcionamento' || item.fechado}
+                      disabled={editingSection !== 'horarios' || item.fechado}
                     />
                     <input
                       type="time"
@@ -775,21 +758,24 @@ export default function ClinicSettingsPage() {
                         next[idx] = { ...next[idx], intervaloFim: event.target.value };
                         setDraft((prev) => ({ ...prev, businessHours: next }));
                       }}
-                      disabled={editingSection !== 'Horários de Funcionamento' || item.fechado}
+                      disabled={editingSection !== 'horarios' || item.fechado}
                     />
                   </div>
                 ))}
               </div>
-            )}
+        </ClinicFormCard>
+      );
+    }
 
-            {activeSection === 'Arquivos e Documentos' && (
-              <div className="stack">
+    if (activeSection === 'arquivos') {
+      return (
+              <div className="stack clinic-section-stack">
                 <form className="form-grid" onSubmit={addFile}>
                   <Field label="Categoria">
                     <select
                       value={draft.newFile?.categoria || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newFile: { ...prev.newFile, categoria: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Arquivos e Documentos'}
+                      disabled={!isAdmin || editingSection !== 'arquivos'}
                     >
                       <option value="">Selecione</option>
                       <option value="contrato">Contrato</option>
@@ -803,7 +789,7 @@ export default function ClinicSettingsPage() {
                     <input
                       value={draft.newFile?.nomeArquivo || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newFile: { ...prev.newFile, nomeArquivo: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Arquivos e Documentos'}
+                      disabled={!isAdmin || editingSection !== 'arquivos'}
                     />
                   </Field>
                   <Field label="Validade">
@@ -811,7 +797,7 @@ export default function ClinicSettingsPage() {
                       type="date"
                       value={draft.newFile?.validade || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newFile: { ...prev.newFile, validade: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Arquivos e Documentos'}
+                      disabled={!isAdmin || editingSection !== 'arquivos'}
                     />
                   </Field>
                   <Field label="Arquivo">
@@ -834,10 +820,10 @@ export default function ClinicSettingsPage() {
                         };
                         reader.readAsDataURL(file);
                       }}
-                      disabled={!isAdmin || editingSection !== 'Arquivos e Documentos'}
+                      disabled={!isAdmin || editingSection !== 'arquivos'}
                     />
                   </Field>
-                  <button className="button primary" type="submit" disabled={!isAdmin || editingSection !== 'Arquivos e Documentos'}>
+                  <button className="button primary" type="submit" disabled={!isAdmin || editingSection !== 'arquivos'}>
                     Adicionar arquivo
                   </button>
                 </form>
@@ -861,15 +847,19 @@ export default function ClinicSettingsPage() {
                   </ul>
                 </div>
               </div>
-            )}
+      );
+    }
 
-            {activeSection === 'Correspondências' && (
-              <div className="form-grid">
+    if (activeSection === 'correspondencias') {
+      return (
+        <div className="clinic-section-stack">
+          <ClinicFormCard title="Preferências de correspondência" description="Endereço e canais preferenciais de contato.">
+              <div className="form-grid clinic-form-grid">
                 <Field label="Endereço para correspondência">
                   <select
                     value={draft.correspondence.addressId || ''}
                     onChange={(event) => setDraft((prev) => ({ ...prev, correspondence: { ...prev.correspondence, addressId: event.target.value } }))}
-                    disabled={editingSection !== 'Correspondências'}
+                    disabled={editingSection !== 'correspondencias'}
                   >
                     <option value="">Selecione</option>
                     {clinic.addresses.map((item) => (
@@ -884,7 +874,7 @@ export default function ClinicSettingsPage() {
                     type="checkbox"
                     checked={draft.correspondence.preferEmail}
                     onChange={(event) => setDraft((prev) => ({ ...prev, correspondence: { ...prev.correspondence, preferEmail: event.target.checked } }))}
-                    disabled={editingSection !== 'Correspondências'}
+                    disabled={editingSection !== 'correspondencias'}
                   />
                 </Field>
                 <Field label="Preferência SMS">
@@ -892,7 +882,7 @@ export default function ClinicSettingsPage() {
                     type="checkbox"
                     checked={draft.correspondence.preferSms}
                     onChange={(event) => setDraft((prev) => ({ ...prev, correspondence: { ...prev.correspondence, preferSms: event.target.checked } }))}
-                    disabled={editingSection !== 'Correspondências'}
+                    disabled={editingSection !== 'correspondencias'}
                   />
                 </Field>
                 <Field label="Preferência WhatsApp">
@@ -900,27 +890,43 @@ export default function ClinicSettingsPage() {
                     type="checkbox"
                     checked={draft.correspondence.preferWhatsApp}
                     onChange={(event) => setDraft((prev) => ({ ...prev, correspondence: { ...prev.correspondence, preferWhatsApp: event.target.checked } }))}
-                    disabled={editingSection !== 'Correspondências'}
+                    disabled={editingSection !== 'correspondencias'}
                   />
                 </Field>
                 <Field label="Observações">
                   <textarea
                     value={draft.correspondence.notes}
                     onChange={(event) => setDraft((prev) => ({ ...prev, correspondence: { ...prev.correspondence, notes: event.target.value } }))}
-                    disabled={editingSection !== 'Correspondências'}
+                    disabled={editingSection !== 'correspondencias'}
                   />
                 </Field>
               </div>
-            )}
+          </ClinicFormCard>
+          <ClinicFormCard title="Observações internas" description="Notas administrativas visíveis apenas para a equipe.">
+              <div className="form-grid clinic-form-grid">
+                <Field label="Observações internas">
+                  <textarea
+                    value={draft.additional.notes}
+                    onChange={(event) => setDraft((prev) => ({ ...prev, additional: { ...prev.additional, notes: event.target.value } }))}
+                    disabled={editingSection !== 'correspondencias'}
+                  />
+                </Field>
+              </div>
+          </ClinicFormCard>
+        </div>
+      );
+    }
 
-            {activeSection === 'Servidores de Email' && (
-              <div className="stack">
-                <form className="form-grid" onSubmit={addMail}>
+    if (activeSection === 'email') {
+      return (
+              <div className="stack clinic-section-stack">
+                <ClinicFormCard title="Novo servidor de e-mail" description="Configure SMTP para envio de mensagens pela clínica.">
+                <form className="form-grid clinic-form-grid" onSubmit={addMail}>
                   <Field label="Provider">
                     <select
                       value={draft.newMailServer?.provider || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newMailServer: { ...prev.newMailServer, provider: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Servidores de Email'}
+                      disabled={!isAdmin || editingSection !== 'email'}
                     >
                       <option value="">Selecione</option>
                       <option value="gmail">Gmail</option>
@@ -932,21 +938,21 @@ export default function ClinicSettingsPage() {
                     <input
                       value={draft.newMailServer?.smtpHost || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newMailServer: { ...prev.newMailServer, smtpHost: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Servidores de Email'}
+                      disabled={!isAdmin || editingSection !== 'email'}
                     />
                   </Field>
                   <Field label="SMTP Port">
                     <input
                       value={draft.newMailServer?.smtpPort || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newMailServer: { ...prev.newMailServer, smtpPort: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Servidores de Email'}
+                      disabled={!isAdmin || editingSection !== 'email'}
                     />
                   </Field>
                   <Field label="SMTP User">
                     <input
                       value={draft.newMailServer?.smtpUser || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newMailServer: { ...prev.newMailServer, smtpUser: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Servidores de Email'}
+                      disabled={!isAdmin || editingSection !== 'email'}
                     />
                   </Field>
                   <Field label="SMTP Password">
@@ -954,28 +960,30 @@ export default function ClinicSettingsPage() {
                       type="password"
                       value={draft.newMailServer?.smtpPassword || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newMailServer: { ...prev.newMailServer, smtpPassword: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Servidores de Email'}
+                      disabled={!isAdmin || editingSection !== 'email'}
                     />
                   </Field>
                   <Field label="From Name">
                     <input
                       value={draft.newMailServer?.fromName || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newMailServer: { ...prev.newMailServer, fromName: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Servidores de Email'}
+                      disabled={!isAdmin || editingSection !== 'email'}
                     />
                   </Field>
                   <Field label="From Email">
                     <input
                       value={draft.newMailServer?.fromEmail || ''}
                       onChange={(event) => setDraft((prev) => ({ ...prev, newMailServer: { ...prev.newMailServer, fromEmail: event.target.value } }))}
-                      disabled={!isAdmin || editingSection !== 'Servidores de Email'}
+                      disabled={!isAdmin || editingSection !== 'email'}
                     />
                   </Field>
-                  <button className="button primary" type="submit" disabled={!isAdmin || editingSection !== 'Servidores de Email'}>
+                  <button className="button primary" type="submit" disabled={!isAdmin || editingSection !== 'email'}>
                     Adicionar servidor
                   </button>
                 </form>
-                <div className="card">
+                </ClinicFormCard>
+                <ClinicFormCard title="Servidores configurados" description="Teste a conexão ou remova servidores existentes.">
+                <div className="clinic-list-card">
                   <ul className="list">
                     {clinic.mailServers.map((item) => (
                       <li key={item.id} className="list-item">
@@ -994,186 +1002,124 @@ export default function ClinicSettingsPage() {
                     ))}
                   </ul>
                 </div>
+                </ClinicFormCard>
               </div>
-            )}
-
-            {activeSection === 'Dados Adicionais' && (
-              <div className="form-grid">
-                <Field label="Observações internas">
-                  <textarea
-                    value={draft.additional.notes}
-                    onChange={(event) => setDraft((prev) => ({ ...prev, additional: { ...prev.additional, notes: event.target.value } }))}
-                    disabled={editingSection !== 'Dados Adicionais'}
-                  />
-                </Field>
-              </div>
-            )}
-          </div>
-        </div>
       );
     }
 
-    if (activeTab === 'nfse') {
+    if (activeSection === 'nfse') {
       return (
-        <div className="stack">
-          <SectionHeaderActions
-            title="Dados NFSe"
-            isEditing={editingTab === 'nfse'}
-            onEdit={isAdmin ? () => startTabEdit('nfse') : null}
-            onCancel={cancelEdit}
-            onSave={() => {
-              updateNfse(user, draft.nfse);
-              setEditingTab('');
-              setSuccess('NFSe atualizado.');
-            }}
-            loading={false}
-          />
-          <div className="form-grid">
+        <ClinicFormCard title="Dados NFSe" description="Integração com prefeitura e emissão de notas fiscais.">
+          <div className="form-grid clinic-form-grid">
           <Field label="Provider">
             <input
               value={draft.nfse.provider}
               onChange={(event) => setDraft((prev) => ({ ...prev, nfse: { ...prev.nfse, provider: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'nfse'}
+              disabled={!isAdmin || editingSection !== 'nfse'}
             />
           </Field>
           <Field label="Código municipal">
             <input
               value={draft.nfse.municipalCode}
               onChange={(event) => setDraft((prev) => ({ ...prev, nfse: { ...prev.nfse, municipalCode: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'nfse'}
+              disabled={!isAdmin || editingSection !== 'nfse'}
             />
           </Field>
           <Field label="Token">
             <input
               value={draft.nfse.token}
               onChange={(event) => setDraft((prev) => ({ ...prev, nfse: { ...prev.nfse, token: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'nfse'}
+              disabled={!isAdmin || editingSection !== 'nfse'}
             />
           </Field>
           </div>
-        </div>
+        </ClinicFormCard>
       );
     }
 
-    if (activeTab === 'integracoes') {
+    if (activeSection === 'integracoes') {
       return (
-        <div className="stack">
-          <SectionHeaderActions
-            title="Integrações"
-            isEditing={editingTab === 'integracoes'}
-            onEdit={isAdmin ? () => startTabEdit('integracoes') : null}
-            onCancel={cancelEdit}
-            onSave={() => {
-              updateIntegrations(user, draft.integrations);
-              setEditingTab('');
-              setSuccess('Integrações atualizadas.');
-            }}
-            loading={false}
-          />
-          <div className="form-grid">
+        <ClinicFormCard title="Integrações" description="WhatsApp, SMS, webhooks e serviços conectados.">
+          <div className="form-grid clinic-form-grid">
           <Field label="WhatsApp API URL">
             <input
               value={draft.integrations.whatsappApiUrl}
               onChange={(event) => setDraft((prev) => ({ ...prev, integrations: { ...prev.integrations, whatsappApiUrl: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'integracoes'}
+              disabled={!isAdmin || editingSection !== 'integracoes'}
             />
           </Field>
           <Field label="SMS Provider">
             <input
               value={draft.integrations.smsProvider}
               onChange={(event) => setDraft((prev) => ({ ...prev, integrations: { ...prev.integrations, smsProvider: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'integracoes'}
+              disabled={!isAdmin || editingSection !== 'integracoes'}
             />
           </Field>
           <Field label="Webhook URL">
             <input
               value={draft.integrations.webhookUrl}
               onChange={(event) => setDraft((prev) => ({ ...prev, integrations: { ...prev.integrations, webhookUrl: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'integracoes'}
+              disabled={!isAdmin || editingSection !== 'integracoes'}
             />
           </Field>
           </div>
-        </div>
+        </ClinicFormCard>
       );
     }
 
-    if (activeTab === 'web') {
+    if (activeSection === 'web') {
       return (
-        <div className="stack">
-          <SectionHeaderActions
-            title="Presença Web"
-            isEditing={editingTab === 'web'}
-            onEdit={isAdmin ? () => startTabEdit('web') : null}
-            onCancel={cancelEdit}
-            onSave={() => {
-              updateWebPresence(user, draft.webPresence);
-              setEditingTab('');
-              setSuccess('Presença web atualizada.');
-            }}
-            loading={false}
-          />
-          <div className="form-grid">
+        <ClinicFormCard title="Presença Web" description="Site, redes sociais e links públicos da clínica.">
+          <div className="form-grid clinic-form-grid">
           <Field label="Website">
             <input
               value={draft.webPresence.website}
               onChange={(event) => setDraft((prev) => ({ ...prev, webPresence: { ...prev.webPresence, website: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'web'}
+              disabled={!isAdmin || editingSection !== 'web'}
             />
           </Field>
           <Field label="Instagram">
             <input
               value={draft.webPresence.instagram}
               onChange={(event) => setDraft((prev) => ({ ...prev, webPresence: { ...prev.webPresence, instagram: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'web'}
+              disabled={!isAdmin || editingSection !== 'web'}
             />
           </Field>
           <Field label="Facebook">
             <input
               value={draft.webPresence.facebook}
               onChange={(event) => setDraft((prev) => ({ ...prev, webPresence: { ...prev.webPresence, facebook: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'web'}
+              disabled={!isAdmin || editingSection !== 'web'}
             />
           </Field>
           <Field label="Google Maps">
             <input
               value={draft.webPresence.googleMapsUrl}
               onChange={(event) => setDraft((prev) => ({ ...prev, webPresence: { ...prev.webPresence, googleMapsUrl: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'web'}
+              disabled={!isAdmin || editingSection !== 'web'}
             />
           </Field>
           <Field label="WhatsApp">
             <input
               value={draft.webPresence.whatsappUrl}
               onChange={(event) => setDraft((prev) => ({ ...prev, webPresence: { ...prev.webPresence, whatsappUrl: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'web'}
+              disabled={!isAdmin || editingSection !== 'web'}
             />
           </Field>
           </div>
-        </div>
+        </ClinicFormCard>
       );
     }
 
-    if (activeTab === 'licenca') {
+    if (activeSection === 'licenca') {
       return (
-        <div className="stack">
-          <SectionHeaderActions
-            title="Licença de Uso"
-            isEditing={editingTab === 'licenca'}
-            onEdit={isAdmin ? () => startTabEdit('licenca') : null}
-            onCancel={cancelEdit}
-            onSave={() => {
-              updateLicense(user, draft.license);
-              setEditingTab('');
-              setSuccess('Licença atualizada.');
-            }}
-            loading={false}
-          />
-          <div className="form-grid">
+        <ClinicFormCard title="Licença de Uso" description="Plano contratado, limites e vencimento.">
+          <div className="form-grid clinic-form-grid">
           <Field label="Plano">
             <input
               value={draft.license.plan}
               onChange={(event) => setDraft((prev) => ({ ...prev, license: { ...prev.license, plan: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'licenca'}
+              disabled={!isAdmin || editingSection !== 'licenca'}
             />
           </Field>
           <Field label="Expira em">
@@ -1181,7 +1127,7 @@ export default function ClinicSettingsPage() {
               type="date"
               value={draft.license.expiresAt}
               onChange={(event) => setDraft((prev) => ({ ...prev, license: { ...prev.license, expiresAt: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'licenca'}
+              disabled={!isAdmin || editingSection !== 'licenca'}
             />
           </Field>
           <Field label="Usuários">
@@ -1189,23 +1135,49 @@ export default function ClinicSettingsPage() {
               type="number"
               value={draft.license.seats}
               onChange={(event) => setDraft((prev) => ({ ...prev, license: { ...prev.license, seats: event.target.value } }))}
-              disabled={!isAdmin || editingTab !== 'licenca'}
+              disabled={!isAdmin || editingSection !== 'licenca'}
             />
           </Field>
           </div>
-        </div>
+        </ClinicFormCard>
       );
     }
 
     return null;
-  }, [activeTab, activeSection, editingSection, clinic, draft, user, isAdmin, error, success]);
+  }, [activeSection, editingSection, clinic, draft, user, isAdmin, cepLoading, cepError, isAutoFilled, handleCepChange, handleCepBlur, handleAddressFieldChange, lookupCep]);
+
+  const headerProps = {
+    logoUrl: draft.profile?.logoUrl,
+    displayName: draft.profile?.nomeClinica || draft.profile?.nomeMarca || draft.profile?.nomeFantasia,
+    razaoSocial: draft.profile?.razaoSocial,
+    documento: formatCnpj(draft.documentation?.cnpj || ''),
+    statusLabel: 'Ativa',
+    email: draft.profile?.emailPrincipal,
+    phone: primaryPhone,
+    isEditing: isRecordEditing,
+    canEdit: canEditActiveSection,
+    canSave: canSaveFromHeader,
+    onEdit: () => startEdit(activeSection),
+    onSave: saveActiveSection,
+    onCancel: cancelEdit,
+    menuItems: isAdmin ? [
+      { label: 'Ir para visão geral', onClick: () => handleSectionChange('geral') },
+      { label: 'Ir para integrações', onClick: () => handleSectionChange('integracoes') },
+    ] : [],
+  };
 
   return (
-    <div className="stack">
-      <Section title="Dados da Clínica">
-        <Tabs tabs={topTabs} active={activeTab} onChange={handleTabChange} />
-        {content}
-      </Section>
-    </div>
+    <ClinicRecordShell
+      headerProps={headerProps}
+      activeSection={activeSection}
+      onSectionChange={handleSectionChange}
+      hasUnsavedChanges={hasUnsavedChanges}
+      successMessage={success}
+      errorMessage={error}
+      onDiscard={cancelEdit}
+      onSave={saveActiveSection}
+    >
+      {sectionContent}
+    </ClinicRecordShell>
   );
 }

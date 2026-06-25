@@ -1,37 +1,10 @@
-import { useState, useEffect } from 'react';
-import { RotateCcw, Save, Settings2, X } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { RotateCcw, Save, Settings2 } from 'lucide-react';
 import Button from '../../Button.jsx';
 import { useCollaboratorAccessForm } from '../../../hooks/useCollaboratorAccessForm.js';
-import {
-  ModalRoot, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalTitle, ModalDescription,
-} from '../../ui/Modal.jsx';
-
-const ACTION_HINTS = {
-  view: 'Visualizar informações',
-  create: 'Cadastrar novos registros',
-  edit: 'Alterar dados existentes',
-  delete: 'Remover registros',
-  export: 'Baixar relatórios',
-  send: 'Disparar mensagens',
-  cancel: 'Cancelar ações',
-  move_stage: 'Mover etapas',
-};
-
-const ACTION_VERBS = {
-  view: 'visualizar',
-  create: 'criar',
-  edit: 'editar',
-  delete: 'excluir',
-  export: 'exportar',
-  send: 'enviar',
-  cancel: 'cancelar',
-  move_stage: 'mover',
-};
-
-function humanActionLabel(actionKey, featureLabel) {
-  const verb = ACTION_VERBS[actionKey] || actionKey;
-  return `Pode ${verb} em ${featureLabel}`;
-}
+import PermissionsModuleModal from './permissions/PermissionsModuleModal.jsx';
+import PermissionsProgress from './permissions/PermissionsProgress.jsx';
+import { progressVariant } from './permissions/permissionsConstants.js';
 
 export default function CollaboratorPermissionsHub({
   collaboratorId,
@@ -62,7 +35,16 @@ export default function CollaboratorPermissionsHub({
 
   const [configModule, setConfigModule] = useState(null);
   const readOnly = form.readOnly || !canEdit;
-  const saveHandlers = { onSaveSuccess, onSaveError };
+
+  const closeModal = useCallback(() => setConfigModule(null), []);
+
+  const saveHandlers = useMemo(() => ({
+    onSaveSuccess: (result) => {
+      closeModal();
+      onSaveSuccess?.(result);
+    },
+    onSaveError,
+  }), [closeModal, onSaveSuccess, onSaveError]);
 
   useEffect(() => {
     onDirtyChange?.(form.dirty);
@@ -93,6 +75,10 @@ export default function CollaboratorPermissionsHub({
               ))}
             </select>
           </div>
+          <div className="cr-perms__profile-counter" aria-live="polite">
+            <span className="cr-perms__label">Total selecionado</span>
+            <strong>{form.allowedCount}/{form.totalPerms}</strong>
+          </div>
         </div>
         <div className="cr-perms__profile-actions">
           <Button variant="secondary" size="sm" icon={RotateCcw} disabled={readOnly} onClick={form.restoreRoleDefaults}>
@@ -117,16 +103,16 @@ export default function CollaboratorPermissionsHub({
         <div className="cr-perms__module-grid">
           {form.sectorsWithPerms.map((sector) => {
             const { selected, total } = form.sectorCount(sector.key);
-            const pct = total ? Math.round((selected / total) * 100) : 0;
+            const variant = progressVariant(selected, total);
             return (
-              <article key={sector.key} className="cr-perms__module-card">
+              <article key={sector.key} className={`cr-perms__module-card cr-perms__module-card--${variant}`}>
                 <div className="cr-perms__module-head">
                   <strong>{sector.label}</strong>
-                  <span>{selected}/{total}</span>
+                  <span className={`cr-perms__module-counter cr-perms__module-counter--${variant}`}>
+                    {selected}/{total}
+                  </span>
                 </div>
-                <div className="cr-perms__progress" aria-hidden>
-                  <span style={{ width: `${pct}%` }} />
-                </div>
+                <PermissionsProgress selected={selected} total={total} />
                 <Button variant="ghost" size="sm" icon={Settings2} onClick={() => setConfigModule(sector.key)}>
                   Configurar
                 </Button>
@@ -136,49 +122,14 @@ export default function CollaboratorPermissionsHub({
         </div>
       </section>
 
-      <ModalRoot open={Boolean(configModule)} onOpenChange={(open) => { if (!open) setConfigModule(null); }}>
-        <ModalContent size="lg">
-          <ModalHeader>
-            <ModalTitle>{activeSector?.label || 'Permissões'}</ModalTitle>
-            <ModalDescription>Defina o que este colaborador pode fazer em cada funcionalidade.</ModalDescription>
-          </ModalHeader>
-          <ModalBody>
-            {activeSector?.rows.map((row) => (
-              <div key={row.key} className="cr-perms__feature">
-                <div className="cr-perms__feature-head">
-                  <strong>{row.label}</strong>
-                </div>
-                <div className="cr-perms__feature-actions">
-                  {row.actions.map((actionKey) => {
-                    const perm = row.permByAction[actionKey];
-                    if (!perm) return null;
-                    const checked = form.effectivePermission(perm.id);
-                    const hint = ACTION_HINTS[actionKey] || form.ACTION_LABELS[actionKey];
-                    return (
-                      <label key={actionKey} className={`cr-perms__action ${checked ? 'is-on' : ''}`} title={humanActionLabel(actionKey, row.label)}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={readOnly}
-                          onChange={(e) => form.setPermission(perm.id, e.target.checked)}
-                        />
-                        <span className="cr-perms__action-label">{form.ACTION_LABELS[actionKey] || actionKey}</span>
-                        <span className="cr-perms__action-hint">{hint}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" icon={X} onClick={() => setConfigModule(null)}>Fechar</Button>
-            <Button variant="primary" icon={Save} loading={form.saving} disabled={readOnly || !form.dirty} onClick={() => form.handleSave(saveHandlers)}>
-              Salvar permissões
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </ModalRoot>
+      <PermissionsModuleModal
+        open={Boolean(configModule)}
+        sector={activeSector}
+        form={form}
+        readOnly={readOnly}
+        saveHandlers={saveHandlers}
+        onClose={closeModal}
+      />
     </div>
   );
 }
