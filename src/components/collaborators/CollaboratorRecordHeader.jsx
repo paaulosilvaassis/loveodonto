@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import Button from '../Button.jsx';
+import AppAvatar from '../common/AppAvatar.jsx';
 import { accessStatusBadgeClass } from '../../utils/inviteStatus.js';
 
 export default function CollaboratorRecordHeader({
@@ -53,17 +54,14 @@ export default function CollaboratorRecordHeader({
     <header className="collaborator-record-header">
       <div className="collaborator-record-header__main">
         <div className="collaborator-record-header__identity">
-          {photoSrc ? (
-            <img
-              src={photoSrc}
-              alt=""
-              className="collaborator-record-header__avatar collaborator-record-header__avatar--photo"
-            />
-          ) : (
-            <span className="collaborator-record-header__avatar" aria-hidden>
-              {initials}
-            </span>
-          )}
+          <AppAvatar
+            user={collaborator}
+            name={displayName}
+            photoUrl={photoSrc}
+            fallbackInitials={initials}
+            className="collaborator-record-header__avatar"
+            size="inherit"
+          />
           <div className="collaborator-record-header__text">
             <h2 className="collaborator-record-header__name">{displayName}</h2>
             {cargoLine ? <p className="collaborator-record-header__role">{cargoLine}</p> : null}

@@ -13,6 +13,7 @@ import {
   resolveCollaboratorProfileRole,
 } from '../utils/collaboratorAccessRole.js';
 import { provisionCollaboratorSystemAccess, linkCollaboratorTenantAccess, listTenantUsersAccess } from './collaboratorAccessProvisionService.js';
+import { mapCollaboratorToProfessionalOption } from '../utils/avatarUtils.js';
 
 function syncLocalCollaboratorAccess(collaboratorId, tenantUser, profileRole) {
   const userId = String(tenantUser?.user_id || '').trim();
@@ -900,10 +901,5 @@ export const getProfessionalOptions = () => {
   const collaborators = (db.collaborators ?? [])
     .filter((item) => item.status === 'ativo')
     .filter((item) => isAgendaProfessional(item));
-  return collaborators.map((item) => ({
-    id: item.id,
-    name: item.nomeCompleto,
-    specialty: item.especialidades?.[0] || item.cargo || '',
-    avatarUrl: item.fotoUrl || '',
-  }));
+  return collaborators.map((item) => mapCollaboratorToProfessionalOption(item));
 };

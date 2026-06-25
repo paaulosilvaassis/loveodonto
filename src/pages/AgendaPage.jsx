@@ -13,6 +13,7 @@ import {
 } from '../services/appointmentService.js';
 import { queueMessage, listTemplates } from '../services/communicationService.js';
 import { getProfessionalOptions } from '../services/collaboratorService.js';
+import { getUserAvatarUrl } from '../utils/avatarUtils.js';
 import { CalendarGrid } from '../components/agenda/CalendarGrid.jsx';
 import { CalendarHeader } from '../components/agenda/CalendarHeader.jsx';
 import { AgendaTimeline } from '../components/agenda/AgendaTimeline.jsx';
@@ -138,8 +139,17 @@ export default function AgendaPage() {
     }
     return safeDb.users
       .filter((item) => item.role === 'profissional')
-      .map((item) => ({ id: item.id, name: item.name, specialty: '', avatarUrl: '' }));
-  }, [safeDb]);
+      .map((item) => {
+        const avatarUrl = getUserAvatarUrl(item);
+        return {
+          id: item.id,
+          name: item.name,
+          specialty: '',
+          avatarUrl,
+          photoUrl: avatarUrl,
+        };
+      });
+  }, [safeDb, dbSnapshot]);
 
   // Validar e limpar seleção se profissional não existir mais
   useEffect(() => {

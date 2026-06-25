@@ -1,12 +1,14 @@
 import { MoreHorizontal, Pencil, Save, X } from 'lucide-react';
 import { useState } from 'react';
 import Button from '../../Button.jsx';
+import AppAvatar from '../../common/AppAvatar.jsx';
 import { accessStatusBadgeClass } from '../../../utils/inviteStatus.js';
 
 export default function CollaboratorCompactHeader({
   fotoUrl,
   initials,
   displayName,
+  collaborator,
   cargo,
   categoria,
   especialidade,
@@ -28,11 +30,14 @@ export default function CollaboratorCompactHeader({
   return (
     <header className="cr-header">
       <div className="cr-header__left">
-        {fotoUrl ? (
-          <img src={fotoUrl} alt="" className="cr-header__avatar cr-header__avatar--photo" />
-        ) : (
-          <span className="cr-header__avatar" aria-hidden>{initials}</span>
-        )}
+        <AppAvatar
+          user={collaborator}
+          name={displayName}
+          photoUrl={fotoUrl}
+          fallbackInitials={initials}
+          className="cr-header__avatar"
+          size="inherit"
+        />
         <div className="cr-header__identity">
           <h1 className="cr-header__name">{displayName}</h1>
           <p className="cr-header__role">

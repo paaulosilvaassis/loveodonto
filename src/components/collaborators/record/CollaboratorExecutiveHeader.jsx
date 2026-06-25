@@ -1,12 +1,14 @@
 import { Mail, MoreHorizontal, Pencil, Phone, Save, X } from 'lucide-react';
 import { useState } from 'react';
 import Button from '../../Button.jsx';
+import AppAvatar from '../../common/AppAvatar.jsx';
 import { accessStatusBadgeClass } from '../../../utils/inviteStatus.js';
 
 export default function CollaboratorExecutiveHeader({
   fotoUrl,
   initials,
   displayName,
+  collaborator,
   cargo,
   categoria,
   especialidade,
@@ -49,11 +51,14 @@ export default function CollaboratorExecutiveHeader({
     <section className="cr-executive">
       <div className="cr-executive__top">
         <div className="cr-executive__identity">
-          {fotoUrl ? (
-            <img src={fotoUrl} alt="" className="cr-executive__avatar cr-executive__avatar--photo" />
-          ) : (
-            <span className="cr-executive__avatar" aria-hidden>{initials}</span>
-          )}
+          <AppAvatar
+            user={collaborator}
+            name={displayName}
+            photoUrl={fotoUrl}
+            fallbackInitials={initials}
+            className="cr-executive__avatar"
+            size="inherit"
+          />
           <div className="cr-executive__identity-text">
             <h1 className="cr-executive__name">{displayName}</h1>
             <p className="cr-executive__headline">{[cargo, categoria].filter(Boolean).join(' · ') || 'Colaborador'}</p>

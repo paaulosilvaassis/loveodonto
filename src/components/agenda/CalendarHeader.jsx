@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
+import AppAvatar from '../common/AppAvatar.jsx';
 
 export const CalendarHeader = ({
   view,
@@ -95,17 +96,6 @@ export const CalendarHeader = ({
       ? statusOptions.find((s) => s.value === filters.status[0])?.label || '1 selecionado'
       : `${statusCount} selecionados`;
 
-  const renderInitials = (name) => {
-    if (!name) return '--';
-    return name
-      .split(' ')
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join('')
-      .toUpperCase();
-  };
-
   return (
     <div className="agenda-header-premium">
       <div className="agenda-header-row agenda-header-row-nav">
@@ -139,13 +129,13 @@ export const CalendarHeader = ({
             aria-haspopup="listbox"
             aria-expanded={isProfessionalOpen}
           >
-            <span className="agenda-control-avatar-small">
-              {selectedProfessional?.avatarUrl ? (
-                <img src={selectedProfessional.avatarUrl} alt={selectedProfessional.name} />
-              ) : (
-                <span>{renderInitials(selectedProfessional?.name || '--')}</span>
-              )}
-            </span>
+            <AppAvatar
+              user={selectedProfessional?.collaborator || selectedProfessional}
+              name={selectedProfessional?.name || 'Profissional'}
+              photoUrl={selectedProfessional?.avatarUrl || selectedProfessional?.photoUrl}
+              className="agenda-control-avatar-small"
+              size="inherit"
+            />
             <span className="agenda-control-text">
               {selectedProfessional?.name || 'Profissional'}
             </span>
@@ -167,13 +157,13 @@ export const CalendarHeader = ({
                   role="option"
                   aria-selected={item.id === selectedProfessionalId}
                 >
-                  <span className="agenda-professional-option-avatar">
-                    {item.avatarUrl ? (
-                      <img src={item.avatarUrl} alt={item.name} />
-                    ) : (
-                      <span>{renderInitials(item.name)}</span>
-                    )}
-                  </span>
+                  <AppAvatar
+                    user={item.collaborator || item}
+                    name={item.name}
+                    photoUrl={item.avatarUrl || item.photoUrl}
+                    className="agenda-professional-option-avatar"
+                    size="inherit"
+                  />
                   <span className="agenda-professional-option-info">
                     <span className="agenda-professional-option-name">{item.name}</span>
                     {item.specialty ? (

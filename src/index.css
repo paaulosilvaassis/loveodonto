@@ -1,6 +1,95 @@
 @import 'tailwindcss';
 @import './contracts/print.css';
 
+/* ── App Avatar (global) ── */
+.app-avatar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  color: var(--color-primary);
+  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.app-avatar--xs { width: 1.5rem; height: 1.5rem; font-size: 0.625rem; }
+.app-avatar--sm { width: 2rem; height: 2rem; font-size: 0.75rem; }
+.app-avatar--md { width: 2.5rem; height: 2.5rem; font-size: 0.8125rem; }
+.app-avatar--lg { width: 3rem; height: 3rem; font-size: 0.875rem; }
+.app-avatar--xl { width: 4rem; height: 4rem; font-size: 1rem; }
+
+.app-avatar.has-photo {
+  border-color: color-mix(in srgb, var(--color-primary) 28%, #e5e7eb);
+  background: #f8fafc;
+}
+
+.app-avatar__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: inherit;
+}
+
+.app-avatar__initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+.app-avatar__skeleton {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: app-avatar-shimmer 1.2s ease-in-out infinite;
+}
+
+.app-avatar.is-loading .app-avatar__img { opacity: 0; }
+
+@keyframes app-avatar-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.app-avatar__status {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  border: 2px solid #fff;
+}
+
+.app-avatar__status--online { background: #10b981; }
+.app-avatar__status--offline { background: #9ca3af; }
+.app-avatar__status--busy { background: #f59e0b; }
+
+.app-avatar.cr-header__avatar,
+.app-avatar.cr-executive__avatar,
+.app-avatar.collaborator-record-header__avatar {
+  border-radius: 10px;
+}
+
+.app-avatar.agenda-professional-avatar,
+.app-avatar.agenda-control-avatar-small,
+.app-avatar.agenda-professional-option-avatar,
+.app-avatar.team-table__avatar,
+.app-avatar.tenant-users-avatar {
+  border-radius: 9999px;
+}
+
 /* ============================================
   DESIGN SYSTEM - LOVE ODONTO
   Tokens de tema padronizados

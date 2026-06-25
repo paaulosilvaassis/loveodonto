@@ -20,6 +20,7 @@ import {
 } from '../services/collaboratorService.js';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import { validateFileMeta, formatPhone } from '../utils/validators.js';
+import { getUserAvatarUrl } from '../utils/avatarUtils.js';
 import { can } from '../permissions/permissions.js';
 import { canManageAccess, canCreateCollaborator, ROLE_LABELS } from '../services/accessService.js';
 import CollaboratorTeamDirectory from '../components/collaborators/CollaboratorTeamDirectory.jsx';
@@ -1127,7 +1128,8 @@ export default function CollaboratorsPage() {
             errorMessage={error}
             menuItems={recordMenuItems}
             headerProps={{
-              fotoUrl: draft.profile?.fotoUrl,
+              fotoUrl: getUserAvatarUrl(draft.profile) || getUserAvatarUrl(selectedCollaboratorRow),
+              collaborator: selectedCollaboratorRow || draft.profile,
               initials: getCollaboratorInitials(selectedCollaboratorRow),
               displayName: getCollaboratorNameDisplay(selectedCollaboratorRow).primary,
               cargo: selectedCollaboratorRow?.cargo || draft.profile?.cargo,

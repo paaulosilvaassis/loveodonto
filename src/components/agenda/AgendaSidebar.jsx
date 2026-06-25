@@ -1,3 +1,5 @@
+import AppAvatar from '../common/AppAvatar.jsx';
+
 export const AgendaSidebar = ({ professionals, selectedId, onChange }) => {
   if (!professionals.length) {
     return (
@@ -27,13 +29,13 @@ export const AgendaSidebar = ({ professionals, selectedId, onChange }) => {
             className={`chip agenda-professional-chip ${selectedId === item.id ? 'active' : ''}`}
             onClick={() => onChange(item.id)}
           >
-            <span className="agenda-professional-avatar">
-              {item.avatarUrl ? (
-                <img src={item.avatarUrl} alt={item.name} />
-              ) : (
-                <span>{item.name?.slice(0, 2)?.toUpperCase()}</span>
-              )}
-            </span>
+            <AppAvatar
+              user={item.collaborator || item}
+              name={item.name}
+              photoUrl={item.avatarUrl || item.photoUrl}
+              className="agenda-professional-avatar"
+              size="inherit"
+            />
             <span className="agenda-professional-info">
               <span className="agenda-professional-name">{item.name}</span>
               {item.specialty ? <span className="agenda-professional-specialty">{item.specialty}</span> : null}

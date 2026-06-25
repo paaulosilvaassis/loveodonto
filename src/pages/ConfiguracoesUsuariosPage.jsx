@@ -33,6 +33,7 @@ import {
 } from '../utils/collaboratorTenantLink.js';
 import { MEMBERSHIP_ROLE_LABELS, INVITABLE_ROLES } from '../constants/tenantRoles.js';
 import { notifyInviteDeliveryResult } from '../utils/inviteDeliveryFeedback.js';
+import AppAvatar from '../components/common/AppAvatar.jsx';
 import { looksLikeEmail } from '../utils/userDisplayName.js';
 import {
   UserPlus,
@@ -757,12 +758,17 @@ export default function ConfiguracoesUsuariosPage() {
                 const canResendInvite = ['pendente', 'enviado', 'expirado'].includes(inviteStatus);
                 const unifiedStatus = resolveMemberUnifiedStatus(member, invitationForMember);
                 const collaboratorCell = resolveCollaboratorCell(member);
-                const initials = getUserInitials(member.full_name, member.email);
 
                 return (
                   <div key={member.id} className="tenant-users-grid__row" role="row">
                     <div className="tenant-users-grid__user" role="cell">
-                      <span className="tenant-users-avatar" aria-hidden>{initials}</span>
+                      <AppAvatar
+                        user={member}
+                        name={member.full_name || member.email}
+                        email={member.email}
+                        className="tenant-users-avatar"
+                        size="inherit"
+                      />
                       <div className="tenant-users-grid__user-text">
                         <button
                           type="button"

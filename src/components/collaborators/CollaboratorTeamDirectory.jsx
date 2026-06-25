@@ -3,6 +3,7 @@ import Button from '../Button.jsx';
 import { COLLABORATOR_CATEGORIES, getAllCargosFlat } from '../../constants/collaboratorRhCatalog.js';
 import { accessStatusBadgeClass } from '../../utils/inviteStatus.js';
 import CollaboratorRowActionsMenu from './CollaboratorRowActionsMenu.jsx';
+import AppAvatar from '../common/AppAvatar.jsx';
 
 const ACCESS_FILTER_OPTIONS = [
   { value: '', label: 'Todos os acessos' },
@@ -211,9 +212,13 @@ export default function CollaboratorTeamDirectory({
                     >
                       <td>
                         <div className="team-table__person">
-                          <span className="team-table__avatar" aria-hidden>
-                            {getCollaboratorInitials(item)}
-                          </span>
+                          <AppAvatar
+                            user={item}
+                            name={namePrimary}
+                            fallbackInitials={getCollaboratorInitials(item)}
+                            className="team-table__avatar"
+                            size="inherit"
+                          />
                           <div className="team-table__person-text">
                             <span className="team-table__name" title={namePrimary}>{namePrimary}</span>
                             <span className="team-table__cargo" title={item.cargo || '—'}>{item.cargo || '—'}</span>
