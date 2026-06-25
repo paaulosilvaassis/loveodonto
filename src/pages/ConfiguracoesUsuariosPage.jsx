@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../auth/useAuth.js';
 import { useTenant } from '../tenant/useTenant.js';
 import { getTenant } from '../services/tenantService.js';
 import { DEV_BACKEND_NOT_RUNNING_MSG } from '../config/adminApiBase.js';
-import { Section } from '../components/Section.jsx';
 import { Field } from '../components/Field.jsx';
 import Button from '../components/Button.jsx';
 import UsuarioMemberModal from '../components/configuracoes/UsuarioMemberModal.jsx';
@@ -34,7 +33,23 @@ import {
 } from '../utils/collaboratorTenantLink.js';
 import { MEMBERSHIP_ROLE_LABELS, INVITABLE_ROLES } from '../constants/tenantRoles.js';
 import { notifyInviteDeliveryResult } from '../utils/inviteDeliveryFeedback.js';
-import { UserPlus, Copy, Trash2, Pencil, Eye, Mail, MoreVertical, UserX, UserCheck } from 'lucide-react';
+import { looksLikeEmail } from '../utils/userDisplayName.js';
+import {
+  UserPlus,
+  Trash2,
+  Pencil,
+  Eye,
+  Mail,
+  MoreVertical,
+  UserX,
+  UserCheck,
+  Search,
+  Users,
+  ShieldCheck,
+  MailWarning,
+  Link2,
+  RefreshCw,
+} from 'lucide-react';
 
 function formatUpdatedAt(iso) {
   if (!iso) return '—';
@@ -65,11 +80,55 @@ function resolveInvitationStatus(invitation, member) {
 
 function invitationStatusLabel(status) {
   if (status === 'sem_convite') return 'Sem convite';
-  if (status === 'aceito') return 'Aceito';
+  if (status === 'aceito') return 'Acesso ativo';
   if (status === 'enviado') return 'Convite enviado';
-  if (status === 'pendente') return 'Convite enviado';
+  if (status === 'pendente') return 'Convite pendente';
   if (status === 'expirado') return 'Convite expirado';
   return status;
+}
+
+function getUserInitials(name, email) {
+  const display = String(name || '').trim();
+  if (display && !looksLikeEmail(display)) {
+    const parts = display.split(/\s+/).filter(Boolean);
+    const first = parts[0]?.[0] || '';
+    const second = parts.length > 1 ? parts[parts.length - 1][0] : '';
+    return `${first}${second}`.toUpperCase() || '?';
+  }
+  return String(email || '?')[0].toUpperCase();
+}
+
+function resolveMemberUnifiedStatus(member, invitation) {
+  const active = isMemberAccessActive(member);
+  const inviteStatus = resolveInvitationStatus(invitation, member);
+
+  if (!active) {
+    return { label: 'Inativo', tone: 'muted' };
+  }
+  if (inviteStatus === 'expirado') {
+    return { label: 'Convite expirado', tone: 'warning' };
+  }
+  if (inviteStatus === 'pendente' || inviteStatus === 'enviado') {
+    return { label: invitationStatusLabel(inviteStatus), tone: 'warning' };
+  }
+  if (inviteStatus === 'aceito' || member?.user_id) {
+    return { label: 'Acesso ativo', tone: 'success' };
+  }
+  return { label: 'Sem convite', tone: 'muted' };
+}
+
+function resolveCollaboratorCell(member) {
+  if (!member?.linked_collaborator && !member?.collaborator_id) {
+    return { text: '—', linked: false };
+  }
+  const label = member.linked_collaborator
+    ? formatCollaboratorLinkLabel(member.linked_collaborator)
+    : 'Colaborador vinculado';
+  const sameAsUser = label === member.full_name;
+  return {
+    text: sameAsUser ? 'Vinculado ao RH' : label,
+    linked: true,
+  };
 }
 
 function normalizeUiAccessErrorMessage(message) {
@@ -237,6 +296,7 @@ export default function ConfiguracoesUsuariosPage() {
   const [newUserPassword, setNewUserPassword] = useState('');
   const [newUserRole, setNewUserRole] = useState('dentista');
   const [newUserStatus, setNewUserStatus] = useState('active');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const tenantId = tenant?.id || user?.tenantId || null;
   const tenantLabel = tenant?.trade_name
@@ -244,6 +304,41 @@ export default function ConfiguracoesUsuariosPage() {
     || getTenant(tenantId)?.name
     || 'Clínica';
   const isMaster = canManageTenantUsers(user, tenantId, currentUser);
+
+  const pageStats = useMemo(() => {
+    let activeCount = 0;
+    let pendingCount = 0;
+    members.forEach((member) => {
+      if (isMemberAccessActive(member)) activeCount += 1;
+      const invitationForMember = invitations.find(
+        (inv) => (inv.email || '').trim().toLowerCase() === (member.email || '').trim().toLowerCase(),
+      );
+      const inviteStatus = resolveInvitationStatus(invitationForMember, member);
+      if (['pendente', 'enviado', 'expirado'].includes(inviteStatus)) pendingCount += 1;
+    });
+    return {
+      total: members.length,
+      active: activeCount,
+      pending: pendingCount,
+    };
+  }, [members, invitations]);
+
+  const filteredMembers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return members;
+    return members.filter((member) => {
+      const roleLabel = (MEMBERSHIP_ROLE_LABELS[member.role] || member.role || '').toLowerCase();
+      const collaboratorLabel = member.linked_collaborator
+        ? formatCollaboratorLinkLabel(member.linked_collaborator).toLowerCase()
+        : '';
+      return (
+        String(member.full_name || '').toLowerCase().includes(query)
+        || String(member.email || '').toLowerCase().includes(query)
+        || roleLabel.includes(query)
+        || collaboratorLabel.includes(query)
+      );
+    });
+  }, [members, searchQuery]);
 
   useEffect(() => {
     if (!user?.id || !tenantId || user.authMode !== 'saas') return;
@@ -411,30 +506,6 @@ export default function ConfiguracoesUsuariosPage() {
     }
   };
 
-  const handleRefreshInvite = async (invitationId) => {
-    setSaving(true);
-    try {
-      const invitation = invitations.find((inv) => inv.id === invitationId);
-      if (!invitation?.email) {
-        throw new Error('Convite não encontrado para reenviar.');
-      }
-      const result = await resendCollaboratorInvite({
-        tenant_id: tenantId,
-        email: invitation.email,
-        collaborator_id: invitation.collaborator_id || null,
-      });
-      notifyInviteDeliveryResult(result?.invite_delivery, {
-        onCopyLink: handleCopyInviteUrl,
-        pushToast,
-      });
-      refresh();
-    } catch (err) {
-      showError(normalizeUiAccessErrorMessage(err?.message || 'Erro ao renovar convite.'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const handleToggleAccessClick = async (m) => {
     if (m.user_id === user?.id) return;
     const active = isMemberAccessActive(m);
@@ -547,142 +618,210 @@ export default function ConfiguracoesUsuariosPage() {
   }
 
   return (
-    <div className="stack">
-      <Section
-        title="Usuários e acessos"
-        description="Gerencie perfis, dados cadastrais e acesso ao sistema. Apenas o administrador (MASTER) pode alterar."
-      >
-        {error && <div className="error">{error}</div>}
-        {toast && (
-          <div className={`toast ${toast.type}`} role="status">
-            {toast.message}
-          </div>
-        )}
+    <div className="tenant-users-page">
+      {toast && (
+        <div className={`toast ${toast.type}`} role="status">
+          {toast.message}
+        </div>
+      )}
 
-        <div className="list-actions" style={{ marginBottom: '1rem' }}>
-          <Button variant="primary" icon={UserPlus} onClick={() => { setError(''); setModalCreateUser(true); }}>
-            Novo usuário
-          </Button>
-          <Button variant="primary" icon={UserPlus} onClick={() => { setError(''); setModalInvite(true); }}>
+      <header className="tenant-users-page__header">
+        <div className="tenant-users-page__intro">
+          <h1 className="tenant-users-page__title">Usuários e acessos</h1>
+          <p className="tenant-users-page__subtitle">
+            Gerencie quem acessa <strong>{tenantLabel}</strong>, perfis de permissão e convites de primeiro acesso.
+          </p>
+        </div>
+        <div className="tenant-users-page__header-actions">
+          <Button
+            variant="secondary"
+            icon={Mail}
+            onClick={() => { setError(''); setModalInvite(true); }}
+          >
             Convidar usuário
           </Button>
+          <Button
+            variant="primary"
+            icon={UserPlus}
+            onClick={() => { setError(''); setModalCreateUser(true); }}
+          >
+            Novo usuário
+          </Button>
+        </div>
+      </header>
+
+      {error ? (
+        <div className="tenant-users-page__alert error" role="alert">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="tenant-users-page__kpis">
+        <article className="tenant-users-kpi">
+          <span className="tenant-users-kpi__icon" aria-hidden>
+            <Users size={18} />
+          </span>
+          <div>
+            <p className="tenant-users-kpi__value">{pageStats.total}</p>
+            <p className="tenant-users-kpi__label">Usuários vinculados</p>
+          </div>
+        </article>
+        <article className="tenant-users-kpi">
+          <span className="tenant-users-kpi__icon tenant-users-kpi__icon--success" aria-hidden>
+            <ShieldCheck size={18} />
+          </span>
+          <div>
+            <p className="tenant-users-kpi__value">{pageStats.active}</p>
+            <p className="tenant-users-kpi__label">Com acesso ativo</p>
+          </div>
+        </article>
+        <article className="tenant-users-kpi">
+          <span className="tenant-users-kpi__icon tenant-users-kpi__icon--warning" aria-hidden>
+            <MailWarning size={18} />
+          </span>
+          <div>
+            <p className="tenant-users-kpi__value">{pageStats.pending}</p>
+            <p className="tenant-users-kpi__label">Convites pendentes</p>
+          </div>
+        </article>
+      </div>
+
+      <section className="tenant-users-panel" aria-labelledby="tenant-users-list-title">
+        <div className="tenant-users-panel__toolbar">
+          <h2 id="tenant-users-list-title" className="tenant-users-panel__title">
+            Equipe com acesso ao sistema
+          </h2>
+          <div className="tenant-users-panel__toolbar-actions">
+            <label className="tenant-users-search">
+              <Search size={16} aria-hidden className="tenant-users-search__icon" />
+              <input
+                type="search"
+                className="tenant-users-search__input"
+                placeholder="Buscar por nome, e-mail ou perfil…"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                aria-label="Buscar usuários"
+              />
+            </label>
+            <button
+              type="button"
+              className="tenant-users-refresh-btn"
+              onClick={refresh}
+              disabled={saving}
+              title="Atualizar lista"
+              aria-label="Atualizar lista"
+            >
+              <RefreshCw size={16} className={saving ? 'is-spinning' : ''} />
+            </button>
+          </div>
         </div>
 
-        <div className="card">
-          <div className="table-wrapper">
-            <table className="access-list-table">
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>E-mail</th>
-                  <th>Colaborador</th>
-                  <th>Perfil</th>
-                  <th>Status</th>
-                  <th>Última atualização</th>
-                  <th className="access-list-table__actions-col">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
+        <div className="tenant-users-grid-wrap">
+          <div className="tenant-users-grid" role="table" aria-label="Usuários da clínica">
+            <div className="tenant-users-grid__header" role="row">
+              <div role="columnheader">Usuário</div>
+              <div role="columnheader">Colaborador RH</div>
+              <div role="columnheader">Perfil</div>
+              <div role="columnheader">Status</div>
+              <div role="columnheader">Atualizado</div>
+              <div className="tenant-users-grid__actions-head" role="columnheader">Ações</div>
+            </div>
+
+            {saving && members.length === 0 ? (
+              <div className="tenant-users-empty" role="row">
+                <p>Carregando usuários…</p>
+              </div>
+            ) : filteredMembers.length === 0 ? (
+              <div className="tenant-users-empty" role="row">
+                <p>
+                  {members.length === 0
+                    ? 'Nenhum usuário vinculado ainda. Convide a equipe ou crie um acesso manualmente.'
+                    : 'Nenhum resultado para a busca atual.'}
+                </p>
                 {members.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="muted" style={{ padding: '1.5rem', textAlign: 'center' }}>
-                      Nenhum usuário vinculado. Use &quot;Convidar usuário&quot; para começar.
-                    </td>
-                  </tr>
-                ) : (
-                  members.map((m) => {
-                    const active = isMemberAccessActive(m);
-                    const canManageRow = m.user_id !== user?.id;
-                    const invitationForMember = invitations
-                      .filter((inv) => (inv.email || '').trim().toLowerCase() === (m.email || '').trim().toLowerCase())
-                      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0] || null;
-                    const inviteStatus = resolveInvitationStatus(invitationForMember, m);
-                    const canResendInvite = ['pendente', 'enviado', 'expirado'].includes(inviteStatus);
-                    const collaboratorLabel = m.linked_collaborator
-                      ? formatCollaboratorLinkLabel(m.linked_collaborator)
-                      : (m.collaborator_id ? 'Vinculado' : 'Não vinculado');
-                    return (
-                      <tr key={m.id}>
-                        <td>
-                          <button
-                            type="button"
-                            className="button link"
-                            style={{ fontWeight: 600, padding: 0, textAlign: 'left' }}
-                            onClick={() => openMemberModal(m, 'view')}
-                          >
-                            {m.full_name || '—'}
-                          </button>
-                        </td>
-                        <td>{m.email || '—'}</td>
-                        <td>{collaboratorLabel}</td>
-                        <td>{MEMBERSHIP_ROLE_LABELS[m.role] || m.role || '—'}</td>
-                        <td>
-                          <div className="access-user-status-stack">
-                            <span className={active ? 'access-badge on' : 'access-badge off'}>
-                              {active ? 'Ativo' : 'Inativo'}
-                            </span>
-                            <span className={`access-badge ${inviteStatus === 'aceito' || inviteStatus === 'enviado' || inviteStatus === 'pendente' ? 'on' : inviteStatus === 'sem_convite' ? 'off' : 'off'}`}>
-                              {invitationStatusLabel(inviteStatus)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="muted access-list-table__date-cell">{formatUpdatedAt(m.updated_at)}</td>
-                        <td className="access-list-table__actions-cell">
-                          <UsuarioRowActions
-                            active={active}
-                            canManageRow={canManageRow}
-                            canResendInvite={canResendInvite}
-                            saving={saving}
-                            onView={() => openMemberModal(m, 'view')}
-                            onEdit={() => openMemberModal(m, 'edit')}
-                            onToggleAccess={() => handleToggleAccessClick(m)}
-                            onResendInvite={() => handleResendInviteForMember(m)}
-                            onRemove={() => handleRemove(m)}
-                          />
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+                  <div className="tenant-users-empty__actions">
+                    <Button variant="primary" icon={Mail} onClick={() => setModalInvite(true)}>
+                      Convidar usuário
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              filteredMembers.map((member) => {
+                const active = isMemberAccessActive(member);
+                const canManageRow = member.user_id !== user?.id;
+                const invitationForMember = invitations
+                  .filter((inv) => (inv.email || '').trim().toLowerCase() === (member.email || '').trim().toLowerCase())
+                  .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0] || null;
+                const inviteStatus = resolveInvitationStatus(invitationForMember, member);
+                const canResendInvite = ['pendente', 'enviado', 'expirado'].includes(inviteStatus);
+                const unifiedStatus = resolveMemberUnifiedStatus(member, invitationForMember);
+                const collaboratorCell = resolveCollaboratorCell(member);
+                const initials = getUserInitials(member.full_name, member.email);
+
+                return (
+                  <div key={member.id} className="tenant-users-grid__row" role="row">
+                    <div className="tenant-users-grid__user" role="cell">
+                      <span className="tenant-users-avatar" aria-hidden>{initials}</span>
+                      <div className="tenant-users-grid__user-text">
+                        <button
+                          type="button"
+                          className="tenant-users-grid__name-btn"
+                          onClick={() => openMemberModal(member, 'view')}
+                        >
+                          {member.full_name || '—'}
+                        </button>
+                        <span className="tenant-users-grid__email">{member.email || '—'}</span>
+                      </div>
+                    </div>
+
+                    <div className="tenant-users-grid__cell" role="cell">
+                      {collaboratorCell.linked ? (
+                        <span className="tenant-users-rh-link" title={collaboratorCell.text}>
+                          <Link2 size={14} aria-hidden />
+                          <span className="tenant-users-cell-truncate">{collaboratorCell.text}</span>
+                        </span>
+                      ) : (
+                        <span className="tenant-users-grid__muted">—</span>
+                      )}
+                    </div>
+
+                    <div className="tenant-users-grid__cell" role="cell">
+                      <span className="tenant-users-role-pill">
+                        {MEMBERSHIP_ROLE_LABELS[member.role] || member.role || '—'}
+                      </span>
+                    </div>
+
+                    <div className="tenant-users-grid__cell" role="cell">
+                      <span className={`tenant-users-status tenant-users-status--${unifiedStatus.tone}`}>
+                        {unifiedStatus.label}
+                      </span>
+                    </div>
+
+                    <div className="tenant-users-grid__cell tenant-users-grid__date" role="cell">
+                      {formatUpdatedAt(member.updated_at)}
+                    </div>
+
+                    <div className="tenant-users-grid__actions" role="cell">
+                      <UsuarioRowActions
+                        active={active}
+                        canManageRow={canManageRow}
+                        canResendInvite={canResendInvite}
+                        saving={saving}
+                        onView={() => openMemberModal(member, 'view')}
+                        onEdit={() => openMemberModal(member, 'edit')}
+                        onToggleAccess={() => handleToggleAccessClick(member)}
+                        onResendInvite={() => handleResendInviteForMember(member)}
+                        onRemove={() => handleRemove(member)}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
-
-        {invitations.length > 0 && (
-          <div className="card" style={{ marginTop: '1.5rem' }}>
-            <h4 style={{ marginBottom: '0.75rem' }}>Convites</h4>
-            <ul className="stack" style={{ listStyle: 'none', padding: 0 }}>
-              {invitations.map((inv) => (
-                <li key={inv.id} className="flex gap-sm" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span>{inv.email}</span>
-                  <span className="muted">({MEMBERSHIP_ROLE_LABELS[inv.role] || inv.role})</span>
-                  <span className={`access-badge ${resolveInvitationStatus(inv) === 'aceito' ? 'on' : 'off'}`}>
-                    {resolveInvitationStatus(inv)}
-                  </span>
-                  <button
-                    type="button"
-                    className="button secondary small"
-                    onClick={() => handleCopyInviteUrl(inv.invite_url)}
-                    title="Copiar link"
-                  >
-                    <Copy size={14} /> Copiar link
-                  </button>
-                  <button
-                    type="button"
-                    className="button secondary small"
-                    onClick={() => handleRefreshInvite(inv.id)}
-                    disabled={saving}
-                    title="Gerar novo token e copiar link"
-                  >
-                    <Mail size={14} /> Reenviar / renovar
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </Section>
+      </section>
 
       <ModalRoot open={modalInvite} onOpenChange={(next) => { if (!next) { setModalInvite(false); setError(''); } }}>
         <ModalContent size="sm" onInteractOutside={(e) => e.preventDefault()}>

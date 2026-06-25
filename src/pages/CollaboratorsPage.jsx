@@ -2,21 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
 import { Field } from '../components/Field.jsx';
-import { Section } from '../components/Section.jsx';
-import { Tabs } from '../components/Tabs.jsx';
-import { SectionHeaderActions } from '../components/SectionHeaderActions.jsx';
 import { loadDb } from '../db/index.js';
 import {
-  addCollaboratorAddress,
-  addCollaboratorEducation,
-  addCollaboratorInsurance,
-  addCollaboratorPhone,
   getCollaborator,
   listCollaborators,
-  removeCollaboratorAddress,
-  removeCollaboratorEducation,
-  removeCollaboratorInsurance,
-  removeCollaboratorPhone,
   updateCollaborator,
   updateCollaboratorAccess,
   updateCollaboratorAdditional,
@@ -30,42 +19,25 @@ import {
   backfillCollaboratorsPendingAccess,
 } from '../services/collaboratorService.js';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
-import { formatCep, formatCpf, formatPhone, validateFileMeta } from '../utils/validators.js';
+import { validateFileMeta, formatPhone } from '../utils/validators.js';
 import { can } from '../permissions/permissions.js';
-import { canManageAccess, canCreateCollaborator } from '../services/accessService.js';
-import CollaboratorPermissionsPanel from '../components/collaborators/CollaboratorPermissionsPanel.jsx';
-import { getUserAccess } from '../services/accessService.js';
-import { Eye, Pencil, UserCheck, UserX } from 'lucide-react';
-import { NewCollaboratorDialog } from '../components/collaborators/CollaboratorCreateModal.jsx';
-import { CollaboratorRhProfileFields } from '../components/collaborators/CollaboratorRhProfileFields.jsx';
-import { getAllCargosFlat } from '../constants/collaboratorRhCatalog.js';
+import { canManageAccess, canCreateCollaborator, ROLE_LABELS } from '../services/accessService.js';
+import CollaboratorTeamDirectory from '../components/collaborators/CollaboratorTeamDirectory.jsx';
+import CollaboratorRecordView from '../components/collaborators/record/CollaboratorRecordView.jsx';
+import CollaboratorOverviewSection from '../components/collaborators/record/CollaboratorOverviewSection.jsx';
+import CollaboratorAccessSection from '../components/collaborators/record/CollaboratorAccessSection.jsx';
+import CollaboratorPermissionsHub from '../components/collaborators/record/CollaboratorPermissionsHub.jsx';
+import CollaboratorCadastroTab from '../components/collaborators/CollaboratorCadastroTab.jsx';
+import CollaboratorFormCard from '../components/collaborators/CollaboratorFormCard.jsx';
 import { setCollaboratorSystemAccess, reconcileCollaboratorTenantLinks } from '../services/collaboratorAccessProvisionService.js';
-import CollaboratorAccessActions from '../components/collaborators/CollaboratorAccessActions.jsx';
+import { getUserAccess } from '../services/accessService.js';
+import { NewCollaboratorDialog } from '../components/collaborators/CollaboratorCreateModal.jsx';
 import {
-  inviteStatusBadgeClass,
   resolveCollaboratorAccessDisplayStatus,
 } from '../utils/inviteStatus.js';
 
-const topTabs = [
-  { value: 'cadastro', label: 'Dados Cadastrais' },
-  { value: 'admissao', label: 'Dados Admissionais' },
-  { value: 'horarios', label: 'Horários' },
-  { value: 'financeiro', label: 'Financeiro' },
-  { value: 'acessos', label: 'Acessos e permissões' },
-];
-
-const cadastroSections = [
-  'Dados Principais',
-  'Documentação',
-  'Formação',
-  'Naturalidade',
-  'Telefones',
-  'Endereços',
-  'Relacionamentos',
-  'Características',
-  'Dados Adicionais',
-  'Convênios',
-];
+const CADASTRO_TABS = new Set(['pessoais', 'documentos', 'profissional', 'endereco', 'contatos']);
+const EDITABLE_TABS = new Set([...CADASTRO_TABS, 'horarios', 'financeiro']);
 
 const defaultHours = [
   { diaSemana: 0, inicio: '08:00', fim: '12:00', intervaloInicio: '13:00', intervaloFim: '18:00', ativo: false },
@@ -111,10 +83,10 @@ export default function CollaboratorsPage() {
   const [collaborators, setCollaborators] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
-  const [directoryStatusTab, setDirectoryStatusTab] = useState('ativo');
-  const [filter, setFilter] = useState({ cargo: '' });
-  const [activeTab, setActiveTab] = useState('cadastro');
-  const [activeSection, setActiveSection] = useState('Dados Principais');
+  const [filter, setFilter] = useState({ cargo: '', categoria: '', status: 'ativo', acesso: '' });
+  const [activeTab, setActiveTab] = useState('geral');
+  const [recordLoading, setRecordLoading] = useState(false);
+  const [accessDirty, setAccessDirty] = useState(false);
   const [editingSection, setEditingSection] = useState('');
   const [editingTab, setEditingTab] = useState('');
   const [error, setError] = useState('');
@@ -158,7 +130,7 @@ export default function CollaboratorsPage() {
     handleFieldChange: handleAddressFieldChange,
     isAutoFilled,
   } = useCepAutofill({
-    enabled: isEditor && editingSection === 'Endereços',
+    enabled: isEditor && (editingSection === 'endereco' || editingSection === 'cadastro'),
     getAddress: () => draft.newAddress,
     setAddress: updateNewAddress,
     fields: {
@@ -393,21 +365,27 @@ export default function CollaboratorsPage() {
   }, [openNewCollaborator]);
 
   useEffect(() => {
-    if (activeTab === 'acessos' && selectedId && import.meta.env?.DEV) {
+    if (activeTab === 'acesso' && selectedId && import.meta.env?.DEV) {
       const data = getCollaborator(selectedId);
       console.debug('[Acessos] collaborator loaded', { access: data?.access, profileId: data?.profile?.id, targetUserId: data?.access?.userId ?? data?.profile?.user_id });
     }
   }, [activeTab, selectedId]);
 
-  const directoryStatusCounts = useMemo(() => {
+  const teamKpis = useMemo(() => {
     let ativos = 0;
     let inativos = 0;
+    let comAcesso = 0;
+    let convitesPendentes = 0;
     for (const item of collaborators) {
       if (isCollaboratorActive(item)) ativos += 1;
       else inativos += 1;
+      const tenantAccess = resolveCollaboratorTenantAccess(item);
+      const accessStatus = resolveCollaboratorAccessDisplayStatus(tenantAccess);
+      if (['active', 'accepted'].includes(accessStatus.key)) comAcesso += 1;
+      if (['sent', 'pending'].includes(accessStatus.key)) convitesPendentes += 1;
     }
-    return { ativos, inativos };
-  }, [collaborators]);
+    return { ativos, inativos, comAcesso, convitesPendentes };
+  }, [collaborators, resolveCollaboratorTenantAccess]);
 
   const filteredCollaborators = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -415,13 +393,20 @@ export default function CollaboratorsPage() {
       const matchesSearch =
         !normalizedSearch ||
         item.nomeCompleto?.toLowerCase().includes(normalizedSearch) ||
-        item.apelido?.toLowerCase().includes(normalizedSearch);
-      const inActiveGroup =
-        directoryStatusTab === 'ativo' ? isCollaboratorActive(item) : !isCollaboratorActive(item);
+        item.apelido?.toLowerCase().includes(normalizedSearch) ||
+        item.email?.toLowerCase().includes(normalizedSearch) ||
+        item.cargo?.toLowerCase().includes(normalizedSearch);
+      const matchesStatus =
+        !filter.status
+        || (filter.status === 'ativo' ? isCollaboratorActive(item) : !isCollaboratorActive(item));
       const matchesCargo = !filter.cargo || item.cargo === filter.cargo;
-      return matchesSearch && inActiveGroup && matchesCargo;
+      const matchesCategoria = !filter.categoria || item.rhCategoria === filter.categoria;
+      const tenantAccess = resolveCollaboratorTenantAccess(item);
+      const accessKey = resolveCollaboratorAccessDisplayStatus(tenantAccess).key;
+      const matchesAcesso = !filter.acesso || accessKey === filter.acesso;
+      return matchesSearch && matchesStatus && matchesCargo && matchesCategoria && matchesAcesso;
     });
-  }, [collaborators, search, directoryStatusTab, filter.cargo]);
+  }, [collaborators, search, filter, resolveCollaboratorTenantAccess]);
 
   const collaboratorPhonesById = useMemo(() => {
     return (db.collaboratorPhones || []).reduce((acc, item) => {
@@ -435,8 +420,7 @@ export default function CollaboratorsPage() {
   const handleCollaboratorCreated = async (newId, meta = {}) => {
     setOpenNewCollaborator(false);
     setSelectedId(newId);
-    setActiveTab('cadastro');
-    setActiveSection('Dados Principais');
+    setActiveTab('geral');
     setEditingSection('');
     setEditingTab('');
     setError('');
@@ -468,12 +452,14 @@ export default function CollaboratorsPage() {
   const handleEditCollaboratorAccess = useCallback((collaboratorId) => {
     if (!collaboratorId) return;
     setSelectedId(collaboratorId);
-    setActiveTab('acessos');
-    setActiveSection('Dados Principais');
+    setActiveTab('acesso');
     setEditingSection('');
     setEditingTab('');
     setError('');
     refreshCollaboratorDraft(collaboratorId);
+    setTimeout(() => {
+      editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   }, [refreshCollaboratorDraft]);
 
   const jumpToExistingCollaborator = useCallback(
@@ -481,12 +467,9 @@ export default function CollaboratorsPage() {
       if (!id) return;
       setOpenNewCollaborator(false);
       const active = isCollaboratorActive({ status });
-      setDirectoryStatusTab(active ? 'ativo' : 'inativo');
-      setSearch('');
-      setFilter({ cargo: '' });
+      setFilter({ cargo: '', categoria: '', status: active ? 'ativo' : 'inativo', acesso: '' });
       setSelectedId(id);
-      setActiveTab('cadastro');
-      setActiveSection('Dados Principais');
+      setActiveTab('geral');
       setEditingSection('');
       setEditingTab('');
       setError('');
@@ -504,6 +487,7 @@ export default function CollaboratorsPage() {
     if (editingSection || editingTab) {
       if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return false;
     }
+    setRecordLoading(true);
     setSelectedId(id);
     const data = getCollaborator(id);
     if (data) {
@@ -511,6 +495,8 @@ export default function CollaboratorsPage() {
     }
     setEditingSection('');
     setEditingTab('');
+    setActiveTab('geral');
+    window.setTimeout(() => setRecordLoading(false), 280);
     return true;
   };
 
@@ -572,10 +558,9 @@ export default function CollaboratorsPage() {
 
   const handleEditCollaborator = (collaboratorId) => {
     if (!selectCollaborator(collaboratorId)) return;
-    setActiveTab('cadastro');
-    setActiveSection('Dados Principais');
+    setActiveTab('pessoais');
     setEditingTab('');
-    setEditingSection('Dados Principais');
+    setEditingSection('pessoais');
     scrollToEditForm();
   };
 
@@ -599,7 +584,7 @@ export default function CollaboratorsPage() {
           profile: { ...prev.profile, status: nextStatus },
         }));
       }
-      setDirectoryStatusTab(nextStatus === 'ativo' ? 'ativo' : 'inativo');
+      setFilter((prev) => ({ ...prev, status: nextStatus === 'ativo' ? 'ativo' : 'inativo' }));
       setSuccess(`Colaborador ${nextStatus === 'ativo' ? 'ativado' : 'desativado'} com sucesso.`);
     } catch (err) {
       setError(err.message || 'Erro ao alterar status do colaborador.');
@@ -637,17 +622,57 @@ export default function CollaboratorsPage() {
     }
   };
 
-  const saveSection = (section) => {
+  const computeTenure = (admissionDate) => {
+    if (!admissionDate) return '—';
+    const start = new Date(`${admissionDate}T12:00:00`);
+    if (Number.isNaN(start.getTime())) return '—';
+    const now = new Date();
+    const months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+    if (months < 12) return months <= 1 ? '1 mês' : `${months} meses`;
+    const years = Math.floor(months / 12);
+    return years === 1 ? '1 ano' : `${years} anos`;
+  };
+
+  const computeWorkHoursSummary = (hours = []) => {
+    const normalized = normalizeWorkHours(hours);
+    const activeDays = normalized.filter((h) => h.ativo);
+    const schedule = activeDays.length
+      ? activeDays.map((h) => dayLabels[h.diaSemana]).join(', ')
+      : '—';
+    let totalMinutes = 0;
+    for (const item of activeDays) {
+      const toMin = (t) => {
+        const [h, m] = String(t || '00:00').split(':').map(Number);
+        return h * 60 + m;
+      };
+      totalMinutes += Math.max(0, toMin(item.fim) - toMin(item.inicio) + toMin(item.intervaloFim) - toMin(item.intervaloInicio));
+    }
+    const totalHours = Math.round(totalMinutes / 60);
+    return { schedule, totalHours: totalHours ? `${totalHours}h` : '—' };
+  };
+
+  const handleTabChange = (next) => {
+    if (editingSection || accessDirty) {
+      if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
+      setEditingSection('');
+      setAccessDirty(false);
+    }
+    setActiveTab(next);
+  };
+
+  const workHoursSummary = useMemo(() => computeWorkHoursSummary(draft.workHours), [draft.workHours]);
+
+  const saveCadastroAll = () => {
     setError('');
     setSuccess('');
     try {
       if (!selectedId) throw new Error('Selecione um colaborador.');
-      if (section === 'Dados Principais') updateCollaborator(user, selectedId, draft.profile);
-      if (section === 'Documentação') updateCollaboratorDocuments(user, selectedId, draft.documents);
-      if (section === 'Naturalidade') updateCollaboratorNationality(user, selectedId, draft.nationality);
-      if (section === 'Relacionamentos') updateCollaboratorRelationships(user, selectedId, draft.relationships);
-      if (section === 'Características') updateCollaboratorCharacteristics(user, selectedId, draft.characteristics);
-      if (section === 'Dados Adicionais') updateCollaboratorAdditional(user, selectedId, draft.additional);
+      updateCollaborator(user, selectedId, draft.profile);
+      updateCollaboratorDocuments(user, selectedId, draft.documents);
+      updateCollaboratorNationality(user, selectedId, draft.nationality);
+      updateCollaboratorRelationships(user, selectedId, draft.relationships);
+      updateCollaboratorCharacteristics(user, selectedId, draft.characteristics);
+      updateCollaboratorAdditional(user, selectedId, draft.additional);
       setEditingSection('');
       refreshCollaboratorDraft();
       setSuccess('Dados salvos com sucesso.');
@@ -656,13 +681,83 @@ export default function CollaboratorsPage() {
     }
   };
 
-  const handleTabChange = (next) => {
-    if (editingSection || editingTab) {
-      if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
+  const isRecordEditing = useMemo(() => editingSection === activeTab && EDITABLE_TABS.has(activeTab), [activeTab, editingSection]);
+
+  const hasUnsavedChanges = Boolean(editingSection && EDITABLE_TABS.has(editingSection));
+
+  const canEditActiveTab = useMemo(() => {
+    if (CADASTRO_TABS.has(activeTab)) return isEditor;
+    if (activeTab === 'horarios') return isEditor;
+    if (activeTab === 'financeiro') return canFinance;
+    return false;
+  }, [activeTab, isEditor, canFinance]);
+
+  const saveActiveSection = () => {
+    setError('');
+    setSuccess('');
+    try {
+      if (!selectedId) throw new Error('Selecione um colaborador.');
+      if (activeTab === 'pessoais') {
+        updateCollaborator(user, selectedId, draft.profile);
+        updateCollaboratorNationality(user, selectedId, draft.nationality);
+        updateCollaboratorRelationships(user, selectedId, draft.relationships);
+      } else if (activeTab === 'documentos') {
+        updateCollaboratorDocuments(user, selectedId, draft.documents);
+        updateCollaboratorCharacteristics(user, selectedId, draft.characteristics);
+        updateCollaboratorAdditional(user, selectedId, draft.additional);
+      } else if (activeTab === 'profissional') {
+        updateCollaborator(user, selectedId, draft.profile);
+        updateCollaboratorDocuments(user, selectedId, draft.documents);
+      } else if (activeTab === 'endereco' || activeTab === 'contatos') {
+        updateCollaboratorRelationships(user, selectedId, draft.relationships);
+        updateCollaborator(user, selectedId, draft.profile);
+      } else if (activeTab === 'horarios') {
+        const normalized = normalizeWorkHours(draft.workHours);
+        updateCollaboratorWorkHours(user, selectedId, normalized);
+        setHoursConflictModal({ open: false, conflicts: [] });
+      } else if (activeTab === 'financeiro') {
+        updateCollaboratorFinance(user, selectedId, draft.finance);
+      } else {
+        saveCadastroAll();
+        return;
+      }
       setEditingSection('');
-      setEditingTab('');
+      refreshCollaboratorDraft();
+      setSuccess('Alterações salvas com sucesso.');
+    } catch (err) {
+      if (err?.code === 'WORK_HOURS_CONFLICT') {
+        setHoursConflictModal({ open: true, conflicts: err?.details?.conflicts || [] });
+        setError(err.message || 'Reagende os pacientes antes de salvar.');
+        return;
+      }
+      setError(err?.message || err.message);
     }
-    setActiveTab(next);
+  };
+
+  const handleRecordEdit = () => {
+    if (!canEditActiveTab) return;
+    startEdit(activeTab);
+  };
+
+  const handleRecordSave = () => {
+    if (CADASTRO_TABS.has(activeTab) || activeTab === 'horarios' || activeTab === 'financeiro') {
+      saveActiveSection();
+    }
+  };
+
+  const handleDiscardChanges = () => {
+    cancelEdit();
+    setAccessDirty(false);
+  };
+
+  const handleEditSection = (section) => {
+    setActiveTab(section);
+    if (EDITABLE_TABS.has(section) && isEditor) {
+      startEdit(section);
+    } else if (section === 'acesso' || section === 'permissoes') {
+      setEditingSection('');
+    }
+    scrollToEditForm();
   };
 
   const handlePhotoUpload = (event) => {
@@ -686,588 +781,92 @@ export default function CollaboratorsPage() {
     reader.readAsDataURL(file);
   };
 
-  const cadastroContent = (
-    <div className="clinic-layout">
-      <aside className="clinic-menu">
-        {cadastroSections.map((section) => (
-          <button
-            key={section}
-            type="button"
-            className={`clinic-menu-item ${activeSection === section ? 'active' : ''}`}
-            onClick={() => {
-              if (editingSection) {
-                if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return;
-              }
-              setActiveSection(section);
-              setEditingSection('');
-            }}
-          >
-            {section}
-          </button>
-        ))}
-      </aside>
-      <div className="clinic-content">
-        <SectionHeaderActions
-          title={activeSection}
-          isEditing={editingSection === activeSection}
-          onEdit={isEditor ? () => startEdit(activeSection) : null}
-          onSave={() => saveSection(activeSection)}
-          onCancel={cancelEdit}
-          loading={false}
-        />
+  const cadastroTabProps = {
+    draft,
+    setDraft,
+    selectedId,
+    user,
+    isEditor,
+    isEditing: editingSection === activeTab && CADASTRO_TABS.has(activeTab),
+    handlePhotoUpload,
+    refreshCollaboratorDraft,
+    cepLoading,
+    cepError,
+    handleCepChange,
+    handleCepBlur,
+    handleAddressFieldChange,
+    isAutoFilled,
+  };
 
-        {error ? <div className="error">{error}</div> : null}
-        {success ? <div className="success">{success}</div> : null}
+  const handleDeactivateAccess = async () => {
+    if (!canEditAcessos || !selectedCollaboratorRow?.id) return;
+    if (!window.confirm('Desativar o acesso deste colaborador ao sistema?')) return;
+    try {
+      await setCollaboratorSystemAccess(selectedCollaboratorRow.id, {
+        tenant_id: user?.tenantId || '',
+        has_system_access: false,
+      });
+      refreshTenantAccess();
+      setSuccess('Acesso desativado.');
+    } catch (err) {
+      setError(err?.message || 'Falha ao desativar acesso.');
+    }
+  };
 
-        {activeSection === 'Dados Principais' && (
-          <CollaboratorRhProfileFields
-            profile={draft.profile}
-            disabled={editingSection !== 'Dados Principais'}
-            onPatch={(partial) => setDraft((prev) => ({ ...prev, profile: { ...prev.profile, ...partial } }))}
-            photoSlot={
-              <Field label="Foto">
-                {draft.profile.fotoUrl ? <img className="logo-preview" src={draft.profile.fotoUrl} alt="Foto" /> : null}
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg"
-                  onChange={handlePhotoUpload}
-                  disabled={editingSection !== 'Dados Principais'}
-                />
-              </Field>
-            }
-          />
-        )}
+  const accessSectionProps = {
+    collaboratorId: selectedCollaboratorRow?.id,
+    targetUserId: draft.access?.userId || draft.profile?.user_id || selectedTenantAccess?.user_id || null,
+    tenantUser: selectedTenantAccess,
+    collaboratorEmail: String(selectedCollaboratorRow?.email || draft.profile?.email || '').trim().toLowerCase(),
+    saasTenantId: user?.tenantId || '',
+    linkedDisplayName: (draft.profile?.nomeCompleto || draft.profile?.apelido || selectedCollaboratorRow?.nomeCompleto || '').trim(),
+    currentUser: user,
+    canEdit: canEditAcessos,
+    accessDisplayStatus: resolveCollaboratorAccessDisplayStatus(selectedTenantAccess),
+    onDeactivateAccess: handleDeactivateAccess,
+    onGoToProfile: () => handleEditSection('contatos'),
+    onSaveSuccess: ({ inviteSent } = {}) => {
+      setError('');
+      setAccessDirty(false);
+      const effectiveUserId = draft.access?.userId || selectedTenantAccess?.user_id;
+      if (effectiveUserId) {
+        const access = getUserAccess(effectiveUserId);
+        if (access) {
+          updateCollaboratorAccess(user, selectedId, { ...draft.access, userId: effectiveUserId, role: access.role });
+        }
+      }
+      refreshCollaboratorDraft();
+      refreshTenantAccess();
+      setSuccess(inviteSent ? 'Convite enviado.' : 'Acesso salvo.');
+    },
+    onSaveError: (msg) => setError(msg),
+    onAccessChanged: () => { refreshTenantAccess(); setSuccess('Acesso atualizado.'); },
+    onDirtyChange: setAccessDirty,
+  };
 
-        {activeSection === 'Documentação' && (
-          <div className="form-grid">
-            <Field label="CPF">
-              <input
-                value={formatCpf(draft.documents.cpf || '')}
-                onChange={(event) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, cpf: event.target.value } }))}
-                disabled={editingSection !== 'Documentação'}
-              />
-            </Field>
-            <Field label="RG">
-              <input
-                value={draft.documents.rg || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, rg: event.target.value } }))}
-                disabled={editingSection !== 'Documentação'}
-              />
-            </Field>
-            <Field label="PIS/PASEP">
-              <input
-                value={draft.documents.pisPasep || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, pisPasep: event.target.value } }))}
-                disabled={editingSection !== 'Documentação'}
-              />
-            </Field>
-            <Field label="CTPS">
-              <input
-                value={draft.documents.ctps || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, ctps: event.target.value } }))}
-                disabled={editingSection !== 'Documentação'}
-              />
-            </Field>
-            <Field label="CNPJ (se PJ)">
-              <input
-                value={draft.documents.cnpj || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, cnpj: event.target.value } }))}
-                disabled={editingSection !== 'Documentação'}
-              />
-            </Field>
-            <Field label="Observações">
-              <textarea
-                value={draft.documents.observacoes || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, observacoes: event.target.value } }))}
-                disabled={editingSection !== 'Documentação'}
-              />
-            </Field>
-          </div>
-        )}
-
-        {activeSection === 'Formação' && (
-          <div className="stack">
-            <form
-              className="form-grid"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!selectedId) return;
-                addCollaboratorEducation(user, selectedId, draft.newEducation);
-                setDraft((prev) => ({ ...prev, newEducation: { formacao: '', instituicao: '', anoConclusao: '', cursos: '' } }));
-                refreshCollaboratorDraft(undefined, { preserveCurrentEdits: true, forceMergeKeys: ['education'] });
-              }}
-            >
-              <Field label="Formação">
-                <input
-                  value={draft.newEducation.formacao}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newEducation: { ...prev.newEducation, formacao: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Formação'}
-                />
-              </Field>
-              <Field label="Instituição">
-                <input
-                  value={draft.newEducation.instituicao}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newEducation: { ...prev.newEducation, instituicao: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Formação'}
-                />
-              </Field>
-              <Field label="Ano">
-                <input
-                  value={draft.newEducation.anoConclusao}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newEducation: { ...prev.newEducation, anoConclusao: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Formação'}
-                />
-              </Field>
-              <Field label="Cursos/Certificações">
-                <input
-                  value={draft.newEducation.cursos}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newEducation: { ...prev.newEducation, cursos: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Formação'}
-                />
-              </Field>
-              <button className="button primary" type="submit" disabled={!isEditor || editingSection !== 'Formação'}>
-                Adicionar formação
-              </button>
-            </form>
-            <div className="card">
-              <ul className="list">
-                {draft.education.map((item) => (
-                  <li key={item.id} className="list-item">
-                    {item.formacao} · {item.instituicao}
-                    {isEditor ? (
-                      <button
-                        className="button secondary"
-                        type="button"
-                        onClick={() => {
-                          removeCollaboratorEducation(user, item.id);
-                          refreshCollaboratorDraft(undefined, { preserveCurrentEdits: true, forceMergeKeys: ['education'] });
-                        }}
-                      >
-                        Remover
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {activeSection === 'Naturalidade' && (
-          <div className="form-grid">
-            <Field label="Cidade">
-              <input
-                value={draft.nationality.naturalidadeCidade || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, nationality: { ...prev.nationality, naturalidadeCidade: event.target.value } }))}
-                disabled={editingSection !== 'Naturalidade'}
-              />
-            </Field>
-            <Field label="UF">
-              <input
-                value={draft.nationality.naturalidadeUf || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, nationality: { ...prev.nationality, naturalidadeUf: event.target.value } }))}
-                disabled={editingSection !== 'Naturalidade'}
-              />
-            </Field>
-            <Field label="Nacionalidade">
-              <input
-                value={draft.nationality.nacionalidade || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, nationality: { ...prev.nationality, nacionalidade: event.target.value } }))}
-                disabled={editingSection !== 'Naturalidade'}
-              />
-            </Field>
-          </div>
-        )}
-
-        {activeSection === 'Telefones' && (
-          <div className="stack">
-            <form
-              className="form-grid"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!selectedId) return;
-                addCollaboratorPhone(user, selectedId, draft.newPhone);
-                setDraft((prev) => ({ ...prev, newPhone: { tipo: '', ddd: '', numero: '', principal: false } }));
-                refreshCollaboratorDraft(undefined, { preserveCurrentEdits: true, forceMergeKeys: ['phones'] });
-              }}
-            >
-              <Field label="Tipo">
-                <select
-                  value={draft.newPhone.tipo}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newPhone: { ...prev.newPhone, tipo: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Telefones'}
-                >
-                  <option value="">Selecione</option>
-                  <option value="whatsapp">WhatsApp</option>
-                  <option value="celular">Celular</option>
-                  <option value="comercial">Comercial</option>
-                  <option value="outro">Outro</option>
-                </select>
-              </Field>
-              <Field label="DDD">
-                <input
-                  value={draft.newPhone.ddd}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newPhone: { ...prev.newPhone, ddd: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Telefones'}
-                />
-              </Field>
-              <Field label="Número">
-                <input
-                  value={formatPhone(draft.newPhone.numero)}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newPhone: { ...prev.newPhone, numero: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Telefones'}
-                />
-              </Field>
-              <Field label="Principal">
-                <input
-                  type="checkbox"
-                  checked={draft.newPhone.principal}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newPhone: { ...prev.newPhone, principal: event.target.checked } }))}
-                  disabled={!isEditor || editingSection !== 'Telefones'}
-                />
-              </Field>
-              <button className="button primary" type="submit" disabled={!isEditor || editingSection !== 'Telefones'}>
-                Adicionar telefone
-              </button>
-            </form>
-            <div className="card">
-              <ul className="list">
-                {draft.phones.map((item) => (
-                  <li key={item.id} className="list-item">
-                    {item.tipo} · ({item.ddd}) {item.numero} {item.principal ? '★' : ''}
-                    {isEditor ? (
-                      <button
-                        className="button secondary"
-                        type="button"
-                        onClick={() => {
-                          removeCollaboratorPhone(user, item.id);
-                          refreshCollaboratorDraft(undefined, { preserveCurrentEdits: true, forceMergeKeys: ['phones'] });
-                        }}
-                      >
-                        Remover
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {activeSection === 'Endereços' && (
-          <div className="stack">
-            <form
-              className="form-grid"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!selectedId) return;
-                addCollaboratorAddress(user, selectedId, draft.newAddress);
-                setDraft((prev) => ({ ...prev, newAddress: { tipo: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', principal: false } }));
-                refreshCollaboratorDraft(undefined, { preserveCurrentEdits: true, forceMergeKeys: ['addresses'] });
-              }}
-            >
-              <Field label="Tipo">
-                <select
-                  value={draft.newAddress.tipo}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newAddress: { ...prev.newAddress, tipo: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Endereços'}
-                >
-                  <option value="">Selecione</option>
-                  <option value="residencial">Residencial</option>
-                  <option value="correspondencia">Correspondência</option>
-                  <option value="outro">Outro</option>
-                </select>
-              </Field>
-              <Field label="CEP" error={cepError}>
-                <div className={`cep-input-wrapper ${cepLoading ? 'is-loading' : ''}`}>
-                  <input
-                    value={formatCep(draft.newAddress.cep)}
-                    onChange={(event) => handleCepChange(event.target.value)}
-                    onBlur={handleCepBlur}
-                    disabled={!isEditor || editingSection !== 'Endereços'}
-                  />
-                  <span className="cep-spinner" aria-hidden="true" />
-                </div>
-              </Field>
-              <Field label="Logradouro">
-                <input
-                  value={draft.newAddress.logradouro}
-                  onChange={(event) => handleAddressFieldChange('logradouro', event.target.value)}
-                  className={isAutoFilled('logradouro') ? 'input-autofilled' : ''}
-                  disabled={!isEditor || editingSection !== 'Endereços'}
-                />
-              </Field>
-              <Field label="Número">
-                <input
-                  value={draft.newAddress.numero}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newAddress: { ...prev.newAddress, numero: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Endereços'}
-                />
-              </Field>
-              <Field label="Complemento">
-                <input
-                  value={draft.newAddress.complemento}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newAddress: { ...prev.newAddress, complemento: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Endereços'}
-                />
-              </Field>
-              <Field label="Bairro">
-                <input
-                  value={draft.newAddress.bairro}
-                  onChange={(event) => handleAddressFieldChange('bairro', event.target.value)}
-                  className={isAutoFilled('bairro') ? 'input-autofilled' : ''}
-                  disabled={!isEditor || editingSection !== 'Endereços'}
-                />
-              </Field>
-              <Field label="Cidade">
-                <input
-                  value={draft.newAddress.cidade}
-                  onChange={(event) => handleAddressFieldChange('cidade', event.target.value)}
-                  className={isAutoFilled('cidade') ? 'input-autofilled' : ''}
-                  disabled={!isEditor || editingSection !== 'Endereços'}
-                />
-              </Field>
-              <Field label="UF">
-                <input
-                  value={draft.newAddress.uf}
-                  onChange={(event) => handleAddressFieldChange('uf', event.target.value)}
-                  className={isAutoFilled('uf') ? 'input-autofilled' : ''}
-                  disabled={!isEditor || editingSection !== 'Endereços'}
-                />
-              </Field>
-              <Field label="Principal">
-                <input
-                  type="checkbox"
-                  checked={draft.newAddress.principal}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newAddress: { ...prev.newAddress, principal: event.target.checked } }))}
-                  disabled={!isEditor || editingSection !== 'Endereços'}
-                />
-              </Field>
-              <button className="button primary" type="submit" disabled={!isEditor || editingSection !== 'Endereços'}>
-                Adicionar endereço
-              </button>
-            </form>
-            <div className="card">
-              <ul className="list">
-                {draft.addresses.map((item) => (
-                  <li key={item.id} className="list-item">
-                    {item.tipo} · {item.logradouro}, {item.numero} · {item.cidade}-{item.uf} {item.principal ? '★' : ''}
-                    {isEditor ? (
-                      <button
-                        className="button secondary"
-                        type="button"
-                        onClick={() => {
-                          removeCollaboratorAddress(user, item.id);
-                          refreshCollaboratorDraft(undefined, { preserveCurrentEdits: true, forceMergeKeys: ['addresses'] });
-                        }}
-                      >
-                        Remover
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {activeSection === 'Relacionamentos' && (
-          <div className="form-grid">
-            <Field label="Estado civil">
-              <input
-                value={draft.relationships.estadoCivil || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, relationships: { ...prev.relationships, estadoCivil: event.target.value } }))}
-                disabled={editingSection !== 'Relacionamentos'}
-              />
-            </Field>
-            <Field label="Contato emergência">
-              <input
-                value={draft.relationships.contatoEmergenciaNome || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, relationships: { ...prev.relationships, contatoEmergenciaNome: event.target.value } }))}
-                disabled={editingSection !== 'Relacionamentos'}
-              />
-            </Field>
-            <Field label="Telefone emergência">
-              <input
-                value={formatPhone(draft.relationships.contatoEmergenciaTelefone || '')}
-                onChange={(event) => setDraft((prev) => ({ ...prev, relationships: { ...prev.relationships, contatoEmergenciaTelefone: event.target.value } }))}
-                disabled={editingSection !== 'Relacionamentos'}
-              />
-            </Field>
-          </div>
-        )}
-
-        {activeSection === 'Características' && (
-          <div className="form-grid">
-            <Field label="Observações gerais">
-              <textarea
-                value={draft.characteristics.observacoesGerais || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, characteristics: { ...prev.characteristics, observacoesGerais: event.target.value } }))}
-                disabled={editingSection !== 'Características'}
-              />
-            </Field>
-          </div>
-        )}
-
-        {activeSection === 'Dados Adicionais' && (
-          <div className="form-grid">
-            <Field label="Notas internas">
-              <textarea
-                value={draft.additional.notes || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, additional: { ...prev.additional, notes: event.target.value } }))}
-                disabled={editingSection !== 'Dados Adicionais'}
-              />
-            </Field>
-          </div>
-        )}
-
-        {activeSection === 'Convênios' && (
-          <div className="stack">
-            <form
-              className="form-grid"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!selectedId) return;
-                addCollaboratorInsurance(user, selectedId, draft.newInsurance);
-                setDraft((prev) => ({ ...prev, newInsurance: { convenioNome: '', detalhes: '', validade: '' } }));
-                refreshCollaboratorDraft(undefined, { preserveCurrentEdits: true, forceMergeKeys: ['insurances'] });
-              }}
-            >
-              <Field label="Convênio">
-                <input
-                  value={draft.newInsurance.convenioNome}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newInsurance: { ...prev.newInsurance, convenioNome: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Convênios'}
-                />
-              </Field>
-              <Field label="Detalhes">
-                <input
-                  value={draft.newInsurance.detalhes}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newInsurance: { ...prev.newInsurance, detalhes: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Convênios'}
-                />
-              </Field>
-              <Field label="Validade">
-                <input
-                  type="date"
-                  value={draft.newInsurance.validade}
-                  onChange={(event) => setDraft((prev) => ({ ...prev, newInsurance: { ...prev.newInsurance, validade: event.target.value } }))}
-                  disabled={!isEditor || editingSection !== 'Convênios'}
-                />
-              </Field>
-              <button className="button primary" type="submit" disabled={!isEditor || editingSection !== 'Convênios'}>
-                Adicionar convênio
-              </button>
-            </form>
-            <div className="card">
-              <ul className="list">
-                {draft.insurances.map((item) => (
-                  <li key={item.id} className="list-item">
-                    {item.convenioNome} · {item.validade || 'Sem validade'}
-                    {isEditor ? (
-                      <button
-                        className="button secondary"
-                        type="button"
-                        onClick={() => {
-                          removeCollaboratorInsurance(user, item.id);
-                          refreshCollaboratorDraft(undefined, { preserveCurrentEdits: true, forceMergeKeys: ['insurances'] });
-                        }}
-                      >
-                        Remover
-                      </button>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const admissionContent = (
-    <div className="stack">
-      <SectionHeaderActions
-        title="Dados Admissionais"
-        isEditing={editingTab === 'admissao'}
-        onEdit={isEditor ? () => startTabEdit('admissao') : null}
-        onCancel={cancelEdit}
-        onSave={() => {
-          updateCollaboratorDocuments(user, selectedId, draft.documents);
-          setEditingTab('');
-          refreshCollaboratorDraft();
-          setSuccess('Dados admissionais salvos.');
-        }}
-        loading={false}
-      />
-      <div className="form-grid">
-        <Field label="Tipo de contratação">
-          <select
-            value={draft.documents.tipoContratacao || ''}
-            onChange={(event) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, tipoContratacao: event.target.value } }))}
-            disabled={!isEditor || editingTab !== 'admissao'}
-          >
-            <option value="">Selecione</option>
-            <option value="CLT">CLT</option>
-            <option value="PJ">PJ</option>
-            <option value="Prestador">Prestador</option>
-            <option value="Estágio">Estágio</option>
-          </select>
-        </Field>
-        <Field label="Data de admissão">
-          <input
-            type="date"
-            value={draft.documents.dataAdmissao || ''}
-            onChange={(event) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, dataAdmissao: event.target.value } }))}
-            disabled={!isEditor || editingTab !== 'admissao'}
-          />
-        </Field>
-        <Field label="Data de demissão">
-          <input
-            type="date"
-            value={draft.documents.dataDemissao || ''}
-            onChange={(event) => setDraft((prev) => ({ ...prev, documents: { ...prev.documents, dataDemissao: event.target.value } }))}
-            disabled={!isEditor || editingTab !== 'admissao'}
-          />
-        </Field>
-      </div>
-    </div>
-  );
+  const permissionsHubProps = {
+    ...accessSectionProps,
+    onSaveSuccess: ({ inviteSent } = {}) => {
+      setError('');
+      setAccessDirty(false);
+      const effectiveUserId = draft.access?.userId || selectedTenantAccess?.user_id;
+      if (effectiveUserId) {
+        const access = getUserAccess(effectiveUserId);
+        if (access) {
+          updateCollaboratorAccess(user, selectedId, { ...draft.access, userId: effectiveUserId, role: access.role });
+        }
+      }
+      refreshCollaboratorDraft();
+      refreshTenantAccess();
+      setSuccess(inviteSent ? 'Convite enviado.' : 'Permissões salvas.');
+    },
+    onDirtyChange: setAccessDirty,
+  };
 
   const hoursContent = (
-    <div className="stack">
-      <SectionHeaderActions
-        title="Horários"
-        isEditing={editingTab === 'horarios'}
-        onEdit={isEditor ? () => startTabEdit('horarios') : null}
-        onCancel={cancelEdit}
-        onSave={() => {
-          const normalized = normalizeWorkHours(draft.workHours);
-          try {
-            updateCollaboratorWorkHours(user, selectedId, normalized);
-            setHoursConflictModal({ open: false, conflicts: [] });
-            setEditingTab('');
-            refreshCollaboratorDraft();
-            setSuccess('Horários salvos.');
-          } catch (err) {
-            if (err?.code === 'WORK_HOURS_CONFLICT') {
-              setHoursConflictModal({
-                open: true,
-                conflicts: err?.details?.conflicts || [],
-              });
-              setError(
-                err.message ||
-                  'A nova grade remove horário com pacientes agendados no trecho afetado. Reagende-os antes de salvar.'
-              );
-              return;
-            }
-            setError(err?.message || 'Erro ao salvar horários.');
-          }
-        }}
-        loading={false}
-      />
-      <div className="stack">
+    <div className="cr-tab-panel">
+    <CollaboratorFormCard title="Grade de horários" className="cr-card-legacy" description="Configure a disponibilidade semanal do colaborador na agenda.">
+      <div className="stack collaborator-hours-grid">
         <div className="hours-row hours-row-header">
           <strong>Dia</strong>
           <span>Ativo</span>
@@ -1296,12 +895,12 @@ export default function CollaboratorsPage() {
                 type="checkbox"
                 checked={item.ativo}
                 onChange={(event) => updateWorkHour('ativo', event.target.checked)}
-                disabled={!isEditor || editingTab !== 'horarios'}
+                disabled={!isEditor || editingSection !== 'horarios'}
               />
               <span>Ativo</span>
             </label>
             <div className="hours-time-wrapper">
-              {(editingTab !== 'horarios' || !item.ativo) ? (
+              {(editingSection !== 'horarios' || !item.ativo) ? (
                 <div className="hours-time-display">{inicioValue}</div>
               ) : (
                 <input
@@ -1314,7 +913,7 @@ export default function CollaboratorsPage() {
               )}
             </div>
             <div className="hours-time-wrapper">
-              {(editingTab !== 'horarios' || !item.ativo) ? (
+              {(editingSection !== 'horarios' || !item.ativo) ? (
                 <div className="hours-time-display">{fimValue}</div>
               ) : (
                 <input
@@ -1327,7 +926,7 @@ export default function CollaboratorsPage() {
               )}
             </div>
             <div className="hours-time-wrapper">
-              {(editingTab !== 'horarios' || !item.ativo) ? (
+              {(editingSection !== 'horarios' || !item.ativo) ? (
                 <div className="hours-time-display">{intervaloInicioValue}</div>
               ) : (
                 <input
@@ -1340,7 +939,7 @@ export default function CollaboratorsPage() {
               )}
             </div>
             <div className="hours-time-wrapper">
-              {(editingTab !== 'horarios' || !item.ativo) ? (
+              {(editingSection !== 'horarios' || !item.ativo) ? (
                 <div className="hours-time-display">{intervaloFimValue}</div>
               ) : (
                 <input
@@ -1355,30 +954,19 @@ export default function CollaboratorsPage() {
           </div>
         )})}
       </div>
+    </CollaboratorFormCard>
     </div>
   );
 
   const financeContent = (
-    <div className="stack">
-      <SectionHeaderActions
-        title="Financeiro"
-        isEditing={editingTab === 'financeiro'}
-        onEdit={canFinance ? () => startTabEdit('financeiro') : null}
-        onCancel={cancelEdit}
-        onSave={() => {
-          updateCollaboratorFinance(user, selectedId, draft.finance);
-          setEditingTab('');
-          refreshCollaboratorDraft();
-          setSuccess('Financeiro salvo.');
-        }}
-        loading={false}
-      />
-      <div className="form-grid">
+    <div className="cr-tab-panel">
+    <CollaboratorFormCard title="Remuneração e financeiro" className="cr-card-legacy">
+      <div className="collaborator-form-grid">
         <Field label="Tipo de remuneração">
           <select
             value={draft.finance.tipoRemuneracao || ''}
             onChange={(event) => setDraft((prev) => ({ ...prev, finance: { ...prev.finance, tipoRemuneracao: event.target.value } }))}
-            disabled={!canFinance || editingTab !== 'financeiro'}
+            disabled={!canFinance || editingSection !== 'financeiro'}
           >
             <option value="">Selecione</option>
             <option value="fixo">Fixo</option>
@@ -1392,7 +980,7 @@ export default function CollaboratorsPage() {
             step="0.01"
             value={draft.finance.percentualComissao || 0}
             onChange={(event) => setDraft((prev) => ({ ...prev, finance: { ...prev.finance, percentualComissao: event.target.value } }))}
-            disabled={!canFinance || editingTab !== 'financeiro'}
+            disabled={!canFinance || editingSection !== 'financeiro'}
           />
         </Field>
         <Field label="Valor fixo">
@@ -1400,7 +988,7 @@ export default function CollaboratorsPage() {
             type="number"
             value={draft.finance.valorFixo || 0}
             onChange={(event) => setDraft((prev) => ({ ...prev, finance: { ...prev.finance, valorFixo: event.target.value } }))}
-            disabled={!canFinance || editingTab !== 'financeiro'}
+            disabled={!canFinance || editingSection !== 'financeiro'}
           />
         </Field>
         <Field label="Pró-labore">
@@ -1408,428 +996,163 @@ export default function CollaboratorsPage() {
             type="number"
             value={draft.finance.proLabore || 0}
             onChange={(event) => setDraft((prev) => ({ ...prev, finance: { ...prev.finance, proLabore: event.target.value } }))}
-            disabled={!canFinance || editingTab !== 'financeiro'}
+            disabled={!canFinance || editingSection !== 'financeiro'}
           />
         </Field>
         <Field label="Conta bancária">
           <input
             value={draft.finance.contaBancaria || ''}
             onChange={(event) => setDraft((prev) => ({ ...prev, finance: { ...prev.finance, contaBancaria: event.target.value } }))}
-            disabled={!canFinance || editingTab !== 'financeiro'}
+            disabled={!canFinance || editingSection !== 'financeiro'}
           />
         </Field>
         <Field label="Observações">
           <textarea
             value={draft.finance.observacoes || ''}
             onChange={(event) => setDraft((prev) => ({ ...prev, finance: { ...prev.finance, observacoes: event.target.value } }))}
-            disabled={!canFinance || editingTab !== 'financeiro'}
+            disabled={!canFinance || editingSection !== 'financeiro'}
           />
         </Field>
       </div>
-    </div>
-  );
-
-  const accessContent = (
-    <div className="stack">
-      {error ? <div className="error">{error}</div> : null}
-      {success ? <div className="success">{success}</div> : null}
-      <CollaboratorPermissionsPanel
-        collaborator={selectedCollaboratorRow}
-        tenantUser={selectedTenantAccess}
-        tenantId={user?.tenantId || ''}
-        currentUser={user}
-        canEdit={canEditAcessos}
-        targetUserId={draft.access?.userId || draft.profile?.user_id || selectedTenantAccess?.user_id || null}
-        saasTenantId={user?.tenantId || ''}
-        linkedDisplayName={(draft.profile?.nomeCompleto || draft.profile?.apelido || selectedCollaboratorRow?.nomeCompleto || '').trim()}
-        onGoToProfile={() => {
-          setActiveTab('cadastro');
-          setActiveSection('Dados Principais');
-          startEdit('Dados Principais');
-        }}
-        onSaveSuccess={() => {
-          setError('');
-          const effectiveUserId = draft.access?.userId || selectedTenantAccess?.user_id;
-          if (effectiveUserId) {
-            const access = getUserAccess(effectiveUserId);
-            if (access) {
-              updateCollaboratorAccess(user, selectedId, {
-                ...draft.access,
-                userId: effectiveUserId,
-                role: access.role,
-              });
-            }
-          }
-          refreshCollaboratorDraft();
-          refreshTenantAccess();
-          setSuccess('Permissões salvas com sucesso.');
-        }}
-        onSaveError={(msg) => setError(msg)}
-        onAccessChanged={() => {
-          refreshTenantAccess();
-          setSuccess('Acesso do colaborador atualizado.');
-        }}
-      />
+    </CollaboratorFormCard>
     </div>
   );
 
   const tabContent = () => {
-    if (activeTab === 'cadastro') return cadastroContent;
-    if (activeTab === 'admissao') return admissionContent;
+    if (activeTab === 'geral') {
+      return (
+        <CollaboratorOverviewSection
+          draft={draft}
+          collaborator={selectedCollaboratorRow}
+          accessStatus={resolveCollaboratorAccessDisplayStatus(selectedTenantAccess)}
+          accessProfile={ROLE_LABELS[selectedTenantAccess?.role || draft.access?.role || ''] || '—'}
+          lastInvite={selectedTenantAccess?.invitation?.sent_at ? formatDatePtBr(String(selectedTenantAccess.invitation.sent_at).slice(0, 10)) : '—'}
+          workHoursSummary={workHoursSummary}
+          formatDate={formatDatePtBr}
+          canEdit={isEditor}
+          onEditSection={handleEditSection}
+        />
+      );
+    }
+    if (CADASTRO_TABS.has(activeTab)) {
+      return <CollaboratorCadastroTab {...cadastroTabProps} section={activeTab === 'documentos' ? 'documentacao' : activeTab} />;
+    }
     if (activeTab === 'horarios') return hoursContent;
     if (activeTab === 'financeiro') return financeContent;
-    if (activeTab === 'acessos') return accessContent;
+    if (activeTab === 'acesso') return <CollaboratorAccessSection {...accessSectionProps} />;
+    if (activeTab === 'permissoes') return <CollaboratorPermissionsHub {...permissionsHubProps} />;
     return null;
   };
 
-  return (
-    <div className="stack">
-      <Section title="Colaboradores">
-        <div className="collaborator-list">
-          <div className="form-grid collaborator-list-filters">
-            <Field label="Busca">
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por nome" />
-            </Field>
-            <Field label="Cargo">
-              <select value={filter.cargo} onChange={(event) => setFilter({ ...filter, cargo: event.target.value })}>
-                <option value="">Todos</option>
-                {getAllCargosFlat().map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </div>
-          <div className="list-actions">
-            <button className="button secondary" type="button" onClick={refreshCollaboratorsListOnly}>
-              Atualizar
-            </button>
-            <button
-              className="button primary"
-              type="button"
-              title={
-                canCreateNewCollaborator
-                  ? undefined
-                  : 'Apenas administrador ou gerente podem cadastrar colaboradores.'
-              }
-              disabled={!canCreateNewCollaborator}
-              onClick={() => {
-                if (!canCreateNewCollaborator) return;
-                setError('');
-                setSuccess('');
-                setOpenNewCollaborator(true);
-              }}
-            >
-              Novo Colaborador
-            </button>
-          </div>
-          <div className="card collaborator-directory">
-            <div
-              className="collaborator-directory-status-rail"
-              role="tablist"
-              aria-label="Equipe por status"
-            >
-              <button
-                type="button"
-                role="tab"
-                className={`collaborator-directory-status-tab ${directoryStatusTab === 'ativo' ? 'is-active' : ''}`}
-                aria-selected={directoryStatusTab === 'ativo'}
-                id="collab-tab-ativos"
-                onClick={() => setDirectoryStatusTab('ativo')}
-              >
-                Ativos
-                <span className="collaborator-directory-status-count">{directoryStatusCounts.ativos}</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                className={`collaborator-directory-status-tab ${directoryStatusTab === 'inativo' ? 'is-active' : ''}`}
-                aria-selected={directoryStatusTab === 'inativo'}
-                id="collab-tab-inativos"
-                onClick={() => setDirectoryStatusTab('inativo')}
-              >
-                Inativos
-                <span className="collaborator-directory-status-count">{directoryStatusCounts.inativos}</span>
-              </button>
-            </div>
-            {filteredCollaborators.length === 0 ? (
-              <p className="muted collaborator-directory-empty">Sem colaboradores para os filtros atuais.</p>
-            ) : (
-              <>
-                <div className="collaborator-directory-scroll">
-                  <div className="collaborator-directory-sheet" role="table" aria-label="Lista de colaboradores">
-                    <div className="collaborator-directory-header" role="row">
-                      <div role="columnheader">Nome do colaborador</div>
-                      <div role="columnheader">Categoria</div>
-                      <div role="columnheader">Cargo</div>
-                      <div role="columnheader">Especialidade</div>
-                      <div role="columnheader">Status RH</div>
-                      <div role="columnheader">Acesso</div>
-                      <div role="columnheader">Contato</div>
-                      <div role="columnheader" className="collaborator-directory-header-actions">
-                        Ações
-                      </div>
-                    </div>
-                    {filteredCollaborators.map((item) => {
-                      const { primary: namePrimary, subtitle: nameSubtitle } = getCollaboratorNameDisplay(item);
-                      const tenantAccess = resolveCollaboratorTenantAccess(item);
-                      const accessStatus = resolveCollaboratorAccessDisplayStatus(tenantAccess);
-                      return (
-                      <div
-                        key={item.id}
-                        role="row"
-                        className={`collaborator-directory-row ${selectedId === item.id ? 'is-selected' : ''}`}
-                        onClick={() => handleViewCollaborator(item.id)}
-                      >
-                        <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--name">
-                          <div className="collaborator-main-cell">
-                            <div className="collaborator-avatar" aria-hidden>
-                              {getCollaboratorInitials(item)}
-                            </div>
-                            <div className="collaborator-name-block">
-                              <span className="collaborator-name-primary" title={namePrimary}>
-                                {namePrimary}
-                              </span>
-                              {nameSubtitle ? (
-                                <span className="collaborator-name-subtitle" title={nameSubtitle}>
-                                  {nameSubtitle}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-                        <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--category">
-                          <span className="collaborator-cell-truncate" title={item.rhCategoria || '—'}>
-                            {item.rhCategoria || '—'}
-                          </span>
-                        </div>
-                        <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--cargo">
-                          <span className="collaborator-cell-truncate" title={item.cargo || '—'}>
-                            {item.cargo || '—'}
-                          </span>
-                        </div>
-                        <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--specialty">
-                          <span className="collaborator-cell-truncate" title={getCollaboratorSpecialty(item)}>
-                            {getCollaboratorSpecialty(item)}
-                          </span>
-                        </div>
-                        <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--status">
-                          <span className={`status-badge ${isCollaboratorActive(item) ? '' : 'inactive'}`}>
-                            {getStatusLabel(item.status)}
-                          </span>
-                        </div>
-                        <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--access">
-                          <span className={`access-badge ${inviteStatusBadgeClass(accessStatus.key)}`}>
-                            {accessStatus.label}
-                          </span>
-                        </div>
-                        <div role="cell" className="collaborator-directory-cell collaborator-directory-cell--contact">
-                          <span className="collaborator-cell-truncate" title={getCollaboratorContact(item)}>
-                            {getCollaboratorContact(item)}
-                          </span>
-                        </div>
-                        <div
-                          role="cell"
-                          className="collaborator-directory-cell collaborator-directory-cell--actions"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <div className="collaborator-row-actions collaborator-row-actions--icons">
-                            <button
-                              type="button"
-                              className="collaborator-icon-btn"
-                              title="Visualizar perfil"
-                              aria-label="Visualizar perfil"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleViewCollaborator(item.id);
-                              }}
-                            >
-                              <Eye size={16} strokeWidth={2} aria-hidden />
-                            </button>
-                            <button
-                              type="button"
-                              className="collaborator-icon-btn"
-                              title="Editar colaborador"
-                              aria-label="Editar colaborador"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleEditCollaborator(item.id);
-                              }}
-                              disabled={!isEditor}
-                            >
-                              <Pencil size={16} strokeWidth={2} aria-hidden />
-                            </button>
-                            <button
-                              type="button"
-                              className={`collaborator-icon-btn ${
-                                isCollaboratorActive(item)
-                                  ? 'collaborator-icon-btn--deactivate'
-                                  : 'collaborator-icon-btn--activate'
-                              }`}
-                              title={isCollaboratorActive(item) ? 'Desativar colaborador' : 'Ativar colaborador'}
-                              aria-label={isCollaboratorActive(item) ? 'Desativar colaborador' : 'Ativar colaborador'}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleToggleCollaboratorStatus(item);
-                              }}
-                              disabled={!isEditor}
-                            >
-                              {isCollaboratorActive(item) ? (
-                                <UserX size={16} strokeWidth={2} aria-hidden />
-                              ) : (
-                                <UserCheck size={16} strokeWidth={2} aria-hidden />
-                              )}
-                            </button>
-                            {canEditAcessos ? (
-                              <CollaboratorAccessActions
-                                collaborator={item}
-                                tenantUser={tenantAccess}
-                                tenantId={user?.tenantId}
-                                canManage={canEditAcessos}
-                                disabled={!isEditor}
-                                onChanged={() => {
-                                  refreshTenantAccess();
-                                  setSuccess('Acesso do colaborador atualizado.');
-                                }}
-                                onError={(message) => setError(message)}
-                                onEditPermissions={() => handleEditCollaboratorAccess(item.id)}
-                              />
-                            ) : null}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                    })}
-                  </div>
-                </div>
+  const recordMenuItems = useMemo(() => {
+    const items = [];
+    if (canEditAcessos) {
+      items.push({ label: 'Ir para acesso', onClick: () => { setActiveTab('acesso'); scrollToEditForm(); } });
+      items.push({ label: 'Ir para permissões', onClick: () => { setActiveTab('permissoes'); scrollToEditForm(); } });
+    }
+    if (isEditor && selectedCollaboratorRow) {
+      items.push({
+        label: isCollaboratorActive(selectedCollaboratorRow) ? 'Desativar colaborador' : 'Ativar colaborador',
+        danger: isCollaboratorActive(selectedCollaboratorRow),
+        onClick: () => handleToggleCollaboratorStatus(selectedCollaboratorRow),
+      });
+    }
+    return items;
+  }, [canEditAcessos, isEditor, selectedCollaboratorRow, scrollToEditForm]);
 
-                <div className="collaborator-directory-cards">
-                  {filteredCollaborators.map((item) => {
-                    const { primary: namePrimary, subtitle: nameSubtitle } = getCollaboratorNameDisplay(item);
-                    const tenantAccess = resolveCollaboratorTenantAccess(item);
-                    const accessStatus = resolveCollaboratorAccessDisplayStatus(tenantAccess);
-                    return (
-                    <article
-                      key={`${item.id}-card`}
-                      className={`collaborator-directory-card ${selectedId === item.id ? 'is-selected' : ''}`}
-                      onClick={() => handleViewCollaborator(item.id)}
-                    >
-                      <div className="collaborator-main-cell">
-                        <div className="collaborator-avatar" aria-hidden>
-                          {getCollaboratorInitials(item)}
-                        </div>
-                        <div className="collaborator-name-block">
-                          <span className="collaborator-name-primary" title={namePrimary}>
-                            {namePrimary}
-                          </span>
-                          {nameSubtitle ? (
-                            <span className="collaborator-name-subtitle" title={nameSubtitle}>
-                              {nameSubtitle}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="collaborator-card-grid">
-                        <span><strong>Categoria:</strong> {item.rhCategoria || '—'}</span>
-                        <span><strong>Cargo:</strong> {item.cargo || '—'}</span>
-                        <span><strong>Especialidade:</strong> {getCollaboratorSpecialty(item)}</span>
-                        <span><strong>Contato:</strong> {getCollaboratorContact(item)}</span>
-                        <span>
-                          <strong>Status RH:</strong>{' '}
-                          <span className={`status-badge ${isCollaboratorActive(item) ? '' : 'inactive'}`}>
-                            {getStatusLabel(item.status)}
-                          </span>
-                        </span>
-                        <span>
-                          <strong>Acesso:</strong>{' '}
-                          <span className={`access-badge ${inviteStatusBadgeClass(accessStatus.key)}`}>
-                            {accessStatus.label}
-                          </span>
-                        </span>
-                      </div>
-                      <div className="collaborator-row-actions collaborator-row-actions--icons">
-                        <button
-                          type="button"
-                          className="collaborator-icon-btn"
-                          title="Visualizar perfil"
-                          aria-label="Visualizar perfil"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleViewCollaborator(item.id);
-                          }}
-                        >
-                          <Eye size={16} strokeWidth={2} aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          className="collaborator-icon-btn"
-                          title="Editar colaborador"
-                          aria-label="Editar colaborador"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleEditCollaborator(item.id);
-                          }}
-                          disabled={!isEditor}
-                        >
-                          <Pencil size={16} strokeWidth={2} aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          className={`collaborator-icon-btn ${
-                            isCollaboratorActive(item)
-                              ? 'collaborator-icon-btn--deactivate'
-                              : 'collaborator-icon-btn--activate'
-                          }`}
-                          title={isCollaboratorActive(item) ? 'Desativar colaborador' : 'Ativar colaborador'}
-                          aria-label={isCollaboratorActive(item) ? 'Desativar colaborador' : 'Ativar colaborador'}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleToggleCollaboratorStatus(item);
-                          }}
-                          disabled={!isEditor}
-                        >
-                          {isCollaboratorActive(item) ? (
-                            <UserX size={16} strokeWidth={2} aria-hidden />
-                          ) : (
-                            <UserCheck size={16} strokeWidth={2} aria-hidden />
-                          )}
-                        </button>
-                        {canEditAcessos ? (
-                          <CollaboratorAccessActions
-                            collaborator={item}
-                            tenantUser={tenantAccess}
-                            tenantId={user?.tenantId}
-                            canManage={canEditAcessos}
-                            disabled={!isEditor}
-                            onChanged={() => {
-                              refreshTenantAccess();
-                              setSuccess('Acesso do colaborador atualizado.');
-                            }}
-                            onError={(message) => setError(message)}
-                            onEditPermissions={() => handleEditCollaboratorAccess(item.id)}
-                          />
-                        ) : null}
-                      </div>
-                    </article>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </Section>
+  return (
+    <div className="team-page-layout stack">
+      <CollaboratorTeamDirectory
+        kpis={teamKpis}
+        search={search}
+        onSearchChange={setSearch}
+        filter={filter}
+        onFilterChange={setFilter}
+        filteredCollaborators={filteredCollaborators}
+        selectedId={selectedId}
+        canCreateNewCollaborator={canCreateNewCollaborator}
+        canEditRh={isEditor}
+        canManageAccess={canEditAcessos}
+        tenantId={user?.tenantId || ''}
+        onRefresh={refreshCollaboratorsListOnly}
+        onNewCollaborator={() => {
+          if (!canCreateNewCollaborator) return;
+          setError('');
+          setSuccess('');
+          setOpenNewCollaborator(true);
+        }}
+        onSelectCollaborator={handleViewCollaborator}
+        onViewCollaborator={handleViewCollaborator}
+        onEditCollaborator={handleEditCollaborator}
+        onEditPermissions={handleEditCollaboratorAccess}
+        onToggleRhStatus={handleToggleCollaboratorStatus}
+        onAccessChanged={() => {
+          refreshTenantAccess();
+          setSuccess('Acesso do colaborador atualizado.');
+        }}
+        onError={(message) => setError(message)}
+        resolveTenantAccess={resolveCollaboratorTenantAccess}
+        getCollaboratorInitials={getCollaboratorInitials}
+        getCollaboratorNameDisplay={getCollaboratorNameDisplay}
+        getCollaboratorSpecialty={getCollaboratorSpecialty}
+        getCollaboratorContact={getCollaboratorContact}
+        getStatusLabel={getStatusLabel}
+        isCollaboratorActive={isCollaboratorActive}
+        resolveAccessStatus={resolveCollaboratorAccessDisplayStatus}
+      />
+
+      {error && !selectedId ? <div className="error">{error}</div> : null}
+      {success && !selectedId ? <div className="success">{success}</div> : null}
 
       {selectedId ? (
-        <div ref={editFormRef} className="scroll-mt-24 collaborator-edit-form-anchor">
-          <Section title="Ficha do Colaborador">
-            <Tabs tabs={topTabs} active={activeTab} onChange={handleTabChange} />
+        <div ref={editFormRef} className="scroll-mt-24 team-detail-panel collaborator-record-v2">
+          <CollaboratorRecordView
+            loading={recordLoading}
+            displayName={getCollaboratorNameDisplay(selectedCollaboratorRow).primary}
+            onBack={() => {
+              if ((hasUnsavedChanges || accessDirty) && !window.confirm('Existem alterações não salvas. Deseja sair?')) return;
+              setSelectedId('');
+              setEditingSection('');
+              setAccessDirty(false);
+              setError('');
+              setSuccess('');
+            }}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            hasUnsavedChanges={hasUnsavedChanges}
+            accessDirty={accessDirty}
+            onDiscard={handleDiscardChanges}
+            onSave={handleRecordSave}
+            toastMessage={success}
+            errorMessage={error}
+            menuItems={recordMenuItems}
+            headerProps={{
+              fotoUrl: draft.profile?.fotoUrl,
+              initials: getCollaboratorInitials(selectedCollaboratorRow),
+              displayName: getCollaboratorNameDisplay(selectedCollaboratorRow).primary,
+              cargo: selectedCollaboratorRow?.cargo || draft.profile?.cargo,
+              categoria: selectedCollaboratorRow?.rhCategoria || draft.profile?.rhCategoria,
+              especialidade: getCollaboratorSpecialty(selectedCollaboratorRow),
+              rhStatusLabel: getStatusLabel(selectedCollaboratorRow?.status),
+              rhActive: isCollaboratorActive(selectedCollaboratorRow),
+              accessStatus: resolveCollaboratorAccessDisplayStatus(selectedTenantAccess),
+              accessProfile: ROLE_LABELS[selectedTenantAccess?.role || draft.access?.role || ''] || '—',
+              ultimoAcesso: selectedTenantAccess?.last_sign_in_at ? formatDatePtBr(String(selectedTenantAccess.last_sign_in_at).slice(0, 10)) : '—',
+              isEditing: isRecordEditing,
+              canEdit: canEditActiveTab && !['acesso', 'permissoes', 'geral'].includes(activeTab),
+              canSave: canEditActiveTab && !['acesso', 'permissoes', 'geral'].includes(activeTab),
+              onEdit: handleRecordEdit,
+              onSave: handleRecordSave,
+              onCancel: cancelEdit,
+            }}
+          >
             {tabContent()}
-          </Section>
+          </CollaboratorRecordView>
         </div>
       ) : (
-        <div className="card muted">Selecione um colaborador para visualizar os detalhes.</div>
+        <div className="team-detail-placeholder card">
+          <p className="muted">Selecione um colaborador na lista para visualizar a ficha completa.</p>
+        </div>
       )}
 
       <NewCollaboratorDialog

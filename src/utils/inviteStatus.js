@@ -1,12 +1,13 @@
 const INVITE_LABELS = {
-  no_access: 'Sem acesso',
+  no_access: 'Sem convite',
   sent: 'Convite enviado',
-  pending: 'Convite pendente',
+  pending: 'Convite enviado',
+  accepted: 'Convite aceito',
   active: 'Acesso ativo',
   expired: 'Convite expirado',
-  revoked: 'Inativo',
+  revoked: 'Acesso bloqueado',
   failed: 'Erro no envio',
-  none: 'Sem acesso',
+  none: 'Sem convite',
 };
 
 export function resolveUserInviteDisplayStatus({
@@ -25,10 +26,11 @@ export function resolveUserInviteDisplayStatus({
   if (hasSystemAccess === false) {
     return { key: 'revoked', label: INVITE_LABELS.revoked };
   }
-  if (userId && hasSystemAccess !== false) {
-    if (invStatus === 'accepted' || invStatus === 'none' || invStatus === 'sent') {
-      return { key: 'active', label: INVITE_LABELS.active };
-    }
+  if (invStatus === 'accepted') {
+    return { key: 'accepted', label: INVITE_LABELS.accepted };
+  }
+  if (userId && hasSystemAccess !== false && (invStatus === 'none' || !invitation)) {
+    return { key: 'active', label: INVITE_LABELS.active };
   }
   if (
     invStatus === 'expired'
@@ -36,11 +38,8 @@ export function resolveUserInviteDisplayStatus({
   ) {
     return { key: 'expired', label: INVITE_LABELS.expired };
   }
-  if (invStatus === 'sent') {
+  if (invStatus === 'sent' || invStatus === 'pending') {
     return { key: 'sent', label: INVITE_LABELS.sent };
-  }
-  if (invStatus === 'pending') {
-    return { key: 'pending', label: INVITE_LABELS.pending };
   }
   if (invStatus === 'revoked') {
     return { key: 'revoked', label: INVITE_LABELS.revoked };
@@ -52,6 +51,25 @@ export function inviteStatusBadgeClass(key) {
   if (key === 'active' || key === 'sent' || key === 'pending') return 'on';
   if (key === 'failed') return 'off';
   return 'off';
+}
+
+/** Classes visuais SaaS para badges de acesso na equipe. */
+export function accessStatusBadgeClass(key) {
+  switch (String(key || '').toLowerCase()) {
+    case 'active':
+    case 'accepted':
+      return 'team-access-badge team-access-badge--active';
+    case 'sent':
+    case 'pending':
+      return 'team-access-badge team-access-badge--invite';
+    case 'revoked':
+      return 'team-access-badge team-access-badge--blocked';
+    case 'failed':
+    case 'expired':
+      return 'team-access-badge team-access-badge--warning';
+    default:
+      return 'team-access-badge team-access-badge--none';
+  }
 }
 
 export function resolveCollaboratorAccessDisplayStatus(tenantUser) {
