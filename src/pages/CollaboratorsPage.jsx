@@ -841,6 +841,7 @@ export default function CollaboratorsPage() {
       setSuccess(inviteSent ? 'Convite enviado.' : 'Acesso salvo.');
     },
     onSaveError: (msg) => setError(msg),
+    onRepairNotice: (msg) => { setError(''); setSuccess(msg); },
     onAccessChanged: () => { refreshTenantAccess(); setSuccess('Acesso atualizado.'); },
     onDirtyChange: setAccessDirty,
   };

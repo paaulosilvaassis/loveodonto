@@ -10,6 +10,7 @@ describe('collaboratorAccessPanel', () => {
     expect(resolveAccessTargetUserId({ localUserId: null, tenantUser: { user_id: 'auth-1' } })).toBe('auth-1');
     expect(resolveAccessTargetUserId({ localUserId: 'local-1', tenantUser: { user_id: 'auth-1' } })).toBe('auth-1');
     expect(resolveAccessTargetUserId({ localUserId: 'stale-local', tenantUser: { id: 'tu-1' } })).toBe(null);
+    expect(resolveAccessTargetUserId({ localUserId: 'stale-local', tenantUser: { id: 'tu-1', user_id: 'gone', auth_user_valid: false } })).toBe(null);
     expect(resolveAccessTargetUserId({ localUserId: 'local-1', tenantUser: null })).toBe('local-1');
   });
 

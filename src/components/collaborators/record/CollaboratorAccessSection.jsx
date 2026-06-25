@@ -17,6 +17,7 @@ export default function CollaboratorAccessSection({
   accessDisplayStatus,
   onSaveSuccess,
   onSaveError,
+  onRepairNotice,
   onAccessChanged,
   onDeactivateAccess,
   onGoToProfile,
@@ -35,7 +36,7 @@ export default function CollaboratorAccessSection({
   });
 
   const readOnly = form.readOnly || !canEdit;
-  const saveHandlers = { onSaveSuccess, onSaveError };
+  const saveHandlers = { onSaveSuccess, onSaveError, onRepairNotice };
 
   useEffect(() => {
     onDirtyChange?.(form.dirty);

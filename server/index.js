@@ -655,13 +655,54 @@ async function getValidAuthUserId(userId) {
   return data.user.id;
 }
 
+async function getValidAuthUserIdWithRetry(userId, { attempts = 4, delayMs = 350 } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const valid = await getValidAuthUserId(userId);
+    if (valid) return valid;
+    if (attempt < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  return null;
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(value || '').trim(),
+  );
+}
+
+function logCollabInviteProdAudit(audit = {}) {
+  console.log('[COLLAB_INVITE_PROD_AUDIT]', {
+    environment: process.env.NODE_ENV || 'development',
+    apiBaseUrl: SUPABASE_URL ? String(SUPABASE_URL).replace(/\/+$/, '') : '',
+    ...audit,
+  });
+}
+
+function formatProvisionErrorResponse(err, fallbackMessage = 'Falha ao provisionar acesso do colaborador.') {
+  const raw = normalizeDatabaseError(err, fallbackMessage);
+  const lower = String(raw || '').toLowerCase();
+  const isStaleAuth = lower.includes('sem conta no auth')
+    || lower.includes('tenant_users_user_id_required')
+    || lower.includes('falha ao ler usuário no auth');
+  const message = isStaleAuth
+    ? 'Não foi possível enviar o convite. Verifique o e-mail e tente novamente.'
+    : (raw || fallbackMessage);
+  return { ok: false, message, error: raw };
+}
+
 async function resolveAuthUserIdForTenantLink({
   normalizedEmail,
   explicitAuthUserId = null,
   existingTenantUser = null,
 }) {
-  const explicit = await getValidAuthUserId(explicitAuthUserId);
-  if (explicit) return explicit;
+  const explicitRaw = normalizeText(explicitAuthUserId);
+  if (explicitRaw) {
+    const validated = await getValidAuthUserIdWithRetry(explicitRaw);
+    if (validated) return validated;
+    if (isUuidLike(explicitRaw)) return explicitRaw;
+  }
 
   const byEmail = await findAuthUserByEmail(normalizedEmail);
   if (byEmail?.id) return byEmail.id;
@@ -761,6 +802,9 @@ async function upsertTenantUserAccess({
     explicitAuthUserId,
     existingTenantUser,
   });
+  if (!authUserId && explicitAuthUserId) {
+    authUserId = normalizeText(explicitAuthUserId) || null;
+  }
   if (!authUserId) {
     throw new Error(
       'Não foi possível vincular o e-mail sem conta no Auth. '
@@ -819,12 +863,17 @@ async function upsertTenantUserAccess({
 async function assertEmailAvailableForTenantInvite(resolvedTenantId, normalizedEmail, { collaboratorId } = {}) {
   const { data: existing, error } = await supabase
     .from('tenant_users')
-    .select('id, status, has_system_access, invitation_status, collaborator_id')
+    .select('id, user_id, status, has_system_access, invitation_status, collaborator_id')
     .eq('tenant_id', resolvedTenantId)
     .eq('email', normalizedEmail)
     .maybeSingle();
   if (error) throw error;
   if (!existing?.id) return;
+
+  if (existing.user_id) {
+    const authStillValid = await getValidAuthUserId(existing.user_id);
+    if (!authStillValid) return;
+  }
 
   const normalizedCollaboratorId = normalizeText(collaboratorId) || null;
   if (normalizedCollaboratorId) {
@@ -1020,16 +1069,20 @@ function formatCollaboratorProvisionResponse(provisioned, { authUserExisted = fa
     || 'none',
   );
   const emailSent = isInviteEmailDelivered(provisioned.inviteDelivery);
-  const message = authUserExisted
-    ? 'Usuário já existia. Acesso vinculado e convite reenviado.'
-    : 'Colaborador criado e convite de acesso enviado.';
+  const inviteSent = emailSent || ['sent', 'pending'].includes(inviteStatus);
+  const message = inviteSent
+    ? 'Convite enviado.'
+    : (authUserExisted
+      ? 'Usuário já existia. Acesso vinculado e convite reenviado.'
+      : 'Colaborador criado e convite de acesso enviado.');
   return {
     ok: true,
     success: true,
     authUserId: provisioned.tenantUser?.user_id || null,
     tenantUserId: provisioned.tenantUser?.id || null,
     emailSent,
-    inviteStatus,
+    inviteSent,
+    inviteStatus: inviteSent ? 'sent' : inviteStatus,
     linkedExisting: Boolean(authUserExisted),
     message,
     tenant_user: provisioned.tenantUser,
@@ -1046,98 +1099,124 @@ async function provisionCollaboratorAccess({
   email,
   profileRole,
   sendInvite = true,
+  repairStaleAuth = false,
 }) {
-  console.log('[COLLAB_ACCESS] provisioning auth user', {
-    collaboratorId,
-    tenantId,
+  const audit = {
+    tenantId: normalizeText(tenantId) || null,
+    collaboratorId: normalizeText(collaboratorId) || null,
     email: maskEmail(email),
-  });
-  const actorTenantUser = await getTenantAdminActorOrThrow(actorAuthUserId, tenantId);
-  const resolvedTenantId = actorTenantUser.tenant_id;
-  const normalizedEmail = normalizeEmail(email);
-  const normalizedRole = normalizeRoleValue(profileRole);
-
-  if (!normalizedEmail) throw new Error('E-mail é obrigatório para criar acesso.');
-  if (!normalizedRole) throw new Error('Perfil de acesso é obrigatório.');
-
-  await assertEmailAvailableForTenantInvite(resolvedTenantId, normalizedEmail, { collaboratorId });
-  await clearStaleTenantUserAuthReference(resolvedTenantId, normalizedEmail);
-
-  const {
-    authUser,
-    inviteDelivery: earlyInviteDelivery,
-    authUserExisted = false,
-  } = await resolveAuthUserForInvite({
-    normalizedEmail,
-    sendInvite,
-    tenantId: resolvedTenantId,
-    role: normalizedRole,
-    collaboratorId,
-    collaboratorFullName,
-  });
-
-  console.log('[COLLAB_ACCESS] linking tenant user', {
-    collaboratorId,
-    authUserId: authUser?.id || null,
-  });
-
-  const tenantUser = await upsertTenantUserAccess({
-    tenantId: resolvedTenantId,
-    collaboratorId,
-    fullName: collaboratorFullName || normalizedEmail,
-    email: normalizedEmail,
-    role: normalizedRole,
-    hasSystemAccess: true,
-    invitationStatus: sendInvite ? 'pending' : 'none',
-    authUserId: authUser?.id || null,
-  });
-
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-  const inviteDelivery = earlyInviteDelivery;
-  let invitationStatus = sendInvite ? 'pending' : 'none';
-
-  if (sendInvite) {
-    invitationStatus = isInviteEmailDelivered(inviteDelivery) ? 'sent' : 'pending';
-  }
-
-  let invitation = await upsertInvitationRecord({
-    tenantId: resolvedTenantId,
-    tenantUserId: tenantUser.id,
-    collaboratorId,
-    email: normalizedEmail,
-    profileRole: normalizedRole,
-    createdBy: actorAuthUserId,
-    status: sendInvite ? invitationStatus : 'pending',
-    expiresAt,
-  });
-
-  let finalTenantUser = tenantUser;
-  if (sendInvite) {
-    const { data: updatedTenantUser, error: updatedTenantUserError } = await supabase
-      .from('tenant_users')
-      .update({ invitation_status: invitationStatus })
-      .eq('id', tenantUser.id)
-      .select(TENANT_USER_SELECT_BASE)
-      .single();
-    if (updatedTenantUserError) {
-      if (!isMissingInvitationStatusColumnError(updatedTenantUserError)) throw updatedTenantUserError;
-    } else {
-      finalTenantUser = updatedTenantUser;
-    }
-  }
-
-  console.log('[COLLAB_ACCESS] done', {
-    collaboratorId,
-    tenantUserId: finalTenantUser?.id,
-    inviteStatus: invitationStatus,
-  });
-
-  return {
-    tenantUser: finalTenantUser,
-    invitation,
-    inviteDelivery: inviteDelivery || null,
-    authUserExisted,
+    repairStaleAuth: Boolean(repairStaleAuth),
+    existingTenantUserId: null,
+    existingCollaboratorUserId: null,
+    authUserFound: false,
+    authUserCreated: false,
+    inviteSent: false,
+    error: null,
   };
+
+  try {
+    const actorTenantUser = await getTenantAdminActorOrThrow(actorAuthUserId, tenantId);
+    const resolvedTenantId = actorTenantUser.tenant_id;
+    audit.tenantId = resolvedTenantId;
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedRole = normalizeRoleValue(profileRole);
+
+    if (!normalizedEmail) throw new Error('E-mail é obrigatório para criar acesso.');
+    if (!normalizedRole) throw new Error('Perfil de acesso é obrigatório.');
+
+    const { data: existingTenantUserRow } = await supabase
+      .from('tenant_users')
+      .select('id, user_id, collaborator_id')
+      .eq('tenant_id', resolvedTenantId)
+      .eq('email', normalizedEmail)
+      .maybeSingle();
+    audit.existingTenantUserId = existingTenantUserRow?.id || null;
+    audit.existingCollaboratorUserId = existingTenantUserRow?.user_id || null;
+
+    if (repairStaleAuth || existingTenantUserRow?.user_id) {
+      await clearStaleTenantUserAuthReference(resolvedTenantId, normalizedEmail);
+    }
+
+    await assertEmailAvailableForTenantInvite(resolvedTenantId, normalizedEmail, { collaboratorId });
+
+    const authBeforeInvite = await findAuthUserByEmail(normalizedEmail);
+    audit.authUserFound = Boolean(authBeforeInvite?.id);
+
+    const {
+      authUser,
+      inviteDelivery: earlyInviteDelivery,
+      authUserExisted = false,
+    } = await resolveAuthUserForInvite({
+      normalizedEmail,
+      sendInvite,
+      tenantId: resolvedTenantId,
+      role: normalizedRole,
+      collaboratorId,
+      collaboratorFullName,
+    });
+
+    audit.authUserFound = audit.authUserFound || Boolean(authUserExisted);
+    audit.authUserCreated = Boolean(authUser?.id) && !authUserExisted;
+
+    const tenantUser = await upsertTenantUserAccess({
+      tenantId: resolvedTenantId,
+      collaboratorId,
+      fullName: collaboratorFullName || normalizedEmail,
+      email: normalizedEmail,
+      role: normalizedRole,
+      hasSystemAccess: true,
+      invitationStatus: sendInvite ? 'pending' : 'none',
+      authUserId: authUser?.id || null,
+    });
+
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const inviteDelivery = earlyInviteDelivery;
+    let invitationStatus = sendInvite ? 'pending' : 'none';
+
+    if (sendInvite) {
+      invitationStatus = isInviteEmailDelivered(inviteDelivery) ? 'sent' : 'pending';
+    }
+    audit.inviteSent = isInviteEmailDelivered(inviteDelivery) || ['sent', 'pending'].includes(invitationStatus);
+
+    let invitation = await upsertInvitationRecord({
+      tenantId: resolvedTenantId,
+      tenantUserId: tenantUser.id,
+      collaboratorId,
+      email: normalizedEmail,
+      profileRole: normalizedRole,
+      createdBy: actorAuthUserId,
+      status: sendInvite ? invitationStatus : 'pending',
+      expiresAt,
+    });
+
+    let finalTenantUser = tenantUser;
+    if (sendInvite) {
+      const { data: updatedTenantUser, error: updatedTenantUserError } = await supabase
+        .from('tenant_users')
+        .update({ invitation_status: invitationStatus })
+        .eq('id', tenantUser.id)
+        .select(TENANT_USER_SELECT_BASE)
+        .single();
+      if (updatedTenantUserError) {
+        if (!isMissingInvitationStatusColumnError(updatedTenantUserError)) throw updatedTenantUserError;
+      } else {
+        finalTenantUser = updatedTenantUser;
+      }
+    }
+
+    logCollabInviteProdAudit(audit);
+
+    return {
+      tenantUser: finalTenantUser,
+      invitation,
+      inviteDelivery: inviteDelivery || null,
+      authUserExisted,
+    };
+  } catch (err) {
+    audit.error = String(err?.message || err || 'unknown');
+    logCollabInviteProdAudit(audit);
+    throw err;
+  }
 }
 
 async function createTenantUserFromApp({
@@ -1585,6 +1664,7 @@ async function handleCollaboratorProvisionAccess(req, res) {
     const email = normalizeEmail(req.body?.email);
     const profileRoleRaw = normalizeText(req.body?.profile_role || req.body?.role);
     const sendInvite = req.body?.send_invite !== false;
+    const repairStaleAuth = req.body?.repair_stale_auth === true;
 
     if (!createSystemAccess) {
       return res.status(200).json({
@@ -1610,6 +1690,14 @@ async function handleCollaboratorProvisionAccess(req, res) {
       email: maskEmail(email),
     });
 
+    logCollabInviteProdAudit({
+      tenantId: explicitTenantId,
+      collaboratorId,
+      email: maskEmail(email),
+      repairStaleAuth,
+      endpoint: req.path,
+    });
+
     const provisioned = await provisionCollaboratorAccess({
       actorAuthUserId: req.appAuthUser.id,
       tenantId: explicitTenantId,
@@ -1618,6 +1706,7 @@ async function handleCollaboratorProvisionAccess(req, res) {
       email,
       profileRole: normalizeRoleValue(profileRoleRaw),
       sendInvite,
+      repairStaleAuth,
     });
 
     return res.status(200).json(formatCollaboratorProvisionResponse(provisioned, {
@@ -1625,10 +1714,8 @@ async function handleCollaboratorProvisionAccess(req, res) {
     }));
   } catch (err) {
     console.error('[COLLAB_ACCESS] error', err);
-    return res.status(400).json({
-      ok: false,
-      error: normalizeDatabaseError(err, 'Falha ao provisionar acesso do colaborador.'),
-    });
+    const payload = formatProvisionErrorResponse(err);
+    return res.status(400).json(payload);
   }
 }
 
@@ -2036,16 +2123,18 @@ app.get('/internal/app/users/list', requireAppUser, async (req, res) => {
       latestInvitationByEmail.set(key, inv);
     }
 
-    const users = (tenantUsers || []).map((row) => {
+    const users = await Promise.all((tenantUsers || []).map(async (row) => {
       const email = normalizeEmail(row?.email);
       const invitation = latestInvitationByEmail.get(email) || null;
       const role = normalizeRoleValue(row?.role || row?.role_slug || invitation?.profile_role || 'atendimento');
       const hasSystemAccess = row?.has_system_access ?? row?.is_active ?? row?.status === 'active';
       const invitationStatus = normalizeInvitationStatus(row?.invitation_status || invitation?.status || 'none');
+      const authUserValid = row?.user_id ? Boolean(await getValidAuthUserId(row.user_id)) : false;
       return {
         id: row.id,
         tenant_id: row.tenant_id,
         user_id: row.user_id || null,
+        auth_user_valid: authUserValid,
         collaborator_id: row.collaborator_id || null,
         full_name: row.full_name || '',
         email: email || '',
@@ -2058,7 +2147,7 @@ app.get('/internal/app/users/list', requireAppUser, async (req, res) => {
         updated_at: row?.updated_at || null,
         invitation,
       };
-    });
+    }));
 
     return res.status(200).json({
       success: true,

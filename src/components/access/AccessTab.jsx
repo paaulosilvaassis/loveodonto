@@ -10,7 +10,8 @@ import {
   ROLE_LABELS,
   ROLE_ADMIN,
 } from '../../services/accessService.js';
-import { saveCollaboratorAccessBundle, provisionCollaboratorSystemAccess, resendCollaboratorInvite } from '../../services/collaboratorAccessProvisionService.js';
+import { saveCollaboratorAccessBundle, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite } from '../../services/collaboratorAccessProvisionService.js';
+import { tenantUserNeedsAuthRepair } from '../../utils/collaboratorAccessPanel.js';
 import { MODULES_SPEC, ACTION_KEYS, ACTION_LABELS } from '../../permissions/catalog.js';
 import { Field } from '../Field.jsx';
 import Button from '../Button.jsx';
@@ -269,11 +270,12 @@ export default function AccessTab({
         if (!saasTenantId) {
           throw new Error('Clínica não identificada para salvar no servidor. Faça login novamente.');
         }
-        if (!resolvedTargetUserId) {
+        const mustProvision = !resolvedTargetUserId || tenantUserNeedsAuthRepair(tenantUser);
+        if (mustProvision) {
           if (!collaboratorId) {
             throw new Error('Colaborador não identificado para criar acesso.');
           }
-          const provisionResult = await provisionCollaboratorSystemAccess({
+          const provisionResult = await provisionCollaboratorAccessWithRepair({
             tenant_id: saasTenantId,
             collaborator_id: collaboratorId,
             collaborator_full_name: (linkedDisplayName || '').trim() || normalizedEmail,
@@ -281,6 +283,8 @@ export default function AccessTab({
             email: normalizedEmail,
             profile_role: role || 'atendimento',
             send_invite: true,
+            repair_stale_auth: tenantUserNeedsAuthRepair(tenantUser),
+            tenantUser,
           });
           resolvedTargetUserId = provisionResult.authUserId
             || provisionResult.tenant_user?.user_id
@@ -288,7 +292,7 @@ export default function AccessTab({
           if (!resolvedTargetUserId) {
             throw new Error('Acesso criado, mas o usuário não foi vinculado. Tente novamente.');
           }
-          inviteSent = true;
+          inviteSent = Boolean(provisionResult.inviteSent ?? provisionResult.emailSent ?? true);
           onAccessChanged?.();
         }
 

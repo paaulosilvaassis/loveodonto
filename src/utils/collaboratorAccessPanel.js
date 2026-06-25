@@ -14,9 +14,18 @@ export function normalizeTenantAccessRole(role) {
 }
 
 export function resolveAccessTargetUserId({ localUserId, tenantUser } = {}) {
-  if (tenantUser?.user_id) return tenantUser.user_id;
+  if (tenantUser?.user_id) {
+    if (tenantUser.auth_user_valid === false) return null;
+    return tenantUser.user_id;
+  }
   if (tenantUser?.id) return null;
   return localUserId || null;
+}
+
+export function tenantUserNeedsAuthRepair(tenantUser) {
+  if (!tenantUser?.id) return false;
+  if (!tenantUser.user_id) return true;
+  return tenantUser.auth_user_valid === false;
 }
 
 export function canShowCollaboratorPermissionsPanel({ targetUserId, tenantUser, collaboratorEmail } = {}) {

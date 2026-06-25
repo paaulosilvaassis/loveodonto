@@ -4,7 +4,33 @@ import {
   assertAdminApiFetchAllowed,
   buildAdminApiUrl,
   formatAdminApiNetworkError,
+  getConfiguredAdminApiBaseUrl,
 } from '../config/adminApiBase.js';
+
+export function isStaleAuthLinkError(message) {
+  const lower = String(message || '').toLowerCase();
+  return (
+    lower.includes('tenant_users_user_id_required')
+    || lower.includes('sem conta no auth')
+    || lower.includes('conta no auth não existe')
+    || lower.includes('conta no auth ausente')
+    || lower.includes('falha ao ler usuário no auth')
+    || lower.includes('não foi possível enviar o convite')
+  );
+}
+
+function logCollabInviteClientAudit(audit = {}) {
+  const payload = {
+    environment: import.meta.env.MODE,
+    apiBaseUrl: getConfiguredAdminApiBaseUrl() || '(proxy/dev)',
+    ...audit,
+  };
+  if (import.meta.env?.DEV) {
+    console.debug('[COLLAB_INVITE_PROD_AUDIT]', payload);
+  } else {
+    console.info('[COLLAB_INVITE_PROD_AUDIT]', payload);
+  }
+}
 
 function normalizeProvisionErrorMessage(message) {
   const raw = String(message || '').trim();
@@ -16,6 +42,12 @@ function normalizeProvisionErrorMessage(message) {
     || lower.includes('network request failed')
   ) {
     return formatAdminApiNetworkError();
+  }
+  if (lower.includes('<!doctype') || lower.includes('<html')) {
+    return (
+      'O servidor retornou HTML em vez de JSON. '
+      + 'Verifique VITE_PLATFORM_API_BASE_URL — a URL deve apontar para a Admin API, não para o frontend.'
+    );
   }
   if (lower.includes('backend saas não configurado') || lower.includes('vite_platform_api_base_url')) {
     return raw;
@@ -29,8 +61,8 @@ function normalizeProvisionErrorMessage(message) {
   if (lower.includes('duplicate key') || lower.includes('already exists')) {
     return 'Este e-mail já possui acesso.';
   }
-  if (lower.includes('tenant_users_user_id_required') || lower.includes('sem conta no auth')) {
-    return 'Não foi possível vincular o e-mail: a conta no Auth não existe mais. Salve o acesso novamente para recriar o convite.';
+  if (isStaleAuthLinkError(raw)) {
+    return 'Não foi possível enviar o convite. Verifique o e-mail e tente novamente.';
   }
   if (lower.includes('já possui acesso nesta clínica')) {
     return 'Este e-mail já possui acesso nesta clínica.';
@@ -52,12 +84,33 @@ async function getAccessTokenOrThrow() {
   return token;
 }
 
-async function postJson(path, payload) {
+async function parseAdminApiResponse(response) {
+  const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+  const rawText = await response.text();
+  if (contentType.includes('text/html') || rawText.trim().startsWith('<!')) {
+    throw new Error(
+      'O servidor retornou HTML em vez de JSON. '
+      + 'Verifique VITE_PLATFORM_API_BASE_URL — a URL deve apontar para a Admin API, não para o frontend.',
+    );
+  }
+  let json = {};
+  if (rawText.trim()) {
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      throw new Error('Resposta inválida do backend (não é JSON).');
+    }
+  }
+  return json;
+}
+
+async function postJson(path, payload, { auditContext = {} } = {}) {
   assertAdminApiFetchAllowed();
   const token = await getAccessTokenOrThrow();
+  const url = buildAdminApiUrl(path);
   let response;
   try {
-    response = await fetch(buildAdminApiUrl(path), {
+    response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -66,12 +119,35 @@ async function postJson(path, payload) {
       body: JSON.stringify(payload || {}),
     });
   } catch (err) {
+    logCollabInviteClientAudit({
+      ...auditContext,
+      endpoint: path,
+      apiBaseUrl: getConfiguredAdminApiBaseUrl() || url,
+      error: err?.message || String(err),
+    });
     throw new Error(normalizeProvisionErrorMessage(err?.message || String(err || '')));
   }
-  const json = await response.json().catch(() => ({}));
+  const json = await parseAdminApiResponse(response);
   if (!response.ok) {
-    throw new Error(normalizeProvisionErrorMessage(json?.error || `Erro HTTP ${response.status}.`));
+    const errMsg = normalizeProvisionErrorMessage(json?.message || json?.error || `Erro HTTP ${response.status}.`);
+    logCollabInviteClientAudit({
+      ...auditContext,
+      endpoint: path,
+      httpStatus: response.status,
+      error: errMsg,
+      response: json,
+    });
+    throw new Error(errMsg);
   }
+  logCollabInviteClientAudit({
+    ...auditContext,
+    endpoint: path,
+    httpStatus: response.status,
+    ok: json?.ok !== false,
+    authUserId: json?.authUserId || json?.tenant_user?.user_id || null,
+    inviteStatus: json?.inviteStatus || json?.tenant_user?.invitation_status || null,
+    inviteSent: json?.inviteSent ?? json?.emailSent ?? null,
+  });
   return json;
 }
 
@@ -89,9 +165,9 @@ async function getJson(path) {
   } catch (err) {
     throw new Error(normalizeProvisionErrorMessage(err?.message || String(err || '')));
   }
-  const json = await response.json().catch(() => ({}));
+  const json = await parseAdminApiResponse(response);
   if (!response.ok) {
-    throw new Error(normalizeProvisionErrorMessage(json?.error || `Erro HTTP ${response.status}.`));
+    throw new Error(normalizeProvisionErrorMessage(json?.message || json?.error || `Erro HTTP ${response.status}.`));
   }
   return json;
 }
@@ -107,15 +183,54 @@ async function patchJson(path, payload) {
     },
     body: JSON.stringify(payload || {}),
   });
-  const json = await response.json().catch(() => ({}));
+  const json = await parseAdminApiResponse(response);
   if (!response.ok) {
-    throw new Error(json?.error || `Erro HTTP ${response.status}.`);
+    throw new Error(normalizeProvisionErrorMessage(json?.message || json?.error || `Erro HTTP ${response.status}.`));
   }
   return json;
 }
 
-export async function provisionCollaboratorSystemAccess(payload) {
-  return postJson('/internal/app/collaborators/provision', payload);
+export async function provisionCollaboratorSystemAccess(payload, options = {}) {
+  const auditContext = {
+    tenantId: payload?.tenant_id || null,
+    collaboratorId: payload?.collaborator_id || null,
+    email: payload?.email || null,
+    repairStaleAuth: payload?.repair_stale_auth === true,
+    ...options.auditContext,
+  };
+  return postJson('/internal/app/collaborators/provision', payload, { auditContext });
+}
+
+/**
+ * Provisiona acesso com reparo automático de vínculo Auth órfão (produção).
+ */
+export async function provisionCollaboratorAccessWithRepair(payload, { onRepairNotice } = {}) {
+  const basePayload = { ...payload, send_invite: payload?.send_invite !== false };
+  const needsRepair = payload?.repair_stale_auth === true
+    || payload?.tenantUser?.auth_user_valid === false
+    || (payload?.tenantUser?.user_id && payload?.tenantUser?.auth_user_valid === false);
+
+  const runProvision = (body, { repaired = false } = {}) => provisionCollaboratorSystemAccess(body, {
+    auditContext: {
+      repaired,
+      tenantId: body?.tenant_id,
+      collaboratorId: body?.collaborator_id,
+      email: body?.email,
+    },
+  });
+
+  if (needsRepair) {
+    onRepairNotice?.();
+    return runProvision({ ...basePayload, repair_stale_auth: true }, { repaired: true });
+  }
+
+  try {
+    return await runProvision(basePayload);
+  } catch (err) {
+    if (!isStaleAuthLinkError(err?.message)) throw err;
+    onRepairNotice?.();
+    return runProvision({ ...basePayload, repair_stale_auth: true }, { repaired: true });
+  }
 }
 
 export async function provisionCollaboratorAccessById(collaboratorId, payload) {
@@ -223,9 +338,9 @@ async function deleteJson(path, payload) {
     },
     body: JSON.stringify(payload || {}),
   });
-  const json = await response.json().catch(() => ({}));
+  const json = await parseAdminApiResponse(response);
   if (!response.ok) {
-    throw new Error(normalizeProvisionErrorMessage(json?.error || `Erro HTTP ${response.status}.`));
+    throw new Error(normalizeProvisionErrorMessage(json?.message || json?.error || `Erro HTTP ${response.status}.`));
   }
   return json;
 }

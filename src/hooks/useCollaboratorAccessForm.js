@@ -10,7 +10,8 @@ import {
   ROLE_LABELS,
   ROLE_ADMIN,
 } from '../services/accessService.js';
-import { saveCollaboratorAccessBundle, provisionCollaboratorSystemAccess, resendCollaboratorInvite } from '../services/collaboratorAccessProvisionService.js';
+import { saveCollaboratorAccessBundle, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite } from '../services/collaboratorAccessProvisionService.js';
+import { tenantUserNeedsAuthRepair } from '../utils/collaboratorAccessPanel.js';
 import { MODULES_SPEC, ACTION_LABELS } from '../permissions/catalog.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
 import { isCollaboratorEmailValid } from '../utils/collaboratorAccessRole.js';
@@ -251,7 +252,7 @@ export function useCollaboratorAccessForm({
     return null;
   }, [hasSystemAccess, credEmail, collaboratorEmail]);
 
-  const handleSave = useCallback(async ({ onSaveSuccess, onSaveError } = {}) => {
+  const handleSave = useCallback(async ({ onSaveSuccess, onSaveError, onRepairNotice } = {}) => {
     if (!currentUser || !canManageAccess(currentUser)) return false;
     const credErr = validateCredentials();
     if (credErr) {
@@ -266,9 +267,11 @@ export function useCollaboratorAccessForm({
 
       if (isSaasModeEnabled() && hasSystemAccess) {
         if (!saasTenantId) throw new Error('Clínica não identificada para salvar no servidor. Faça login novamente.');
-        if (!resolvedTargetUserId) {
+        const mustProvision = !resolvedTargetUserId || tenantUserNeedsAuthRepair(tenantUser);
+        if (mustProvision) {
           if (!collaboratorId) throw new Error('Colaborador não identificado para criar acesso.');
-          const provisionResult = await provisionCollaboratorSystemAccess({
+          let repairNotified = false;
+          const provisionResult = await provisionCollaboratorAccessWithRepair({
             tenant_id: saasTenantId,
             collaborator_id: collaboratorId,
             collaborator_full_name: (linkedDisplayName || '').trim() || normalizedEmail,
@@ -276,10 +279,18 @@ export function useCollaboratorAccessForm({
             email: normalizedEmail,
             profile_role: role || 'atendimento',
             send_invite: true,
+            repair_stale_auth: tenantUserNeedsAuthRepair(tenantUser),
+            tenantUser,
+          }, {
+            onRepairNotice: () => {
+              if (repairNotified) return;
+              repairNotified = true;
+              onRepairNotice?.('Encontramos um vínculo antigo. O sistema vai recriar o convite.');
+            },
           });
           resolvedTargetUserId = provisionResult.authUserId || provisionResult.tenant_user?.user_id || null;
           if (!resolvedTargetUserId) throw new Error('Acesso criado, mas o usuário não foi vinculado. Tente novamente.');
-          inviteSent = true;
+          inviteSent = Boolean(provisionResult.inviteSent ?? provisionResult.emailSent ?? true);
           onAccessChanged?.();
         }
         await saveCollaboratorAccessBundle({
@@ -322,7 +333,7 @@ export function useCollaboratorAccessForm({
     } finally {
       setSaving(false);
     }
-  }, [currentUser, validateCredentials, effectiveTargetUserId, credEmail, collaboratorEmail, hasSystemAccess, saasTenantId, collaboratorId, linkedDisplayName, role, overrides, onAccessChanged]);
+  }, [currentUser, validateCredentials, effectiveTargetUserId, credEmail, collaboratorEmail, hasSystemAccess, saasTenantId, collaboratorId, linkedDisplayName, role, overrides, onAccessChanged, tenantUser]);
 
   const formatInviteDate = (value) => {
     if (!value) return '—';

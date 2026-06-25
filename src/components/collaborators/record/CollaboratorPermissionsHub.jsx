@@ -18,6 +18,7 @@ export default function CollaboratorPermissionsHub({
   accessDisplayStatus,
   onSaveSuccess,
   onSaveError,
+  onRepairNotice,
   onAccessChanged,
   onDirtyChange,
 }) {
@@ -44,7 +45,8 @@ export default function CollaboratorPermissionsHub({
       onSaveSuccess?.(result);
     },
     onSaveError,
-  }), [closeModal, onSaveSuccess, onSaveError]);
+    onRepairNotice,
+  }), [closeModal, onSaveSuccess, onSaveError, onRepairNotice]);
 
   useEffect(() => {
     onDirtyChange?.(form.dirty);
