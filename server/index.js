@@ -666,11 +666,6 @@ async function getValidAuthUserIdWithRetry(userId, { attempts = 4, delayMs = 350
   return null;
 }
 
-function isUuidLike(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    String(value || '').trim(),
-  );
-}
 
 function logCollabInviteProdAudit(audit = {}) {
   console.log('[COLLAB_INVITE_PROD_AUDIT]', {
@@ -701,7 +696,6 @@ async function resolveAuthUserIdForTenantLink({
   if (explicitRaw) {
     const validated = await getValidAuthUserIdWithRetry(explicitRaw);
     if (validated) return validated;
-    if (isUuidLike(explicitRaw)) return explicitRaw;
   }
 
   const byEmail = await findAuthUserByEmail(normalizedEmail);
@@ -802,9 +796,6 @@ async function upsertTenantUserAccess({
     explicitAuthUserId,
     existingTenantUser,
   });
-  if (!authUserId && explicitAuthUserId) {
-    authUserId = normalizeText(explicitAuthUserId) || null;
-  }
   if (!authUserId) {
     throw new Error(
       'Não foi possível vincular o e-mail sem conta no Auth. '

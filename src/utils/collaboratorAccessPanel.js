@@ -13,12 +13,13 @@ export function normalizeTenantAccessRole(role) {
   return raw;
 }
 
-export function resolveAccessTargetUserId({ localUserId, tenantUser } = {}) {
+export function resolveAccessTargetUserId({ localUserId, tenantUser, saasMode = false } = {}) {
   if (tenantUser?.user_id) {
     if (tenantUser.auth_user_valid === false) return null;
     return tenantUser.user_id;
   }
   if (tenantUser?.id) return null;
+  if (saasMode) return null;
   return localUserId || null;
 }
 

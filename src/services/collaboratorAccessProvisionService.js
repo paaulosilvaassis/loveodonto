@@ -313,9 +313,47 @@ export async function setCollaboratorSystemAccess(collaboratorId, payload) {
   return patchJson(`/internal/app/collaborators/${encodeURIComponent(collaboratorId)}/access`, payload);
 }
 
-/** Salva credenciais, perfil e overrides de permissão no Supabase (tenant_users + Auth app_metadata). */
-export async function saveCollaboratorAccessBundle(payload) {
-  return postJson('/internal/app/collaborators/access-bundle', payload);
+export async function saveCollaboratorAccessBundle(payload, options = {}) {
+  return postJson('/internal/app/collaborators/access-bundle', payload, {
+    auditContext: {
+      tenantId: payload?.tenant_id,
+      collaboratorId: payload?.collaborator_id,
+      email: payload?.email,
+      targetUserId: payload?.target_user_id,
+      ...options.auditContext,
+    },
+  });
+}
+
+/**
+ * Salva bundle de acesso; se o vínculo Auth estiver órfão, reprovisiona e tenta novamente.
+ */
+export async function saveCollaboratorAccessBundleWithRepair(payload, { onRepairNotice, tenantUser } = {}) {
+  try {
+    return await saveCollaboratorAccessBundle(payload);
+  } catch (err) {
+    if (!isStaleAuthLinkError(err?.message)) throw err;
+    onRepairNotice?.('Encontramos um vínculo antigo. O sistema vai recriar o convite.');
+    const provisioned = await provisionCollaboratorAccessWithRepair({
+      tenant_id: payload?.tenant_id,
+      collaborator_id: payload?.collaborator_id,
+      collaborator_full_name: payload?.email,
+      create_system_access: true,
+      email: payload?.email,
+      profile_role: payload?.role || 'atendimento',
+      send_invite: true,
+      repair_stale_auth: true,
+      tenantUser,
+    }, { onRepairNotice });
+    const authUserId = provisioned.authUserId || provisioned.tenant_user?.user_id || null;
+    if (!authUserId) {
+      throw new Error('Não foi possível enviar o convite. Verifique o e-mail e tente novamente.');
+    }
+    return saveCollaboratorAccessBundle({
+      ...payload,
+      target_user_id: authUserId,
+    });
+  }
 }
 
 export async function listTenantUsersAccess(tenantId) {

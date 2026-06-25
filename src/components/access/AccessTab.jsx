@@ -10,7 +10,7 @@ import {
   ROLE_LABELS,
   ROLE_ADMIN,
 } from '../../services/accessService.js';
-import { saveCollaboratorAccessBundle, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite } from '../../services/collaboratorAccessProvisionService.js';
+import { saveCollaboratorAccessBundleWithRepair, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite } from '../../services/collaboratorAccessProvisionService.js';
 import { tenantUserNeedsAuthRepair } from '../../utils/collaboratorAccessPanel.js';
 import { MODULES_SPEC, ACTION_KEYS, ACTION_LABELS } from '../../permissions/catalog.js';
 import { Field } from '../Field.jsx';
@@ -77,7 +77,11 @@ export default function AccessTab({
 
   const catalog = useMemo(() => getPermissionsCatalog(), []);
   const effectiveTargetUserId = useMemo(
-    () => resolveAccessTargetUserId({ localUserId: targetUserId, tenantUser }),
+    () => resolveAccessTargetUserId({
+      localUserId: targetUserId,
+      tenantUser,
+      saasMode: isSaasModeEnabled(),
+    }),
     [targetUserId, tenantUser],
   );
   const roleDefaultIds = useMemo(
@@ -296,7 +300,7 @@ export default function AccessTab({
           onAccessChanged?.();
         }
 
-        await saveCollaboratorAccessBundle({
+        await saveCollaboratorAccessBundleWithRepair({
           tenant_id: saasTenantId,
           collaborator_id: collaboratorId || '',
           target_user_id: resolvedTargetUserId,
@@ -304,7 +308,7 @@ export default function AccessTab({
           role: role || 'atendimento',
           has_system_access: hasSystemAccess,
           permission_overrides: overrides || {},
-        });
+        }, { tenantUser });
       } else if (hasSystemAccess && !resolvedTargetUserId) {
         onSaveError?.('Crie o acesso do colaborador antes de salvar permissões individuais.');
         return;

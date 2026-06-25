@@ -12,6 +12,7 @@ describe('collaboratorAccessPanel', () => {
     expect(resolveAccessTargetUserId({ localUserId: 'stale-local', tenantUser: { id: 'tu-1' } })).toBe(null);
     expect(resolveAccessTargetUserId({ localUserId: 'stale-local', tenantUser: { id: 'tu-1', user_id: 'gone', auth_user_valid: false } })).toBe(null);
     expect(resolveAccessTargetUserId({ localUserId: 'local-1', tenantUser: null })).toBe('local-1');
+    expect(resolveAccessTargetUserId({ localUserId: 'stale-local', tenantUser: null, saasMode: true })).toBe(null);
   });
 
   it('exibe painel quando há tenant user ou auth id', () => {

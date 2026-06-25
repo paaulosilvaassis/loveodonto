@@ -10,7 +10,7 @@ import {
   ROLE_LABELS,
   ROLE_ADMIN,
 } from '../services/accessService.js';
-import { saveCollaboratorAccessBundle, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite } from '../services/collaboratorAccessProvisionService.js';
+import { saveCollaboratorAccessBundleWithRepair, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite } from '../services/collaboratorAccessProvisionService.js';
 import { tenantUserNeedsAuthRepair } from '../utils/collaboratorAccessPanel.js';
 import { MODULES_SPEC, ACTION_LABELS } from '../permissions/catalog.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
@@ -40,7 +40,11 @@ export function useCollaboratorAccessForm({
 
   const catalog = useMemo(() => getPermissionsCatalog(), []);
   const effectiveTargetUserId = useMemo(
-    () => resolveAccessTargetUserId({ localUserId: targetUserId, tenantUser }),
+    () => resolveAccessTargetUserId({
+      localUserId: targetUserId,
+      tenantUser,
+      saasMode: isSaasModeEnabled(),
+    }),
     [targetUserId, tenantUser],
   );
   const roleDefaultIds = useMemo(
@@ -293,7 +297,7 @@ export function useCollaboratorAccessForm({
           inviteSent = Boolean(provisionResult.inviteSent ?? provisionResult.emailSent ?? true);
           onAccessChanged?.();
         }
-        await saveCollaboratorAccessBundle({
+        await saveCollaboratorAccessBundleWithRepair({
           tenant_id: saasTenantId,
           collaborator_id: collaboratorId || '',
           target_user_id: resolvedTargetUserId,
@@ -301,7 +305,7 @@ export function useCollaboratorAccessForm({
           role: role || 'atendimento',
           has_system_access: hasSystemAccess,
           permission_overrides: overrides || {},
-        });
+        }, { onRepairNotice, tenantUser });
       } else if (hasSystemAccess && !resolvedTargetUserId) {
         onSaveError?.('Crie o acesso do colaborador antes de salvar permissões individuais.');
         return false;
