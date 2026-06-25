@@ -8,6 +8,7 @@ import ActivatePage from './pages/ActivatePage.jsx';
 import PrimeiroAcessoPage from './pages/PrimeiroAcessoPage.jsx';
 import AceitarTermosPage from './pages/AceitarTermosPage.jsx';
 import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
+import RedefinirSenhaPage from './pages/RedefinirSenhaPage.jsx';
 import ConvitePage from './pages/ConvitePage.jsx';
 import ContractSignPublicPage from './pages/contratos/ContractSignPublicPage.jsx';
 import { PlatformAuthProvider } from './auth/PlatformAuthContext.jsx';
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/primeiro-acesso" element={<PrimeiroAcessoPage />} />
             <Route path="/aceitar-termos" element={<AceitarTermosPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/redefinir-senha" element={<RedefinirSenhaPage />} />
             <Route path="/convite" element={<ConvitePage />} />
             <Route path="/assinatura/:token" element={<ContractSignPublicPage />} />
             <Route path="/platform/login" element={<PlatformLoginPage />} />

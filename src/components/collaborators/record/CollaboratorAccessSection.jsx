@@ -1,9 +1,16 @@
+import { useCallback, useEffect, useState } from 'react';
 import { Info, Mail, Shield, UserX } from 'lucide-react';
-import { useEffect } from 'react';
 import Button from '../../Button.jsx';
 import { Field } from '../../Field.jsx';
 import { useCollaboratorAccessForm } from '../../../hooks/useCollaboratorAccessForm.js';
+import CollaboratorAccessManagementCard from '../../access/CollaboratorAccessManagementCard.jsx';
 import { accessStatusBadgeClass } from '../../../utils/inviteStatus.js';
+import { isSaasModeEnabled } from '../../../services/saasAuthService.js';
+import {
+  fetchCollaboratorAccessAudit,
+  requestCollaboratorPasswordReset,
+  sendCollaboratorInvite,
+} from '../../../services/collaboratorAccessProvisionService.js';
 
 export default function CollaboratorAccessSection({
   collaboratorId,
@@ -35,12 +42,82 @@ export default function CollaboratorAccessSection({
     onAccessChanged,
   });
 
+  const [auditEvents, setAuditEvents] = useState([]);
   const readOnly = form.readOnly || !canEdit;
   const saveHandlers = { onSaveSuccess, onSaveError, onRepairNotice };
+  const inviteEmail = (form.credEmail || collaboratorEmail || '').trim().toLowerCase();
 
   useEffect(() => {
     onDirtyChange?.(form.dirty);
   }, [form.dirty, onDirtyChange]);
+
+  const loadAudit = useCallback(async () => {
+    if (!isSaasModeEnabled() || !saasTenantId || !inviteEmail) return;
+    try {
+      const result = await fetchCollaboratorAccessAudit({
+        tenant_id: saasTenantId,
+        email: inviteEmail,
+      });
+      setAuditEvents(Array.isArray(result?.events) ? result.events : []);
+    } catch {
+      setAuditEvents([]);
+    }
+  }, [saasTenantId, inviteEmail]);
+
+  const handleSendInvite = async () => {
+    if (!collaboratorId || !saasTenantId || !inviteEmail) {
+      onSaveError?.('Informe um e-mail válido antes de enviar o convite.');
+      return;
+    }
+    form.setSaving(true);
+    try {
+      await sendCollaboratorInvite({
+        tenant_id: saasTenantId,
+        collaborator_id: collaboratorId,
+        collaborator_full_name: (linkedDisplayName || '').trim() || inviteEmail,
+        email: inviteEmail,
+        profile_role: form.role || 'atendimento',
+        repair_stale_auth: true,
+        tenantUser,
+      });
+      onAccessChanged?.();
+      onSaveSuccess?.({ inviteSent: true });
+      await loadAudit();
+    } catch (err) {
+      onSaveError?.(err?.message || 'Não foi possível enviar o convite. Tente novamente.');
+    } finally {
+      form.setSaving(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!saasTenantId || !inviteEmail) return;
+    form.setSaving(true);
+    try {
+      const result = await requestCollaboratorPasswordReset({
+        tenant_id: saasTenantId,
+        email: inviteEmail,
+        collaborator_id: collaboratorId || tenantUser?.collaborator_id || null,
+      });
+      onAccessChanged?.();
+      if (result?.auth_recreated) {
+        onRepairNotice?.(result.message);
+      } else {
+        onSaveSuccess?.({
+          passwordResetSent: true,
+          message: result?.message || `Link de redefinição enviado para: ${inviteEmail}`,
+        });
+      }
+      if (result?.audit) {
+        setAuditEvents((prev) => [result.audit, ...prev]);
+      }
+      await loadAudit();
+    } catch (err) {
+      onSaveError?.(err?.message || 'Não foi possível enviar o e-mail. Tente novamente.');
+    } finally {
+      form.setSaving(false);
+    }
+  };
 
   return (
     <div className="cr-access">
@@ -135,6 +212,25 @@ export default function CollaboratorAccessSection({
           </Button>
         </footer>
       </section>
+
+      {form.hasSystemAccess ? (
+        <CollaboratorAccessManagementCard
+          tenantUser={tenantUser}
+          collaboratorEmail={form.credEmail || collaboratorEmail}
+          saasTenantId={saasTenantId}
+          collaboratorId={collaboratorId}
+          linkedDisplayName={linkedDisplayName}
+          currentUser={currentUser}
+          canEdit={canEdit}
+          saving={form.saving}
+          auditEvents={auditEvents}
+          onLoadAudit={loadAudit}
+          onSendInvite={handleSendInvite}
+          onResendInvite={() => form.handleResendInvite(saveHandlers)}
+          onResetPassword={handleResetPassword}
+          onDeactivateAccess={onDeactivateAccess}
+        />
+      ) : null}
     </div>
   );
 }

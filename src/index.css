@@ -33580,6 +33580,163 @@ a.button {
   margin-top: 8px;
 }
 
+/* Gerenciamento de acesso */
+.cr-access-mgmt {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  background: #FAFAFA;
+}
+
+.cr-access-mgmt__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.cr-access-mgmt__head h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cr-access-mgmt__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cr-access-mgmt__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cr-access-mgmt__label {
+  font-size: 0.75rem;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cr-access-mgmt__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cr-access-mgmt__history h4 {
+  margin: 0 0 8px;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6B7280;
+}
+
+.cr-access-mgmt__history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cr-access-mgmt__history-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.cr-access-mgmt__history-list p {
+  margin: 2px 0 0;
+  font-size: 0.8125rem;
+}
+
+.cr-access-mgmt__ip {
+  font-size: 0.75rem;
+}
+
+.cr-reset-modal__text {
+  margin: 0 0 4px;
+}
+
+.cr-reset-modal__email {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.cr-reset-modal__hint {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* Recuperação de senha */
+.login-form-container--recovery {
+  grid-column: 1 / -1;
+  min-height: 100vh;
+}
+
+.login-form-card--recovery {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.password-recovery-email {
+  margin-bottom: 1rem;
+}
+
+.password-recovery-back {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.password-recovery-success {
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.password-strength {
+  margin: 0.75rem 0 1rem;
+  padding: 12px;
+  border-radius: 8px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+}
+
+.password-strength__label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.875rem;
+  margin-bottom: 8px;
+}
+
+.password-strength--weak .password-strength__label { color: #DC2626; }
+.password-strength--medium .password-strength__label { color: #D97706; }
+.password-strength--strong .password-strength__label { color: #059669; }
+
+.password-strength__rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  color: #6B7280;
+}
+
+.password-strength__rules li {
+  padding: 2px 0;
+}
+
+.password-strength__rules li.ok {
+  color: #059669;
+}
+
 /* Permissões hub */
 .cr-perms__profile {
   display: flex;

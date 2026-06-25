@@ -23,3 +23,11 @@ export function getInviteRedirectTo() {
     || (process.env.NODE_ENV === 'production' ? 'https://loveodonto.com.br' : 'http://localhost:5176');
   return `${appUrl.replace(/\/+$/, '')}/primeiro-acesso`;
 }
+
+export function getPasswordResetRedirectTo() {
+  const explicit = normalizeText(process.env.APP_PASSWORD_RESET_REDIRECT_TO);
+  if (explicit) return explicit;
+  const appUrl = normalizeText(process.env.APP_URL)
+    || (process.env.NODE_ENV === 'production' ? 'https://loveodonto.com.br' : 'http://localhost:5176');
+  return `${appUrl.replace(/\/+$/, '')}/redefinir-senha`;
+}

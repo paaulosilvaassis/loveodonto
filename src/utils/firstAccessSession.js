@@ -9,6 +9,7 @@ const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
 
 export const FIRST_ACCESS_PUBLIC_PATHS = [
   '/primeiro-acesso',
+  '/redefinir-senha',
   '/aceitar-termos',
   '/activate',
   '/convite',
@@ -30,7 +31,15 @@ export function isPrimeiroAcessoPath(pathname) {
   if (path == null && typeof window !== 'undefined' && window.location?.pathname) {
     path = window.location.pathname;
   }
-  return path === '/primeiro-acesso';
+  return path === '/primeiro-acesso' || path === '/redefinir-senha';
+}
+
+export function isRedefinirSenhaPath(pathname) {
+  let path = pathname;
+  if (path == null && typeof window !== 'undefined' && window.location?.pathname) {
+    path = window.location.pathname;
+  }
+  return path === '/redefinir-senha';
 }
 
 /** Proteção estrita: AuthContext não pode deslogar/resolver tenant durante primeiro acesso. */
@@ -143,15 +152,23 @@ export function isFirstAccessFlow(locationLike = window.location) {
 
 export function buildPrimeiroAcessoPathWithAuth(locationLike = window.location) {
   const parsed = parseAuthCallbackFromUrl(locationLike);
-  if (parsed.hasHash) return `/primeiro-acesso${parsed.hash}`;
-  if (parsed.code || parsed.search.includes('type=')) return `/primeiro-acesso${parsed.search}`;
+  const targetPath = isRedefinirSenhaPath(locationLike.pathname) ? '/redefinir-senha' : '/primeiro-acesso';
+  if (parsed.hasHash) return `${targetPath}${parsed.hash}`;
+  if (parsed.code || parsed.search.includes('type=')) return `${targetPath}${parsed.search}`;
   return null;
 }
 
-/** Redireciona tokens que caíram em /login (Site URL) para /primeiro-acesso. */
+/** Redireciona tokens que caíram em /login (Site URL) para rota de senha correta. */
 export function resolvePrimeiroAcessoRedirect(locationLike = window.location) {
-  if (locationLike.pathname === '/primeiro-acesso') return null;
+  if (isPrimeiroAcessoPath(locationLike.pathname)) return null;
   if (!hasSupabaseAuthCallback(locationLike)) return null;
+  const parsed = parseAuthCallbackFromUrl(locationLike);
+  const isRecovery = parsed.type === 'recovery';
+  if (isRecovery) {
+    if (parsed.hasHash) return `/redefinir-senha${parsed.hash}`;
+    if (parsed.code || parsed.search.includes('type=')) return `/redefinir-senha${parsed.search}`;
+    return '/redefinir-senha';
+  }
   return buildPrimeiroAcessoPathWithAuth(locationLike);
 }
 
@@ -361,6 +378,30 @@ export async function completeFirstAccess(client, clearAppSession) {
   clearAuthParamsFromUrl('/login?firstAccess=success');
   if (typeof window !== 'undefined') {
     window.location.replace('/login?firstAccess=success');
+  }
+}
+
+export async function bootstrapPasswordRecoverySession(client, options = {}) {
+  return bootstrapFirstAccessSession(client, options);
+}
+
+/** Logout limpo após redefinição de senha. */
+export async function completePasswordRecovery(client, clearAppSession) {
+  auditFirstAccess('completePasswordRecovery start', { updateUserSuccess: true });
+  if (typeof clearAppSession === 'function') {
+    clearAppSession();
+  }
+  clearPlatformAuthStorage();
+  if (client) {
+    try {
+      await client.auth.signOut();
+    } catch {
+      /* ignore */
+    }
+  }
+  clearAuthParamsFromUrl('/login?passwordReset=success');
+  if (typeof window !== 'undefined') {
+    window.location.replace('/login?passwordReset=success');
   }
 }
 

@@ -120,11 +120,20 @@ export default function LoginPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('firstAccess') !== 'success' || shownActivatedRef.current) return;
-    shownActivatedRef.current = true;
-    setToast({ message: 'Senha definida com sucesso! Faça login para acessar.', type: 'success' });
-    setTimeout(() => setToast(null), 5000);
-    window.history.replaceState({}, document.title, '/login');
+    if (shownActivatedRef.current) return;
+    if (params.get('firstAccess') === 'success') {
+      shownActivatedRef.current = true;
+      setToast({ message: 'Senha definida com sucesso! Faça login para acessar.', type: 'success' });
+      setTimeout(() => setToast(null), 5000);
+      window.history.replaceState({}, document.title, '/login');
+      return;
+    }
+    if (params.get('passwordReset') === 'success') {
+      shownActivatedRef.current = true;
+      setToast({ message: 'Senha alterada com sucesso! Faça login com sua nova senha.', type: 'success' });
+      setTimeout(() => setToast(null), 5000);
+      window.history.replaceState({}, document.title, '/login');
+    }
   }, [location.search]);
 
   useEffect(() => {
@@ -283,7 +292,7 @@ export default function LoginPage() {
                 </>
               )}
               <Link to="/activate" className="link">Recebeu um convite? Ativar acesso</Link>
-              <Link to="/forgot-password" className="link">Esqueci minha senha</Link>
+              <Link to="/forgot-password" className="link">Esqueceu sua senha?</Link>
               <Link to="/platform/login" className="link">
                 É operador da plataforma (Console)? Entrar aqui
               </Link>

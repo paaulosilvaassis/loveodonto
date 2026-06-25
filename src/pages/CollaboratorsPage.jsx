@@ -826,7 +826,7 @@ export default function CollaboratorsPage() {
     accessDisplayStatus: resolveCollaboratorAccessDisplayStatus(selectedTenantAccess),
     onDeactivateAccess: handleDeactivateAccess,
     onGoToProfile: () => handleEditSection('contatos'),
-    onSaveSuccess: ({ inviteSent } = {}) => {
+    onSaveSuccess: ({ inviteSent, passwordResetSent, message } = {}) => {
       setError('');
       setAccessDirty(false);
       const effectiveUserId = draft.access?.userId || selectedTenantAccess?.user_id;
@@ -838,7 +838,11 @@ export default function CollaboratorsPage() {
       }
       refreshCollaboratorDraft();
       refreshTenantAccess();
-      setSuccess(inviteSent ? 'Convite enviado.' : 'Acesso salvo.');
+      if (passwordResetSent) {
+        setSuccess(message || `Link de redefinição enviado para: ${selectedTenantAccess?.email || ''}`);
+      } else {
+        setSuccess(inviteSent ? 'Convite enviado.' : 'Acesso salvo.');
+      }
     },
     onSaveError: (msg) => setError(msg),
     onRepairNotice: (msg) => { setError(''); setSuccess(msg); },

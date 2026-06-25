@@ -215,3 +215,32 @@ export async function signInSaasWithPassword(email, password) {
     resolvedUser,
   };
 }
+
+export function getPasswordResetRedirectUrl() {
+  const explicit = String(import.meta.env.VITE_PASSWORD_RESET_REDIRECT_TO || '').trim();
+  if (explicit) return explicit;
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5176';
+  return `${origin.replace(/\/+$/, '')}/redefinir-senha`;
+}
+
+export async function requestSelfServicePasswordReset(email) {
+  const client = supabasePlatformClient;
+  if (!client) {
+    throw new Error('Recuperação de senha indisponível no momento.');
+  }
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  if (!normalizedEmail) {
+    throw new Error('Informe um e-mail válido.');
+  }
+  const { error } = await client.auth.resetPasswordForEmail(normalizedEmail, {
+    redirectTo: getPasswordResetRedirectUrl(),
+  });
+  if (error) {
+    const lower = String(error.message || '').toLowerCase();
+    if (lower.includes('rate') || lower.includes('too many')) {
+      throw new Error('Muitas tentativas. Aguarde alguns minutos e tente novamente.');
+    }
+    throw new Error('Não foi possível enviar o e-mail. Tente novamente.');
+  }
+  return { email: normalizedEmail };
+}

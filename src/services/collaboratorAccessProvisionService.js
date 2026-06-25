@@ -305,6 +305,25 @@ export async function resendCollaboratorInvite(payload) {
   return postJson('/internal/app/invitations/resend', payload);
 }
 
+export async function requestCollaboratorPasswordReset(payload) {
+  return postJson('/internal/app/users/password-reset', payload);
+}
+
+export async function fetchCollaboratorAccessAudit({ tenant_id, email }) {
+  const query = new URLSearchParams();
+  if (tenant_id) query.set('tenant_id', tenant_id);
+  if (email) query.set('email', email);
+  return getJson(`/internal/app/collaborators/access-audit?${query.toString()}`);
+}
+
+export async function sendCollaboratorInvite(payload) {
+  return provisionCollaboratorAccessWithRepair({
+    ...payload,
+    create_system_access: true,
+    send_invite: true,
+  });
+}
+
 export async function reconcileOwnInvitationAcceptance() {
   return postJson('/internal/app/invitations/reconcile', {});
 }

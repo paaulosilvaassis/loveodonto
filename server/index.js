@@ -13,6 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { getInviteRedirectTo as resolveInviteRedirectTo, getEmailConfig } from './email/emailConfig.js';
 import { dispatchCollaboratorInvite } from './collaboratorInviteDispatch.js';
 import { generatePasswordSetupLink, sendUserInviteEmail } from './email/sendUserInviteEmail.js';
+import { sendPasswordResetEmail } from './email/sendPasswordResetEmail.js';
+import { getPasswordResetRedirectTo } from './email/emailConfig.js';
 import {
   LIABILITY_TERMS_VERSION,
   normalizeOnboardingPayload,
@@ -673,6 +675,54 @@ function logCollabInviteProdAudit(audit = {}) {
     apiBaseUrl: SUPABASE_URL ? String(SUPABASE_URL).replace(/\/+$/, '') : '',
     ...audit,
   });
+}
+
+function logCollaboratorAccessAudit(audit = {}) {
+  console.log('[COLLAB_ACCESS_AUDIT]', {
+    environment: process.env.NODE_ENV || 'development',
+    at: new Date().toISOString(),
+    ...audit,
+  });
+}
+
+function resolveClientIp(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || req.socket?.remoteAddress || null;
+}
+
+async function getAuthUserMeta(userId) {
+  const id = normalizeText(userId);
+  if (!id) return null;
+  const { data, error } = await supabase.auth.admin.getUserById(id);
+  if (error || !data?.user) return null;
+  return {
+    last_sign_in_at: data.user.last_sign_in_at || null,
+    created_at: data.user.created_at || null,
+    user_metadata: data.user.user_metadata || {},
+    app_metadata: data.user.app_metadata || {},
+  };
+}
+
+async function appendAccessAuditToAuthUser(authUserId, auditEntry) {
+  const meta = await getAuthUserMeta(authUserId);
+  if (!meta) return null;
+  const existing = Array.isArray(meta.app_metadata?.access_audit_log)
+    ? meta.app_metadata.access_audit_log
+    : [];
+  const nextLog = [{ ...auditEntry, at: auditEntry.at || new Date().toISOString() }, ...existing].slice(0, 20);
+  const { error } = await supabase.auth.admin.updateUserById(authUserId, {
+    app_metadata: {
+      ...meta.app_metadata,
+      access_audit_log: nextLog,
+      last_password_reset_requested_at: auditEntry.action === 'password_reset_requested'
+        ? auditEntry.at || new Date().toISOString()
+        : meta.app_metadata?.last_password_reset_requested_at || null,
+    },
+  });
+  if (error) {
+    console.error('[COLLAB_ACCESS_AUDIT] falha ao persistir audit em app_metadata', error.message);
+  }
+  return nextLog;
 }
 
 function formatProvisionErrorResponse(err, fallbackMessage = 'Falha ao provisionar acesso do colaborador.') {
@@ -2014,6 +2064,163 @@ app.post('/internal/app/invitations/resend', requireAppUser, async (req, res) =>
   }
 });
 
+app.post('/internal/app/users/password-reset', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const targetEmail = normalizeEmail(req.body?.email);
+    const collaboratorId = normalizeText(req.body?.collaborator_id);
+
+    if (!targetEmail) {
+      return res.status(400).json({ message: 'E-mail é obrigatório para redefinir a senha.' });
+    }
+
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+    const clientIp = resolveClientIp(req);
+    const actorName = actorTenantUser.full_name || req.appAuthUser.email || 'Administrador';
+
+    const { data: tenantUser, error: tenantUserError } = await supabase
+      .from('tenant_users')
+      .select('id, tenant_id, collaborator_id, user_id, full_name, email, role, role_slug, invitation_status')
+      .eq('tenant_id', tenantId)
+      .eq('email', targetEmail)
+      .maybeSingle();
+    if (tenantUserError) throw tenantUserError;
+    if (!tenantUser?.id) {
+      return res.status(404).json({ message: 'Usuário não encontrado para este e-mail.' });
+    }
+
+    await clearStaleTenantUserAuthReference(tenantId, targetEmail);
+
+    let authUserId = await getValidAuthUserId(tenantUser.user_id);
+    let authRecreated = false;
+    if (!authUserId) {
+      authUserId = (await findAuthUserByEmail(targetEmail))?.id || null;
+    }
+    if (!authUserId) {
+      const role = normalizeRoleValue(tenantUser.role || tenantUser.role_slug || 'atendimento');
+      const recreated = await createAuthUserForCollaboratorInvite({
+        normalizedEmail: targetEmail,
+        tenantId,
+        role,
+        collaboratorId: collaboratorId || tenantUser.collaborator_id,
+        collaboratorFullName: tenantUser.full_name || targetEmail,
+      });
+      authUserId = recreated?.id || null;
+      authRecreated = Boolean(authUserId);
+      if (authUserId && authUserId !== tenantUser.user_id) {
+        await supabase.from('tenant_users').update({ user_id: authUserId }).eq('id', tenantUser.id);
+      }
+    }
+
+    if (!authUserId) {
+      return res.status(400).json({ message: 'Não foi possível enviar o e-mail. Tente novamente.' });
+    }
+
+    if (authRecreated) {
+      const role = normalizeRoleValue(tenantUser.role || tenantUser.role_slug || 'atendimento');
+      const inviteDelivery = await sendCollaboratorInvite({
+        email: targetEmail,
+        tenantId,
+        role,
+        collaboratorId: collaboratorId || tenantUser.collaborator_id,
+        collaboratorName: tenantUser.full_name,
+        userName: tenantUser.full_name || targetEmail,
+        profileRole: role,
+      });
+      const auditEntry = {
+        action: 'auth_recreated_invite_sent',
+        actor_name: actorName,
+        actor_id: req.appAuthUser.id,
+        ip: clientIp,
+        target_email: targetEmail,
+      };
+      logCollaboratorAccessAudit(auditEntry);
+      await appendAccessAuditToAuthUser(authUserId, auditEntry);
+      return res.status(200).json({
+        ok: true,
+        message: 'Encontramos um problema na conta. Ela foi recriada automaticamente. Um novo convite foi enviado.',
+        auth_recreated: true,
+        email_sent: isInviteEmailDelivered(inviteDelivery),
+        audit: auditEntry,
+      });
+    }
+
+    const invStatus = normalizeInvitationStatus(tenantUser.invitation_status || 'none');
+    if (['sent', 'pending', 'expired'].includes(invStatus)) {
+      return res.status(400).json({
+        message: 'O colaborador ainda não aceitou o convite. Use Reenviar convite.',
+      });
+    }
+
+    const resetDelivery = await sendPasswordResetEmail(supabase, {
+      email: targetEmail,
+      userName: tenantUser.full_name || targetEmail,
+      redirectTo: getPasswordResetRedirectTo(),
+    });
+
+    const auditEntry = {
+      action: 'password_reset_requested',
+      actor_name: actorName,
+      actor_id: req.appAuthUser.id,
+      ip: clientIp,
+      target_email: targetEmail,
+      label: 'Solicitou redefinição de senha',
+    };
+    logCollaboratorAccessAudit(auditEntry);
+    const auditLog = await appendAccessAuditToAuthUser(authUserId, auditEntry);
+
+    return res.status(200).json({
+      ok: true,
+      message: `Link de redefinição enviado para: ${targetEmail}`,
+      email: targetEmail,
+      email_sent: Boolean(resetDelivery?.emailSent),
+      audit: auditEntry,
+      audit_log: auditLog || [],
+    });
+  } catch (err) {
+    console.error('[app-password-reset]', err);
+    return res.status(400).json({
+      message: 'Não foi possível enviar o e-mail. Tente novamente.',
+    });
+  }
+});
+
+app.get('/internal/app/collaborators/access-audit', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.query?.tenant_id);
+    const targetEmail = normalizeEmail(req.query?.email);
+    if (!targetEmail) {
+      return res.status(400).json({ message: 'E-mail é obrigatório.' });
+    }
+
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+
+    const { data: tenantUser, error } = await supabase
+      .from('tenant_users')
+      .select('id, user_id, email')
+      .eq('tenant_id', tenantId)
+      .eq('email', targetEmail)
+      .maybeSingle();
+    if (error) throw error;
+    if (!tenantUser?.user_id) {
+      return res.status(200).json({ success: true, events: [] });
+    }
+
+    const meta = await getAuthUserMeta(tenantUser.user_id);
+    const events = Array.isArray(meta?.app_metadata?.access_audit_log)
+      ? meta.app_metadata.access_audit_log
+      : [];
+
+    return res.status(200).json({ success: true, events });
+  } catch (err) {
+    return res.status(400).json({
+      message: 'Não foi possível carregar o histórico de acesso.',
+    });
+  }
+});
+
 app.post('/internal/app/invitations/reconcile', requireAppUser, async (req, res) => {
   try {
     const tenantUser = await getTenantUserByAuthUserId(req.appAuthUser.id);
@@ -2121,6 +2328,7 @@ app.get('/internal/app/users/list', requireAppUser, async (req, res) => {
       const hasSystemAccess = row?.has_system_access ?? row?.is_active ?? row?.status === 'active';
       const invitationStatus = normalizeInvitationStatus(row?.invitation_status || invitation?.status || 'none');
       const authUserValid = row?.user_id ? Boolean(await getValidAuthUserId(row.user_id)) : false;
+      const authMeta = row?.user_id ? await getAuthUserMeta(row.user_id) : null;
       return {
         id: row.id,
         tenant_id: row.tenant_id,
@@ -2136,6 +2344,9 @@ app.get('/internal/app/users/list', requireAppUser, async (req, res) => {
         invitation_status: invitationStatus,
         created_at: row?.created_at || null,
         updated_at: row?.updated_at || null,
+        last_sign_in_at: authMeta?.last_sign_in_at || null,
+        password_reset_sent_at: authMeta?.app_metadata?.last_password_reset_requested_at || null,
+        auth_meta: authMeta?.app_metadata || null,
         invitation,
       };
     }));
