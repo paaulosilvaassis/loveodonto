@@ -25,6 +25,7 @@ import {
   Info,
   Mail,
   UserX,
+  UserCheck,
   RotateCcw,
   Shield,
   KeyRound,
@@ -39,6 +40,7 @@ import {
   normalizeTenantAccessRole,
   resolveAccessTargetUserId,
 } from '../../utils/collaboratorAccessPanel.js';
+import { isTenantSystemAccessActive } from '../../utils/collaboratorAccessManagement.js';
 
 const FIXED_MATRIX_ACTIONS = ['view', 'create', 'edit', 'delete', 'export', 'send', 'cancel'];
 const DEFAULT_EXPANDED_SECTORS = [];
@@ -59,7 +61,8 @@ export default function AccessTab({
   onSaveSuccess,
   onSaveError,
   onAccessChanged,
-  onDeactivateAccess,
+  onToggleSystemAccess,
+  accessActive: accessActiveProp,
   accessDisplayStatus = null,
   onGoToProfile,
   section = 'full',
@@ -109,18 +112,26 @@ export default function AccessTab({
         has_system_access: tenantUser?.has_system_access !== false,
         displayName: linkedDisplayName,
         tenantId: saasTenantId || '',
+        collaboratorId: collaboratorId || '',
       });
     }
 
+    const serverHasAccess = isSaasModeEnabled() && tenantUser?.id
+      ? isTenantSystemAccessActive(tenantUser)
+      : null;
+
     const access = getUserAccess(effectiveTargetUserId);
     if (access) {
-      setHasSystemAccess(access.has_system_access);
+      setHasSystemAccess(serverHasAccess !== null ? serverHasAccess : access.has_system_access);
       setRole(normalizeTenantAccessRole(access.role));
       setOverrides(access.overrides || {});
-      setInitialSnapshot(JSON.stringify(access));
+      setInitialSnapshot(JSON.stringify({
+        ...access,
+        has_system_access: serverHasAccess !== null ? serverHasAccess : access.has_system_access,
+      }));
       setDirty(false);
     } else if (tenantUser) {
-      setHasSystemAccess(tenantUser.has_system_access !== false);
+      setHasSystemAccess(serverHasAccess !== null ? serverHasAccess : tenantUser.has_system_access !== false);
       setRole(normalizeTenantAccessRole(tenantUser.role));
       setOverrides({});
       setInitialSnapshot(null);
@@ -322,6 +333,7 @@ export default function AccessTab({
             has_system_access: hasSystemAccess,
             displayName: (linkedDisplayName || '').trim(),
             tenantId: saasTenantId || '',
+            collaboratorId: collaboratorId || '',
           });
         }
         updateUserAccess(currentUser, resolvedTargetUserId, {
@@ -354,6 +366,9 @@ export default function AccessTab({
   const roleOptions = ROLES.filter((r) => r !== ROLE_ADMIN);
   const canManage = canManageAccess(currentUser);
   const readOnly = !canEdit || !canManage;
+  const accessActive = typeof accessActiveProp === 'boolean'
+    ? accessActiveProp
+    : (tenantUser?.id ? isTenantSystemAccessActive(tenantUser) : hasSystemAccess);
   const inviteTargetEmail = (credEmail || collaboratorEmail || '').trim().toLowerCase();
   const resolvedAccessStatus = useMemo(
     () => accessDisplayStatus || resolveCollaboratorAccessDisplayStatus(tenantUser),
@@ -741,9 +756,14 @@ export default function AccessTab({
               Reenviar convite
             </Button>
           ) : null}
-          {onDeactivateAccess ? (
-            <Button variant="secondary" icon={UserX} onClick={onDeactivateAccess} disabled={readOnly || saving}>
-              Desativar acesso
+          {onToggleSystemAccess && tenantUser?.id ? (
+            <Button
+              variant="secondary"
+              icon={accessActive ? UserX : UserCheck}
+              onClick={onToggleSystemAccess}
+              disabled={readOnly || saving}
+            >
+              {accessActive ? 'Desativar acesso' : 'Ativar acesso'}
             </Button>
           ) : null}
           <Button variant="ghost" onClick={handleRevert} disabled={readOnly || !dirty}>

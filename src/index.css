@@ -33580,6 +33580,64 @@ a.button {
   margin-top: 8px;
 }
 
+.cr-access__health-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  border: 1px solid #FCD34D;
+  background: #FFFBEB;
+  color: #92400E;
+}
+
+.cr-access__health-banner p {
+  margin: 4px 0 0;
+}
+
+.identity-dash__toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.identity-dash__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.identity-dash__card {
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px solid #E5E7EB;
+  background: #fff;
+}
+
+.identity-dash__card-label {
+  display: block;
+  font-size: 0.8125rem;
+  color: #6B7280;
+  margin-bottom: 6px;
+}
+
+.identity-dash__card-value {
+  font-size: 1.5rem;
+}
+
+.identity-dash__card--success { border-color: #BBF7D0; background: #F0FDF4; }
+.identity-dash__card--warning { border-color: #FDE68A; background: #FFFBEB; }
+.identity-dash__card--danger { border-color: #FECACA; background: #FEF2F2; }
+.identity-dash__card--muted { border-color: #E5E7EB; background: #F9FAFB; }
+
+.identity-dash__row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 /* Gerenciamento de acesso */
 .cr-access-mgmt {
   margin-top: 16px;

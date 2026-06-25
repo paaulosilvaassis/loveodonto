@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import AccessTab from '../access/AccessTab.jsx';
-import { setCollaboratorSystemAccess } from '../../services/collaboratorAccessProvisionService.js';
+import { setCollaboratorSystemAccessWithRecovery } from '../../services/collaboratorAccessRecoveryService.js';
 import { resolveCollaboratorAccessDisplayStatus } from '../../utils/inviteStatus.js';
+import { isTenantSystemAccessActive } from '../../utils/collaboratorAccessManagement.js';
 
 /**
  * Painel unificado da aba Acessos e permissões.
@@ -28,16 +29,24 @@ export default function CollaboratorPermissionsPanel({
     [tenantUser],
   );
   const hasTenantRow = Boolean(tenantUser?.id);
-  const accessActive = hasTenantRow && tenantUser?.has_system_access !== false;
+  const accessActive = hasTenantRow && isTenantSystemAccessActive(tenantUser);
 
-  const handleDeactivateAccess = async () => {
+  const handleToggleSystemAccess = async () => {
     if (!canEdit || busy || !collaborator?.id) return;
-    if (!window.confirm('Desativar o acesso deste colaborador ao sistema?')) return;
+    const nextAccess = !accessActive;
+    const confirmMessage = nextAccess
+      ? 'Reativar o acesso deste colaborador ao sistema?'
+      : 'Desativar o acesso deste colaborador ao sistema?';
+    if (!window.confirm(confirmMessage)) return;
     setBusy(true);
     try {
-      await setCollaboratorSystemAccess(collaborator.id, {
-        tenant_id: tenantId,
-        has_system_access: false,
+      await setCollaboratorSystemAccessWithRecovery({
+        collaboratorId: collaborator.id,
+        collaborator,
+        tenantUser,
+        tenantId,
+        currentUser,
+        hasSystemAccess: nextAccess,
       });
       onAccessChanged?.();
     } catch (err) {
@@ -60,7 +69,8 @@ export default function CollaboratorPermissionsPanel({
         canEdit={canEdit}
         accessDisplayStatus={accessStatus}
         onAccessChanged={onAccessChanged}
-        onDeactivateAccess={hasTenantRow && accessActive ? handleDeactivateAccess : undefined}
+        onToggleSystemAccess={hasTenantRow ? handleToggleSystemAccess : undefined}
+        accessActive={accessActive}
         onGoToProfile={onGoToProfile}
         onSaveSuccess={onSaveSuccess}
         onSaveError={onSaveError}

@@ -157,10 +157,11 @@ export function ensureLocalUserForSaasAccess(targetUserId, {
   has_system_access: hasSystemAccess = true,
   displayName = '',
   tenantId = '',
+  collaboratorId = '',
 } = {}) {
   if (!targetUserId) return false;
   const db = loadDb();
-  if (db.users?.some((u) => u.id === targetUserId)) return false;
+  const createdUser = !db.users?.some((u) => u.id === targetUserId);
 
   const emailNorm = String(email || '').trim().toLowerCase();
   const now = new Date().toISOString();
@@ -169,48 +170,82 @@ export function ensureLocalUserForSaasAccess(targetUserId, {
   const appRole = ROLES.includes(roleNorm) ? roleNorm : 'atendimento';
   const membershipRole = appRole === ROLE_ADMIN ? ROLE_MASTER : appRole;
   const name = String(displayName || '').trim() || (emailNorm ? emailNorm.split('@')[0] : 'Usuário');
+  const collabId = String(collaboratorId || '').trim();
 
   withDb((d) => {
     d.users = d.users || [];
-    d.users.push({
+    const uIdx = d.users.findIndex((u) => u.id === targetUserId);
+    const userRecord = {
       id: targetUserId,
       name,
       email: emailNorm,
       role: appRole,
       active: true,
       has_system_access: hasSystemAccess !== false,
-    });
-    d.users_profile = d.users_profile || [];
-    if (!d.users_profile.some((p) => p.id === targetUserId)) {
-      d.users_profile.push({
-        id: targetUserId,
-        full_name: name,
-        email: emailNorm,
-        phone: '',
-        tenant_id: tid || undefined,
-        created_at: now,
-        updated_at: now,
-      });
+    };
+    if (uIdx >= 0) {
+      d.users[uIdx] = { ...d.users[uIdx], ...userRecord };
+    } else {
+      d.users.push(userRecord);
     }
+
+    d.users_profile = d.users_profile || [];
+    const pIdx = d.users_profile.findIndex((p) => p.id === targetUserId);
+    const profileRecord = {
+      id: targetUserId,
+      full_name: name,
+      email: emailNorm,
+      phone: '',
+      tenant_id: tid || undefined,
+      created_at: now,
+      updated_at: now,
+    };
+    if (pIdx >= 0) {
+      d.users_profile[pIdx] = { ...d.users_profile[pIdx], ...profileRecord };
+    } else {
+      d.users_profile.push(profileRecord);
+    }
+
     if (tid) {
       d.memberships = d.memberships || [];
-      const exists = d.memberships.some((m) => m.tenant_id === tid && m.user_id === targetUserId);
-      if (!exists) {
-        d.memberships.push({
-          id: `memb-${crypto.randomUUID()}`,
-          tenant_id: tid,
-          user_id: targetUserId,
-          role: membershipRole,
-          has_system_access: hasSystemAccess !== false,
-          status: 'active',
-          created_at: now,
-          updated_at: now,
-        });
+      const mIdx = d.memberships.findIndex((m) => m.tenant_id === tid && m.user_id === targetUserId);
+      const membershipRecord = {
+        id: mIdx >= 0 ? d.memberships[mIdx].id : `memb-${crypto.randomUUID()}`,
+        tenant_id: tid,
+        user_id: targetUserId,
+        role: membershipRole,
+        has_system_access: hasSystemAccess !== false,
+        status: 'active',
+        created_at: mIdx >= 0 ? d.memberships[mIdx].created_at : now,
+        updated_at: now,
+      };
+      if (mIdx >= 0) {
+        d.memberships[mIdx] = { ...d.memberships[mIdx], ...membershipRecord };
+      } else {
+        d.memberships.push(membershipRecord);
       }
     }
+
+    if (collabId) {
+      d.collaboratorAccess = d.collaboratorAccess || [];
+      const aIdx = d.collaboratorAccess.findIndex((a) => a.collaboratorId === collabId);
+      const accessRecord = {
+        collaboratorId: collabId,
+        userId: targetUserId,
+        role: appRole,
+        permissions: aIdx >= 0 ? (d.collaboratorAccess[aIdx].permissions || []) : [],
+        lastLoginAt: aIdx >= 0 ? (d.collaboratorAccess[aIdx].lastLoginAt || '') : '',
+      };
+      if (aIdx >= 0) {
+        d.collaboratorAccess[aIdx] = { ...d.collaboratorAccess[aIdx], ...accessRecord };
+      } else {
+        d.collaboratorAccess.push(accessRecord);
+      }
+    }
+
     return d;
   });
-  return true;
+  return createdUser;
 }
 
 /**

@@ -23,6 +23,13 @@ export function formatAccessDate(value) {
   }
 }
 
+export function isTenantSystemAccessActive(tenantUser) {
+  if (!tenantUser?.id) return false;
+  return tenantUser.has_system_access !== false
+    && tenantUser.status !== 'inactive'
+    && tenantUser.is_active !== false;
+}
+
 export function resolveCollaboratorAccountStatus(tenantUser) {
   if (!tenantUser?.id) {
     return { key: 'no_access', label: ACCOUNT_STATUS_LABELS.no_access };
@@ -64,6 +71,13 @@ export function resolveCollaboratorAccountStatus(tenantUser) {
     return { key: 'first_access_pending', label: ACCOUNT_STATUS_LABELS.first_access_pending };
   }
 
+  if (invStatus === 'expired') {
+    return { key: 'invite_pending', label: 'Convite expirado' };
+  }
+  if (invStatus === 'failed') {
+    return { key: 'invite_pending', label: 'Erro no envio do convite' };
+  }
+
   if (passwordResetSentAt) {
     const resetAt = new Date(passwordResetSentAt).getTime();
     const signInAt = lastSignIn ? new Date(lastSignIn).getTime() : 0;
@@ -86,17 +100,20 @@ export function resolveAccessManagementActions({ tenantUser, accountStatus, hasV
   const invStatus = String(
     tenantUser?.invitation_status || tenantUser?.invitation?.status || 'none',
   ).toLowerCase();
-  const inviteNotAccepted = !['accepted'].includes(invStatus) && !tenantUser?.invitation?.accepted_at;
+  const inviteNotAccepted = !['accepted', 'active'].includes(invStatus) && !tenantUser?.invitation?.accepted_at;
   const neverInvited = key === 'no_access' || (invStatus === 'none' && !tenantUser?.invitation);
+  const canResendByInviteStatus = ['sent', 'pending', 'expired', 'failed', 'revoked'].includes(invStatus);
 
   return {
     canSendInvite: hasValidEmail && (neverInvited || (!hasAuthUser && invStatus === 'none')),
     canResendInvite: hasValidEmail && hasTenantUser && inviteNotAccepted
-      && ['invite_pending', 'first_access_pending', 'expired', 'failed'].includes(key),
+      && (['invite_pending', 'first_access_pending', 'blocked'].includes(key)
+        || canResendByInviteStatus),
     canResetPassword: hasValidEmail && hasTenantUser && hasAuthUser
       && ['active', 'password_reset'].includes(key)
       && !inviteNotAccepted,
-    canDeactivate: hasTenantUser && tenantUser?.has_system_access !== false,
+    canDeactivate: hasTenantUser && isTenantSystemAccessActive(tenantUser),
+    canActivate: hasTenantUser && !isTenantSystemAccessActive(tenantUser),
   };
 }
 

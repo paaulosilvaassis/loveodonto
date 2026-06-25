@@ -53,9 +53,37 @@ export function getConfiguredAdminApiBaseUrl() {
   );
 }
 
+const FRONTEND_DEV_PORTS = new Set(['5176', '4176', '5177']);
+
+export function isMisconfiguredFrontendApiUrl(url) {
+  const raw = normalizeEnvString(url);
+  if (!raw) return false;
+  try {
+    const parsed = new URL(raw);
+    const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+    if (FRONTEND_DEV_PORTS.has(port)) return true;
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin.replace(/\/+$/, '');
+      if (raw.replace(/\/+$/, '') === origin) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /** Base efetiva para montar URLs: em dev, vazio = proxy relativo. */
 export function resolveAdminApiBaseUrl() {
-  return getConfiguredAdminApiBaseUrl();
+  const configured = getConfiguredAdminApiBaseUrl();
+  if (import.meta.env.DEV && isMisconfiguredFrontendApiUrl(configured)) {
+    if (import.meta.env?.DEV) {
+      console.warn(
+        '[Admin API] VITE_PLATFORM_API_BASE_URL aponta para o frontend — usando proxy /internal/app → :3001',
+      );
+    }
+    return '';
+  }
+  return configured;
 }
 
 /**

@@ -19,6 +19,15 @@ export function isStaleAuthLinkError(message) {
   );
 }
 
+export function isCollaboratorAccessLinkNotFoundError(message) {
+  const lower = String(message || '').toLowerCase();
+  return (
+    lower.includes('vínculo de acesso não encontrado')
+    || lower.includes('nenhum usuário de acesso encontrado')
+    || lower.includes('usuário não encontrado nesta clínica')
+  );
+}
+
 function logCollabInviteClientAudit(audit = {}) {
   const payload = {
     environment: import.meta.env.MODE,
@@ -44,6 +53,12 @@ function normalizeProvisionErrorMessage(message) {
     return formatAdminApiNetworkError();
   }
   if (lower.includes('<!doctype') || lower.includes('<html')) {
+    if (import.meta.env?.DEV) {
+      return (
+        'O backend local parece desatualizado ou inacessível. '
+        + 'Reinicie com npm run dev:stack (API na porta 3001 + app na 5176).'
+      );
+    }
     return (
       'O servidor retornou HTML em vez de JSON. '
       + 'Verifique VITE_PLATFORM_API_BASE_URL — a URL deve apontar para a Admin API, não para o frontend.'
@@ -67,7 +82,31 @@ function normalizeProvisionErrorMessage(message) {
   if (lower.includes('já possui acesso nesta clínica')) {
     return 'Este e-mail já possui acesso nesta clínica.';
   }
+  if (lower.includes('vínculo de acesso não encontrado') || lower.includes('nenhum usuário de acesso encontrado')) {
+    return 'Salve o acesso na aba Acesso ao sistema e tente novamente.';
+  }
+  if (lower.includes('usuário interno não encontrado') || lower.includes('usuário não encontrado para este e-mail')) {
+    return 'Salve o acesso do colaborador antes de enviar o convite.';
+  }
+  if (lower.includes('target_user_id') || lower.includes('tenant_users')) {
+    return 'Salve o acesso na aba Acesso ao sistema para vincular o colaborador.';
+  }
+  if (lower.includes('conta no auth ausente') || lower.includes('conta no auth não existe')) {
+    return 'Não foi possível enviar o convite. Tente reenviar — o sistema corrigirá o vínculo automaticamente.';
+  }
+  if (lower.includes('email link is invalid') || lower.includes('otp_expired')) {
+    return 'O link anterior expirou. Solicite um novo convite ou redefinição de senha.';
+  }
+  if (lower.includes('user already') || lower.includes('already registered') || lower.includes('already exists')) {
+    return 'Este e-mail já possui cadastro. Use Reenviar convite para reenviar o acesso.';
+  }
+  if (lower.includes('provedor de e-mail não configurado')) {
+    return 'Não foi possível enviar o e-mail agora. Tente novamente em alguns minutos.';
+  }
   if (lower.includes('collaborator_id') && lower.includes('tenant_users') && lower.includes('schema cache')) {
+    if (import.meta.env?.PROD) {
+      return 'Configuração do sistema incompleta. Entre em contato com o suporte.';
+    }
     return 'Migration pendente: invitation_status/collaborator_id não existe no banco atual. Aplique a migration 005_app_collaborator_access_invites.sql no projeto Supabase do backend.';
   }
   return raw || 'Falha ao processar a operação de acesso.';
@@ -88,10 +127,10 @@ async function parseAdminApiResponse(response) {
   const contentType = String(response.headers.get('content-type') || '').toLowerCase();
   const rawText = await response.text();
   if (contentType.includes('text/html') || rawText.trim().startsWith('<!')) {
-    throw new Error(
-      'O servidor retornou HTML em vez de JSON. '
-      + 'Verifique VITE_PLATFORM_API_BASE_URL — a URL deve apontar para a Admin API, não para o frontend.',
-    );
+    const devHint = import.meta.env?.DEV
+      ? 'Reinicie o backend local com npm run dev:stack (porta 3001).'
+      : 'Verifique VITE_PLATFORM_API_BASE_URL — a URL deve apontar para a Admin API, não para o frontend.';
+    throw new Error(`O servidor retornou HTML em vez de JSON. ${devHint}`);
   }
   let json = {};
   if (rawText.trim()) {
@@ -204,11 +243,16 @@ export async function provisionCollaboratorSystemAccess(payload, options = {}) {
 /**
  * Provisiona acesso com reparo automático de vínculo Auth órfão (produção).
  */
-export async function provisionCollaboratorAccessWithRepair(payload, { onRepairNotice } = {}) {
-  const basePayload = { ...payload, send_invite: payload?.send_invite !== false };
-  const needsRepair = payload?.repair_stale_auth === true
-    || payload?.tenantUser?.auth_user_valid === false
-    || (payload?.tenantUser?.user_id && payload?.tenantUser?.auth_user_valid === false);
+export async function provisionCollaboratorAccessWithRepair(payload, { onRepairNotice, tenantUser } = {}) {
+  const { tenantUser: _ignoredTenantUser, ...cleanPayload } = payload || {};
+  const basePayload = {
+    ...cleanPayload,
+    send_invite: cleanPayload?.send_invite !== false,
+    repair_stale_auth: cleanPayload?.repair_stale_auth === true
+      || cleanPayload?.send_invite !== false
+      || tenantUser?.auth_user_valid === false
+      || _ignoredTenantUser?.auth_user_valid === false,
+  };
 
   const runProvision = (body, { repaired = false } = {}) => provisionCollaboratorSystemAccess(body, {
     auditContext: {
@@ -219,16 +263,17 @@ export async function provisionCollaboratorAccessWithRepair(payload, { onRepairN
     },
   });
 
-  if (needsRepair) {
-    onRepairNotice?.();
-    return runProvision({ ...basePayload, repair_stale_auth: true }, { repaired: true });
+  if (basePayload.repair_stale_auth && (tenantUser?.auth_user_valid === false || _ignoredTenantUser?.auth_user_valid === false)) {
+    onRepairNotice?.('Verificando vínculo de acesso antes de enviar o convite...');
   }
 
   try {
-    return await runProvision(basePayload);
+    return await runProvision(basePayload, { repaired: basePayload.repair_stale_auth });
   } catch (err) {
-    if (!isStaleAuthLinkError(err?.message)) throw err;
-    onRepairNotice?.();
+    if (!isStaleAuthLinkError(err?.message) && !isCollaboratorAccessLinkNotFoundError(err?.message)) {
+      throw err;
+    }
+    onRepairNotice?.('Encontramos um vínculo antigo. O sistema vai recriar o convite.');
     return runProvision({ ...basePayload, repair_stale_auth: true }, { repaired: true });
   }
 }
@@ -313,15 +358,19 @@ export async function fetchCollaboratorAccessAudit({ tenant_id, email }) {
   const query = new URLSearchParams();
   if (tenant_id) query.set('tenant_id', tenant_id);
   if (email) query.set('email', email);
-  return getJson(`/internal/app/collaborators/access-audit?${query.toString()}`);
+  try {
+    return await getJson(`/internal/app/collaborators/access-audit?${query.toString()}`);
+  } catch {
+    return { success: true, events: [] };
+  }
 }
 
-export async function sendCollaboratorInvite(payload) {
+export async function sendCollaboratorInvite(payload, options = {}) {
   return provisionCollaboratorAccessWithRepair({
     ...payload,
     create_system_access: true,
     send_invite: true,
-  });
+  }, options);
 }
 
 export async function reconcileOwnInvitationAcceptance() {
@@ -351,7 +400,8 @@ export async function saveCollaboratorAccessBundleWithRepair(payload, { onRepair
   try {
     return await saveCollaboratorAccessBundle(payload);
   } catch (err) {
-    if (!isStaleAuthLinkError(err?.message)) throw err;
+    const canRepair = isStaleAuthLinkError(err?.message) || isCollaboratorAccessLinkNotFoundError(err?.message);
+    if (!canRepair) throw err;
     onRepairNotice?.('Encontramos um vínculo antigo. O sistema vai recriar o convite.');
     const provisioned = await provisionCollaboratorAccessWithRepair({
       tenant_id: payload?.tenant_id,

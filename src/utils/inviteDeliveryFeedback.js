@@ -1,6 +1,12 @@
-export function notifyInviteDeliveryResult(delivery, { onCopyLink, pushToast }) {
+export function notifyInviteDeliveryResult(delivery, { onCopyLink, pushToast, serverMessage } = {}) {
   const setupLink = delivery?.setupLink || delivery?.setup_link || null;
   const emailDelivery = delivery?.emailDelivery || delivery?.email_delivery || null;
+
+  if (serverMessage) {
+    pushToast('success', serverMessage);
+    if (setupLink) onCopyLink?.(setupLink);
+    return;
+  }
 
   if (emailDelivery === 'supabase_auth' || emailDelivery === 'backend_resend') {
     pushToast(
@@ -14,10 +20,10 @@ export function notifyInviteDeliveryResult(delivery, { onCopyLink, pushToast }) 
     onCopyLink?.(setupLink);
     pushToast(
       'success',
-      'Este e-mail já existe no Auth. O link de acesso foi copiado — envie manualmente ao colaborador.',
+      'Link de acesso gerado. Se o e-mail não chegar, copie o link e envie manualmente ao colaborador.',
     );
     return;
   }
 
-  pushToast('success', 'Convite processado.');
+  pushToast('success', 'Acesso processado. Se o e-mail não chegar, use Reenviar convite.');
 }

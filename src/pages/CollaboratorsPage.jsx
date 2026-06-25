@@ -30,12 +30,20 @@ import CollaboratorAccessSection from '../components/collaborators/record/Collab
 import CollaboratorPermissionsHub from '../components/collaborators/record/CollaboratorPermissionsHub.jsx';
 import CollaboratorCadastroTab from '../components/collaborators/CollaboratorCadastroTab.jsx';
 import CollaboratorFormCard from '../components/collaborators/CollaboratorFormCard.jsx';
-import { setCollaboratorSystemAccess, reconcileCollaboratorTenantLinks } from '../services/collaboratorAccessProvisionService.js';
+import { reconcileCollaboratorTenantLinks } from '../services/collaboratorAccessProvisionService.js';
+import { reconcileCollaboratorAccessState, setCollaboratorSystemAccessWithRecovery } from '../services/collaboratorAccessRecoveryService.js';
 import { getUserAccess } from '../services/accessService.js';
 import { NewCollaboratorDialog } from '../components/collaborators/CollaboratorCreateModal.jsx';
 import {
   resolveCollaboratorAccessDisplayStatus,
 } from '../utils/inviteStatus.js';
+import { isTenantSystemAccessActive } from '../utils/collaboratorAccessManagement.js';
+import IdentityLifecycleModal from '../components/access/IdentityLifecycleModal.jsx';
+import {
+  deactivateIdentity,
+  reactivateIdentity,
+} from '../services/identityService.js';
+import { isSaasModeEnabled } from '../services/saasAuthService.js';
 
 const CADASTRO_TABS = new Set(['pessoais', 'documentos', 'profissional', 'endereco', 'contatos']);
 const EDITABLE_TABS = new Set([...CADASTRO_TABS, 'horarios', 'financeiro']);
@@ -94,6 +102,8 @@ export default function CollaboratorsPage() {
   const [success, setSuccess] = useState('');
   const [hoursConflictModal, setHoursConflictModal] = useState({ open: false, conflicts: [] });
   const [tenantAccessMap, setTenantAccessMap] = useState({ byCollaboratorId: {}, byEmail: {} });
+  const [identityLifecycle, setIdentityLifecycle] = useState({ open: false, mode: 'deactivate', loading: false });
+  const [selectedIdentity, setSelectedIdentity] = useState(null);
   const editFormRef = useRef(null);
 
   const [draft, setDraft] = useState({
@@ -322,18 +332,32 @@ export default function CollaboratorsPage() {
 
   useEffect(() => {
     if (!selectedId || !user || !selectedTenantAccess?.user_id) return;
-    const current = getCollaborator(selectedId);
-    if (current?.access?.userId === selectedTenantAccess.user_id) return;
-    try {
-      updateCollaboratorAccess(user, selectedId, {
-        userId: selectedTenantAccess.user_id,
-        role: selectedTenantAccess.role || 'atendimento',
-      });
+    reconcileCollaboratorAccessState({
+      collaboratorId: selectedId,
+      collaborator: selectedCollaboratorRow,
+      tenantUser: selectedTenantAccess,
+      tenantId: user?.tenantId || '',
+      currentUser: user,
+    }).then((result) => {
+      if (result.access?.userId) {
+        refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
+      }
+    }).catch(() => {});
+  }, [selectedId, selectedTenantAccess, selectedCollaboratorRow, user, refreshCollaboratorDraft]);
+
+  useEffect(() => {
+    if (activeTab !== 'acesso' || !selectedId || !user?.tenantId) return;
+    reconcileCollaboratorAccessState({
+      collaboratorId: selectedId,
+      collaborator: selectedCollaboratorRow,
+      tenantUser: selectedTenantAccess,
+      tenantId: user.tenantId,
+      currentUser: user,
+    }).then(() => {
       refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
-    } catch {
-      // Sem permissão collaborators:access — o painel SaaS continua via tenantUser.
-    }
-  }, [selectedId, selectedTenantAccess, user, refreshCollaboratorDraft]);
+      refreshTenantAccess();
+    }).catch(() => {});
+  }, [activeTab, selectedId, user, selectedCollaboratorRow, selectedTenantAccess, refreshCollaboratorDraft, refreshTenantAccess]);
 
   const formatDatePtBr = (value) => {
     if (!value) return '—';
@@ -573,9 +597,13 @@ export default function CollaboratorsPage() {
     try {
       updateCollaborator(user, collaborator.id, { status: nextStatus });
       if (draft?.access?.userId || draft?.profile?.user_id) {
-        await setCollaboratorSystemAccess(collaborator.id, {
-          tenant_id: user?.tenantId || '',
-          has_system_access: nextStatus === 'ativo',
+        await setCollaboratorSystemAccessWithRecovery({
+          collaboratorId: collaborator.id,
+          collaborator,
+          tenantUser: resolveCollaboratorTenantAccess(collaborator),
+          tenantId: user?.tenantId || '',
+          currentUser: user,
+          hasSystemAccess: nextStatus === 'ativo',
         }).catch(() => {});
       }
       refreshCollaboratorsListOnly();
@@ -799,18 +827,58 @@ export default function CollaboratorsPage() {
     isAutoFilled,
   };
 
-  const handleDeactivateAccess = async () => {
+  const handleToggleSystemAccess = () => {
     if (!canEditAcessos || !selectedCollaboratorRow?.id) return;
-    if (!window.confirm('Desativar o acesso deste colaborador ao sistema?')) return;
+    const accessActive = isTenantSystemAccessActive(selectedTenantAccess);
+    setIdentityLifecycle({
+      open: true,
+      mode: accessActive ? 'deactivate' : 'reactivate',
+      loading: false,
+    });
+  };
+
+  const handleIdentityLifecycleConfirm = async (payload) => {
+    if (!canEditAcessos || !selectedCollaboratorRow?.id) return;
+    const accessActive = isTenantSystemAccessActive(selectedTenantAccess);
+    const nextAccess = !accessActive;
+    const tenantId = user?.tenantId || '';
+
+    setIdentityLifecycle((prev) => ({ ...prev, loading: true }));
     try {
-      await setCollaboratorSystemAccess(selectedCollaboratorRow.id, {
-        tenant_id: user?.tenantId || '',
-        has_system_access: false,
-      });
+      if (isSaasModeEnabled() && selectedIdentity?.id) {
+        if (nextAccess) {
+          await reactivateIdentity(selectedIdentity.id, {
+            tenant_id: tenantId,
+            reason: payload.reason,
+            reason_description: payload.reason_description,
+          });
+        } else {
+          await deactivateIdentity(selectedIdentity.id, {
+            tenant_id: tenantId,
+            reason: payload.reason,
+            reason_description: payload.reason_description,
+            expected_return_at: payload.expected_return_at,
+            suspended: payload.suspended,
+          });
+        }
+      } else {
+        await setCollaboratorSystemAccessWithRecovery({
+          collaboratorId: selectedCollaboratorRow.id,
+          collaborator: selectedCollaboratorRow,
+          tenantUser: selectedTenantAccess,
+          tenantId,
+          currentUser: user,
+          hasSystemAccess: nextAccess,
+          lifecycle: payload,
+        });
+      }
+      setIdentityLifecycle({ open: false, mode: 'deactivate', loading: false });
       refreshTenantAccess();
-      setSuccess('Acesso desativado.');
+      refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
+      setSuccess(nextAccess ? 'Acesso reativado.' : 'Acesso desativado.');
     } catch (err) {
-      setError(err?.message || 'Falha ao desativar acesso.');
+      setIdentityLifecycle((prev) => ({ ...prev, loading: false }));
+      setError(err?.message || (nextAccess ? 'Falha ao ativar acesso.' : 'Falha ao desativar acesso.'));
     }
   };
 
@@ -824,7 +892,7 @@ export default function CollaboratorsPage() {
     currentUser: user,
     canEdit: canEditAcessos,
     accessDisplayStatus: resolveCollaboratorAccessDisplayStatus(selectedTenantAccess),
-    onDeactivateAccess: handleDeactivateAccess,
+    onToggleSystemAccess: selectedTenantAccess?.id ? handleToggleSystemAccess : undefined,
     onGoToProfile: () => handleEditSection('contatos'),
     onSaveSuccess: ({ inviteSent, passwordResetSent, message } = {}) => {
       setError('');
@@ -848,6 +916,11 @@ export default function CollaboratorsPage() {
     onRepairNotice: (msg) => { setError(''); setSuccess(msg); },
     onAccessChanged: () => { refreshTenantAccess(); setSuccess('Acesso atualizado.'); },
     onDirtyChange: setAccessDirty,
+    onRecovered: () => {
+      refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
+      refreshTenantAccess();
+    },
+    onIdentityChange: setSelectedIdentity,
   };
 
   const permissionsHubProps = {
@@ -1168,6 +1241,14 @@ export default function CollaboratorsPage() {
         onOpenChange={setOpenNewCollaborator}
         onSaved={handleCollaboratorCreated}
         onOpenExistingCollaborator={jumpToExistingCollaborator}
+      />
+
+      <IdentityLifecycleModal
+        open={identityLifecycle.open}
+        mode={identityLifecycle.mode}
+        loading={identityLifecycle.loading}
+        onClose={() => setIdentityLifecycle({ open: false, mode: 'deactivate', loading: false })}
+        onConfirm={handleIdentityLifecycleConfirm}
       />
 
       {hoursConflictModal.open && (

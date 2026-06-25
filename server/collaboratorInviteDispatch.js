@@ -1,5 +1,7 @@
 import { getEmailConfig, getInviteRedirectTo } from './email/emailConfig.js';
 import { generatePasswordSetupLink, sendUserInviteEmail } from './email/sendUserInviteEmail.js';
+import { sendSupabaseAuthRecoveryEmail } from './email/sendSupabaseAuthEmail.js';
+import { logAccessEmailAudit } from './email/accessEmailAudit.js';
 
 function isUserAlreadyRegisteredError(error) {
   const message = String(error?.message || '').toLowerCase();
@@ -90,6 +92,18 @@ export async function dispatchCollaboratorInvite(supabase, {
       profileRole: profileRole || role,
       setupLink,
     });
+    logAccessEmailAudit({
+      tenantId,
+      collaboratorId,
+      email: normalizedEmail,
+      requestedAction: 'invite_existing_user',
+      authUserFound: true,
+      authUserId: existingUser?.id || null,
+      linkType: 'recovery',
+      inviteSent: true,
+      emailDelivery: 'backend_resend',
+      finalStatus: 'invite_sent',
+    });
     return {
       emailDelivery: 'backend_resend',
       user: existingUser,
@@ -97,9 +111,46 @@ export async function dispatchCollaboratorInvite(supabase, {
     };
   }
 
+  try {
+    await sendSupabaseAuthRecoveryEmail(supabase, {
+      email: normalizedEmail,
+      redirectTo,
+    });
+    logAccessEmailAudit({
+      tenantId,
+      collaboratorId,
+      email: normalizedEmail,
+      requestedAction: 'invite_existing_user',
+      authUserFound: true,
+      authUserId: existingUser?.id || null,
+      linkType: 'supabase_recovery',
+      inviteSent: true,
+      emailDelivery: 'supabase_auth',
+      finalStatus: 'invite_sent',
+    });
+    return {
+      emailDelivery: 'supabase_auth',
+      user: existingUser,
+      setupLink: null,
+    };
+  } catch (supabaseEmailErr) {
+    logAccessEmailAudit({
+      tenantId,
+      collaboratorId,
+      email: normalizedEmail,
+      requestedAction: 'invite_existing_user',
+      authUserFound: true,
+      authUserId: existingUser?.id || null,
+      inviteSent: false,
+      emailDelivery: 'setup_link',
+      finalStatus: 'setup_link_only',
+      error: supabaseEmailErr?.message || String(supabaseEmailErr),
+    });
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     console.debug(
-      '[dispatchCollaboratorInvite] usuário já existe no Auth — link gerado sem envio automático:',
+      '[dispatchCollaboratorInvite] usuário já existe — link gerado para envio manual:',
       normalizedEmail,
     );
   }
@@ -109,6 +160,6 @@ export async function dispatchCollaboratorInvite(supabase, {
     user: existingUser,
     setupLink,
     message:
-      'Este e-mail já está cadastrado no Auth. O Supabase não reenvia convite automaticamente — copie o link e envie manualmente, ou configure EMAIL_API_KEY no backend.',
+      'Link de acesso gerado. Se o e-mail não chegar em alguns minutos, copie o link e envie manualmente ao colaborador.',
   };
 }

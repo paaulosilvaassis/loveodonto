@@ -11,11 +11,13 @@ import {
   ROLE_ADMIN,
 } from '../services/accessService.js';
 import { saveCollaboratorAccessBundleWithRepair, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite } from '../services/collaboratorAccessProvisionService.js';
+import { syncCollaboratorAccessFromTenantUser } from '../services/collaboratorAccessRecoveryService.js';
 import { tenantUserNeedsAuthRepair } from '../utils/collaboratorAccessPanel.js';
 import { MODULES_SPEC, ACTION_LABELS } from '../permissions/catalog.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
 import { isCollaboratorEmailValid } from '../utils/collaboratorAccessRole.js';
 import { resolveCollaboratorAccessDisplayStatus } from '../utils/inviteStatus.js';
+import { isTenantSystemAccessActive } from '../utils/collaboratorAccessManagement.js';
 import { normalizeTenantAccessRole, resolveAccessTargetUserId } from '../utils/collaboratorAccessPanel.js';
 import { PERMS_CLIPBOARD_PREFIX } from '../components/collaborators/record/permissions/permissionsConstants.js';
 
@@ -72,18 +74,26 @@ export function useCollaboratorAccessForm({
         has_system_access: tenantUser?.has_system_access !== false,
         displayName: linkedDisplayName,
         tenantId: saasTenantId || '',
+        collaboratorId: collaboratorId || '',
       });
     }
 
+    const serverHasAccess = isSaasModeEnabled() && tenantUser?.id
+      ? isTenantSystemAccessActive(tenantUser)
+      : null;
+
     const access = getUserAccess(effectiveTargetUserId);
     if (access) {
-      setHasSystemAccess(access.has_system_access);
+      setHasSystemAccess(serverHasAccess !== null ? serverHasAccess : access.has_system_access);
       setRole(normalizeTenantAccessRole(access.role));
       setOverrides(access.overrides || {});
-      setInitialSnapshot(JSON.stringify(access));
+      setInitialSnapshot(JSON.stringify({
+        ...access,
+        has_system_access: serverHasAccess !== null ? serverHasAccess : access.has_system_access,
+      }));
       setDirty(false);
     } else if (tenantUser) {
-      setHasSystemAccess(tenantUser.has_system_access !== false);
+      setHasSystemAccess(serverHasAccess !== null ? serverHasAccess : tenantUser.has_system_access !== false);
       setRole(normalizeTenantAccessRole(tenantUser.role));
       setOverrides({});
       setInitialSnapshot(null);
@@ -319,6 +329,7 @@ export function useCollaboratorAccessForm({
             has_system_access: hasSystemAccess,
             displayName: (linkedDisplayName || '').trim(),
             tenantId: saasTenantId || '',
+            collaboratorId: collaboratorId || '',
           });
         }
         updateUserAccess(currentUser, resolvedTargetUserId, {
@@ -326,6 +337,13 @@ export function useCollaboratorAccessForm({
           role: role || 'atendimento',
           overrides,
         });
+        if (tenantUser?.user_id) {
+          syncCollaboratorAccessFromTenantUser(collaboratorId || '', tenantUser, {
+            tenantId: saasTenantId || '',
+            currentUser,
+            profileRole: role || 'atendimento',
+          });
+        }
         setInitialSnapshot(JSON.stringify(getUserAccess(resolvedTargetUserId)));
       }
       setDirty(false);

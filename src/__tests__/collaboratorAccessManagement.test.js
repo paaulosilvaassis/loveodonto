@@ -68,5 +68,20 @@ describe('collaboratorAccessManagement', () => {
     const accountStatus = resolveCollaboratorAccountStatus(tenantUser);
     const actions = resolveAccessManagementActions({ tenantUser, accountStatus, hasValidEmail: true });
     expect(actions.canResetPassword).toBe(true);
+    expect(actions.canDeactivate).toBe(true);
+    expect(actions.canActivate).toBe(false);
+  });
+
+  it('mostra ativar acesso quando conta bloqueada', () => {
+    const tenantUser = {
+      id: 'tu-1',
+      has_system_access: false,
+      user_id: 'auth-1',
+      auth_user_valid: true,
+    };
+    const accountStatus = resolveCollaboratorAccountStatus(tenantUser);
+    const actions = resolveAccessManagementActions({ tenantUser, accountStatus, hasValidEmail: true });
+    expect(actions.canDeactivate).toBe(false);
+    expect(actions.canActivate).toBe(true);
   });
 });

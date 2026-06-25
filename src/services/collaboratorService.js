@@ -15,7 +15,7 @@ import {
 import { provisionCollaboratorSystemAccess, linkCollaboratorTenantAccess, listTenantUsersAccess } from './collaboratorAccessProvisionService.js';
 import { mapCollaboratorToProfessionalOption } from '../utils/avatarUtils.js';
 
-function syncLocalCollaboratorAccess(collaboratorId, tenantUser, profileRole) {
+export function syncLocalCollaboratorAccess(collaboratorId, tenantUser, profileRole) {
   const userId = String(tenantUser?.user_id || '').trim();
   if (!userId) return;
   const role = String(profileRole || tenantUser?.role || tenantUser?.role_slug || 'atendimento').trim();

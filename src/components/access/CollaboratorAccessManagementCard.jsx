@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Mail, RefreshCw, KeyRound, UserX, Shield } from 'lucide-react';
+import { Mail, RefreshCw, KeyRound, UserCheck, UserX, Shield, Wrench, LogOut } from 'lucide-react';
 import Button from '../Button.jsx';
 import ResetPasswordModal from './ResetPasswordModal.jsx';
 import {
@@ -17,8 +17,21 @@ const AUDIT_ACTION_LABELS = {
   auth_recreated_invite_sent: 'Recriou conta e enviou convite',
 };
 
+const IDENTITY_EVENT_LABELS = {
+  'identity.created': 'Identidade criada',
+  'identity.provisioned': 'Acesso provisionado',
+  'identity.repaired': 'Acesso reparado',
+  'identity.invite.sent': 'Convite enviado',
+  'identity.password.reset.sent': 'Reset de senha enviado',
+  'identity.disabled': 'Acesso desativado',
+  'identity.reactivated': 'Acesso reativado',
+  'identity.session.revoked': 'Sessões revogadas',
+  'identity.health.checked': 'Verificação de saúde',
+};
+
 export default function CollaboratorAccessManagementCard({
   tenantUser,
+  identity = null,
   collaboratorEmail = '',
   saasTenantId,
   collaboratorId,
@@ -29,9 +42,14 @@ export default function CollaboratorAccessManagementCard({
   onSendInvite,
   onResendInvite,
   onResetPassword,
-  onDeactivateAccess,
+  onToggleSystemAccess,
+  onRepairIdentity,
+  onRevokeSessions,
   auditEvents = [],
+  identityEvents = [],
   onLoadAudit,
+  statusLabels = {},
+  healthLabels = {},
 }) {
   const [resetModalOpen, setResetModalOpen] = useState(false);
   const email = (tenantUser?.email || collaboratorEmail || '').trim().toLowerCase();
@@ -66,25 +84,51 @@ export default function CollaboratorAccessManagementCard({
       <section className="cr-access-mgmt">
         <header className="cr-access-mgmt__head">
           <Shield size={16} aria-hidden />
-          <h3>Gerenciamento de acesso</h3>
+          <h3>Centro de credenciais</h3>
         </header>
 
         <div className="cr-access-mgmt__stats">
           <div className="cr-access-mgmt__stat">
             <span className="cr-access-mgmt__label">Status da conta</span>
-            <span className={accountStatusBadgeClass(accountStatus.key)}>{accountStatus.label}</span>
+            <span className={accountStatusBadgeClass(accountStatus.key)}>
+              {identity?.status ? (statusLabels[identity.status] || identity.status) : accountStatus.label}
+            </span>
+          </div>
+          {identity?.invitation_status ? (
+            <div className="cr-access-mgmt__stat">
+              <span className="cr-access-mgmt__label">Status do convite</span>
+              <strong>{identity.invitation_status}</strong>
+            </div>
+          ) : null}
+          {identity?.password_status ? (
+            <div className="cr-access-mgmt__stat">
+              <span className="cr-access-mgmt__label">Status da senha</span>
+              <strong>{identity.password_status}</strong>
+            </div>
+          ) : null}
+          {identity?.identity_health ? (
+            <div className="cr-access-mgmt__stat">
+              <span className="cr-access-mgmt__label">Saúde da identidade</span>
+              <strong className={identity.identity_health === 'healthy' ? 'access-badge on' : 'access-badge off'}>
+                {healthLabels[identity.identity_health] || identity.identity_health}
+              </strong>
+            </div>
+          ) : null}
+          <div className="cr-access-mgmt__stat">
+            <span className="cr-access-mgmt__label">E-mail de acesso</span>
+            <strong>{email || '—'}</strong>
           </div>
           <div className="cr-access-mgmt__stat">
             <span className="cr-access-mgmt__label">Data do convite</span>
-            <strong>{formatAccessDate(dates.inviteDate)}</strong>
+            <strong>{formatAccessDate(identity?.last_invite_sent_at || dates.inviteDate)}</strong>
           </div>
           <div className="cr-access-mgmt__stat">
             <span className="cr-access-mgmt__label">Último acesso</span>
-            <strong>{formatAccessDate(dates.lastSignIn)}</strong>
+            <strong>{formatAccessDate(identity?.last_login_at || dates.lastSignIn)}</strong>
           </div>
           <div className="cr-access-mgmt__stat">
             <span className="cr-access-mgmt__label">Última redefinição de senha</span>
-            <strong>{formatAccessDate(dates.lastPasswordReset)}</strong>
+            <strong>{formatAccessDate(identity?.last_password_reset_sent_at || dates.lastPasswordReset)}</strong>
           </div>
           <div className="cr-access-mgmt__stat">
             <span className="cr-access-mgmt__label">Criado em</span>
@@ -126,24 +170,66 @@ export default function CollaboratorAccessManagementCard({
               Redefinir senha
             </Button>
           ) : null}
-          {actions.canDeactivate && onDeactivateAccess ? (
+          {actions.canDeactivate && onToggleSystemAccess ? (
             <Button
               variant="secondary"
               size="sm"
               icon={UserX}
               disabled={readOnly || saving}
-              onClick={onDeactivateAccess}
+              onClick={onToggleSystemAccess}
             >
               Desativar acesso
             </Button>
           ) : null}
+          {actions.canActivate && onToggleSystemAccess ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={UserCheck}
+              disabled={readOnly || saving}
+              onClick={onToggleSystemAccess}
+            >
+              Reativar acesso
+            </Button>
+          ) : null}
+          {onRepairIdentity && identity?.identity_health !== 'healthy' ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={Wrench}
+              disabled={readOnly || saving}
+              onClick={onRepairIdentity}
+            >
+              Reparar acesso
+            </Button>
+          ) : null}
+          {onRevokeSessions && identity?.auth_user_id ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={LogOut}
+              disabled={readOnly || saving}
+              onClick={onRevokeSessions}
+            >
+              Revogar sessões
+            </Button>
+          ) : null}
         </div>
 
-        {auditEvents.length > 0 ? (
+        {(identityEvents.length > 0 || auditEvents.length > 0) ? (
           <div className="cr-access-mgmt__history">
             <h4>Histórico</h4>
             <ul className="cr-access-mgmt__history-list">
-              {auditEvents.slice(0, 5).map((event, index) => (
+              {identityEvents.slice(0, 5).map((event) => (
+                <li key={event.id}>
+                  <div className="cr-access-mgmt__history-row">
+                    <strong>{event.actor_email || 'Sistema'}</strong>
+                    <span className="muted">{formatAccessDate(event.created_at)}</span>
+                  </div>
+                  <p>{IDENTITY_EVENT_LABELS[event.action] || event.message || event.action}</p>
+                </li>
+              ))}
+              {auditEvents.slice(0, Math.max(0, 5 - identityEvents.length)).map((event, index) => (
                 <li key={`${event.at}-${index}`}>
                   <div className="cr-access-mgmt__history-row">
                     <strong>{event.actor_name || 'Administrador'}</strong>

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Info, Mail, Shield, UserX } from 'lucide-react';
+import { Info, Mail, Shield, UserCheck, UserX } from 'lucide-react';
 import Button from '../../Button.jsx';
 import { Field } from '../../Field.jsx';
 import { useCollaboratorAccessForm } from '../../../hooks/useCollaboratorAccessForm.js';
 import CollaboratorAccessManagementCard from '../../access/CollaboratorAccessManagementCard.jsx';
+import IdentityHealthBanner from '../../access/IdentityHealthBanner.jsx';
 import { accessStatusBadgeClass } from '../../../utils/inviteStatus.js';
 import { isSaasModeEnabled } from '../../../services/saasAuthService.js';
 import {
@@ -11,6 +12,16 @@ import {
   requestCollaboratorPasswordReset,
   sendCollaboratorInvite,
 } from '../../../services/collaboratorAccessProvisionService.js';
+import { reconcileCollaboratorAccessState } from '../../../services/collaboratorAccessRecoveryService.js';
+import { isTenantSystemAccessActive } from '../../../utils/collaboratorAccessManagement.js';
+import {
+  fetchIdentityByCollaborator,
+  fetchIdentityEvents,
+  repairIdentity,
+  revokeIdentitySessions,
+  IDENTITY_STATUS_LABELS,
+  IDENTITY_HEALTH_LABELS,
+} from '../../../services/identityService.js';
 
 export default function CollaboratorAccessSection({
   collaboratorId,
@@ -26,9 +37,11 @@ export default function CollaboratorAccessSection({
   onSaveError,
   onRepairNotice,
   onAccessChanged,
-  onDeactivateAccess,
+  onToggleSystemAccess,
   onGoToProfile,
   onDirtyChange,
+  onRecovered,
+  onIdentityChange,
 }) {
   const form = useCollaboratorAccessForm({
     collaboratorId,
@@ -43,13 +56,50 @@ export default function CollaboratorAccessSection({
   });
 
   const [auditEvents, setAuditEvents] = useState([]);
+  const [identity, setIdentity] = useState(null);
+  const [identityEvents, setIdentityEvents] = useState([]);
   const readOnly = form.readOnly || !canEdit;
   const saveHandlers = { onSaveSuccess, onSaveError, onRepairNotice };
   const inviteEmail = (form.credEmail || collaboratorEmail || '').trim().toLowerCase();
+  const accessActive = tenantUser?.id
+    ? isTenantSystemAccessActive(tenantUser)
+    : form.hasSystemAccess;
 
   useEffect(() => {
     onDirtyChange?.(form.dirty);
   }, [form.dirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (!collaboratorId || !saasTenantId) return;
+    let active = true;
+    (async () => {
+      const result = await reconcileCollaboratorAccessState({
+        collaboratorId,
+        collaborator: {
+          email: collaboratorEmail,
+          nomeCompleto: linkedDisplayName,
+          apelido: linkedDisplayName,
+        },
+        tenantUser,
+        tenantId: saasTenantId,
+        currentUser,
+      });
+      if (!active) return;
+      if (result.recovered || result.access?.userId) {
+        onRecovered?.(result);
+      }
+    })();
+    return () => { active = false; };
+  }, [
+    collaboratorId,
+    saasTenantId,
+    tenantUser?.id,
+    tenantUser?.user_id,
+    collaboratorEmail,
+    linkedDisplayName,
+    currentUser,
+    onRecovered,
+  ]);
 
   const loadAudit = useCallback(async () => {
     if (!isSaasModeEnabled() || !saasTenantId || !inviteEmail) return;
@@ -64,6 +114,68 @@ export default function CollaboratorAccessSection({
     }
   }, [saasTenantId, inviteEmail]);
 
+  const loadIdentity = useCallback(async () => {
+    if (!isSaasModeEnabled() || !saasTenantId || !collaboratorId) {
+      setIdentity(null);
+      setIdentityEvents([]);
+      onIdentityChange?.(null);
+      return;
+    }
+    try {
+      const row = await fetchIdentityByCollaborator({
+        tenantId: saasTenantId,
+        collaboratorId,
+        email: inviteEmail,
+      });
+      setIdentity(row);
+      onIdentityChange?.(row);
+      if (row?.id) {
+        const eventsResult = await fetchIdentityEvents(row.id, saasTenantId, 10);
+        setIdentityEvents(Array.isArray(eventsResult?.events) ? eventsResult.events : []);
+      } else {
+        setIdentityEvents([]);
+      }
+    } catch {
+      setIdentity(null);
+      setIdentityEvents([]);
+      onIdentityChange?.(null);
+    }
+  }, [saasTenantId, collaboratorId, inviteEmail, onIdentityChange]);
+
+  useEffect(() => {
+    loadIdentity();
+  }, [loadIdentity]);
+
+  const handleRepairIdentity = async () => {
+    if (!identity?.id || !saasTenantId) return;
+    form.setSaving(true);
+    try {
+      await repairIdentity(identity.id, { tenant_id: saasTenantId });
+      onRepairNotice?.('Acesso reparado automaticamente.');
+      onAccessChanged?.();
+      await loadIdentity();
+      await loadAudit();
+    } catch (err) {
+      onSaveError?.(err?.message || 'Não foi possível reparar o acesso.');
+    } finally {
+      form.setSaving(false);
+    }
+  };
+
+  const handleRevokeSessions = async () => {
+    if (!identity?.id || !saasTenantId) return;
+    form.setSaving(true);
+    try {
+      await revokeIdentitySessions(identity.id, { tenant_id: saasTenantId });
+      onSaveSuccess?.({ message: 'Sessões revogadas com sucesso.' });
+      await loadIdentity();
+    } catch (err) {
+      onSaveError?.(err?.message || 'Não foi possível revogar as sessões.');
+    } finally {
+      form.setSaving(false);
+    }
+  };
+
   const handleSendInvite = async () => {
     if (!collaboratorId || !saasTenantId || !inviteEmail) {
       onSaveError?.('Informe um e-mail válido antes de enviar o convite.');
@@ -71,18 +183,27 @@ export default function CollaboratorAccessSection({
     }
     form.setSaving(true);
     try {
-      await sendCollaboratorInvite({
+      const result = await sendCollaboratorInvite({
         tenant_id: saasTenantId,
         collaborator_id: collaboratorId,
         collaborator_full_name: (linkedDisplayName || '').trim() || inviteEmail,
         email: inviteEmail,
         profile_role: form.role || 'atendimento',
         repair_stale_auth: true,
-        tenantUser,
-      });
+      }, { onRepairNotice, tenantUser });
       onAccessChanged?.();
-      onSaveSuccess?.({ inviteSent: true });
+      const delivery = result?.invite_delivery;
+      if (result?.repairedBrokenLink || result?.repaired_broken_link) {
+        onRepairNotice?.('Vínculo de acesso corrigido automaticamente.');
+      }
+      onSaveSuccess?.({
+        inviteSent: result?.emailSent ?? result?.inviteSent,
+        message: result?.message || (delivery?.setupLink
+          ? 'Link de acesso gerado. Copie e envie ao colaborador se o e-mail não chegar.'
+          : 'Convite enviado por e-mail.'),
+      });
       await loadAudit();
+      await loadIdentity();
     } catch (err) {
       onSaveError?.(err?.message || 'Não foi possível enviar o convite. Tente novamente.');
     } finally {
@@ -100,7 +221,7 @@ export default function CollaboratorAccessSection({
         collaborator_id: collaboratorId || tenantUser?.collaborator_id || null,
       });
       onAccessChanged?.();
-      if (result?.auth_recreated) {
+      if (result?.auth_recreated || result?.invite_resent) {
         onRepairNotice?.(result.message);
       } else {
         onSaveSuccess?.({
@@ -112,6 +233,7 @@ export default function CollaboratorAccessSection({
         setAuditEvents((prev) => [result.audit, ...prev]);
       }
       await loadAudit();
+      await loadIdentity();
     } catch (err) {
       onSaveError?.(err?.message || 'Não foi possível enviar o e-mail. Tente novamente.');
     } finally {
@@ -121,6 +243,13 @@ export default function CollaboratorAccessSection({
 
   return (
     <div className="cr-access">
+      <IdentityHealthBanner
+        identity={identity}
+        canEdit={canEdit}
+        saving={form.saving}
+        onRepair={identity?.id ? handleRepairIdentity : null}
+      />
+
       {!tenantUser?.id && !form.effectiveTargetUserId && form.hasSystemAccess ? (
         <p className="cr-access__banner" role="status">
           <Info size={15} aria-hidden />
@@ -196,9 +325,15 @@ export default function CollaboratorAccessSection({
               Reenviar convite
             </Button>
           ) : null}
-          {onDeactivateAccess ? (
-            <Button variant="secondary" size="sm" icon={UserX} disabled={readOnly || form.saving} onClick={onDeactivateAccess}>
-              Desativar acesso
+          {onToggleSystemAccess && tenantUser?.id ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={accessActive ? UserX : UserCheck}
+              disabled={readOnly || form.saving}
+              onClick={onToggleSystemAccess}
+            >
+              {accessActive ? 'Desativar acesso' : 'Ativar acesso'}
             </Button>
           ) : null}
           <Button
@@ -213,9 +348,10 @@ export default function CollaboratorAccessSection({
         </footer>
       </section>
 
-      {form.hasSystemAccess ? (
+      {tenantUser?.id ? (
         <CollaboratorAccessManagementCard
           tenantUser={tenantUser}
+          identity={identity}
           collaboratorEmail={form.credEmail || collaboratorEmail}
           saasTenantId={saasTenantId}
           collaboratorId={collaboratorId}
@@ -224,11 +360,16 @@ export default function CollaboratorAccessSection({
           canEdit={canEdit}
           saving={form.saving}
           auditEvents={auditEvents}
+          identityEvents={identityEvents}
           onLoadAudit={loadAudit}
           onSendInvite={handleSendInvite}
           onResendInvite={() => form.handleResendInvite(saveHandlers)}
           onResetPassword={handleResetPassword}
-          onDeactivateAccess={onDeactivateAccess}
+          onToggleSystemAccess={onToggleSystemAccess}
+          onRepairIdentity={identity?.id ? handleRepairIdentity : null}
+          onRevokeSessions={identity?.id ? handleRevokeSessions : null}
+          statusLabels={IDENTITY_STATUS_LABELS}
+          healthLabels={IDENTITY_HEALTH_LABELS}
         />
       ) : null}
     </div>

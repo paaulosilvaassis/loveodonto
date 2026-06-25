@@ -27,6 +27,7 @@ import FornecedoresPage from './pages/administrativo/FornecedoresPage.jsx';
 import TreatmentPlanTypesAdminPage from './pages/admin/TreatmentPlanTypesAdminPage.jsx';
 import ClinicalGuidesAdminPage from './pages/admin/ClinicalGuidesAdminPage.jsx';
 import ClinicalMediaLibraryPage from './pages/admin/ClinicalMediaLibraryPage.jsx';
+import IdentitiesDashboardPage from './pages/admin/IdentitiesDashboardPage.jsx';
 import InventoryPage from './pages/InventoryPage.jsx';
 import AdminUsuariosPage from './pages/AdminUsuariosPage.jsx';
 import PatientsPage from './pages/PatientsPage.jsx';
@@ -183,6 +184,7 @@ export default function ProtectedApp() {
         <Route path="/admin/colaboradores" element={withAdminGate(withRole('/admin/colaboradores', <CollaboratorsPage />))} />
         <Route path="/admin/acessos" element={<Navigate to="/admin/colaboradores" replace />} />
         <Route path="/admin/usuarios" element={withAdminGate(withRole('/admin/usuarios', <AdminUsuariosPage />))} />
+        <Route path="/admin/identidades" element={withAdminGate(withRole('/admin/identidades', <IdentitiesDashboardPage />))} />
         <Route path="/admin/base-precos" element={withAdminGate(withRole('/admin/base-precos', <PriceBasePage />))} />
         <Route path="/admin/base-precos/tabelas/:priceTableId" element={withAdminGate(withRole('/admin/base-precos', <PriceBaseTableDetailPage />))} />
         <Route path="/admin/procedimentos" element={<Navigate to="/admin/base-precos" replace />} />
