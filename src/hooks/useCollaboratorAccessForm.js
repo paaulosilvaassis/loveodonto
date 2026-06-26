@@ -10,7 +10,7 @@ import {
   ROLE_LABELS,
   ROLE_ADMIN,
 } from '../services/accessService.js';
-import { saveCollaboratorAccessBundleWithRepair, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite } from '../services/collaboratorAccessProvisionService.js';
+import { saveCollaboratorAccessBundleWithRepair, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite, resolveCollaboratorIdForAccessRequest } from '../services/collaboratorAccessProvisionService.js';
 import { syncCollaboratorAccessFromTenantUser } from '../services/collaboratorAccessRecoveryService.js';
 import { tenantUserNeedsAuthRepair } from '../utils/collaboratorAccessPanel.js';
 import { MODULES_SPEC, ACTION_LABELS } from '../permissions/catalog.js';
@@ -386,15 +386,16 @@ export function useCollaboratorAccessForm({
     && (['sent', 'pending', 'expired', 'failed'].includes(resolvedAccessStatus.key) || !tenantUser?.user_id),
   );
 
-  const handleResendInvite = useCallback(async ({ onSaveSuccess, onSaveError } = {}) => {
+  const handleResendInvite = useCallback(async ({ onSaveSuccess, onSaveError, onClearError } = {}) => {
     if (!canResendInvite || !currentUser || saving) return;
+    onClearError?.();
     setSaving(true);
     try {
       if (isSaasModeEnabled() && saasTenantId) {
         await resendCollaboratorInvite({
           tenant_id: saasTenantId,
           email: inviteTargetEmail,
-          collaborator_id: collaboratorId || tenantUser?.collaborator_id || null,
+          collaborator_id: resolveCollaboratorIdForAccessRequest({ tenantUser, collaboratorId }),
         });
         onAccessChanged?.();
         onSaveSuccess?.({ inviteSent: true });

@@ -3,6 +3,7 @@ import { Mail, MoreVertical, Pencil, UserCheck, UserPlus, UserX } from 'lucide-r
 import {
   provisionCollaboratorSystemAccess,
   resendCollaboratorInvite,
+  resolveCollaboratorIdForAccessRequest,
   setCollaboratorSystemAccess,
   removeTenantUserAccess,
 } from '../../services/collaboratorAccessProvisionService.js';
@@ -93,7 +94,7 @@ function CollaboratorAccessActions({
     const result = await resendCollaboratorInvite({
       tenant_id: tenantId,
       email,
-      collaborator_id: collaborator?.id || tenantUser?.collaborator_id || null,
+      collaborator_id: resolveCollaboratorIdForAccessRequest({ tenantUser, collaboratorId: collaborator?.id }),
     });
     notifyInviteDeliveryResult(result?.invite_delivery, {
       onCopyLink: copyInviteLink,

@@ -28,11 +28,27 @@ export function createIdentityService(deps) {
       return await repo.recordEvent(event);
     } catch (err) {
       if (isMissingIdentitiesTableError(err)) return null;
-      if (process.env.NODE_ENV !== 'production') {
-        console.debug('[IdentityService] recordEvent skipped', err?.message);
-      }
+      console.error('[IdentityService] recordEvent failed', {
+        action: event?.action,
+        identity_id: event?.identity_id,
+        message: err?.message,
+      });
       return null;
     }
+  }
+
+  function assertInviteEmailDelivered(provisioned, { sendInvite }) {
+    if (!sendInvite) return;
+    const delivered = deps.isInviteEmailDelivered(provisioned?.inviteDelivery);
+    if (delivered) return;
+    const err = new Error(
+      provisioned?.inviteDelivery?.message
+      || 'Não foi possível enviar o convite por e-mail. Verifique SUPABASE_ANON_KEY, SMTP do Supabase Auth ou EMAIL_API_KEY no Railway.',
+    );
+    err.code = 'INVITE_EMAIL_NOT_SENT';
+    err.setupLink = provisioned?.inviteDelivery?.setupLink || null;
+    err.emailDelivery = provisioned?.inviteDelivery?.emailDelivery || 'setup_link';
+    throw err;
   }
 
   async function safeUpsertIdentity(payload) {
@@ -174,12 +190,35 @@ export function createIdentityService(deps) {
 
     const identity = tu ? await syncFromTenantUser(tu, { collaboratorId, patch: identityPatch }) : null;
     if (identity) {
-      await recordIdentityEvent(identity, IDENTITY_EVENTS.PROVISIONED, {
-        actor: { ...actor, id: actorAuthUserId },
-        newStatus: identity.status,
-        details: { email_sent: emailSent, requested_action: requestedAction },
-      });
+      if (emailSent) {
+        await recordIdentityEvent(identity, IDENTITY_EVENTS.PROVISIONED, {
+          actor: { ...actor, id: actorAuthUserId },
+          newStatus: identity.status,
+          details: { email_sent: true, requested_action: requestedAction },
+        });
+        await recordIdentityEvent(identity, IDENTITY_EVENTS.INVITE_SENT, {
+          actor: { ...actor, id: actorAuthUserId },
+          message: provisioned.inviteDelivery?.message || null,
+          details: { email_delivery: provisioned.inviteDelivery?.emailDelivery },
+        });
+      } else if (sendInvite) {
+        await recordIdentityEvent(identity, IDENTITY_EVENTS.INVITE_FAILED, {
+          actor: { ...actor, id: actorAuthUserId },
+          newStatus: identity.status,
+          result: 'error',
+          message: provisioned.inviteDelivery?.message || 'Convite não entregue por e-mail.',
+          details: { requested_action: requestedAction, email_delivery: provisioned.inviteDelivery?.emailDelivery },
+        });
+      } else {
+        await recordIdentityEvent(identity, IDENTITY_EVENTS.PROVISIONED, {
+          actor: { ...actor, id: actorAuthUserId },
+          newStatus: identity.status,
+          details: { email_sent: false, requested_action: requestedAction },
+        });
+      }
     }
+
+    assertInviteEmailDelivered(provisioned, { sendInvite });
 
     return {
       identity,
@@ -242,6 +281,45 @@ export function createIdentityService(deps) {
     }
 
     return { identity: repaired || result.identity, ...result };
+  }
+
+  async function resendInviteByEmail({
+    tenantId,
+    email,
+    collaboratorId = null,
+    collaboratorFullName = null,
+    profileRole = null,
+    actorAuthUserId,
+    actor = {},
+  }) {
+    const normalizedEmail = deps.normalizeEmail(email);
+    const identity = await resolveIdentityForCollaborator({
+      tenantId,
+      collaboratorId,
+      email: normalizedEmail,
+    });
+
+    if (identity?.id) {
+      return resendInvite({
+        identityId: identity.id,
+        tenantId,
+        actorAuthUserId,
+        actor,
+      });
+    }
+
+    return provisionIdentity({
+      actorAuthUserId,
+      tenantId,
+      collaboratorId,
+      collaboratorFullName: collaboratorFullName || normalizedEmail,
+      email: normalizedEmail,
+      profileRole: profileRole || 'atendimento',
+      sendInvite: true,
+      repairStaleAuth: true,
+      actor,
+      requestedAction: 'resend',
+    });
   }
 
   async function resendInvite({ identityId, tenantId, actorAuthUserId, actor = {} }) {
@@ -542,6 +620,7 @@ export function createIdentityService(deps) {
     provisionIdentity,
     repairIdentity,
     resendInvite,
+    resendInviteByEmail,
     resetPassword,
     resetPasswordByEmail,
     activateIdentity,

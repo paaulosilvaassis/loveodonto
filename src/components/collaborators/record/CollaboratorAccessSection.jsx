@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Info, Mail, Shield, UserCheck, UserX } from 'lucide-react';
 import Button from '../../Button.jsx';
 import { Field } from '../../Field.jsx';
@@ -10,6 +10,7 @@ import { isSaasModeEnabled } from '../../../services/saasAuthService.js';
 import {
   fetchCollaboratorAccessAudit,
   requestCollaboratorPasswordReset,
+  resolveCollaboratorIdForAccessRequest,
   sendCollaboratorInvite,
 } from '../../../services/collaboratorAccessProvisionService.js';
 import { reconcileCollaboratorAccessState } from '../../../services/collaboratorAccessRecoveryService.js';
@@ -59,7 +60,7 @@ export default function CollaboratorAccessSection({
   const [identity, setIdentity] = useState(null);
   const [identityEvents, setIdentityEvents] = useState([]);
   const readOnly = form.readOnly || !canEdit;
-  const saveHandlers = { onSaveSuccess, onSaveError, onRepairNotice };
+  const saveHandlers = { onSaveSuccess, onSaveError, onRepairNotice, onClearError: () => onSaveError?.('') };
   const inviteEmail = (form.credEmail || collaboratorEmail || '').trim().toLowerCase();
   const accessActive = tenantUser?.id
     ? isTenantSystemAccessActive(tenantUser)
@@ -69,27 +70,39 @@ export default function CollaboratorAccessSection({
     onDirtyChange?.(form.dirty);
   }, [form.dirty, onDirtyChange]);
 
+  const onRecoveredRef = useRef(onRecovered);
+  onRecoveredRef.current = onRecovered;
+  const reconcileInFlightRef = useRef(false);
+
   useEffect(() => {
-    if (!collaboratorId || !saasTenantId) return;
+    if (!collaboratorId || !saasTenantId || reconcileInFlightRef.current) return;
     let active = true;
+    reconcileInFlightRef.current = true;
     (async () => {
-      const result = await reconcileCollaboratorAccessState({
-        collaboratorId,
-        collaborator: {
-          email: collaboratorEmail,
-          nomeCompleto: linkedDisplayName,
-          apelido: linkedDisplayName,
-        },
-        tenantUser,
-        tenantId: saasTenantId,
-        currentUser,
-      });
-      if (!active) return;
-      if (result.recovered || result.access?.userId) {
-        onRecovered?.(result);
+      try {
+        const result = await reconcileCollaboratorAccessState({
+          collaboratorId,
+          collaborator: {
+            email: collaboratorEmail,
+            nomeCompleto: linkedDisplayName,
+            apelido: linkedDisplayName,
+          },
+          tenantUser,
+          tenantId: saasTenantId,
+          currentUser,
+        });
+        if (!active) return;
+        if (result.recovered) {
+          onRecoveredRef.current?.(result);
+        }
+      } finally {
+        if (active) reconcileInFlightRef.current = false;
       }
     })();
-    return () => { active = false; };
+    return () => {
+      active = false;
+      reconcileInFlightRef.current = false;
+    };
   }, [
     collaboratorId,
     saasTenantId,
@@ -98,7 +111,6 @@ export default function CollaboratorAccessSection({
     collaboratorEmail,
     linkedDisplayName,
     currentUser,
-    onRecovered,
   ]);
 
   const loadAudit = useCallback(async () => {
@@ -218,7 +230,7 @@ export default function CollaboratorAccessSection({
       const result = await requestCollaboratorPasswordReset({
         tenant_id: saasTenantId,
         email: inviteEmail,
-        collaborator_id: collaboratorId || tenantUser?.collaborator_id || null,
+        collaborator_id: resolveCollaboratorIdForAccessRequest({ tenantUser, collaboratorId }),
       });
       onAccessChanged?.();
       if (result?.auth_recreated || result?.invite_resent) {

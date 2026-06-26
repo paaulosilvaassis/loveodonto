@@ -32,3 +32,18 @@ export function isUserAlreadyRegisteredError(error) {
     || error?.status === 422
   );
 }
+
+/**
+ * Usuários criados via admin.createUser (sem convite) bloqueiam inviteUserByEmail.
+ * Se nunca autenticaram, remove e permite novo convite com e-mail do Supabase Auth.
+ */
+export async function reinviteStaleAuthUser(supabase, email) {
+  const existing = await findAuthUserByEmail(supabase, email);
+  if (!existing?.id) return null;
+  if (existing.last_sign_in_at) return existing;
+  if (existing.invited_at) return existing;
+
+  const { error: deleteError } = await supabase.auth.admin.deleteUser(existing.id);
+  if (deleteError) throw deleteError;
+  return null;
+}

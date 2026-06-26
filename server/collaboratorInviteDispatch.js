@@ -2,36 +2,17 @@ import { getEmailConfig, getInviteRedirectTo } from './email/emailConfig.js';
 import { generatePasswordSetupLink, sendUserInviteEmail } from './email/sendUserInviteEmail.js';
 import { sendSupabaseAuthRecoveryEmail } from './email/sendSupabaseAuthEmail.js';
 import { logAccessEmailAudit } from './email/accessEmailAudit.js';
+import {
+  findAuthUserByEmail,
+  isUserAlreadyRegisteredError,
+  reinviteStaleAuthUser,
+} from './email/accessEmailHelpers.js';
 
-function isUserAlreadyRegisteredError(error) {
-  const message = String(error?.message || '').toLowerCase();
-  const code = String(error?.code || '').toLowerCase();
-  return (
-    message.includes('already registered')
-    || message.includes('already exists')
-    || message.includes('user already')
-    || message.includes('email address has already been registered')
-    || code.includes('email_exists')
-    || error?.status === 422
-  );
-}
-
-async function findAuthUserByEmail(supabase, email) {
-  const target = String(email || '').trim().toLowerCase();
-  if (!target) return null;
-  let page = 1;
-  const perPage = 200;
-
-  while (true) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
-    if (error) throw error;
-    const users = Array.isArray(data?.users) ? data.users : [];
-    const match = users.find((u) => String(u?.email || '').trim().toLowerCase() === target);
-    if (match) return match;
-    if (users.length < perPage) break;
-    page += 1;
-  }
-  return null;
+async function tryInviteUserByEmail(supabase, email, { redirectTo, metadata }) {
+  return supabase.auth.admin.inviteUserByEmail(email, {
+    data: metadata,
+    redirectTo,
+  });
 }
 
 export async function dispatchCollaboratorInvite(supabase, {
@@ -51,20 +32,93 @@ export async function dispatchCollaboratorInvite(supabase, {
     collaborator_id: collaboratorId || null,
     collaborator_name: collaboratorName || '',
   };
+  const auditBase = {
+    tenantId,
+    collaboratorId,
+    email: normalizedEmail,
+    requestedAction: 'invite',
+  };
 
-  const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-    normalizedEmail,
-    {
-      data: metadata,
+  // 1) E-mail transacional (Resend/SendGrid) — entrega mais confiável
+  if (getEmailConfig().isConfigured) {
+    let authUser = await findAuthUserByEmail(supabase, normalizedEmail);
+    if (!authUser?.id) {
+      const { error: inviteError } = await tryInviteUserByEmail(supabase, normalizedEmail, {
+        redirectTo,
+        metadata,
+      });
+      if (inviteError && !isUserAlreadyRegisteredError(inviteError)) {
+        throw inviteError;
+      }
+      if (inviteError && isUserAlreadyRegisteredError(inviteError)) {
+        await reinviteStaleAuthUser(supabase, normalizedEmail);
+        await tryInviteUserByEmail(supabase, normalizedEmail, { redirectTo, metadata });
+      }
+      authUser = await findAuthUserByEmail(supabase, normalizedEmail);
+    }
+
+    const setupLink = await generatePasswordSetupLink(supabase, {
+      email: normalizedEmail,
       redirectTo,
-    },
+      data: metadata,
+      existingUser: Boolean(authUser?.id),
+    });
+
+    await sendUserInviteEmail(supabase, {
+      tenantId,
+      email: normalizedEmail,
+      userName: userName || collaboratorName || normalizedEmail,
+      profileRole: profileRole || role,
+      setupLink,
+    });
+
+    logAccessEmailAudit({
+      ...auditBase,
+      authUserFound: Boolean(authUser?.id),
+      authUserId: authUser?.id || null,
+      linkType: 'recovery',
+      inviteSent: true,
+      emailDelivery: 'backend_resend',
+      finalStatus: 'invite_sent',
+    });
+
+    return {
+      emailDelivery: 'backend_resend',
+      user: authUser,
+      setupLink: null,
+    };
+  }
+
+  // 2) Convite Supabase Auth (SMTP configurado no painel Supabase)
+  let { data: inviteData, error: inviteError } = await tryInviteUserByEmail(
+    supabase,
+    normalizedEmail,
+    { redirectTo, metadata },
   );
+
+  if (inviteError && isUserAlreadyRegisteredError(inviteError)) {
+    await reinviteStaleAuthUser(supabase, normalizedEmail);
+    ({ data: inviteData, error: inviteError } = await tryInviteUserByEmail(
+      supabase,
+      normalizedEmail,
+      { redirectTo, metadata },
+    ));
+  }
 
   if (!inviteError) {
     let user = inviteData?.user || null;
     if (!user?.id) {
       user = await findAuthUserByEmail(supabase, normalizedEmail);
     }
+    logAccessEmailAudit({
+      ...auditBase,
+      authUserFound: Boolean(user?.id),
+      authUserId: user?.id || null,
+      linkType: 'invite',
+      inviteSent: true,
+      emailDelivery: 'supabase_auth',
+      finalStatus: 'invite_sent',
+    });
     return {
       emailDelivery: 'supabase_auth',
       user,
@@ -73,43 +127,17 @@ export async function dispatchCollaboratorInvite(supabase, {
   }
 
   if (!isUserAlreadyRegisteredError(inviteError)) {
+    logAccessEmailAudit({
+      ...auditBase,
+      inviteSent: false,
+      finalStatus: 'invite_failed',
+      error: inviteError?.message || String(inviteError),
+    });
     throw inviteError;
   }
 
+  // 3) Usuário já existe — recovery via anon key (dispara SMTP Supabase)
   const existingUser = await findAuthUserByEmail(supabase, normalizedEmail);
-  const setupLink = await generatePasswordSetupLink(supabase, {
-    email: normalizedEmail,
-    redirectTo,
-    data: metadata,
-    existingUser: Boolean(existingUser?.id),
-  });
-
-  if (getEmailConfig().isConfigured) {
-    await sendUserInviteEmail(supabase, {
-      tenantId,
-      email: normalizedEmail,
-      userName: userName || collaboratorName || normalizedEmail,
-      profileRole: profileRole || role,
-      setupLink,
-    });
-    logAccessEmailAudit({
-      tenantId,
-      collaboratorId,
-      email: normalizedEmail,
-      requestedAction: 'invite_existing_user',
-      authUserFound: true,
-      authUserId: existingUser?.id || null,
-      linkType: 'recovery',
-      inviteSent: true,
-      emailDelivery: 'backend_resend',
-      finalStatus: 'invite_sent',
-    });
-    return {
-      emailDelivery: 'backend_resend',
-      user: existingUser,
-      setupLink: null,
-    };
-  }
 
   try {
     await sendSupabaseAuthRecoveryEmail(supabase, {
@@ -117,11 +145,8 @@ export async function dispatchCollaboratorInvite(supabase, {
       redirectTo,
     });
     logAccessEmailAudit({
-      tenantId,
-      collaboratorId,
-      email: normalizedEmail,
-      requestedAction: 'invite_existing_user',
-      authUserFound: true,
+      ...auditBase,
+      authUserFound: Boolean(existingUser?.id),
       authUserId: existingUser?.id || null,
       linkType: 'supabase_recovery',
       inviteSent: true,
@@ -134,32 +159,30 @@ export async function dispatchCollaboratorInvite(supabase, {
       setupLink: null,
     };
   } catch (supabaseEmailErr) {
-    logAccessEmailAudit({
-      tenantId,
-      collaboratorId,
+    const setupLink = await generatePasswordSetupLink(supabase, {
       email: normalizedEmail,
-      requestedAction: 'invite_existing_user',
-      authUserFound: true,
+      redirectTo,
+      data: metadata,
+      existingUser: Boolean(existingUser?.id),
+    });
+
+    logAccessEmailAudit({
+      ...auditBase,
+      authUserFound: Boolean(existingUser?.id),
       authUserId: existingUser?.id || null,
       inviteSent: false,
       emailDelivery: 'setup_link',
       finalStatus: 'setup_link_only',
       error: supabaseEmailErr?.message || String(supabaseEmailErr),
     });
-  }
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.debug(
-      '[dispatchCollaboratorInvite] usuário já existe — link gerado para envio manual:',
-      normalizedEmail,
+    const err = new Error(
+      supabaseEmailErr?.message
+      || 'Não foi possível enviar o convite por e-mail. Configure SUPABASE_ANON_KEY e SMTP do Supabase Auth no Railway.',
     );
+    err.code = 'INVITE_EMAIL_NOT_SENT';
+    err.setupLink = setupLink;
+    err.emailDelivery = 'setup_link';
+    throw err;
   }
-
-  return {
-    emailDelivery: 'setup_link',
-    user: existingUser,
-    setupLink,
-    message:
-      'Link de acesso gerado. Se o e-mail não chegar em alguns minutos, copie o link e envie manualmente ao colaborador.',
-  };
 }

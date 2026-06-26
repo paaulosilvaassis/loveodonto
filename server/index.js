@@ -19,7 +19,7 @@ import { logAccessEmailAudit } from './email/accessEmailAudit.js';
 import { createIdentityService } from './identity/IdentityService.js';
 import { isMissingIdentitiesTableError } from './identity/identityRepository.js';
 import { registerIdentityRoutes } from './identity/routes.js';
-import { sendSupabaseAuthRecoveryEmail } from './email/sendSupabaseAuthEmail.js';
+import { hasSupabaseAuthPublicClient } from './email/supabasePublicClient.js';
 import {
   LIABILITY_TERMS_VERSION,
   normalizeOnboardingPayload,
@@ -28,6 +28,10 @@ import {
 import { sendClinicOnboardingEmail } from './email/sendClinicOnboardingEmail.js';
 import { emailAudit } from './email/emailAuditLog.js';
 import { provisionClinicOwnerAccess, resendClinicOwnerAccess } from './clinicOwnerAccessDispatch.js';
+import {
+  assertCanAssignEmailToCollaborator,
+  resolveCollaboratorIdForTenantEmailAccess,
+} from './collaboratorLinkPolicy.js';
 import {
   acceptTermsByToken,
   buildTermsPreview,
@@ -43,15 +47,19 @@ const repoRoot = path.join(__dirname, '..');
 
 /**
  * 1) `server/.env` — valores base.
- * 2) `.env` e `.env.local` na **raiz do repositório** com `override: true` — um único sítio para
+ * 2) `console/.env` e `console/.env.local` — fallback dev (VITE_CONSOLE_SUPABASE_ANON_KEY etc.).
+ * 3) `.env` e `.env.local` na **raiz do repositório** com `override: true` — um único sítio para
  *    `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` alinhados com a Console (5177) e o app (5176).
  * Variáveis de ambiente do sistema continuam a ser sobrescritas pelo último ficheiro carregado.
  */
 dotenv.config({ path: path.join(__dirname, '.env') });
+// Fallback dev: mesmas chaves VITE_CONSOLE_* que o Vite usa (console/.env) — raiz prevalece depois.
+dotenv.config({ path: path.join(repoRoot, 'console', '.env'), override: false });
+dotenv.config({ path: path.join(repoRoot, 'console', '.env.local'), override: false });
 dotenv.config({ path: path.join(repoRoot, '.env'), override: true });
 dotenv.config({ path: path.join(repoRoot, '.env.local'), override: true });
 console.log(
-  '[SaaS Admin API] env: server/.env depois raiz .env/.env.local (a raiz prevalece — veja .env.example na raiz).',
+  '[SaaS Admin API] env: server/.env → console/.env → raiz .env/.env.local (a raiz prevalece — veja .env.example na raiz).',
 );
 
 const app = express();
@@ -66,11 +74,23 @@ app.use(express.json());
 
 /** Health check leve (sem Supabase) — usado pelo script `npm run console:stack` para saber quando a API está escutando. */
 app.get('/health', (_req, res) => {
+  const emailCfg = getEmailConfig();
   res.status(200).json({
     ok: true,
     service: 'saas-admin-api',
-    version: '2026-06-24-billing',
-    features: { resendAccess: true, billingEvaluate: true },
+    version: '2026-06-26-identity-unified',
+    build: {
+      identityModule: true,
+      identityRoutes: true,
+      commitHint: 'feat: identity management service + unified invite flow',
+    },
+    features: {
+      resendAccess: true,
+      billingEvaluate: true,
+      identityService: true,
+      supabaseAuthPublicClient: hasSupabaseAuthPublicClient(),
+      transactionalEmail: emailCfg.isConfigured,
+    },
   });
 });
 
@@ -230,6 +250,7 @@ if (SUPABASE_URL) {
 }
 console.log('[SaaS Admin API] SERVICE_ROLE_KEY loaded', Boolean(SUPABASE_SERVICE_ROLE_KEY));
 console.log('[SaaS Admin API] PLATFORM_API_KEY loaded', Boolean(PLATFORM_API_KEY));
+console.log('[SaaS Admin API] SUPABASE_ANON_KEY loaded', hasSupabaseAuthPublicClient());
 warnIfConsoleSupabaseHostnameDiffersFromServer();
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -247,6 +268,9 @@ try {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+/** Preenchido antes de app.listen — rotas de acesso usam IdentityService. */
+let identityService;
 
 /** Host do `iss` do JWT (sem verificar assinatura) — só para diagnóstico de projeto errado. */
 function jwtAccessTokenIssuerHost(accessToken) {
@@ -758,7 +782,13 @@ function formatProvisionErrorResponse(err, fallbackMessage = 'Não foi possível
     message = 'Salve o acesso na aba Acesso ao sistema e tente enviar o convite novamente.';
   }
 
-  return { ok: false, message, error: raw };
+  return {
+    ok: false,
+    message,
+    error: raw,
+    setup_link: err?.setupLink || null,
+    code: err?.code || null,
+  };
 }
 
 async function resolveAuthUserIdForTenantLink({
@@ -945,9 +975,13 @@ async function assertEmailAvailableForTenantInvite(resolvedTenantId, normalizedE
     if (!existing.collaborator_id || existing.collaborator_id === normalizedCollaboratorId) {
       return;
     }
-    const linkConflictErr = new Error('Este e-mail já está vinculado a outro colaborador.');
-    linkConflictErr.code = 'EMAIL_LINKED_TO_OTHER_COLLABORATOR';
-    throw linkConflictErr;
+    await assertCanAssignEmailToCollaborator(supabase, {
+      tenantId: resolvedTenantId,
+      tenantUserId: existing.id,
+      collaboratorId: normalizedCollaboratorId,
+      email: normalizedEmail,
+    });
+    return;
   }
 
   const invitationStatus = normalizeInvitationStatus(existing.invitation_status);
@@ -990,9 +1024,12 @@ async function linkCollaboratorToTenantUser({
   }
 
   if (existing.collaborator_id && existing.collaborator_id !== normalizedCollaboratorId) {
-    const linkConflictErr = new Error('Este e-mail já está vinculado a outro colaborador.');
-    linkConflictErr.code = 'EMAIL_LINKED_TO_OTHER_COLLABORATOR';
-    throw linkConflictErr;
+    await assertCanAssignEmailToCollaborator(supabase, {
+      tenantId: resolvedTenantId,
+      tenantUserId: existing.id,
+      collaboratorId: normalizedCollaboratorId,
+      email: normalizedEmail,
+    });
   }
 
   if (existing.collaborator_id === normalizedCollaboratorId) {
@@ -1034,6 +1071,17 @@ async function linkCollaboratorToTenantUser({
   if (invUpdate.error && process.env.NODE_ENV !== 'production') {
     console.debug('[linkCollaboratorToTenantUser] falha ao atualizar invitations', invUpdate.error);
   }
+
+  await supabase
+    .from('identities')
+    .update({ collaborator_id: normalizedCollaboratorId, updated_at: new Date().toISOString() })
+    .eq('tenant_id', resolvedTenantId)
+    .eq('email', normalizedEmail)
+    .then(({ error: identityErr }) => {
+      if (identityErr && process.env.NODE_ENV !== 'production') {
+        console.debug('[linkCollaboratorToTenantUser] identities sync skipped', identityErr.message);
+      }
+    });
 
   return { tenantUser, linked: true };
 }
@@ -1144,6 +1192,12 @@ async function resolveAuthUserForInvite({
   }
 
   if (!authUser?.id) {
+    if (sendInvite) {
+      throw new Error(
+        'Não foi possível criar a conta de acesso para este e-mail. '
+        + 'Verifique o SMTP do Supabase Auth ou configure EMAIL_API_KEY no backend.',
+      );
+    }
     authUser = await createAuthUserForCollaboratorInvite({
       normalizedEmail,
       tenantId,
@@ -1151,53 +1205,6 @@ async function resolveAuthUserForInvite({
       collaboratorId,
       collaboratorFullName,
     });
-    if (authUser?.id && sendInvite) {
-      try {
-        const setupLink = await generatePasswordSetupLink(supabase, {
-          email: normalizedEmail,
-          redirectTo: getInviteRedirectTo(),
-          data: {
-            tenant_id: tenantId,
-            role,
-            collaborator_id: collaboratorId || null,
-          },
-          existingUser: authUserExisted,
-        });
-        if (getEmailConfig().isConfigured) {
-          await sendUserInviteEmail(supabase, {
-            tenantId,
-            email: normalizedEmail,
-            userName: collaboratorFullName || normalizedEmail,
-            profileRole: role,
-            setupLink,
-          });
-          inviteDelivery = { emailDelivery: 'backend_resend', user: authUser, setupLink: null };
-        } else {
-          try {
-            await sendSupabaseAuthRecoveryEmail(supabase, {
-              email: normalizedEmail,
-              redirectTo: getInviteRedirectTo(),
-            });
-            inviteDelivery = { emailDelivery: 'supabase_auth', user: authUser, setupLink: null };
-          } catch {
-            inviteDelivery = {
-              emailDelivery: 'setup_link',
-              user: authUser,
-              setupLink,
-              message: 'Link de acesso gerado. Envie manualmente se o e-mail não chegar.',
-            };
-          }
-        }
-      } catch (linkErr) {
-        console.error('[COLLAB_ACCESS] falha ao enviar link após recriar Auth', linkErr);
-        try {
-          await sendSupabaseAuthRecoveryEmail(supabase, { email: normalizedEmail, redirectTo: getInviteRedirectTo() });
-          inviteDelivery = { emailDelivery: 'supabase_auth', user: authUser, setupLink: null };
-        } catch {
-          inviteDelivery = { emailDelivery: 'auth_created', user: authUser, setupLink: null };
-        }
-      }
-    }
   }
 
   if (!authUser?.id) {
@@ -1226,8 +1233,12 @@ function formatCollaboratorProvisionResponse(provisioned, { authUserExisted = fa
     message = 'Link de acesso gerado. Se o e-mail não chegar, copie o link e envie manualmente ao colaborador.';
   } else if (authUserExisted) {
     message = 'Usuário já existia. Acesso vinculado — use Reenviar convite se o e-mail não chegou.';
+  } else if (requestedAction === 'resend' && emailSent) {
+    message = 'Convite reenviado por e-mail.';
   } else if (requestedAction === 'resend') {
-    message = 'Convite reenviado.';
+    message = hasSetupLink
+      ? 'Link de acesso gerado. Se o e-mail não chegar, copie o link e envie manualmente.'
+      : 'Não foi possível enviar o e-mail automaticamente. Tente novamente ou verifique o SMTP do Supabase.';
   }
 
   return {
@@ -1297,6 +1308,14 @@ async function provisionCollaboratorAccess({
       .maybeSingle();
     audit.existingTenantUserId = existingTenantUserRow?.id || null;
     audit.existingCollaboratorAccessUserId = existingTenantUserRow?.user_id || null;
+
+    collaboratorId = await resolveCollaboratorIdForTenantEmailAccess(supabase, {
+      tenantId: resolvedTenantId,
+      tenantUserId: existingTenantUserRow?.id || null,
+      tenantUserCollaboratorId: existingTenantUserRow?.collaborator_id,
+      requestedCollaboratorId: collaboratorId,
+      email: normalizedEmail,
+    }) || collaboratorId;
 
     const shouldRepairStale = repairStaleAuth
       || sendInvite
@@ -1377,6 +1396,16 @@ async function provisionCollaboratorAccess({
     }
 
     logAccessEmailAudit(audit);
+
+    if (sendInvite && !isInviteEmailDelivered(inviteDelivery)) {
+      const err = new Error(
+        inviteDelivery?.message
+        || 'Não foi possível enviar o convite por e-mail. Verifique SUPABASE_ANON_KEY, SMTP do Supabase Auth ou EMAIL_API_KEY no Railway.',
+      );
+      err.code = 'INVITE_EMAIL_NOT_SENT';
+      err.setupLink = inviteDelivery?.setupLink || null;
+      throw err;
+    }
 
     if (sendInvite && authUser?.id) {
       await appendAccessAuditToAuthUser(authUser.id, {
@@ -1632,6 +1661,13 @@ async function requireConsoleAccess(req, res, next) {
   }
 }
 
+function isSupabaseNetworkError(err) {
+  const code = String(err?.cause?.code || err?.code || '').trim();
+  const message = String(err?.message || err?.cause?.message || '');
+  return ['ENOTFOUND', 'ETIMEDOUT', 'ECONNREFUSED', 'EAI_AGAIN'].includes(code)
+    || message.includes('fetch failed');
+}
+
 async function requireAppUser(req, res, next) {
   try {
     const authHeader = normalizeText(req.headers.authorization);
@@ -1652,6 +1688,11 @@ async function requireAppUser(req, res, next) {
     req.appAuthUser = data.user;
     next();
   } catch (err) {
+    if (isSupabaseNetworkError(err)) {
+      return res.status(503).json({
+        error: 'Não foi possível contactar o Supabase. Verifique a ligação à internet e tente novamente.',
+      });
+    }
     res.status(401).json({ error: err?.message || 'Falha ao validar sessão do app.' });
   }
 }
@@ -2054,6 +2095,36 @@ app.post('/internal/app/collaborators/access-bundle', requireAppUser, async (req
     const { error: authUpdErr } = await supabase.auth.admin.updateUserById(targetUserId, authUpdate);
     if (authUpdErr) throw authUpdErr;
 
+    if (identityService) {
+      try {
+        const linkedIdentity = await identityService.resolveIdentityForCollaborator({
+          tenantId,
+          collaboratorId: collaboratorId || tuRow.collaborator_id,
+          email,
+        });
+        if (linkedIdentity?.id) {
+          await identityService.syncIdentity({
+            identityId: linkedIdentity.id,
+            tenantId,
+            actor: { id: req.appAuthUser.id, email: req.appAuthUser.email, ip: resolveClientIp(req) },
+          });
+        } else if (collaboratorId || email) {
+          await identityService.createIdentity({
+            tenantId,
+            email,
+            fullName: tuRow.full_name || email,
+            roleSlug: roleSlug,
+            collaboratorId: collaboratorId || tuRow.collaborator_id,
+            actor: { id: req.appAuthUser.id, email: req.appAuthUser.email },
+          });
+        }
+      } catch (identityErr) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug('[access-bundle] identity sync skipped', identityErr?.message);
+        }
+      }
+    }
+
     return res.status(200).json({
       success: true,
       tenant_user_id: tuRow.id,
@@ -2128,7 +2199,7 @@ app.post('/internal/app/invitations/resend', requireAppUser, async (req, res) =>
       .eq('email', targetEmail)
       .maybeSingle();
 
-    const resolvedCollaboratorId = collaboratorId || tenantUser?.collaborator_id || '';
+    const resolvedCollaboratorId = tenantUser?.collaborator_id || collaboratorId || '';
     const resolvedFullName = collaboratorFullName || tenantUser?.full_name || targetEmail;
     const resolvedRole = normalizeRoleValue(tenantUser?.role || tenantUser?.role_slug || req.body?.profile_role || 'atendimento');
 
@@ -2138,17 +2209,14 @@ app.post('/internal/app/invitations/resend', requireAppUser, async (req, res) =>
       });
     }
 
-    const result = await identityService.provisionIdentity({
+    const result = await identityService.resendInviteByEmail({
       actorAuthUserId: req.appAuthUser.id,
       tenantId,
+      email: targetEmail,
       collaboratorId: resolvedCollaboratorId,
       collaboratorFullName: resolvedFullName,
-      email: targetEmail,
       profileRole: resolvedRole,
-      sendInvite: true,
-      repairStaleAuth: true,
       actor: { id: req.appAuthUser.id, email: req.appAuthUser.email, ip: resolveClientIp(req) },
-      requestedAction: 'resend',
     });
 
     return res.status(200).json({
@@ -3662,7 +3730,7 @@ async function setCollaboratorAccessState({
   return tenantUser;
 }
 
-const identityService = createIdentityService({
+identityService = createIdentityService({
   supabase,
   provisionCollaboratorAccess,
   clearStaleTenantUserAuthReference,
@@ -3711,6 +3779,12 @@ const httpServer = app.listen(PORT, () => {
   console.log(`[SaaS Admin API] e-mail transacional: ${emailCfg.isConfigured ? `sim (${emailCfg.provider})` : 'NÃO — convites usam SMTP Supabase (entrega limitada)'}`);
   if (!emailCfg.isConfigured) {
     console.warn('[SaaS Admin API] Configure EMAIL_API_KEY e EMAIL_FROM_ADDRESS no Railway para entrega confiável.');
+    if (!hasSupabaseAuthPublicClient()) {
+      console.warn(
+        '[SaaS Admin API] SUPABASE_ANON_KEY ausente — convites usam SMTP Supabase via resetPasswordForEmail/invite, '
+        + 'mas exigem a anon key do mesmo projeto (VITE_SUPABASE_APP_ANON_KEY na raiz).',
+      );
+    }
   }
 
   if (process.env.IDENTITY_HEALTH_ON_STARTUP === '1') {

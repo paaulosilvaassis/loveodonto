@@ -35,8 +35,11 @@ const internalAppProxy = {
         res.writeHead(502, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(
           JSON.stringify({
+            ok: false,
+            message:
+              'Admin API local indisponível (porta 3001). Na raiz do projeto, rode npm run dev para subir o app e o backend juntos.',
             error: isConn
-              ? 'Backend local não está rodando. Abra outro terminal e rode cd server && npm start.'
+              ? 'Admin API local indisponível (porta 3001). Na raiz do projeto, rode npm run dev para subir o app e o backend juntos.'
               : `Falha no proxy para o backend (3001): ${msg || 'erro desconhecido'}`,
           }),
         );

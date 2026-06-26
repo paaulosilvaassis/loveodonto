@@ -6,6 +6,11 @@ import {
   formatAdminApiNetworkError,
   getConfiguredAdminApiBaseUrl,
 } from '../config/adminApiBase.js';
+import {
+  fetchIdentityByCollaborator,
+  resendIdentityInvite,
+  resetIdentityPassword,
+} from './identityService.js';
 
 export function isStaleAuthLinkError(message) {
   const lower = String(message || '').toLowerCase();
@@ -26,6 +31,45 @@ export function isCollaboratorAccessLinkNotFoundError(message) {
     || lower.includes('nenhum usuário de acesso encontrado')
     || lower.includes('usuário não encontrado nesta clínica')
   );
+}
+
+/** Prioriza collaborator_id já persistido em tenant_users sobre o id local do RH. */
+export function resolveCollaboratorIdForAccessRequest({ tenantUser, collaboratorId } = {}) {
+  const fromTenant = String(tenantUser?.collaborator_id || '').trim();
+  const fromLocal = String(collaboratorId || '').trim();
+  return fromTenant || fromLocal || null;
+}
+
+function mapIdentityProvisionResponse(json = {}) {
+  const inviteDelivery = json?.invite_delivery || json?.inviteDelivery || null;
+  return {
+    ok: json?.ok !== false,
+    success: json?.ok !== false,
+    authUserId: json?.authUserId
+      || json?.tenant_user?.user_id
+      || json?.identity?.auth_user_id
+      || null,
+    tenant_user: json?.tenant_user || null,
+    identity: json?.identity || null,
+    invitation: json?.invitation || null,
+    emailSent: Boolean(json?.emailSent ?? json?.email_sent ?? json?.inviteSent),
+    inviteSent: Boolean(json?.inviteSent ?? json?.emailSent ?? json?.email_sent),
+    inviteStatus: json?.inviteStatus || json?.tenant_user?.invitation_status || null,
+    message: json?.message || '',
+    invite_delivery: inviteDelivery,
+    setupLink: json?.setup_link || inviteDelivery?.setupLink || null,
+    repairedBrokenLink: Boolean(json?.repairedBrokenLink ?? json?.repaired_broken_link),
+    linkedExisting: Boolean(json?.linkedExisting),
+  };
+}
+
+async function resolveIdentityIdForAccess({ tenantId, collaboratorId, email }) {
+  try {
+    const row = await fetchIdentityByCollaborator({ tenantId, collaboratorId, email });
+    return row?.id || null;
+  } catch {
+    return null;
+  }
 }
 
 function logCollabInviteClientAudit(audit = {}) {
@@ -49,6 +93,9 @@ function normalizeProvisionErrorMessage(message) {
     || lower.includes('networkerror')
     || lower.includes('fetch failed')
     || lower.includes('network request failed')
+    || lower.includes('backend local não está rodando')
+    || lower.includes('admin api local indisponível')
+    || lower.includes('cd server && npm start')
   ) {
     return formatAdminApiNetworkError();
   }
@@ -235,9 +282,19 @@ export async function provisionCollaboratorSystemAccess(payload, options = {}) {
     collaboratorId: payload?.collaborator_id || null,
     email: payload?.email || null,
     repairStaleAuth: payload?.repair_stale_auth === true,
+    flow: 'identity.provision',
     ...options.auditContext,
   };
-  return postJson('/internal/app/collaborators/provision', payload, { auditContext });
+  const body = {
+    tenant_id: payload?.tenant_id,
+    collaborator_id: payload?.collaborator_id,
+    collaborator_full_name: payload?.collaborator_full_name,
+    email: payload?.email,
+    profile_role: payload?.profile_role,
+    send_invite: payload?.send_invite !== false,
+  };
+  const json = await postJson('/internal/app/identities/provision', body, { auditContext });
+  return mapIdentityProvisionResponse(json);
 }
 
 /**
@@ -281,7 +338,7 @@ export async function provisionCollaboratorAccessWithRepair(payload, { onRepairN
 export async function provisionCollaboratorAccessById(collaboratorId, payload) {
   const id = String(collaboratorId || '').trim();
   if (!id) throw new Error('collaboratorId é obrigatório.');
-  return postJson(`/internal/app/collaborators/${encodeURIComponent(id)}/provision-access`, {
+  return provisionCollaboratorSystemAccess({
     ...payload,
     collaborator_id: id,
     create_system_access: payload?.create_system_access !== false,
@@ -312,7 +369,6 @@ export async function reconcileCollaboratorTenantLinks(tenantId, collaborators =
     );
     if (!tenantUser?.id) continue;
     if (tenantUser.collaborator_id === collaborator.id) continue;
-    if (tenantUser.collaborator_id && tenantUser.collaborator_id !== collaborator.id) continue;
 
     try {
       await linkCollaboratorTenantAccess({
@@ -347,10 +403,35 @@ export async function createTenantUserAccess(payload) {
 }
 
 export async function resendCollaboratorInvite(payload) {
-  return postJson('/internal/app/invitations/resend', payload);
+  const tenantId = payload?.tenant_id;
+  const email = payload?.email;
+  const collaboratorId = resolveCollaboratorIdForAccessRequest({
+    tenantUser: payload?.tenantUser,
+    collaboratorId: payload?.collaborator_id,
+  });
+  const identityId = await resolveIdentityIdForAccess({ tenantId, collaboratorId, email });
+  if (identityId) {
+    const json = await resendIdentityInvite(identityId, { tenant_id: tenantId });
+    return mapIdentityProvisionResponse(json);
+  }
+  const json = await postJson('/internal/app/invitations/resend', payload);
+  return mapIdentityProvisionResponse(json);
 }
 
 export async function requestCollaboratorPasswordReset(payload) {
+  const tenantId = payload?.tenant_id;
+  const email = payload?.email;
+  const collaboratorId = resolveCollaboratorIdForAccessRequest({
+    collaboratorId: payload?.collaborator_id,
+  });
+  const identityId = await resolveIdentityIdForAccess({ tenantId, collaboratorId, email });
+  if (identityId) {
+    const json = await resetIdentityPassword(identityId, { tenant_id: tenantId });
+    return {
+      ...json,
+      message: json?.message || `Link de redefinição enviado para: ${email}`,
+    };
+  }
   return postJson('/internal/app/users/password-reset', payload);
 }
 

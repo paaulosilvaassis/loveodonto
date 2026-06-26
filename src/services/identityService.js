@@ -22,7 +22,7 @@ async function identityFetch(path, { method = 'GET', body, tenantId } = {}) {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch (err) {
-    throw new Error(formatAdminApiNetworkError(err?.message));
+    throw new Error(formatAdminApiNetworkError());
   }
 
   const raw = await response.text();

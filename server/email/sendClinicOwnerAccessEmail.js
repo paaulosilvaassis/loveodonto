@@ -1,6 +1,6 @@
 import { getEmailConfig, getInviteRedirectTo } from './emailConfig.js';
 import { emailAudit } from './emailAuditLog.js';
-import { findAuthUserByEmail, isUserAlreadyRegisteredError } from './accessEmailHelpers.js';
+import { findAuthUserByEmail, isUserAlreadyRegisteredError, reinviteStaleAuthUser } from './accessEmailHelpers.js';
 import { generatePasswordSetupLink, sendUserInviteEmail } from './sendUserInviteEmail.js';
 
 function normalizeEmail(value) {
@@ -20,31 +20,6 @@ async function tryInviteUserByEmail(supabase, email, { redirectTo, metadata }) {
     error: error?.message || null,
   });
   return { data, error };
-}
-
-/**
- * Usuários criados via createUser (sem convite) bloqueiam inviteUserByEmail.
- * Se nunca fizeram login, remove e reenvia convite para disparar e-mail do Supabase Auth.
- */
-async function reinviteStaleAuthUser(supabase, email) {
-  const existing = await findAuthUserByEmail(supabase, email);
-  if (!existing?.id) return null;
-  if (existing.last_sign_in_at) {
-    emailAudit('reinvite ignorado — usuário já autenticou', { email, userId: existing.id });
-    return existing;
-  }
-  if (existing.invited_at) {
-    emailAudit('reinvite ignorado — convite já registrado', { email, userId: existing.id });
-    return existing;
-  }
-
-  emailAudit('reinvite — removendo usuário createUser sem login', { email, userId: existing.id });
-  const { error: deleteError } = await supabase.auth.admin.deleteUser(existing.id);
-  if (deleteError) {
-    emailAudit('reinvite falhou ao remover usuário', { email, error: deleteError.message });
-    throw deleteError;
-  }
-  return null;
 }
 
 /**

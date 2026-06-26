@@ -11,6 +11,7 @@ import {
 import {
   provisionCollaboratorSystemAccess,
   resendCollaboratorInvite,
+  resolveCollaboratorIdForAccessRequest,
   setCollaboratorSystemAccess,
   removeTenantUserAccess,
 } from '../../services/collaboratorAccessProvisionService.js';
@@ -117,7 +118,7 @@ export default function CollaboratorRowActionsMenu({
     const result = await resendCollaboratorInvite({
       tenant_id: tenantId,
       email,
-      collaborator_id: collaborator?.id || tenantUser?.collaborator_id || null,
+      collaborator_id: resolveCollaboratorIdForAccessRequest({ tenantUser, collaboratorId: collaborator?.id }),
     });
     notifyInviteDeliveryResult(result?.invite_delivery, {
       onCopyLink: copyInviteLink,

@@ -10,7 +10,7 @@ import {
   ROLE_LABELS,
   ROLE_ADMIN,
 } from '../../services/accessService.js';
-import { saveCollaboratorAccessBundleWithRepair, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite } from '../../services/collaboratorAccessProvisionService.js';
+import { saveCollaboratorAccessBundleWithRepair, provisionCollaboratorAccessWithRepair, resendCollaboratorInvite, resolveCollaboratorIdForAccessRequest } from '../../services/collaboratorAccessProvisionService.js';
 import { tenantUserNeedsAuthRepair } from '../../utils/collaboratorAccessPanel.js';
 import { MODULES_SPEC, ACTION_KEYS, ACTION_LABELS } from '../../permissions/catalog.js';
 import { Field } from '../Field.jsx';
@@ -405,7 +405,7 @@ export default function AccessTab({
         await resendCollaboratorInvite({
           tenant_id: saasTenantId,
           email: inviteTargetEmail,
-          collaborator_id: collaboratorId || tenantUser?.collaborator_id || null,
+          collaborator_id: resolveCollaboratorIdForAccessRequest({ tenantUser, collaboratorId }),
         });
         onAccessChanged?.();
         onSaveSuccess?.({ inviteSent: true });

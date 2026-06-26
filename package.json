@@ -7,6 +7,7 @@
     "env:check": "node ./scripts/preflight-local.mjs --mode stack",
     "smoke": "node ./scripts/smoke-local.mjs",
     "check:admin-api": "node ./scripts/check-admin-api.mjs",
+    "audit:identity-api": "node ./scripts/audit-identity-production.mjs",
     "preflight:app": "node ./scripts/preflight-local.mjs --mode app",
     "preflight:api": "node ./scripts/preflight-local.mjs --mode api",
     "preflight:console": "node ./scripts/preflight-local.mjs --mode console-vite",

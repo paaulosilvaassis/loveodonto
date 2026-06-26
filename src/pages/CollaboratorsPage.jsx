@@ -331,33 +331,28 @@ export default function CollaboratorsPage() {
   );
 
   useEffect(() => {
-    if (!selectedId || !user || !selectedTenantAccess?.user_id) return;
-    reconcileCollaboratorAccessState({
-      collaboratorId: selectedId,
-      collaborator: selectedCollaboratorRow,
-      tenantUser: selectedTenantAccess,
-      tenantId: user?.tenantId || '',
-      currentUser: user,
-    }).then((result) => {
-      if (result.access?.userId) {
-        refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
-      }
-    }).catch(() => {});
-  }, [selectedId, selectedTenantAccess, selectedCollaboratorRow, user, refreshCollaboratorDraft]);
-
-  useEffect(() => {
-    if (activeTab !== 'acesso' || !selectedId || !user?.tenantId) return;
+    if (!selectedId || !user?.tenantId || !selectedTenantAccess?.user_id) return;
+    let active = true;
     reconcileCollaboratorAccessState({
       collaboratorId: selectedId,
       collaborator: selectedCollaboratorRow,
       tenantUser: selectedTenantAccess,
       tenantId: user.tenantId,
       currentUser: user,
-    }).then(() => {
+    }).then((result) => {
+      if (!active || !result.recovered) return;
       refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
-      refreshTenantAccess();
     }).catch(() => {});
-  }, [activeTab, selectedId, user, selectedCollaboratorRow, selectedTenantAccess, refreshCollaboratorDraft, refreshTenantAccess]);
+    return () => { active = false; };
+  }, [
+    selectedId,
+    selectedTenantAccess?.id,
+    selectedTenantAccess?.user_id,
+    user?.tenantId,
+    selectedCollaboratorRow?.id,
+    selectedCollaboratorRow?.email,
+    refreshCollaboratorDraft,
+  ]);
 
   const formatDatePtBr = (value) => {
     if (!value) return '—';
@@ -686,6 +681,7 @@ export default function CollaboratorsPage() {
       setEditingSection('');
       setAccessDirty(false);
     }
+    if (next === 'acesso') setError('');
     setActiveTab(next);
   };
 
@@ -882,7 +878,53 @@ export default function CollaboratorsPage() {
     }
   };
 
-  const accessSectionProps = {
+  const handleAccessSaveSuccess = useCallback(({ inviteSent, passwordResetSent, message } = {}) => {
+    setError('');
+    setAccessDirty(false);
+    const effectiveUserId = draft.access?.userId || selectedTenantAccess?.user_id;
+    if (effectiveUserId) {
+      const access = getUserAccess(effectiveUserId);
+      if (access) {
+        updateCollaboratorAccess(user, selectedId, { ...draft.access, userId: effectiveUserId, role: access.role });
+      }
+    }
+    refreshCollaboratorDraft();
+    refreshTenantAccess();
+    if (passwordResetSent) {
+      setSuccess(message || `Link de redefinição enviado para: ${selectedTenantAccess?.email || ''}`);
+    } else {
+      setSuccess(inviteSent ? 'Convite enviado.' : 'Acesso salvo.');
+    }
+  }, [
+    draft.access,
+    selectedId,
+    selectedTenantAccess?.user_id,
+    selectedTenantAccess?.email,
+    user,
+    refreshCollaboratorDraft,
+    refreshTenantAccess,
+  ]);
+
+  const handleAccessSaveError = useCallback((msg) => setError(msg), []);
+
+  const handleAccessRepairNotice = useCallback((msg) => {
+    setError('');
+    setSuccess(msg);
+  }, []);
+
+  const handleAccessChanged = useCallback(() => {
+    refreshTenantAccess();
+    setSuccess('Acesso atualizado.');
+  }, [refreshTenantAccess]);
+
+  const handleAccessRecovered = useCallback(() => {
+    refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
+    refreshTenantAccess();
+  }, [selectedId, refreshCollaboratorDraft, refreshTenantAccess]);
+
+  const handleAccessGoToProfile = useCallback(() => handleEditSection('contatos'), [handleEditSection]);
+
+  const accessSectionProps = useMemo(() => ({
     collaboratorId: selectedCollaboratorRow?.id,
     targetUserId: draft.access?.userId || draft.profile?.user_id || selectedTenantAccess?.user_id || null,
     tenantUser: selectedTenantAccess,
@@ -893,35 +935,29 @@ export default function CollaboratorsPage() {
     canEdit: canEditAcessos,
     accessDisplayStatus: resolveCollaboratorAccessDisplayStatus(selectedTenantAccess),
     onToggleSystemAccess: selectedTenantAccess?.id ? handleToggleSystemAccess : undefined,
-    onGoToProfile: () => handleEditSection('contatos'),
-    onSaveSuccess: ({ inviteSent, passwordResetSent, message } = {}) => {
-      setError('');
-      setAccessDirty(false);
-      const effectiveUserId = draft.access?.userId || selectedTenantAccess?.user_id;
-      if (effectiveUserId) {
-        const access = getUserAccess(effectiveUserId);
-        if (access) {
-          updateCollaboratorAccess(user, selectedId, { ...draft.access, userId: effectiveUserId, role: access.role });
-        }
-      }
-      refreshCollaboratorDraft();
-      refreshTenantAccess();
-      if (passwordResetSent) {
-        setSuccess(message || `Link de redefinição enviado para: ${selectedTenantAccess?.email || ''}`);
-      } else {
-        setSuccess(inviteSent ? 'Convite enviado.' : 'Acesso salvo.');
-      }
-    },
-    onSaveError: (msg) => setError(msg),
-    onRepairNotice: (msg) => { setError(''); setSuccess(msg); },
-    onAccessChanged: () => { refreshTenantAccess(); setSuccess('Acesso atualizado.'); },
+    onGoToProfile: handleAccessGoToProfile,
+    onSaveSuccess: handleAccessSaveSuccess,
+    onSaveError: handleAccessSaveError,
+    onRepairNotice: handleAccessRepairNotice,
+    onAccessChanged: handleAccessChanged,
     onDirtyChange: setAccessDirty,
-    onRecovered: () => {
-      refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
-      refreshTenantAccess();
-    },
+    onRecovered: handleAccessRecovered,
     onIdentityChange: setSelectedIdentity,
-  };
+  }), [
+    selectedCollaboratorRow,
+    draft.access,
+    draft.profile,
+    selectedTenantAccess,
+    user,
+    canEditAcessos,
+    handleToggleSystemAccess,
+    handleAccessGoToProfile,
+    handleAccessSaveSuccess,
+    handleAccessSaveError,
+    handleAccessRepairNotice,
+    handleAccessChanged,
+    handleAccessRecovered,
+  ]);
 
   const permissionsHubProps = {
     ...accessSectionProps,

@@ -8,7 +8,7 @@ export const DEV_ADMIN_API_ORIGIN = 'http://127.0.0.1:3001';
 
 /** Mensagem padrão quando a Admin API local (:3001) não está acessível. */
 export const DEV_BACKEND_NOT_RUNNING_MSG =
-  'Backend local não está rodando. Abra outro terminal e rode cd server && npm start.';
+  'Admin API local indisponível (porta 3001). Na raiz do projeto, rode npm run dev para subir o app e o backend juntos.';
 
 export const PROD_BACKEND_MISCONFIGURED_MSG =
   'Backend SaaS não configurado em produção. Configure VITE_PLATFORM_API_BASE_URL com a URL pública do backend.';
@@ -168,10 +168,7 @@ export function formatAdminApiServerError(status) {
   if (status === 502 || status === 503 || status === 504) {
     return DEV_BACKEND_NOT_RUNNING_MSG;
   }
-  return (
-    `O backend SaaS (porta 3001) não respondeu (HTTP ${status}). `
-    + DEV_BACKEND_NOT_RUNNING_MSG
-  );
+  return `O backend SaaS não respondeu (HTTP ${status}). ${DEV_BACKEND_NOT_RUNNING_MSG}`;
 }
 
 /** Indica se o erro em dev é falha de conexão com a Admin API local. */
