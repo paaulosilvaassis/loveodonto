@@ -18,7 +18,7 @@ import { getPasswordResetRedirectTo } from './email/emailConfig.js';
 import { logAccessEmailAudit } from './email/accessEmailAudit.js';
 import { createIdentityService } from './identity/IdentityService.js';
 import { isMissingIdentitiesTableError } from './identity/identityRepository.js';
-import { registerIdentityRoutes } from './identity/routes.js';
+import identityRoutes from './identity/routes.js';
 import { hasSupabaseAuthPublicClient } from './email/supabasePublicClient.js';
 import {
   LIABILITY_TERMS_VERSION,
@@ -84,22 +84,14 @@ app.use(express.json());
 
 /** Health check leve (sem Supabase) — usado pelo script `npm run console:stack` para saber quando a API está escutando. */
 app.get('/health', (_req, res) => {
-  const emailCfg = getEmailConfig();
   res.status(200).json({
     ok: true,
     service: 'saas-admin-api',
     version: '2026-06-26-identity-unified',
-    build: {
-      identityModule: true,
-      identityRoutes: true,
-      commitHint: 'feat: identity management service + unified invite flow',
-    },
+    build: { identityModule: true },
     features: {
-      resendAccess: true,
-      billingEvaluate: true,
       identityService: true,
-      supabaseAuthPublicClient: hasSupabaseAuthPublicClient(),
-      transactionalEmail: emailCfg.isConfigured,
+      supabaseAuthPublicClient: Boolean(process.env.SUPABASE_ANON_KEY),
     },
   });
 });
@@ -3797,14 +3789,14 @@ identityService = createIdentityService({
   setCollaboratorAccessState,
 });
 
-registerIdentityRoutes(app, {
+app.use('/internal/app', identityRoutes({
   identityService,
   requireAppUser,
   getTenantAdminActorOrThrow,
   resolveClientIp,
   normalizeText,
   normalizeEmail,
-});
+}));
 
 /** Rotas internas desconhecidas — sempre JSON (evita HTML no frontend). */
 app.use('/internal/app', (req, res) => {

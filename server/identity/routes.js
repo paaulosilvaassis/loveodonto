@@ -1,3 +1,4 @@
+import { Router } from 'express';
 import { DISABLE_REASONS, REACTIVATION_REASONS } from './constants.js';
 import { isMissingIdentitiesTableError } from './identityRepository.js';
 
@@ -6,7 +7,11 @@ function jsonError(res, err, fallback = 'Não foi possível concluir a operaçã
   return res.status(400).json({ ok: false, message, error: message });
 }
 
-export function registerIdentityRoutes(app, {
+/**
+ * Router montado em app.use('/internal/app', identityRoutes(deps))
+ * Paths relativos: /identities, /identity-health, etc.
+ */
+export default function identityRoutes({
   identityService,
   requireAppUser,
   getTenantAdminActorOrThrow,
@@ -14,7 +19,9 @@ export function registerIdentityRoutes(app, {
   normalizeText,
   normalizeEmail,
 }) {
-  app.get('/internal/app/identities', requireAppUser, async (req, res) => {
+  const router = Router();
+
+  router.get('/identities', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.query?.tenant_id);
       const actor = await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -37,7 +44,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.get('/internal/app/identity-health', requireAppUser, async (req, res) => {
+  router.get('/identity-health', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.query?.tenant_id);
       const actor = await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -48,7 +55,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.post('/internal/app/identity-health/evaluate', requireAppUser, async (req, res) => {
+  router.post('/identity-health/evaluate', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.body?.tenant_id);
       const actor = await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -62,7 +69,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.get('/internal/app/identities/:id', requireAppUser, async (req, res) => {
+  router.get('/identities/:id', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.query?.tenant_id);
       const actor = await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -78,7 +85,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.get('/internal/app/identities/:id/events', requireAppUser, async (req, res) => {
+  router.get('/identities/:id/events', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.query?.tenant_id);
       const actor = await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -93,7 +100,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.post('/internal/app/identities/provision', requireAppUser, async (req, res) => {
+  router.post('/identities/provision', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.body?.tenant_id);
       await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -114,7 +121,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.post('/internal/app/identities/:id/repair', requireAppUser, async (req, res) => {
+  router.post('/identities/:id/repair', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.body?.tenant_id);
       await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -135,7 +142,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.post('/internal/app/identities/:id/resend-invite', requireAppUser, async (req, res) => {
+  router.post('/identities/:id/resend-invite', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.body?.tenant_id);
       await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -156,7 +163,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.post('/internal/app/identities/:id/reset-password', requireAppUser, async (req, res) => {
+  router.post('/identities/:id/reset-password', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.body?.tenant_id);
       await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -176,7 +183,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.post('/internal/app/identities/:id/deactivate', requireAppUser, async (req, res) => {
+  router.post('/identities/:id/deactivate', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.body?.tenant_id);
       await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -196,7 +203,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.post('/internal/app/identities/:id/reactivate', requireAppUser, async (req, res) => {
+  router.post('/identities/:id/reactivate', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.body?.tenant_id);
       await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -213,7 +220,7 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.post('/internal/app/identities/:id/revoke-sessions', requireAppUser, async (req, res) => {
+  router.post('/identities/:id/revoke-sessions', requireAppUser, async (req, res) => {
     try {
       const tenantId = normalizeText(req.body?.tenant_id);
       await getTenantAdminActorOrThrow(req.appAuthUser.id, tenantId);
@@ -229,11 +236,18 @@ export function registerIdentityRoutes(app, {
     }
   });
 
-  app.get('/internal/app/identity/reasons', requireAppUser, (_req, res) => {
+  router.get('/identity/reasons', requireAppUser, (_req, res) => {
     res.json({
       ok: true,
       disable_reasons: DISABLE_REASONS,
       reactivation_reasons: REACTIVATION_REASONS,
     });
   });
+
+  return router;
+}
+
+/** @deprecated Use default export identityRoutes() + app.use('/internal/app', router) */
+export function registerIdentityRoutes(app, deps) {
+  app.use('/internal/app', identityRoutes(deps));
 }
