@@ -40,6 +40,16 @@ import {
 } from './onboardingTerms.js';
 import { createPlatformBillingService } from './platformBillingService.js';
 import { formatBillingOverviewResponse } from './platformRevenueMetrics.js';
+import {
+  assertAuthUserIdForTenantWrite,
+  IdentityProvisionError,
+  isIdentityProvisionError,
+} from './identity/identityProvisionErrors.js';
+import { identityLog } from './identity/identityProvisionLog.js';
+import {
+  lookupAuthUserByEmail,
+  requireAuthUserId,
+} from './identity/identityAuthResolver.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -488,6 +498,7 @@ async function sendCollaboratorInvite({
   collaboratorName,
   userName,
   profileRole,
+  mode = 'resend',
 }) {
   return dispatchCollaboratorInvite(supabase, {
     email,
@@ -497,7 +508,7 @@ async function sendCollaboratorInvite({
     collaboratorName,
     userName,
     profileRole: profileRole || role,
-  });
+  }, { mode });
 }
 
 async function upsertInvitationRecord({
@@ -599,8 +610,8 @@ async function createAuthUserAndTenantLink({
   if (authCreateError || !authCreateData?.user?.id) {
     throw authCreateError || new Error('Falha ao criar usuário no Supabase Auth.');
   }
-  const authUserId = authCreateData.user.id;
-  console.log('[ProvisionUser] auth user criado', { authUserId, email, tenantId });
+  const authUserId = assertAuthUserIdForTenantWrite(authCreateData.user.id, { email, tenantId });
+  identityLog('user_id encontrado', { userId: authUserId, source: 'createUser' });
 
   const tenantUserPayload = {
     tenant_id: tenantId,
@@ -755,6 +766,15 @@ async function appendAccessAuditToAuthUser(authUserId, auditEntry) {
 }
 
 function formatProvisionErrorResponse(err, fallbackMessage = 'Não foi possível concluir a operação de acesso. Tente novamente.') {
+  if (isIdentityProvisionError(err)) {
+    return {
+      ok: false,
+      code: err.code,
+      message: err.message,
+      error: err.message,
+      setup_link: err.details?.setupLink || err.setupLink || null,
+    };
+  }
   const raw = normalizeDatabaseError(err, fallbackMessage);
   const lower = String(raw || '').toLowerCase();
   const isStaleAuth = lower.includes('sem conta no auth')
@@ -826,11 +846,11 @@ async function clearStaleTenantUserAuthReference(tenantId, email) {
   const valid = await getValidAuthUserId(existing.user_id);
   if (valid) return false;
 
-  const { error: updErr } = await supabase
-    .from('tenant_users')
-    .update({ user_id: null, invitation_status: 'none' })
-    .eq('id', existing.id);
-  if (updErr) throw updErr;
+  identityLog('user_id órfão detectado — será reparado no próximo upsert', {
+    tenantUserId: existing.id,
+    orphanedUserId: existing.user_id,
+  });
+  // PROIBIDO gravar user_id NULL — o upsert subsequente corrige com authUserId válido.
   return true;
 }
 
@@ -895,17 +915,17 @@ async function upsertTenantUserAccess({
     .maybeSingle();
   if (existingTenantUserError) throw existingTenantUserError;
 
-  let authUserId = await resolveAuthUserIdForTenantLink({
+  const resolvedFromLink = await resolveAuthUserIdForTenantLink({
     normalizedEmail,
     explicitAuthUserId,
     existingTenantUser,
   });
-  if (!authUserId) {
-    throw new Error(
-      'Não foi possível vincular o e-mail sem conta no Auth. '
-      + 'Envie o convite primeiro ou crie o usuário com senha.',
-    );
-  }
+  const authUserId = assertAuthUserIdForTenantWrite(resolvedFromLink, {
+    tenantId,
+    email: normalizedEmail,
+    collaboratorId,
+    existingTenantUserId: existingTenantUser?.id || null,
+  });
 
   const payload = {
     tenant_id: tenantId,
@@ -922,11 +942,15 @@ async function upsertTenantUserAccess({
   };
 
   const executeUpsert = async (nextPayload, includeAccessOnSelect, includeCollaboratorOnSelect = true) => {
+    assertAuthUserIdForTenantWrite(nextPayload.user_id, { tenantId, email: normalizedEmail });
     let query;
     if (existingTenantUser?.id) {
       query = supabase.from('tenant_users').update(nextPayload).eq('id', existingTenantUser.id);
     } else {
-      query = supabase.from('tenant_users').insert(nextPayload);
+      query = supabase.from('tenant_users').upsert(nextPayload, {
+        onConflict: 'tenant_id,email',
+        ignoreDuplicates: false,
+      });
     }
     const { data, error } = await query
       .select(
@@ -936,6 +960,17 @@ async function upsertTenantUserAccess({
       )
       .single();
     if (error) throw error;
+    assertAuthUserIdForTenantWrite(data?.user_id, {
+      tenantId,
+      email: normalizedEmail,
+      tenantUserId: data?.id,
+      phase: 'after_upsert',
+    });
+    identityLog('tenant_user atualizado', {
+      tenantUserId: data.id,
+      userId: data.user_id,
+      operation: existingTenantUser?.id ? 'update' : 'insert',
+    });
     return data;
   };
 
@@ -1163,17 +1198,19 @@ async function resolveAuthUserForInvite({
   role,
   collaboratorId,
   collaboratorFullName,
+  requestedAction = 'provision',
 }) {
-  let authUser = await findAuthUserByEmail(normalizedEmail);
+  let authUser = await lookupAuthUserByEmail(supabase, normalizedEmail);
   const authUserExisted = Boolean(authUser?.id);
   let inviteDelivery = null;
+  const inviteMode = requestedAction === 'resend' || authUserExisted ? 'resend' : 'invite';
 
   if (sendInvite) {
-    console.log('[COLLAB_ACCESS] sending invite', {
-      email: maskEmail(normalizedEmail),
+    identityLog('iniciando envio de acesso', {
       tenantId,
       collaboratorId,
       authUserExisted,
+      mode: inviteMode,
     });
     inviteDelivery = await dispatchCollaboratorInvite(supabase, {
       email: normalizedEmail,
@@ -1183,21 +1220,12 @@ async function resolveAuthUserForInvite({
       collaboratorName: collaboratorFullName,
       userName: collaboratorFullName || normalizedEmail,
       profileRole: role,
-    });
-    if (inviteDelivery?.user?.id) {
-      authUser = inviteDelivery.user;
-    } else if (!authUser?.id) {
-      authUser = await findAuthUserByEmail(normalizedEmail);
-    }
-  }
+    }, { mode: inviteMode });
 
-  if (!authUser?.id) {
-    if (sendInvite) {
-      throw new Error(
-        'Não foi possível criar a conta de acesso para este e-mail. '
-        + 'Verifique o SMTP do Supabase Auth ou configure EMAIL_API_KEY no backend.',
-      );
-    }
+    authUser = await requireAuthUserId(supabase, normalizedEmail, {
+      explicitUser: inviteDelivery?.user || authUser,
+    });
+  } else if (!authUser?.id) {
     authUser = await createAuthUserForCollaboratorInvite({
       normalizedEmail,
       tenantId,
@@ -1205,13 +1233,9 @@ async function resolveAuthUserForInvite({
       collaboratorId,
       collaboratorFullName,
     });
-  }
-
-  if (!authUser?.id) {
-    throw new Error(
-      'Não foi possível criar a conta no Auth para este e-mail. '
-      + 'Se você apagou o usuário manualmente no Supabase, tente salvar o acesso novamente.',
-    );
+    authUser = await requireAuthUserId(supabase, normalizedEmail, { explicitUser: authUser });
+  } else {
+    identityLog('user_id encontrado', { userId: authUser.id, sendInvite: false });
   }
 
   return { authUser, inviteDelivery, authUserExisted };
@@ -1341,10 +1365,15 @@ async function provisionCollaboratorAccess({
       role: normalizedRole,
       collaboratorId,
       collaboratorFullName,
+      requestedAction,
     });
 
     audit.authUserFound = Boolean(authBeforeInvite?.id) || Boolean(authUserExisted);
-    audit.authUserId = authUser?.id || authBeforeInvite?.id || null;
+    audit.authUserId = assertAuthUserIdForTenantWrite(authUser?.id, {
+      email: normalizedEmail,
+      tenantId: resolvedTenantId,
+      phase: 'before_tenant_upsert',
+    });
 
     const tenantUser = await upsertTenantUserAccess({
       tenantId: resolvedTenantId,
@@ -1472,7 +1501,7 @@ async function createTenantUserFromApp({
     throw duplicateErr;
   }
 
-  let authUser = await findAuthUserByEmail(normalizedEmail);
+  let authUser = await lookupAuthUserByEmail(supabase, normalizedEmail);
   if (!authUser?.id) {
     const { data: authCreateData, error: authCreateError } = await supabase.auth.admin.createUser({
       email: normalizedEmail,
@@ -1481,10 +1510,16 @@ async function createTenantUserFromApp({
       user_metadata: { full_name: normalizedFullName },
       app_metadata: { tenant_id: resolvedTenantId, role: normalizedRole },
     });
-    if (authCreateError || !authCreateData?.user?.id) {
-      throw authCreateError || new Error('Falha ao criar usuário no Supabase Auth.');
+    if (authCreateError) {
+      if (isAuthUserAlreadyRegisteredError(authCreateError)) {
+        authUser = await requireAuthUserId(supabase, normalizedEmail, { afterInviteError: authCreateError });
+      } else {
+        throw authCreateError;
+      }
+    } else {
+      authUser = authCreateData?.user || null;
+      authUser = await requireAuthUserId(supabase, normalizedEmail, { explicitUser: authUser });
     }
-    authUser = authCreateData.user;
   }
 
   const tenantUser = await upsertTenantUserAccess({
@@ -1495,7 +1530,7 @@ async function createTenantUserFromApp({
     role: normalizedRole,
     hasSystemAccess: isActive,
     invitationStatus: sendInvite ? 'pending' : 'none',
-    authUserId: authUser.id,
+    authUserId: assertAuthUserIdForTenantWrite(authUser.id, { email: normalizedEmail, tenantId: resolvedTenantId }),
   });
 
   if (!tenantUser?.id) throw new Error('Falha ao criar vínculo do usuário no tenant.');
@@ -2036,7 +2071,12 @@ app.post('/internal/app/collaborators/access-bundle', requireAppUser, async (req
     }
 
     const tuRow = resolvedTuRow;
-    const targetUserId = validTargetUserId;
+    const targetUserId = assertAuthUserIdForTenantWrite(validTargetUserId, {
+      email,
+      tenantId,
+      tenantUserId: tuRow.id,
+      phase: 'access_bundle',
+    });
 
     const baseTenantUpdate = {
       email,
@@ -3602,11 +3642,22 @@ async function sendPasswordResetFlow({
     authUserId = recreated?.id || null;
     authRecreated = Boolean(authUserId);
     if (authUserId && authUserId !== tenantUser.user_id) {
-      await supabase.from('tenant_users').update({ user_id: authUserId }).eq('id', tenantUser.id);
+      const safeUserId = assertAuthUserIdForTenantWrite(authUserId, {
+        email: targetEmail,
+        tenantId,
+        tenantUserId: tenantUser.id,
+        phase: 'password_reset_relink',
+      });
+      await supabase.from('tenant_users').update({ user_id: safeUserId }).eq('id', tenantUser.id);
+      identityLog('tenant_user atualizado', { tenantUserId: tenantUser.id, userId: safeUserId });
     }
   }
 
-  if (!authUserId) throw new Error('Não foi possível enviar o e-mail. Tente novamente.');
+  assertAuthUserIdForTenantWrite(authUserId, {
+    email: targetEmail,
+    tenantId,
+    phase: 'password_reset',
+  });
 
   if (authRecreated) {
     const role = normalizeRoleValue(tenantUser.role || tenantUser.role_slug || 'atendimento');
