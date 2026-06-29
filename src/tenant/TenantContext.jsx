@@ -11,7 +11,7 @@ import { emitStabilityLog } from '../services/stabilityLogService.js';
 import { getTenantSnapshotTimeoutMessage } from '../config/adminApiBase.js';
 import { backfillCollaboratorTenantIds, reconcileSaasTeamRoster } from '../services/tenantTeamRosterSync.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
-import { syncTeamRosterPermissionStates } from '../services/collaboratorPermissionPersistence.js';
+import { syncTeamRosterPermissionStates, syncCurrentUserPermissionsFromContext } from '../services/collaboratorPermissionPersistence.js';
 import { getPermissionsCatalog } from '../services/accessService.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
 import { syncTenantClinicProfileToLocalDb } from '../services/tenantClinicProfileSync.js';
@@ -112,11 +112,11 @@ export function TenantProvider({ children }) {
           reconcileSaasTeamRoster(context?.teamRoster, user.tenantId);
           const catalogIds = getPermissionsCatalog().map((p) => p.id);
           syncTeamRosterPermissionStates(context?.teamRoster, user.tenantId, catalogIds);
+          syncCurrentUserPermissionsFromContext(context?.currentUser, user, catalogIds);
           backfillCollaboratorTenantIds(user.tenantId);
           ensureSaasUserInLocalDb({
             ...user,
             collaboratorId: context?.currentUser?.collaboratorId || user.collaboratorId,
-            permissionOverrides: context?.currentUser?.permissionOverrides || user.permissionOverrides,
           });
         } catch (syncErr) {
           if (import.meta.env?.DEV) {

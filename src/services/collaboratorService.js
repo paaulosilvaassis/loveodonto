@@ -909,7 +909,11 @@ export const updateCollaboratorFinance = (user, collaboratorId, payload) => {
 
 export const getProfessionalOptions = () => {
   const db = loadDb();
-  const tenantFilter = normalizeTenantId(db.clinicProfile?.tenant_id);
+  const tenantFilter = normalizeTenantId(
+    db.clinicProfile?.tenant_id
+    || db.tenants?.[0]?.id
+    || (db.memberships || []).find((m) => m.status === 'active')?.tenant_id,
+  );
   const collaborators = (db.collaborators ?? [])
     .filter((item) => item.status === 'ativo')
     .filter((item) => {

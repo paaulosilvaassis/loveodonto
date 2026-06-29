@@ -2076,9 +2076,10 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
     const authMeta = req.appAuthUser?.app_metadata && typeof req.appAuthUser.app_metadata === 'object'
       ? req.appAuthUser.app_metadata
       : {};
-    const permissionOverrides = authMeta.permission_overrides && typeof authMeta.permission_overrides === 'object'
-      ? authMeta.permission_overrides
-      : {};
+    const currentUserAuthMeta = await getAuthUserMeta(authUserId);
+    const permissionFields = extractPermissionFieldsFromAppMetadata(
+      currentUserAuthMeta?.app_metadata || authMeta,
+    );
 
     res.json({
       tenant,
@@ -2103,7 +2104,9 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         role: tenantUser.role || tenantUser.role_slug || 'atendimento',
         isActive: tenantUser.is_active ?? true,
         collaboratorId: tenantUser.collaborator_id || null,
-        permissionOverrides,
+        permissionOverrides: permissionFields.permission_overrides,
+        has_custom_permissions: permissionFields.has_custom_permissions,
+        custom_permissions: permissionFields.custom_permissions,
       },
       teamRoster,
     });
@@ -2117,6 +2120,77 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         : '';
     res.status(400).json({
       error: `${raw}${hint}`,
+    });
+  }
+});
+
+/**
+ * Diagnóstico de sincronização SaaS (usuário autenticado).
+ * GET /internal/app/debug-user-context?tenant_id=...&target_user_id=... (opcional)
+ */
+app.get('/internal/app/debug-user-context', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.query?.tenant_id);
+    const targetUserIdInput = normalizeText(req.query?.target_user_id);
+    const authUserId = targetUserIdInput || req.appAuthUser.id;
+
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+
+    const { data: tenantRow } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
+    const clinicProfile = await resolveClinicProfileForTenant(supabase, tenantId, tenantRow || { id: tenantId });
+
+    const { data: tuRow } = await supabase
+      .from('tenant_users')
+      .select('id, tenant_id, user_id, collaborator_id, full_name, email, role, role_slug, is_active, status, has_system_access')
+      .eq('tenant_id', tenantId)
+      .eq('user_id', authUserId)
+      .maybeSingle();
+
+    const authMeta = await getAuthUserMeta(authUserId);
+    const permissionFields = extractPermissionFieldsFromAppMetadata(authMeta?.app_metadata || {});
+
+    let collaborator = null;
+    const collabId = tuRow?.collaborator_id || null;
+
+    const permissionsCount = permissionFields.has_custom_permissions && permissionFields.custom_permissions
+      ? Object.values(permissionFields.custom_permissions).filter(Boolean).length
+      : Object.values(permissionFields.permission_overrides || {}).filter((v) => v === true).length;
+
+    const roleSlug = normalizeRoleValue(tuRow?.role || tuRow?.role_slug || 'atendimento');
+    const agendaPermKeys = ['agenda'];
+    const agendaEnabled = permissionFields.has_custom_permissions && permissionFields.custom_permissions
+      ? agendaPermKeys.some((mod) => Object.entries(permissionFields.custom_permissions)
+        .some(([key, val]) => key.includes(mod) && val === true))
+      : ['dentista', 'profissional', 'atendimento', 'recepcao', 'gerente', 'administrativo'].includes(roleSlug);
+
+    return res.status(200).json({
+      user_id: authUserId,
+      email: tuRow?.email || req.appAuthUser.email || '',
+      tenant_id: tenantId,
+      tenant_name: tenantRow?.trade_name || tenantRow?.name || '',
+      role_slug: roleSlug,
+      tenant_user_status: tuRow?.status || (tuRow?.is_active ? 'active' : 'inactive') || 'unknown',
+      collaborator_id: collabId,
+      collaborator_name: tuRow?.full_name || '',
+      collaborator_status: tuRow?.is_active === false ? 'inativo' : 'ativo',
+      access_id: tuRow?.id || null,
+      access_status: tuRow?.has_system_access !== false ? 'active' : 'inactive',
+      has_custom_permissions: permissionFields.has_custom_permissions,
+      permissions_count: permissionsCount,
+      agenda_enabled: agendaEnabled,
+      logo_url: clinicProfile?.logo_url || null,
+      avatar_url: authMeta?.user_metadata?.avatar_url || null,
+      source: 'debug-user-context',
+      permission_overrides_keys: Object.keys(permissionFields.permission_overrides || {}).length,
+      custom_permissions_keys: permissionFields.custom_permissions
+        ? Object.keys(permissionFields.custom_permissions).length
+        : 0,
+    });
+  } catch (err) {
+    console.error('[debug-user-context]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha no diagnóstico de contexto do usuário.'),
     });
   }
 });

@@ -83,6 +83,22 @@ export function ensureSaasUserInLocalDb(user) {
   const permissionOverrides = user.permissionOverrides && typeof user.permissionOverrides === 'object'
     ? user.permissionOverrides
     : {};
+  const existingDbUser = (loadDb().users || []).find((u) => u.id === authUserId);
+  const preserveCustomFromDb = existingDbUser?.has_custom_permissions === true
+    && existingDbUser?.custom_permissions
+    && typeof existingDbUser.custom_permissions === 'object'
+    && Object.keys(permissionOverrides).length === 0
+    && !user.has_custom_permissions;
+  const effectiveOverrides = preserveCustomFromDb
+    ? (existingDbUser.permissionOverrides || {})
+    : permissionOverrides;
+  const effectiveHasCustom = preserveCustomFromDb
+    ? true
+    : (user.has_custom_permissions === true || existingDbUser?.has_custom_permissions === true);
+  const effectiveCustomPermissions = preserveCustomFromDb
+    ? existingDbUser.custom_permissions
+    : (user.custom_permissions || existingDbUser?.custom_permissions || null);
+
   const now = new Date().toISOString();
 
   const existingUser = (db.users || []).find((u) => u.id === authUserId);
@@ -93,7 +109,7 @@ export function ensureSaasUserInLocalDb(user) {
   const existingAccess = (db.collaboratorAccess || []).find((a) => a.userId === authUserId);
   const existingCollab = (db.collaborators || []).find((c) => c.id === resolvedCollabId);
 
-  const overridesJson = JSON.stringify(permissionOverrides);
+  const overridesJson = JSON.stringify(effectiveOverrides);
   const prevOverridesJson = JSON.stringify(existingUser?.permissionOverrides || {});
 
   const needsAnyChange =
@@ -129,14 +145,18 @@ export function ensureSaasUserInLocalDb(user) {
       role: appRole,
       active: true,
       has_system_access: hasSystemAccess,
-      permissionOverrides,
+      permissionOverrides: effectiveOverrides,
+      has_custom_permissions: effectiveHasCustom,
+      custom_permissions: effectiveHasCustom ? effectiveCustomPermissions : undefined,
     };
     if (uIdx >= 0) {
       d.users[uIdx] = { ...d.users[uIdx], ...userRecord };
     } else {
       d.users.push(userRecord);
     }
-    syncPermissionOverrides(d, authUserId, permissionOverrides);
+    if (!preserveCustomFromDb) {
+      syncPermissionOverrides(d, authUserId, effectiveOverrides);
+    }
 
     const pIdx = d.users_profile.findIndex((p) => p.id === authUserId);
     const profileRecord = {

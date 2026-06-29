@@ -5,6 +5,7 @@
 import { loadDb, withDb } from '../db/index.js';
 import { normalizeTenantId } from './tenantIsolation.js';
 import { createId } from './helpers.js';
+import { isAgendaProfessional } from '../constants/collaboratorRhCatalog.js';
 
 const SAAS_COLLAB_PREFIX = 'col-saas-';
 
@@ -124,6 +125,7 @@ export function reconcileSaasTeamRoster(teamRoster, tenantId) {
 
       if (idx >= 0) {
         const prev = db.collaborators[idx];
+        const keepClinicalProfile = isAgendaProfessional(prev) && !isAgendaProfessional({ ...rhStub, rhCategoria: rhStub.rhCategoria, cargo: rhStub.cargo });
         db.collaborators[idx] = {
           ...baseRecord,
           ...prev,
@@ -132,12 +134,13 @@ export function reconcileSaasTeamRoster(teamRoster, tenantId) {
           email,
           nomeCompleto: prev.nomeCompleto || fullName,
           apelido: prev.apelido || baseRecord.apelido,
+          fotoUrl: prev.fotoUrl || prev.foto_url || '',
           status: baseRecord.status,
           updatedAt: now,
-          rhCategoria: prev.rhCategoria || rhStub.rhCategoria,
-          cargo: prev.cargo || rhStub.cargo,
+          rhCategoria: keepClinicalProfile ? prev.rhCategoria : (prev.rhCategoria || rhStub.rhCategoria),
+          cargo: keepClinicalProfile ? prev.cargo : (prev.cargo || rhStub.cargo),
           tipoVinculo: prev.tipoVinculo || rhStub.tipoVinculo,
-          setor: prev.setor || rhStub.setor,
+          setor: keepClinicalProfile ? prev.setor : (prev.setor || rhStub.setor),
         };
       } else {
         db.collaborators.push(baseRecord);

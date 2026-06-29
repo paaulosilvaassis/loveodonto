@@ -203,6 +203,30 @@ export const AuthProvider = ({ children }) => {
   }, [user]);
 
   useEffect(() => {
+    const onPermissionsSynced = (event) => {
+      const detail = event?.detail;
+      const current = userRef.current;
+      if (!detail?.userId || !current?.id || detail.userId !== current.id) return;
+      const nextUser = enrichSaasUserPrivileges({
+        ...current,
+        permissionOverrides: detail.permissionOverrides || {},
+        has_custom_permissions: detail.hasCustomPermissions === true,
+        custom_permissions: detail.customPermissions || null,
+      });
+      setUser(nextUser);
+      const stored = readStoredSession();
+      if (stored?.cachedUser?.id === current.id) {
+        writeStoredSession({
+          ...stored,
+          cachedUser: sanitizeCachedUser(nextUser),
+        });
+      }
+    };
+    window.addEventListener('saas:user-permissions-synced', onPermissionsSynced);
+    return () => window.removeEventListener('saas:user-permissions-synced', onPermissionsSynced);
+  }, []);
+
+  useEffect(() => {
     if (!session) {
       setUser(null);
       return undefined;

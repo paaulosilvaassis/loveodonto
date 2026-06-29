@@ -140,7 +140,10 @@ export function syncPermissionStateToLocalDb(userId, {
     db.userPermissions = db.userPermissions || [];
     db.userPermissions = db.userPermissions.filter((x) => x.user_id !== userId);
     if (hasCustomPermissions) {
-      for (const [permId, allowed] of Object.entries(overrides)) {
+      const sourceMap = customPermissions && typeof customPermissions === 'object'
+        ? customPermissions
+        : overrides;
+      for (const [permId, allowed] of Object.entries(sourceMap)) {
         if (typeof allowed !== 'boolean') continue;
         db.userPermissions.push({
           user_id: userId,
@@ -194,4 +197,55 @@ export function syncTeamRosterPermissionStates(teamRoster, tenantId, catalogIds 
     synced += 1;
   }
   return synced;
+}
+
+/**
+ * Sincroniza permissões do usuário logado a partir do tenant-context (fonte fresca via Admin API).
+ * Emite evento para AuthContext atualizar permissionOverrides na sessão.
+ */
+export function syncCurrentUserPermissionsFromContext(currentUser, sessionUser, catalogIds = []) {
+  const userId = String(currentUser?.id || sessionUser?.id || '').trim();
+  if (!userId) return null;
+
+  const role = String(currentUser?.role || sessionUser?.role || 'atendimento').trim().toLowerCase();
+  const tenantUserLike = {
+    ...currentUser,
+    user_id: userId,
+    role,
+    has_custom_permissions: currentUser?.has_custom_permissions,
+    custom_permissions: currentUser?.custom_permissions,
+    permission_overrides: currentUser?.permissionOverrides || currentUser?.permission_overrides,
+    auth_meta: currentUser?.auth_meta,
+  };
+  const state = resolvePermissionStateFromTenantUser(tenantUserLike, role, catalogIds);
+
+  syncPermissionStateToLocalDb(userId, {
+    role,
+    hasCustomPermissions: state.hasCustomPermissions,
+    sparseOverrides: state.sparseOverrides,
+    customPermissions: state.customPermissions,
+    email: currentUser?.email || sessionUser?.email || '',
+    displayName: currentUser?.fullName || currentUser?.full_name || sessionUser?.name || '',
+    tenantId: sessionUser?.tenantId || '',
+    collaboratorId: currentUser?.collaboratorId || currentUser?.collaborator_id || '',
+    has_system_access: currentUser?.isActive !== false && sessionUser?.has_system_access !== false,
+  });
+
+  const payload = {
+    userId,
+    tenantId: sessionUser?.tenantId || '',
+    role,
+    hasCustomPermissions: state.hasCustomPermissions,
+    permissionOverrides: state.sparseOverrides,
+    customPermissions: state.customPermissions,
+    permissionsCount: state.hasCustomPermissions && state.customPermissions
+      ? Object.values(state.customPermissions).filter(Boolean).length
+      : countAllowedPermissions({ sparseOverrides: state.sparseOverrides, role, catalogIds }),
+  };
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('saas:user-permissions-synced', { detail: payload }));
+  }
+
+  return payload;
 }

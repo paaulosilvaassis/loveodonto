@@ -73,16 +73,7 @@ export function can(user, moduleKey, actionKey) {
 
   const rolePerms = getRolePermissionIds(db, u.role);
   const baseAllowed = rolePerms.includes(pid);
-  const saasOverrides = u?.permissionOverrides && typeof u.permissionOverrides === 'object' && !Array.isArray(u.permissionOverrides)
-    ? u.permissionOverrides
-    : null;
-  if (saasOverrides && Object.prototype.hasOwnProperty.call(saasOverrides, pid)) {
-    const overrideVal = saasOverrides[pid];
-    if (typeof overrideVal === 'boolean') return overrideVal;
-  }
-  const userOverride = (db.userPermissions || []).find((x) => x.user_id === u.id && x.permission_id === pid);
-  if (userOverride && typeof userOverride.allowed === 'boolean') return userOverride.allowed;
-  return baseAllowed;
+  return resolvePermissionAllowed(u, pid, baseAllowed, db);
 }
 
 /**
@@ -103,14 +94,45 @@ function resolveEffectiveUser(db, user) {
   if (!user?.id) return user;
   const dbUser = db.users?.find((x) => x.id === user.id);
   if (!dbUser) return user;
+
+  const authOverrides = user.permissionOverrides;
+  const dbOverrides = dbUser.permissionOverrides;
+  const hasAuthOverrides = authOverrides
+    && typeof authOverrides === 'object'
+    && !Array.isArray(authOverrides)
+    && Object.keys(authOverrides).length > 0;
+  const permissionOverrides = hasAuthOverrides ? authOverrides : (dbOverrides || authOverrides || {});
+
   return {
     ...dbUser,
     role: user.role || dbUser.role,
     isMaster: user.isMaster ?? dbUser.isMaster,
-    permissionOverrides: user.permissionOverrides ?? dbUser.permissionOverrides,
+    permissionOverrides,
+    has_custom_permissions: dbUser.has_custom_permissions === true || user.has_custom_permissions === true,
+    custom_permissions: dbUser.custom_permissions || user.custom_permissions || null,
     has_system_access: user.has_system_access ?? dbUser.has_system_access,
     active: user.active ?? dbUser.active,
   };
+}
+
+function resolvePermissionAllowed(u, pid, baseAllowed, db) {
+  if (u.has_custom_permissions && u.custom_permissions && typeof u.custom_permissions === 'object') {
+    if (Object.prototype.hasOwnProperty.call(u.custom_permissions, pid)) {
+      return u.custom_permissions[pid] === true;
+    }
+    return false;
+  }
+
+  const saasOverrides = u?.permissionOverrides && typeof u.permissionOverrides === 'object' && !Array.isArray(u.permissionOverrides)
+    ? u.permissionOverrides
+    : null;
+  if (saasOverrides && Object.prototype.hasOwnProperty.call(saasOverrides, pid)) {
+    const overrideVal = saasOverrides[pid];
+    if (typeof overrideVal === 'boolean') return overrideVal;
+  }
+  const userOverride = (db.userPermissions || []).find((x) => x.user_id === u.id && x.permission_id === pid);
+  if (userOverride && typeof userOverride.allowed === 'boolean') return userOverride.allowed;
+  return baseAllowed;
 }
 
 function getRolePermissionIds(db, role) {

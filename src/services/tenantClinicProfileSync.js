@@ -47,6 +47,8 @@ export function needsClinicProfileResync(tenantId) {
   if (!localTid || localTid !== tid) return true;
   const name = String(db?.clinicProfile?.nomeClinica || '').trim().toLowerCase();
   if (!name || DEFAULT_PLACEHOLDER_NAMES.has(name)) return true;
+  const logoUrl = String(db?.clinicProfile?.logoUrl || '').trim();
+  if (!logoUrl) return true;
   return false;
 }
 

@@ -70,6 +70,8 @@ export const sanitizeCachedUser = (u) => (u
     tenantId: u.tenantId,
     authMode: 'saas',
     permissionOverrides: u.permissionOverrides || {},
+    has_custom_permissions: u.has_custom_permissions === true,
+    custom_permissions: u.custom_permissions || null,
   }
   : null);
 
@@ -169,10 +171,20 @@ async function fetchBootstrapWithRetry() {
 }
 
 function buildResolvedUser(supaSession, bootstrap) {
-  const rawOverrides = supaSession.user?.app_metadata?.permission_overrides;
+  const authMeta = supaSession.user?.app_metadata && typeof supaSession.user.app_metadata === 'object'
+    ? supaSession.user.app_metadata
+    : {};
+  const rawOverrides = authMeta.permission_overrides;
   const permissionOverrides = rawOverrides && typeof rawOverrides === 'object' && !Array.isArray(rawOverrides)
     ? rawOverrides
     : {};
+  const hasCustomPermissions = authMeta.has_custom_permissions === true;
+  const customPermissions = hasCustomPermissions
+    && authMeta.custom_permissions
+    && typeof authMeta.custom_permissions === 'object'
+    && !Array.isArray(authMeta.custom_permissions)
+    ? authMeta.custom_permissions
+    : null;
   const saasAppRole = String(supaSession.user?.app_metadata?.role || '').trim().toLowerCase();
   const bootstrapRole = bootstrap.role;
   const roleFromAppMeta = saasAppRole ? normalizeSaasBootstrapRole(saasAppRole) : '';
@@ -191,6 +203,8 @@ function buildResolvedUser(supaSession, bootstrap) {
     tenantId: bootstrap.tenantId,
     authMode: 'saas',
     permissionOverrides,
+    has_custom_permissions: hasCustomPermissions,
+    custom_permissions: customPermissions,
   };
 }
 
