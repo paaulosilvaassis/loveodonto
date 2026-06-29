@@ -30,6 +30,7 @@ import {
 } from '../services/clinicService.js';
 import { ClinicPhonesSection } from '../components/clinic/ClinicPhonesSection.jsx';
 import { formatCep, formatCnpj, validateFileMeta } from '../utils/validators.js';
+import { validateClinicLogoFile } from '../utils/clinicLogoImage.js';
 
 const EDITABLE_SECTIONS = new Set([
   'cadastro', 'documentacao', 'tributacao', 'horarios', 'correspondencias', 'adicionais',
@@ -55,7 +56,8 @@ export default function ClinicSettingsPage() {
   const [editingSection, setEditingSection] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [clinic, setClinic] = useState(() => getClinic());
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreviewUrl, setLogoPreviewUrl] = useState('');
   const [draft, setDraft] = useState(() => ({
     ...getClinic(),
     newPhone: { tipo: '', ddd: '', numero: '', principal: false },
@@ -148,7 +150,7 @@ export default function ClinicSettingsPage() {
     try {
       const section = editingSection || activeSection;
       if (section === 'cadastro') {
-        const result = await updateClinicProfile(user, draft.profile);
+        const result = await updateClinicProfile(user, draft.profile, { logoFile });
         await refreshTenantContext(false);
         const remoteLogo = result?.clinicProfile?.logoUrl || result?.clinicProfile?.logo_url;
         if (remoteLogo) {
@@ -157,6 +159,11 @@ export default function ClinicSettingsPage() {
             profile: { ...prev.profile, logoUrl: remoteLogo },
           }));
         }
+        setLogoFile(null);
+        if (logoPreviewUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(logoPreviewUrl);
+        }
+        setLogoPreviewUrl('');
       }
       else if (section === 'documentacao') updateClinicDocumentation(user, draft.documentation);
       else if (section === 'tributacao') updateClinicTax(user, draft.tax);
@@ -216,19 +223,21 @@ export default function ClinicSettingsPage() {
   const onUploadLogo = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const validation = validateFileMeta(file, ['image/png', 'image/svg+xml']);
+    const validation = validateClinicLogoFile(file);
     if (!validation.ok) {
       setError(validation.message);
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setDraft((prev) => ({
-        ...prev,
-        profile: { ...prev.profile, logoUrl: reader.result },
-      }));
-    };
-    reader.readAsDataURL(file);
+    setError('');
+    setLogoFile(file);
+    if (logoPreviewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(logoPreviewUrl);
+    }
+    setLogoPreviewUrl(URL.createObjectURL(file));
+    setDraft((prev) => ({
+      ...prev,
+      profile: { ...prev.profile, logoUrl: '' },
+    }));
   };
 
   const refreshClinicPhones = () => {
@@ -339,7 +348,13 @@ export default function ClinicSettingsPage() {
                   />
                 </Field>
                 <Field label="Logomarca">
-                  {draft.profile.logoUrl ? <img className="logo-preview clinic-logo-preview" src={draft.profile.logoUrl} alt="Logo" /> : null}
+                  {(logoPreviewUrl || draft.profile.logoUrl) ? (
+                    <img
+                      className="logo-preview clinic-logo-preview"
+                      src={logoPreviewUrl || draft.profile.logoUrl}
+                      alt="Logo"
+                    />
+                  ) : null}
                   <input type="file" accept="image/png,image/svg+xml" onChange={onUploadLogo} disabled={editingSection !== 'cadastro'} />
                 </Field>
             </div>
@@ -1160,9 +1175,9 @@ export default function ClinicSettingsPage() {
   }, [activeSection, editingSection, clinic, draft, user, isAdmin, cepLoading, cepError, isAutoFilled, handleCepChange, handleCepBlur, handleAddressFieldChange, lookupCep]);
 
   const headerProps = {
-    logoUrl: isRecordEditing
-      ? (draft.profile?.logoUrl || getClinicLogo(clinicProfile, { includeDefault: false }))
-      : getClinicLogo(clinicProfile, { includeDefault: false }) || draft.profile?.logoUrl,
+    logoUrl: logoPreviewUrl
+      || (isRecordEditing ? draft.profile?.logoUrl : null)
+      || getClinicLogo(clinicProfile, { includeDefault: false }),
     displayName: draft.profile?.nomeClinica || draft.profile?.nomeMarca || draft.profile?.nomeFantasia,
     razaoSocial: draft.profile?.razaoSocial,
     documento: formatCnpj(draft.documentation?.cnpj || ''),

@@ -84,7 +84,7 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Platform-Key'],
   }),
 );
-app.use(express.json({ limit: '12mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 /** Health check leve (sem Supabase) — usado pelo script `npm run console:stack` para saber quando a API está escutando. */
 app.get('/health', (_req, res) => {
@@ -2093,6 +2093,14 @@ app.put('/internal/app/clinic-profile', requireAppUser, async (req, res) => {
     const explicitTenantId = normalizeText(req.body?.tenant_id);
     const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
     const tenantId = actorTenantUser.tenant_id;
+
+    const rawLogo = req.body?.logo_url || req.body?.logoUrl;
+    if (rawLogo && String(rawLogo).trim().toLowerCase().startsWith('data:')) {
+      return res.status(400).json({
+        error: 'logo_url deve ser URL pública do Supabase Storage. Envie a imagem ao bucket clinic-logos antes de salvar.',
+        code: 'LOGO_MUST_BE_STORAGE_URL',
+      });
+    }
 
     const row = await upsertClinicProfileForTenant(supabase, tenantId, {
       name: req.body?.name || req.body?.nomeClinica,

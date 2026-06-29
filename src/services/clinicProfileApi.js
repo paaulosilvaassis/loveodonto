@@ -1,3 +1,4 @@
+import { assertLogoUrlSafeForApi } from './clinicLogoUploadService.js';
 import { getPlatformAccessToken } from '../auth/saasSessionResolver.js';
 import {
   assertAdminApiFetchAllowed,
@@ -48,5 +49,9 @@ async function putJson(path, body) {
 }
 
 export async function saveClinicProfileRemote(payload) {
-  return putJson('/internal/app/clinic-profile', payload);
+  const body = { ...payload };
+  if (body.logoUrl != null) {
+    body.logoUrl = assertLogoUrlSafeForApi(body.logoUrl);
+  }
+  return putJson('/internal/app/clinic-profile', body);
 }

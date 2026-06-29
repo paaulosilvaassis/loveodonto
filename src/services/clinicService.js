@@ -12,7 +12,7 @@ import { encryptSecret, decryptSecret } from '../utils/crypto.js';
 import { normalizeTenantId, requireSessionTenantId } from './tenantIsolation.js';
 import { isSaasModeEnabled } from './saasAuthService.js';
 import { saveClinicProfileRemote } from './clinicProfileApi.js';
-import { resolveClinicLogoUrlForSave } from './clinicLogoUploadService.js';
+import { resolveClinicLogoUrlForSave, assertLogoUrlSafeForApi } from './clinicLogoUploadService.js';
 import { syncTenantClinicProfileToLocalDb } from './tenantClinicProfileSync.js';
 
 export const getClinic = () => {
@@ -66,7 +66,7 @@ export const getClinicSummary = (sessionTenantId = '') => {
 /** Versão assíncrona para não bloquear o thread (usa loadDbAsync). */
 export const getClinicSummaryAsync = (sessionTenantId = '') => loadDbAsync().then((db) => buildClinicSummaryFromDb(db, sessionTenantId));
 
-export const updateClinicProfile = async (user, payload) => {
+export const updateClinicProfile = async (user, payload, options = {}) => {
   requirePermission(user, 'team:write');
   assertRequired(payload.nomeClinica, 'Nome da clínica é obrigatório.');
   const tenantId = isSaasModeEnabled() ? requireSessionTenantId(user) : normalizeTenantId(user?.tenantId);
@@ -87,35 +87,37 @@ export const updateClinicProfile = async (user, payload) => {
   });
 
   if (isSaasModeEnabled() && tenantId) {
-    let logoUrlForRemote = updated.logoUrl;
-    try {
-      logoUrlForRemote = await resolveClinicLogoUrlForSave(tenantId, updated.logoUrl) ?? logoUrlForRemote;
-    } catch (uploadErr) {
-      const isBase64 = String(updated.logoUrl || '').startsWith('data:');
-      if (!isBase64) throw uploadErr;
-      if (import.meta.env?.DEV) {
-        console.debug('[updateClinicProfile] upload client falhou — fallback server', uploadErr?.message);
-      }
-    }
-    if (logoUrlForRemote && logoUrlForRemote !== updated.logoUrl) {
+    const resolvedLogo = await resolveClinicLogoUrlForSave(
+      tenantId,
+      updated.logoUrl,
+      { logoFile: options.logoFile || null },
+    );
+    const safeLogoUrl = assertLogoUrlSafeForApi(resolvedLogo ?? (updated.logoUrl || null));
+
+    if (safeLogoUrl && safeLogoUrl !== updated.logoUrl) {
       withDb((db) => {
         db.clinicProfile = {
           ...db.clinicProfile,
-          logoUrl: logoUrlForRemote,
+          logoUrl: safeLogoUrl,
           updatedAt: new Date().toISOString(),
         };
         return db.clinicProfile;
       });
-      updated.logoUrl = logoUrlForRemote;
+      updated.logoUrl = safeLogoUrl;
     }
-    const res = await saveClinicProfileRemote({
+
+    const remotePayload = {
       tenant_id: tenantId,
       nomeClinica: updated.nomeClinica,
       nomeFantasia: updated.nomeFantasia,
       razaoSocial: updated.razaoSocial,
-      logoUrl: logoUrlForRemote || updated.logoUrl,
       emailPrincipal: updated.emailPrincipal,
-    });
+    };
+    if (safeLogoUrl) {
+      remotePayload.logoUrl = safeLogoUrl;
+    }
+
+    const res = await saveClinicProfileRemote(remotePayload);
     if (res?.clinicProfile) {
       syncTenantClinicProfileToLocalDb(res.clinicProfile, tenantId);
     }

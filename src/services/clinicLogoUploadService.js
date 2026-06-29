@@ -1,27 +1,20 @@
 /**
- * Upload da logomarca para Supabase Storage antes de salvar clinic_profiles.
- * Evita HTTP 413 ao enviar base64 no JSON do PUT /clinic-profile.
+ * Upload da logomarca → Supabase Storage (binário).
+ * A API clinic-profile recebe APENAS logo_url http(s) — nunca base64.
  */
 import { supabaseAppClient, supabasePlatformClient } from '../lib/supabaseClients.js';
+import { compressClinicLogoFile } from '../utils/clinicLogoImage.js';
 
-const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i;
-const BUCKET = 'clinic-logos';
+export const CLINIC_LOGO_BUCKET = 'clinic-logos';
 
-function extensionForMime(mime) {
-  const m = String(mime || '').toLowerCase();
-  if (m.includes('svg')) return 'svg';
-  if (m.includes('png')) return 'png';
-  if (m.includes('webp')) return 'webp';
-  if (m.includes('gif')) return 'gif';
-  return 'jpg';
-}
+const DATA_URL_RE = /^data:/i;
 
-function isHttpUrl(value) {
+export function isHttpUrl(value) {
   const v = String(value || '').trim();
   return v.startsWith('https://') || v.startsWith('http://');
 }
 
-function isDataUrl(value) {
+export function isDataUrl(value) {
   return DATA_URL_RE.test(String(value || '').trim());
 }
 
@@ -34,60 +27,88 @@ async function pickAuthenticatedStorageClient() {
   return clients[0] || null;
 }
 
-function dataUrlToBlob(dataUrl) {
-  const match = String(dataUrl).trim().match(DATA_URL_RE);
-  if (!match) return null;
-  const mime = match[1];
-  const b64 = match[2];
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return { blob: new Blob([bytes], { type: mime }), mime, ext: extensionForMime(mime) };
-}
-
 /**
- * Se logo for data URL, faz upload e retorna URL pública.
- * Se já for http(s), retorna inalterado.
+ * Upload binário (File ou Blob) para clinic-logos/{tenantId}/logo.{ext}
  */
-export async function resolveClinicLogoUrlForSave(tenantId, logoInput) {
-  const raw = String(logoInput ?? '').trim();
-  if (!raw) return null;
-  if (isHttpUrl(raw)) return raw;
-  if (!isDataUrl(raw)) return raw;
-
+export async function uploadClinicLogoBlob(tenantId, blob, { ext = 'webp', mime = 'image/webp' } = {}) {
   const tid = String(tenantId || '').trim();
-  if (!tid) {
-    throw new Error('tenant_id ausente para upload da logomarca.');
-  }
-
-  const parsed = dataUrlToBlob(raw);
-  if (!parsed) {
-    throw new Error('Formato de imagem inválido para logomarca.');
-  }
+  if (!tid) throw new Error('tenant_id ausente para upload da logomarca.');
 
   const client = await pickAuthenticatedStorageClient();
   if (!client) {
-    throw new Error('Supabase não configurado para upload da logomarca.');
+    throw new Error('Supabase não configurado. Verifique VITE_SUPABASE_* e faça login novamente.');
   }
 
-  const objectPath = `${tid}/logo.${parsed.ext}`;
-  const { error } = await client.storage.from(BUCKET).upload(objectPath, parsed.blob, {
+  const objectPath = `${tid}/logo.${ext}`;
+  const { error } = await client.storage.from(CLINIC_LOGO_BUCKET).upload(objectPath, blob, {
     upsert: true,
-    contentType: parsed.mime,
+    contentType: mime,
     cacheControl: '3600',
   });
 
   if (error) {
-    throw new Error(`Falha ao enviar logomarca para o storage: ${error.message}`);
+    const msg = String(error.message || '');
+    if (msg.toLowerCase().includes('bucket') || msg.toLowerCase().includes('not found')) {
+      throw new Error(
+        'Bucket clinic-logos não encontrado no Supabase. Aplique a migration 013_clinic_logos_storage.sql.',
+      );
+    }
+    throw new Error(`Falha no upload da logomarca (Storage): ${msg}`);
   }
 
-  const { data } = client.storage.from(BUCKET).getPublicUrl(objectPath);
+  const { data } = client.storage.from(CLINIC_LOGO_BUCKET).getPublicUrl(objectPath);
   if (!data?.publicUrl) {
-    throw new Error('Upload da logomarca concluído, mas a URL pública não foi gerada.');
+    throw new Error('Upload concluído, mas a URL pública não foi gerada.');
   }
   return data.publicUrl;
 }
 
-export { isDataUrl, isHttpUrl };
+/** Upload a partir de File com compressão automática (máx. 2 MB). */
+export async function uploadClinicLogoFile(tenantId, file) {
+  const { blob, mime, ext, originalSize, compressedSize } = await compressClinicLogoFile(file);
+  const publicUrl = await uploadClinicLogoBlob(tenantId, blob, { ext, mime });
+  if (import.meta.env?.DEV) {
+    console.debug('[clinic-logo] upload', { originalSize, compressedSize, publicUrl });
+  }
+  return publicUrl;
+}
+
+/**
+ * Resolve logo para salvar em clinic_profiles.
+ * - http(s): retorna como está
+ * - data: URL legado: comprime e envia ao Storage (não repassa à API)
+ * - vazio: null
+ */
+export async function resolveClinicLogoUrlForSave(tenantId, logoInput, { logoFile = null } = {}) {
+  if (logoFile) {
+    return uploadClinicLogoFile(tenantId, logoFile);
+  }
+
+  const raw = String(logoInput ?? '').trim();
+  if (!raw) return null;
+  if (isHttpUrl(raw)) return raw;
+
+  if (isDataUrl(raw)) {
+    const res = await fetch(raw);
+    const blob = await res.blob();
+    const file = new File([blob], 'logo.webp', { type: blob.type || 'image/webp' });
+    return uploadClinicLogoFile(tenantId, file);
+  }
+
+  throw new Error('Formato de logomarca inválido. Selecione JPG, PNG ou WEBP.');
+}
+
+/** Bloqueia envio de base64 à Admin API. */
+export function assertLogoUrlSafeForApi(logoUrl) {
+  const raw = String(logoUrl ?? '').trim();
+  if (!raw) return null;
+  if (isDataUrl(raw)) {
+    throw new Error(
+      'A logomarca ainda está em base64. O upload para o Supabase Storage deve concluir antes de salvar o perfil.',
+    );
+  }
+  if (!isHttpUrl(raw)) {
+    throw new Error('logo_url inválida. Esperada URL pública http(s) do Supabase Storage.');
+  }
+  return raw;
+}
