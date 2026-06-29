@@ -1,8 +1,13 @@
 import { loadDb, withDb } from '../db/index.js';
 import { ROLE_MASTER } from '../constants/tenantRoles.js';
 import { logAction } from './logService.js';
+import { isSaasModeEnabled } from './saasAuthService.js';
+import { normalizeTenantId } from './tenantIsolation.js';
 
 export function getDefaultTenant() {
+  if (isSaasModeEnabled()) {
+    return null;
+  }
   const db = loadDb();
   const tenant = (db.tenants || [])[0];
   if (!tenant) return null;

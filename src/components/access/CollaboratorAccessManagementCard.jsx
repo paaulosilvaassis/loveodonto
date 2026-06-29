@@ -114,9 +114,9 @@ export default function CollaboratorAccessManagementCard({
               </strong>
             </div>
           ) : null}
-          <div className="cr-access-mgmt__stat">
+          <div className="cr-access-mgmt__stat cr-access-mgmt__stat--email">
             <span className="cr-access-mgmt__label">E-mail de acesso</span>
-            <strong>{email || '—'}</strong>
+            <strong title={email || undefined}>{email || '—'}</strong>
           </div>
           <div className="cr-access-mgmt__stat">
             <span className="cr-access-mgmt__label">Data do convite</span>

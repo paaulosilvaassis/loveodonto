@@ -4,7 +4,7 @@ import { TenantContext } from './tenantContext.js';
 import { subscribeTenantRealtimeChanges } from '../services/tenantContextService.js';
 import { readTenantAccessSnapshot } from '../services/platformAccessService.js';
 import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
-import { raceWithTimeout } from '../utils/promiseTimeout.js';
+import { auditTenantAccess } from '../services/tenantIsolation.js';
 import { isTransientAuthError } from '../auth/saasSessionResolver.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
 import { getTenantSnapshotTimeoutMessage } from '../config/adminApiBase.js';
@@ -67,6 +67,15 @@ export function TenantProvider({ children }) {
       hasLoadedOnce.current = true;
       if (!silent) setError('');
       emitStabilityLog('TENANT_CONTEXT_OK', { tenantId: user.tenantId, source: silent ? 'background' : 'foreground' });
+      try {
+        auditTenantAccess(user, {
+          source: silent ? 'tenant_context_background' : 'tenant_context',
+          linkStatus: context?.tenant?.status || 'active',
+          extra: { tenant_name: context?.tenant?.trade_name || context?.tenant?.name || null },
+        });
+      } catch {
+        /* sessão sem tenant — RequireTenantAccess bloqueia */
+      }
     } catch (err) {
       emitStabilityLog('TENANT_CONTEXT_FAILED', {
         tenantId: user?.tenantId || null,

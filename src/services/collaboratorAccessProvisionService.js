@@ -507,8 +507,13 @@ export async function saveCollaboratorAccessBundleWithRepair(payload, { onRepair
 }
 
 export async function listTenantUsersAccess(tenantId) {
-  const query = tenantId ? `?tenant_id=${encodeURIComponent(tenantId)}` : '';
-  return getJson(`/internal/app/users/list${query}`);
+  const tid = String(tenantId || '').trim();
+  if (!tid) {
+    const err = new Error('tenant_id é obrigatório para listar usuários da clínica.');
+    err.code = 'TENANT_REQUIRED';
+    throw err;
+  }
+  return getJson(`/internal/app/users/list?tenant_id=${encodeURIComponent(tid)}`);
 }
 
 export async function setTenantUserSystemAccess(tenantUserId, payload) {

@@ -13,6 +13,7 @@ import {
   resolveCollaboratorProfileRole,
 } from '../utils/collaboratorAccessRole.js';
 import { provisionCollaboratorSystemAccess, linkCollaboratorTenantAccess, listTenantUsersAccess } from './collaboratorAccessProvisionService.js';
+import { normalizeTenantId } from './tenantIsolation.js';
 import { mapCollaboratorToProfessionalOption } from '../utils/avatarUtils.js';
 
 export function syncLocalCollaboratorAccess(collaboratorId, tenantUser, profileRole) {
@@ -288,7 +289,12 @@ const ensureUnique = (db, { cpf, email, registro, excludeCollaboratorId } = {}) 
 
 export const listCollaborators = (filters = {}) => {
   const db = loadDb();
+  const tenantFilter = normalizeTenantId(filters.tenantId || filters.tenant_id);
   return db.collaborators.filter((item) => {
+    if (tenantFilter) {
+      const rowTenant = normalizeTenantId(item.tenant_id || item.tenantId);
+      if (!rowTenant || rowTenant !== tenantFilter) return false;
+    }
     if (filters.status && item.status !== filters.status) return false;
     if (filters.cargo && item.cargo !== filters.cargo) return false;
     if (filters.especialidade && !item.especialidades?.includes(filters.especialidade)) return false;
@@ -334,6 +340,7 @@ export const createCollaborator = (user, payload) => {
   const conselhoUfRaw = String(payload.conselhoUf || '').trim().toUpperCase().slice(0, 2);
   const collaborator = {
     id: createId('col'),
+    tenant_id: normalizeTenantId(user?.tenantId || user?.tenant_id) || null,
     status: payload.status || 'ativo',
     apelido: normalizeText(payload.apelido),
     nomeCompleto: normalizeText(payload.nomeCompleto),

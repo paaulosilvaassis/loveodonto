@@ -141,7 +141,12 @@ export async function authenticateByEmailPassword(email, password) {
   if (profileTenantId) {
     selectedMembership = memberships.find((m) => m.tenant_id === profileTenantId) || null;
   }
-  if (!selectedMembership) selectedMembership = memberships[0];
+  if (!selectedMembership && memberships.length === 1) {
+    selectedMembership = memberships[0];
+  }
+  if (!selectedMembership && memberships.length > 1) {
+    return null;
+  }
   if (!selectedMembership?.tenant_id) return null;
 
   const now = new Date().toISOString();

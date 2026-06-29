@@ -424,6 +424,16 @@ function isMissingCollaboratorIdColumnError(error) {
   );
 }
 
+function isTenantUserDuplicateError(error) {
+  const code = String(error?.code || '').trim();
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    code === '23505'
+    || message.includes('duplicate key')
+    || message.includes('unique constraint')
+  );
+}
+
 function omitHasSystemAccess(payload = {}) {
   const cloned = { ...(payload || {}) };
   delete cloned.has_system_access;
@@ -446,20 +456,55 @@ const TENANT_USER_SELECT_BASE = 'id, tenant_id, collaborator_id, user_id, full_n
 const TENANT_USER_SELECT_BASE_LEGACY = 'id, tenant_id, user_id, full_name, email, role, role_slug, is_active, status';
 const TENANT_USER_SELECT_WITH_ACCESS = `${TENANT_USER_SELECT_BASE}, has_system_access`;
 
-async function getTenantUserByAuthUserId(authUserId) {
-  const { data, error } = await supabase
-    .from('tenant_users')
-    .select('id, tenant_id, user_id, email, full_name, role, role_slug, is_active, status')
-    .eq('user_id', authUserId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+async function resolveActiveTenantUser(authUserId, explicitTenantId = '') {
+  const normalizedExplicit = normalizeText(explicitTenantId);
+  const baseFilters = (query) => {
+    let q = query.eq('user_id', authUserId).order('created_at', { ascending: true });
+    if (normalizedExplicit) q = q.eq('tenant_id', normalizedExplicit);
+    return q;
+  };
+
+  let rows = null;
+  let error = null;
+  ({ data: rows, error } = await baseFilters(
+    supabase.from('tenant_users').select('id, tenant_id, user_id, email, full_name, role, role_slug, is_active, status, has_system_access'),
+  ));
+  if (error && isMissingHasSystemAccessColumnError(error)) {
+    ({ data: rows, error } = await baseFilters(
+      supabase.from('tenant_users').select('id, tenant_id, user_id, email, full_name, role, role_slug, is_active, status'),
+    ));
+  }
   if (error) throw error;
-  return data || null;
+
+  const activeRows = (Array.isArray(rows) ? rows : []).filter((row) => {
+    const status = String(row?.status || '').toLowerCase();
+    if (status === 'inactive') return false;
+    if (row?.is_active === false) return false;
+    if (row?.has_system_access === false) return false;
+    return Boolean(row?.tenant_id);
+  });
+
+  if (activeRows.length === 0) {
+    return null;
+  }
+
+  if (!normalizedExplicit && activeRows.length > 1) {
+    const err = new Error(
+      'Usuário vinculado a múltiplas clínicas. Informe tenant_id explicitamente.',
+    );
+    err.code = 'TENANT_AMBIGUOUS';
+    throw err;
+  }
+
+  return activeRows[0];
+}
+
+async function getTenantUserByAuthUserId(authUserId, explicitTenantId = '') {
+  return resolveActiveTenantUser(authUserId, explicitTenantId);
 }
 
 async function getTenantAdminActorOrThrow(authUserId, explicitTenantId = '') {
-  const actorTenantUser = await getTenantUserByAuthUserId(authUserId);
+  const actorTenantUser = await resolveActiveTenantUser(authUserId, explicitTenantId);
   if (!actorTenantUser?.tenant_id) {
     throw new Error('Usuário sem vínculo em tenant_users.');
   }
@@ -939,18 +984,38 @@ async function upsertTenantUserAccess({
     if (existingTenantUser?.id) {
       query = supabase.from('tenant_users').update(nextPayload).eq('id', existingTenantUser.id);
     } else {
-      query = supabase.from('tenant_users').upsert(nextPayload, {
-        onConflict: 'tenant_id,email',
-        ignoreDuplicates: false,
-      });
+      query = supabase.from('tenant_users').insert(nextPayload);
     }
-    const { data, error } = await query
+    let { data, error } = await query
       .select(
         includeAccessOnSelect
           ? (includeCollaboratorOnSelect ? TENANT_USER_SELECT_WITH_ACCESS : `${TENANT_USER_SELECT_BASE_LEGACY}, has_system_access`)
           : (includeCollaboratorOnSelect ? TENANT_USER_SELECT_BASE : TENANT_USER_SELECT_BASE_LEGACY),
       )
       .single();
+
+    if (error && !existingTenantUser?.id && isTenantUserDuplicateError(error)) {
+      const { data: dupRow, error: dupErr } = await supabase
+        .from('tenant_users')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+      if (dupErr || !dupRow?.id) throw error;
+      const retry = await supabase
+        .from('tenant_users')
+        .update(nextPayload)
+        .eq('id', dupRow.id)
+        .select(
+          includeAccessOnSelect
+            ? (includeCollaboratorOnSelect ? TENANT_USER_SELECT_WITH_ACCESS : `${TENANT_USER_SELECT_BASE_LEGACY}, has_system_access`)
+            : (includeCollaboratorOnSelect ? TENANT_USER_SELECT_BASE : TENANT_USER_SELECT_BASE_LEGACY),
+        )
+        .single();
+      data = retry.data;
+      error = retry.error;
+    }
+
     if (error) throw error;
     assertAuthUserIdForTenantWrite(data?.user_id, {
       tenantId,
@@ -1781,21 +1846,26 @@ app.get('/internal/platform/console-profile', async (req, res) => {
 app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
   try {
     const authUserId = req.appAuthUser.id;
-    const { data: tenantUser, error: tenantUserError } = await supabase
-      .from('tenant_users')
-      .select('tenant_id, user_id, full_name, email, role, role_slug, is_active, status')
-      .eq('user_id', authUserId)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (tenantUserError) throw tenantUserError;
+    const explicitTenantId = normalizeText(req.query?.tenant_id);
+    const tenantUser = await resolveActiveTenantUser(authUserId, explicitTenantId);
     if (!tenantUser?.tenant_id) {
-      return res.status(404).json({
+      return res.status(403).json({
         error:
           'Usuário sem vínculo ativo em tenant_users. '
-          + 'Faça o provisionamento da clínica pela Console antes de acessar o app.',
+          + 'Entre em contato com o administrador da clínica.',
+        code: 'TENANT_MEMBERSHIP_REQUIRED',
       });
     }
+
+    console.log('[TENANT_AUDIT]', {
+      user_id: authUserId,
+      email: req.appAuthUser.email,
+      tenant_id: tenantUser.tenant_id,
+      role: tenantUser.role || tenantUser.role_slug,
+      link_source: 'tenant_users',
+      status: tenantUser.status,
+      at: new Date().toISOString(),
+    });
 
     const tenantId = tenantUser.tenant_id;
     const [
@@ -2410,6 +2480,12 @@ app.post('/internal/app/invitations/reconcile', requireAppUser, async (req, res)
 app.get('/internal/app/users/list', requireAppUser, async (req, res) => {
   try {
     const explicitTenantId = normalizeText(req.query?.tenant_id);
+    if (!explicitTenantId) {
+      return res.status(400).json({
+        error: 'tenant_id é obrigatório na query string.',
+        code: 'TENANT_REQUIRED',
+      });
+    }
     const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
     const tenantId = actorTenantUser.tenant_id;
 

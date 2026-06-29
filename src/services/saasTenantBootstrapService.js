@@ -168,6 +168,15 @@ function shouldBootstrapFreshTenant(tenantId, previousTenantId) {
   const local = getTenant(tenantId);
   if (!local) return true;
   if (!local.saas_bootstrapped_at) return true;
+  try {
+    const db = loadDb();
+    const clinicTenant = String(db?.clinicProfile?.tenant_id || '').trim();
+    if (clinicTenant && clinicTenant !== tenantId) return true;
+    const firstTenant = String(db?.tenants?.[0]?.id || '').trim();
+    if (firstTenant && firstTenant !== tenantId) return true;
+  } catch {
+    return true;
+  }
   return false;
 }
 

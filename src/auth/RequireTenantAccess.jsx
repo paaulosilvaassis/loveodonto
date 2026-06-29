@@ -1,8 +1,10 @@
 import TenantAccessBlockedPage from '../pages/TenantAccessBlockedPage.jsx';
+import TenantNoMembershipPage from '../pages/TenantNoMembershipPage.jsx';
 import { useTenant } from '../tenant/useTenant.js';
 import { useAuth } from './useAuth.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
 import { DEV_BACKEND_NOT_RUNNING_MSG } from '../config/adminApiBase.js';
+import { isSaasModeEnabled } from '../services/saasAuthService.js';
 
 function classifyTenantError(message) {
   const lower = String(message || '').toLowerCase();
@@ -60,8 +62,49 @@ function classifyTenantError(message) {
 }
 
 export default function RequireTenantAccess({ children }) {
-  const { loading, error, isTenantBlocked, refreshTenantContext } = useTenant();
-  const { logoutWithReason } = useAuth();
+  const { loading, error, isTenantBlocked, refreshTenantContext, tenant } = useTenant();
+  const { logoutWithReason, user } = useAuth();
+
+  const sessionTenantId = String(user?.tenantId || user?.tenant_id || '').trim();
+  const contextTenantId = String(tenant?.id || '').trim();
+
+  if (user && isSaasModeEnabled() && !sessionTenantId) {
+    emitStabilityLog('TENANT_GUARD_BLOCKED', { reason: 'missing_session_tenant_id', userId: user.id });
+    return <TenantNoMembershipPage />;
+  }
+
+  if (
+    user
+    && sessionTenantId
+    && contextTenantId
+    && sessionTenantId !== contextTenantId
+  ) {
+    emitStabilityLog('TENANT_GUARD_MISMATCH', {
+      userId: user.id,
+      sessionTenantId,
+      contextTenantId,
+    });
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#94a3b8', textAlign: 'center', padding: '1.5rem' }}>
+        <div style={{ maxWidth: '28rem' }}>
+          <p style={{ margin: '0 0 0.75rem' }}>Inconsistência de clínica detectada</p>
+          <p className="muted" style={{ margin: '0 0 1rem', fontSize: '0.85rem' }}>
+            Sua sessão não corresponde à clínica carregada. Faça login novamente.
+          </p>
+          <button
+            type="button"
+            className="button primary"
+            onClick={() => {
+              logoutWithReason('Sessão inconsistente com a clínica. Faça login novamente.');
+              window.location.assign('/login');
+            }}
+          >
+            Voltar ao login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

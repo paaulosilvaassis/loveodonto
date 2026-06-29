@@ -1,3 +1,5 @@
+import { assertSameTenant, requireSessionTenantId, TenantIsolationError } from './tenantIsolation.js';
+
 const normalizeTenant = (value) => {
   if (value === null || value === undefined) return '';
   const normalized = String(value).trim();
@@ -14,14 +16,15 @@ export const resolveUserTenantId = (user) => {
 };
 
 export const resolveTenantIdForWrite = (user, payloadTenantId = '') => {
+  const sessionTenantId = requireSessionTenantId(user);
   const fromPayload = normalizeTenant(payloadTenantId);
-  if (fromPayload) return fromPayload;
 
-  const fromUser = resolveUserTenantId(user);
-  if (fromUser) return fromUser;
+  if (fromPayload) {
+    assertSameTenant(user, fromPayload, { action: 'write' });
+    return fromPayload;
+  }
 
-  const error = new Error('Clínica obrigatória: selecione uma clínica antes de salvar.');
-  error.code = 'TENANT_REQUIRED';
-  throw error;
+  return sessionTenantId;
 };
 
+export { TenantIsolationError, requireSessionTenantId, assertSameTenant };

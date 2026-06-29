@@ -300,10 +300,10 @@ export default function ConfiguracoesUsuariosPage() {
   const [newUserStatus, setNewUserStatus] = useState('active');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const tenantId = tenant?.id || user?.tenantId || null;
+  const tenantId = user?.tenantId || null;
   const tenantLabel = tenant?.trade_name
     || tenant?.name
-    || getTenant(tenantId)?.name
+    || (tenantId ? getTenant(tenantId)?.name : null)
     || 'Clínica';
   const isMaster = canManageTenantUsers(user, tenantId, currentUser);
 
@@ -371,15 +371,25 @@ export default function ConfiguracoesUsuariosPage() {
     if (!tenantId) return;
     let active = true;
     setSaving(true);
-    const collaborators = listCollaborators();
+    const collaborators = listCollaborators({ tenantId });
     const collaboratorMaps = buildCollaboratorLookupMaps(collaborators);
 
-    reconcileCollaboratorTenantLinks(tenantId, collaborators)
-      .then(({ users = [] }) => ({ users }))
-      .catch(() => listTenantUsersAccess(tenantId))
-      .then((result) => {
+    listTenantUsersAccess(tenantId)
+      .then(async (result) => {
+        let users = Array.isArray(result?.users) ? result.users : [];
+        users = users.filter((row) => String(row?.tenant_id || tenantId) === tenantId);
+        try {
+          const reconciled = await reconcileCollaboratorTenantLinks(tenantId, collaborators);
+          if (Array.isArray(reconciled?.users) && reconciled.users.length > 0) {
+            users = reconciled.users.filter((row) => String(row?.tenant_id || tenantId) === tenantId);
+          }
+        } catch {
+          /* mantém lista da API — fonte autoritativa */
+        }
+        return users;
+      })
+      .then((users) => {
         if (!active) return;
-        const users = Array.isArray(result?.users) ? result.users : [];
         setMembers(users.map((u) => ({
           ...u,
           name: u.full_name || '',
@@ -585,7 +595,7 @@ export default function ConfiguracoesUsuariosPage() {
   if (!tenantId) {
     return (
       <div className="stack" style={{ padding: '2rem', maxWidth: '36rem' }}>
-        <p className="muted">Nenhuma clínica encontrada para sua sessão.</p>
+        <p className="form-error">Usuário sem vínculo com clínica. Entre em contato com o administrador.</p>
         {tenantError ? (
           <p className="error" style={{ marginTop: '0.75rem' }}>{tenantError}</p>
         ) : null}

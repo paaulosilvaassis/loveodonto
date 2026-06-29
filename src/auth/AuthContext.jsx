@@ -10,6 +10,7 @@ import { resolveTrustedTenantId } from '../services/tenantIdentityService.js';
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
 import { LOGOUT_REASON_KEY } from './logoutReason.js';
+import { auditTenantAccess } from '../services/tenantIsolation.js';
 import { raceWithTimeout } from '../utils/promiseTimeout.js';
 import { AuthContext } from './authContext.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
@@ -41,7 +42,7 @@ function resolveUserFromSession(session, loadDbFn) {
   const db = loadDbFn();
   const u = db.users.find((item) => item.id === session.userId) || null;
   if (!u) return null;
-  const tenantId = session.tenantId || (getDefaultTenant()?.id);
+  const tenantId = session.tenantId || null;
   if (!tenantId) return null;
   const membership = getMembership(tenantId, session.userId);
   if (!membership || membership.has_system_access === false) return null;
@@ -78,6 +79,11 @@ async function persistResolvedSaasUser(resolved, { previousTenantId } = {}) {
     tenantId: enriched.tenantId,
     cachedUser: sanitizeCachedUser(enriched),
   });
+  try {
+    auditTenantAccess(enriched, { source: 'saas_session_persist' });
+  } catch {
+    /* tenant_id ausente — persistência já falhou upstream */
+  }
   window.setTimeout(() => {
     reconcileOwnInvitationAcceptance().catch(() => {});
   }, 2500);
@@ -130,6 +136,10 @@ async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
       if (isCancelled()) return;
       if (!fresh?.tenantId) {
         onLogout('Seu acesso à clínica foi revogado. Faça login novamente.');
+        return;
+      }
+      if (fresh.tenantId !== cached.tenantId) {
+        onLogout('Seu vínculo com a clínica foi alterado. Faça login novamente.');
         return;
       }
       await persistResolvedSaasUser(fresh, { previousTenantId: stored.tenantId });
