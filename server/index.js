@@ -456,7 +456,80 @@ const TENANT_USER_SELECT_BASE = 'id, tenant_id, collaborator_id, user_id, full_n
 const TENANT_USER_SELECT_BASE_LEGACY = 'id, tenant_id, user_id, full_name, email, role, role_slug, is_active, status';
 const TENANT_USER_SELECT_WITH_ACCESS = `${TENANT_USER_SELECT_BASE}, has_system_access`;
 
-async function resolveActiveTenantUser(authUserId, explicitTenantId = '') {
+function isActiveTenantUserRow(row) {
+  const status = String(row?.status || '').toLowerCase();
+  if (status === 'inactive') return false;
+  if (row?.is_active === false) return false;
+  if (row?.has_system_access === false) return false;
+  return Boolean(row?.tenant_id);
+}
+
+/**
+ * Vincula auth user a tenant_users existente pelo e-mail quando user_id ainda está vazio
+ * (ex.: provisionamento falhou após convite aceito).
+ */
+async function linkAuthUserToTenantMembership(authUserId, explicitTenantId = '', emailHint = '') {
+  const normalizedAuthUserId = normalizeText(authUserId);
+  if (!normalizedAuthUserId) return null;
+
+  let email = normalizeEmail(emailHint);
+  if (!email) {
+    const { data: authData } = await supabase.auth.admin.getUserById(normalizedAuthUserId);
+    email = normalizeEmail(authData?.user?.email);
+  }
+  if (!email) return null;
+
+  const normalizedExplicit = normalizeText(explicitTenantId);
+  let query = supabase
+    .from('tenant_users')
+    .select('id, tenant_id, collaborator_id, user_id, email, full_name, role, role_slug, is_active, status, has_system_access')
+    .eq('email', email);
+  if (normalizedExplicit) query = query.eq('tenant_id', normalizedExplicit);
+
+  let { data: rows, error } = await query;
+  if (error && isMissingHasSystemAccessColumnError(error)) {
+    ({ data: rows, error } = await supabase
+      .from('tenant_users')
+      .select('id, tenant_id, collaborator_id, user_id, email, full_name, role, role_slug, is_active, status')
+      .eq('email', email));
+    if (normalizedExplicit) {
+      rows = (rows || []).filter((row) => row?.tenant_id === normalizedExplicit);
+    }
+  }
+  if (error) throw error;
+
+  const candidates = (Array.isArray(rows) ? rows : []).filter(isActiveTenantUserRow);
+  for (const row of candidates) {
+    const linkedUserId = normalizeText(row?.user_id);
+    if (linkedUserId && linkedUserId !== normalizedAuthUserId) continue;
+
+    if (!linkedUserId) {
+      const updatePayload = { user_id: normalizedAuthUserId, invitation_status: 'accepted' };
+      let { error: updErr } = await supabase
+        .from('tenant_users')
+        .update(updatePayload)
+        .eq('id', row.id);
+      if (updErr && isMissingInvitationStatusColumnError(updErr)) {
+        ({ error: updErr } = await supabase
+          .from('tenant_users')
+          .update({ user_id: normalizedAuthUserId })
+          .eq('id', row.id));
+      }
+      if (updErr) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.debug('[linkAuthUserToTenantMembership] update skipped', updErr.message);
+        }
+        continue;
+      }
+    }
+
+    return { ...row, user_id: normalizedAuthUserId };
+  }
+
+  return null;
+}
+
+async function resolveActiveTenantUser(authUserId, explicitTenantId = '', emailHint = '') {
   const normalizedExplicit = normalizeText(explicitTenantId);
   const baseFilters = (query) => {
     let q = query.eq('user_id', authUserId).order('created_at', { ascending: true });
@@ -467,24 +540,20 @@ async function resolveActiveTenantUser(authUserId, explicitTenantId = '') {
   let rows = null;
   let error = null;
   ({ data: rows, error } = await baseFilters(
-    supabase.from('tenant_users').select('id, tenant_id, user_id, email, full_name, role, role_slug, is_active, status, has_system_access'),
+    supabase.from('tenant_users').select('id, tenant_id, collaborator_id, user_id, email, full_name, role, role_slug, is_active, status, has_system_access'),
   ));
   if (error && isMissingHasSystemAccessColumnError(error)) {
     ({ data: rows, error } = await baseFilters(
-      supabase.from('tenant_users').select('id, tenant_id, user_id, email, full_name, role, role_slug, is_active, status'),
+      supabase.from('tenant_users').select('id, tenant_id, collaborator_id, user_id, email, full_name, role, role_slug, is_active, status'),
     ));
   }
   if (error) throw error;
 
-  const activeRows = (Array.isArray(rows) ? rows : []).filter((row) => {
-    const status = String(row?.status || '').toLowerCase();
-    if (status === 'inactive') return false;
-    if (row?.is_active === false) return false;
-    if (row?.has_system_access === false) return false;
-    return Boolean(row?.tenant_id);
-  });
+  const activeRows = (Array.isArray(rows) ? rows : []).filter(isActiveTenantUserRow);
 
   if (activeRows.length === 0) {
+    const linked = await linkAuthUserToTenantMembership(authUserId, explicitTenantId, emailHint);
+    if (linked) return linked;
     return null;
   }
 
@@ -1847,7 +1916,11 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
   try {
     const authUserId = req.appAuthUser.id;
     const explicitTenantId = normalizeText(req.query?.tenant_id);
-    const tenantUser = await resolveActiveTenantUser(authUserId, explicitTenantId);
+    const tenantUser = await resolveActiveTenantUser(
+      authUserId,
+      explicitTenantId,
+      req.appAuthUser.email,
+    );
     if (!tenantUser?.tenant_id) {
       return res.status(403).json({
         error:
@@ -1915,6 +1988,24 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
       warnings.push('Existem pendências de cobrança');
     }
 
+    let teamRoster = [];
+    const rosterSelects = [
+      'id, tenant_id, collaborator_id, user_id, full_name, email, role, role_slug, is_active, status, has_system_access',
+      'id, tenant_id, collaborator_id, user_id, full_name, email, role, role_slug, is_active, status',
+    ];
+    for (const sel of rosterSelects) {
+      const { data: rosterRows, error: rosterErr } = await supabase
+        .from('tenant_users')
+        .select(sel)
+        .eq('tenant_id', tenantId)
+        .order('full_name', { ascending: true });
+      if (!rosterErr) {
+        teamRoster = (rosterRows || []).filter(isActiveTenantUserRow);
+        break;
+      }
+      if (!isMissingHasSystemAccessColumnError(rosterErr)) throw rosterErr;
+    }
+
     res.json({
       tenant,
       modules: buildModuleMap(modulesResult.data || []),
@@ -1927,6 +2018,7 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         role: tenantUser.role || tenantUser.role_slug || 'atendimento',
         isActive: tenantUser.is_active ?? tenantUser.status === 'active',
         invitationStatus: tenantUser.invitation_status || 'none',
+        collaboratorId: tenantUser.collaborator_id || null,
       },
       currentUser: {
         id: authUserId,
@@ -1934,7 +2026,9 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         email: tenantUser.email || req.appAuthUser.email || '',
         role: tenantUser.role || tenantUser.role_slug || 'atendimento',
         isActive: tenantUser.is_active ?? true,
+        collaboratorId: tenantUser.collaborator_id || null,
       },
+      teamRoster,
     });
   } catch (err) {
     console.error('[tenant-context]', err);
@@ -2184,6 +2278,7 @@ app.post('/internal/app/collaborators/access-bundle', requireAppUser, async (req
     const nextMeta = {
       ...prevMeta,
       tenant_id: tenantId,
+      role: roleSlug,
       permission_overrides: permissionOverrides,
     };
     const authUpdate = { app_metadata: nextMeta };
@@ -2438,7 +2533,14 @@ app.get('/internal/app/collaborators/access-audit', requireAppUser, async (req, 
 
 app.post('/internal/app/invitations/reconcile', requireAppUser, async (req, res) => {
   try {
-    const tenantUser = await getTenantUserByAuthUserId(req.appAuthUser.id);
+    let tenantUser = await getTenantUserByAuthUserId(req.appAuthUser.id);
+    if (!tenantUser?.tenant_id) {
+      tenantUser = await linkAuthUserToTenantMembership(
+        req.appAuthUser.id,
+        '',
+        req.appAuthUser.email,
+      );
+    }
     if (!tenantUser?.tenant_id || !tenantUser?.email) {
       return res.status(200).json({ success: true, updated: 0 });
     }

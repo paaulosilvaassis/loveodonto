@@ -9,6 +9,9 @@ import { auditTenantAccess } from '../services/tenantIsolation.js';
 import { isTransientAuthError } from '../auth/saasSessionResolver.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
 import { getTenantSnapshotTimeoutMessage } from '../config/adminApiBase.js';
+import { backfillCollaboratorTenantIds, reconcileSaasTeamRoster } from '../services/tenantTeamRosterSync.js';
+import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
+import { isSaasModeEnabled } from '../services/saasAuthService.js';
 
 /** Curto o suficiente para não travar a tela; o erro oferece retry e volta ao login. */
 const TENANT_SNAPSHOT_TIMEOUT_MS = 20000;
@@ -68,6 +71,20 @@ export function TenantProvider({ children }) {
       hasLoadedOnce.current = true;
       if (!silent) setError('');
       emitStabilityLog('TENANT_CONTEXT_OK', { tenantId: user.tenantId, source: silent ? 'background' : 'foreground' });
+      if (isSaasModeEnabled() && user?.tenantId) {
+        try {
+          reconcileSaasTeamRoster(context?.teamRoster, user.tenantId);
+          backfillCollaboratorTenantIds(user.tenantId);
+          ensureSaasUserInLocalDb({
+            ...user,
+            collaboratorId: context?.currentUser?.collaboratorId || user.collaboratorId,
+          });
+        } catch (syncErr) {
+          if (import.meta.env?.DEV) {
+            console.debug('[TenantContext] roster sync skipped', syncErr?.message);
+          }
+        }
+      }
       try {
         auditTenantAccess(user, {
           source: silent ? 'tenant_context_background' : 'tenant_context',

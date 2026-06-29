@@ -8,7 +8,7 @@ import { createId } from './helpers.js';
 import { logAction } from './logService.js';
 import { buildPermissionsCatalog } from '../permissions/catalog.js';
 import { ROLE_DEFAULT_PERMISSIONS } from '../permissions/roleDefaults.js';
-import { getDefaultTenant } from './tenantService.js';
+import { isSaasModeEnabled } from './saasAuthService.js';
 
 const ROLE_ADMIN = 'admin';
 /** Role de membership para admin (db.users.role=admin → membership.role=master) */
@@ -165,7 +165,8 @@ export function ensureLocalUserForSaasAccess(targetUserId, {
 
   const emailNorm = String(email || '').trim().toLowerCase();
   const now = new Date().toISOString();
-  const tid = String(tenantId || '').trim() || String(getDefaultTenant()?.id || '').trim();
+  const tid = String(tenantId || '').trim();
+  if (!tid && isSaasModeEnabled()) return false;
   const roleNorm = String(role || '').trim().toLowerCase();
   const appRole = ROLES.includes(roleNorm) ? roleNorm : 'atendimento';
   const membershipRole = appRole === ROLE_ADMIN ? ROLE_MASTER : appRole;
@@ -232,6 +233,7 @@ export function ensureLocalUserForSaasAccess(targetUserId, {
       const accessRecord = {
         collaboratorId: collabId,
         userId: targetUserId,
+        tenant_id: tid || undefined,
         role: appRole,
         permissions: aIdx >= 0 ? (d.collaboratorAccess[aIdx].permissions || []) : [],
         lastLoginAt: aIdx >= 0 ? (d.collaboratorAccess[aIdx].lastLoginAt || '') : '',

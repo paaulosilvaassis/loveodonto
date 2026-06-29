@@ -20,11 +20,15 @@ export function syncLocalCollaboratorAccess(collaboratorId, tenantUser, profileR
   const userId = String(tenantUser?.user_id || '').trim();
   if (!userId) return;
   const role = String(profileRole || tenantUser?.role || tenantUser?.role_slug || 'atendimento').trim();
+  const tenantId = normalizeTenantId(tenantUser?.tenant_id || tenantUser?.tenantId);
   withDb((db) => {
-    db.collaboratorAccess = (db.collaboratorAccess || []).filter((item) => item.collaboratorId !== collaboratorId);
+    db.collaboratorAccess = (db.collaboratorAccess || []).filter(
+      (item) => item.collaboratorId !== collaboratorId && item.userId !== userId,
+    );
     db.collaboratorAccess.push({
       collaboratorId,
       userId,
+      tenant_id: tenantId || undefined,
       role,
       permissions: [],
       lastLoginAt: '',
@@ -905,8 +909,14 @@ export const updateCollaboratorFinance = (user, collaboratorId, payload) => {
 
 export const getProfessionalOptions = () => {
   const db = loadDb();
+  const tenantFilter = normalizeTenantId(db.clinicProfile?.tenant_id);
   const collaborators = (db.collaborators ?? [])
     .filter((item) => item.status === 'ativo')
+    .filter((item) => {
+      if (!tenantFilter) return true;
+      const rowTenant = normalizeTenantId(item.tenant_id || item.tenantId);
+      return !rowTenant || rowTenant === tenantFilter;
+    })
     .filter((item) => isAgendaProfessional(item));
   return collaborators.map((item) => mapCollaboratorToProfessionalOption(item));
 };
