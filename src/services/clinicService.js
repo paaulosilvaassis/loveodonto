@@ -9,6 +9,10 @@ import {
   phonePartsToKey,
 } from '../utils/phoneUtils.js';
 import { encryptSecret, decryptSecret } from '../utils/crypto.js';
+import { normalizeTenantId, requireSessionTenantId } from './tenantIsolation.js';
+import { isSaasModeEnabled } from './saasAuthService.js';
+import { saveClinicProfileRemote } from './clinicProfileApi.js';
+import { syncTenantClinicProfileToLocalDb } from './tenantClinicProfileSync.js';
 
 export const getClinic = () => {
   const db = loadDb();
@@ -34,10 +38,16 @@ export const getClinic = () => {
   };
 };
 
-const buildClinicSummaryFromDb = (db) => {
+const buildClinicSummaryFromDb = (db, sessionTenantId = '') => {
+  const tid = normalizeTenantId(sessionTenantId);
+  const profileTenant = normalizeTenantId(db.clinicProfile?.tenant_id);
+  if (tid && profileTenant && profileTenant !== tid) {
+    return null;
+  }
   const phone = db.clinicPhones.find((item) => item.principal) || db.clinicPhones[0];
   const address = db.clinicAddresses.find((item) => item.principal) || db.clinicAddresses[0];
   return {
+    tenant_id: profileTenant || tid || null,
     nomeClinica: db.clinicProfile.nomeClinica,
     nomeFantasia: db.clinicProfile.nomeFantasia,
     cnpj: db.clinicDocumentation.cnpj,
@@ -47,22 +57,24 @@ const buildClinicSummaryFromDb = (db) => {
   };
 };
 
-export const getClinicSummary = () => {
+export const getClinicSummary = (sessionTenantId = '') => {
   const db = loadDb();
-  return buildClinicSummaryFromDb(db);
+  return buildClinicSummaryFromDb(db, sessionTenantId);
 };
 
 /** Versão assíncrona para não bloquear o thread (usa loadDbAsync). */
-export const getClinicSummaryAsync = () => loadDbAsync().then(buildClinicSummaryFromDb);
+export const getClinicSummaryAsync = (sessionTenantId = '') => loadDbAsync().then((db) => buildClinicSummaryFromDb(db, sessionTenantId));
 
 export const updateClinicProfile = (user, payload) => {
   requirePermission(user, 'team:write');
   assertRequired(payload.nomeClinica, 'Nome da clínica é obrigatório.');
-  return withDb((db) => {
+  const tenantId = isSaasModeEnabled() ? requireSessionTenantId(user) : normalizeTenantId(user?.tenantId);
+  const updated = withDb((db) => {
     const before = { ...db.clinicProfile };
     db.clinicProfile = {
       ...db.clinicProfile,
       ...payload,
+      tenant_id: tenantId || db.clinicProfile?.tenant_id || null,
       nomeClinica: normalizeText(payload.nomeClinica),
       nomeFantasia: normalizeText(payload.nomeFantasia),
       razaoSocial: normalizeText(payload.razaoSocial),
@@ -72,6 +84,27 @@ export const updateClinicProfile = (user, payload) => {
     logAction('clinic:update-profile', { before, after: db.clinicProfile, userId: user.id });
     return db.clinicProfile;
   });
+
+  if (isSaasModeEnabled() && tenantId) {
+    saveClinicProfileRemote({
+      tenant_id: tenantId,
+      nomeClinica: updated.nomeClinica,
+      nomeFantasia: updated.nomeFantasia,
+      razaoSocial: updated.razaoSocial,
+      logoUrl: updated.logoUrl,
+      emailPrincipal: updated.emailPrincipal,
+    }).then((res) => {
+      if (res?.clinicProfile) {
+        syncTenantClinicProfileToLocalDb(res.clinicProfile, tenantId);
+      }
+    }).catch((err) => {
+      if (import.meta.env?.DEV) {
+        console.debug('[updateClinicProfile] remote sync skipped', err?.message);
+      }
+    });
+  }
+
+  return updated;
 };
 
 export const updateClinicDocumentation = (user, payload) => {

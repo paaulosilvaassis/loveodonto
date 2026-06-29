@@ -7,6 +7,7 @@ import {
   normalizeModuleKey,
 } from '../tenant/tenantAccess.js';
 import { emitStabilityLog } from './stabilityLogService.js';
+import { tenantAudit, startTenantAuditTimer } from './tenantAuditLog.js';
 import {
   assertAdminApiFetchAllowed,
   buildAdminApiUrl,
@@ -87,6 +88,12 @@ function shouldUseSupabaseFallback(err) {
 
 const TENANT_CONTEXT_FETCH_TIMEOUT_MS = 8000;
 
+function formatHttpTenantError(response, json, fallback) {
+  const code = json?.code ? ` (${json.code})` : '';
+  const msg = json?.error || fallback;
+  return `[HTTP ${response.status}]${code} ${msg}`;
+}
+
 async function runQuery(queryFactory) {
   try {
     const result = await queryFactory();
@@ -102,6 +109,12 @@ async function fetchTenantContextViaAdminApiAttempt() {
   if (!accessToken) {
     throw new Error('Sessão SaaS ausente para carregar contexto da clínica.');
   }
+  const elapsed = startTenantAuditTimer();
+  tenantAudit('TENANT_API', {
+    source: 'tenant_users',
+    status: 'start',
+    extra: { endpoint: '/internal/app/tenant-context' },
+  });
   const fetchOpts = {
     method: 'GET',
     headers: {
@@ -135,32 +148,62 @@ async function fetchTenantContextViaAdminApiAttempt() {
           backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
         });
         if (response.status === 401) {
-          throw new Error(
-            json?.error
-            || 'Sua sessão SaaS não foi aceita pelo backend local. '
+          throw new Error(formatHttpTenantError(
+            response,
+            json,
+            'Sua sessão SaaS não foi aceita pelo backend. '
               + 'Alinhe `VITE_SUPABASE_PLATFORM_*` no app com `SUPABASE_URL` no server (mesmo projeto Supabase).',
-          );
+          ));
         }
         if (response.status === 404) {
-          throw new Error(
-            json?.error
-            || 'Usuário sem vínculo em tenant_users ou clínica inexistente. '
+          throw new Error(formatHttpTenantError(
+            response,
+            json,
+            'Usuário sem vínculo em tenant_users ou clínica inexistente. '
               + 'Provisione a clínica na Platform Console (5177) antes de usar o app.',
-          );
+          ));
+        }
+        if (response.status === 422 && json?.code === 'TENANT_PROFILE_MISSING') {
+          const err = new Error(formatHttpTenantError(response, json, 'Clínica não configurada para este usuário.'));
+          err.code = 'TENANT_PROFILE_MISSING';
+          throw err;
+        }
+        if (response.status === 403 && json?.code === 'TENANT_PROFILE_MISMATCH') {
+          const err = new Error(formatHttpTenantError(response, json, 'Perfil da clínica inconsistente com o vínculo do usuário.'));
+          err.code = 'TENANT_PROFILE_MISMATCH';
+          throw err;
+        }
+        if (response.status === 403) {
+          throw new Error(formatHttpTenantError(response, json, 'Acesso negado à clínica.'));
         }
         if (response.status === 502 || response.status === 503 || response.status === 504 || response.status >= 500) {
-          throw new Error(json?.error || formatAdminApiServerError(response.status));
+          throw new Error(formatHttpTenantError(response, json, formatAdminApiServerError(response.status)));
         }
-        throw new Error(json?.error || `Erro HTTP ${response.status} ao carregar contexto da clínica.`);
+        throw new Error(formatHttpTenantError(response, json, 'Erro ao carregar contexto da clínica.'));
       }
       emitStabilityLog('BACKEND_OK', {
         url,
         backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
       });
+      tenantAudit('TENANT_API', {
+        tenant_id: json?.tenant?.id || json?.tenantId || null,
+        role: json?.currentUser?.role || null,
+        source: 'tenant_users',
+        duration_ms: elapsed(),
+        status: 'ok',
+      });
       return json;
     } catch (error) {
       lastError = error;
-      if (!isTransientTenantContextError(error)) throw error;
+      if (!isTransientTenantContextError(error)) {
+        tenantAudit('TENANT_API', {
+          source: 'tenant_users',
+          duration_ms: elapsed(),
+          status: 'error',
+          error: String(error?.message || error),
+        });
+        throw error;
+      }
     } finally {
       clearTimeout(abortTimer);
     }
@@ -297,12 +340,15 @@ export async function getTenantContext(tenantId) {
     });
     return {
       tenant: apiContext.tenant || null,
+      clinicProfile: apiContext.clinicProfile || null,
       modules: apiContext.modules || createDefaultModuleMap(),
       flags: apiContext.flags || {},
       limits: apiContext.limits || {},
       subscription: apiContext.subscription || null,
       warnings: Array.isArray(apiContext.warnings) ? apiContext.warnings : [],
       currentUser: apiContext.currentUser || null,
+      teamRoster: Array.isArray(apiContext.teamRoster) ? apiContext.teamRoster : [],
+      access: apiContext.access || null,
     };
   }
 

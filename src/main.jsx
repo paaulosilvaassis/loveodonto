@@ -14,7 +14,7 @@ function showLoadError(err) {
 
 (async () => {
   const dbMod = await import('./db/index.js');
-  const { raceWithTimeout } = await import('./utils/promiseTimeout.js');
+  const { raceWithTimeout } = await import('./utils/async.js');
   await raceWithTimeout(
     dbMod.initDb(),
     120000,

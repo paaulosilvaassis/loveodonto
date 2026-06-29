@@ -39,6 +39,10 @@ import {
   findLegalProfileByToken,
 } from './onboardingTerms.js';
 import { createPlatformBillingService } from './platformBillingService.js';
+import {
+  resolveClinicProfileForTenant,
+  upsertClinicProfileForTenant,
+} from './clinicProfileResolver.js';
 import { formatBillingOverviewResponse } from './platformRevenueMetrics.js';
 import {
   assertAuthUserIdForTenantWrite,
@@ -2006,8 +2010,46 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
       if (!isMissingHasSystemAccessColumnError(rosterErr)) throw rosterErr;
     }
 
+    let clinicProfile = null;
+    try {
+      clinicProfile = await resolveClinicProfileForTenant(supabase, tenantId, tenant);
+    } catch (profileErr) {
+      if (profileErr?.code === 'TENANT_PROFILE_MISMATCH') {
+        console.error('[TENANT_PROFILE_MISMATCH]', {
+          tenant_id: tenantId,
+          user_id: authUserId,
+          email: req.appAuthUser.email,
+        });
+        return res.status(403).json({
+          error: 'Perfil da clínica inconsistente com o vínculo do usuário.',
+          code: 'TENANT_PROFILE_MISMATCH',
+        });
+      }
+      throw profileErr;
+    }
+
+    if (!clinicProfile?.tenant_id) {
+      console.error('[TENANT_PROFILE_MISSING]', {
+        tenant_id: tenantId,
+        user_id: authUserId,
+        email: req.appAuthUser.email,
+      });
+      return res.status(422).json({
+        error: 'Clínica não configurada para este usuário.',
+        code: 'TENANT_PROFILE_MISSING',
+      });
+    }
+
+    const authMeta = req.appAuthUser?.app_metadata && typeof req.appAuthUser.app_metadata === 'object'
+      ? req.appAuthUser.app_metadata
+      : {};
+    const permissionOverrides = authMeta.permission_overrides && typeof authMeta.permission_overrides === 'object'
+      ? authMeta.permission_overrides
+      : {};
+
     res.json({
       tenant,
+      clinicProfile,
       modules: buildModuleMap(modulesResult.data || []),
       flags: buildFeatureFlags(globalFlagsResult.data || [], tenantFlagsResult.data || []),
       limits: limitsResult.data?.limits_json || {},
@@ -2019,6 +2061,7 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         isActive: tenantUser.is_active ?? tenantUser.status === 'active',
         invitationStatus: tenantUser.invitation_status || 'none',
         collaboratorId: tenantUser.collaborator_id || null,
+        clinicId: clinicProfile.clinic_id || null,
       },
       currentUser: {
         id: authUserId,
@@ -2027,6 +2070,7 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         role: tenantUser.role || tenantUser.role_slug || 'atendimento',
         isActive: tenantUser.is_active ?? true,
         collaboratorId: tenantUser.collaborator_id || null,
+        permissionOverrides,
       },
       teamRoster,
     });
@@ -2040,6 +2084,35 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         : '';
     res.status(400).json({
       error: `${raw}${hint}`,
+    });
+  }
+});
+
+app.put('/internal/app/clinic-profile', requireAppUser, async (req, res) => {
+  try {
+    const explicitTenantId = normalizeText(req.body?.tenant_id);
+    const actorTenantUser = await getTenantAdminActorOrThrow(req.appAuthUser.id, explicitTenantId);
+    const tenantId = actorTenantUser.tenant_id;
+
+    const row = await upsertClinicProfileForTenant(supabase, tenantId, {
+      name: req.body?.name || req.body?.nomeClinica,
+      fantasy_name: req.body?.fantasy_name || req.body?.nomeFantasia,
+      legal_name: req.body?.legal_name || req.body?.razaoSocial,
+      logo_url: req.body?.logo_url || req.body?.logoUrl,
+      email: req.body?.email || req.body?.emailPrincipal,
+      phone: req.body?.phone,
+      cnpj: req.body?.cnpj,
+      status: req.body?.status,
+    });
+
+    const { data: tenantRow } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle();
+    const clinicProfile = await resolveClinicProfileForTenant(supabase, tenantId, tenantRow || { id: tenantId });
+
+    return res.status(200).json({ success: true, clinicProfile: clinicProfile || row });
+  } catch (err) {
+    console.error('[app-clinic-profile]', err);
+    return res.status(400).json({
+      error: normalizeDatabaseError(err, 'Falha ao salvar perfil da clínica.'),
     });
   }
 });

@@ -10,7 +10,7 @@
  */
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { fetchSaasAccessBootstrap } from '../services/saasAuthService.js';
-import { raceWithTimeout } from '../utils/promiseTimeout.js';
+import { raceWithTimeout } from '../utils/async.js';
 import {
   enrichSaasUserPrivileges,
   isMasterMembershipRole,

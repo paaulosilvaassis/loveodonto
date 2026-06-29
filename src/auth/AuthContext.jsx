@@ -11,7 +11,8 @@ import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
 import { LOGOUT_REASON_KEY } from './logoutReason.js';
 import { auditTenantAccess } from '../services/tenantIsolation.js';
-import { raceWithTimeout } from '../utils/promiseTimeout.js';
+import { tenantAudit, startTenantAuditTimer } from '../services/tenantAuditLog.js';
+import { raceWithTimeout } from '../utils/async.js';
 import { AuthContext } from './authContext.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
 import { bootstrapSaasTenantLocalDb } from '../services/saasTenantBootstrapService.js';
@@ -97,6 +98,15 @@ async function persistResolvedSaasUser(resolved, { previousTenantId } = {}) {
  */
 async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
   authDebug('hydrate: início da validação de sessão');
+  const hydrateElapsed = startTenantAuditTimer();
+  tenantAudit('TENANT_AUTH', {
+    user_id: stored?.userId,
+    email: stored?.cachedUser?.email,
+    tenant_id: stored?.tenantId,
+    role: stored?.cachedUser?.role,
+    source: 'tenant_users',
+    status: 'hydrate_start',
+  });
   if (!supabasePlatformClient) {
     onLogout('Configuração do Supabase ausente. Contate o suporte.');
     return;
@@ -166,6 +176,15 @@ async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
     }
     await persistResolvedSaasUser(resolved, { previousTenantId: stored.tenantId });
     onUser(enrichSaasUserPrivileges(resolved));
+    tenantAudit('TENANT_AUTH', {
+      user_id: resolved.id,
+      email: resolved.email,
+      tenant_id: resolved.tenantId,
+      role: resolved.role,
+      source: 'tenant_users',
+      duration_ms: hydrateElapsed(),
+      status: 'hydrate_ok',
+    });
     authDebug('hydrate: usuário e tenant resolvidos — fim do loading');
   } catch (err) {
     if (isCancelled()) return;
@@ -335,6 +354,14 @@ export const AuthProvider = ({ children }) => {
       }, 2500);
       setSession(next);
       setUser(enriched);
+      tenantAudit('TENANT_AUTH', {
+        user_id: enriched.id,
+        email: enriched.email,
+        tenant_id: enriched.tenantId,
+        role: enriched.role,
+        source: 'tenant_users',
+        status: 'login_ok',
+      });
       emitStabilityLog('AUTH_OK', { mode: 'saas', tenantId: enriched.tenantId });
       return enriched;
     }

@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { initDb, resetDb, withDb } from '../db/index.js';
 import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
 import { BUDGET_STATUS } from '../services/clinicalBudgetConstants.js';
@@ -13,6 +13,11 @@ import { SIGNATURE_WEBHOOK_EVENTS } from '../contracts/contractConstants.js';
 
 describe('contractSignatureFlow', () => {
   beforeEach(async () => {
+    vi.stubGlobal('window', {
+      ...globalThis.window,
+      location: { origin: 'http://localhost:5173' },
+      dispatchEvent: () => true,
+    });
     localStorage.clear();
     await resetDb();
     await initDb();

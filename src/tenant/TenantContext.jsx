@@ -4,7 +4,7 @@ import { TenantContext } from './tenantContext.js';
 import { subscribeTenantRealtimeChanges } from '../services/tenantContextService.js';
 import { readTenantAccessSnapshot } from '../services/platformAccessService.js';
 import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
-import { raceWithTimeout } from '../utils/promiseTimeout.js';
+import { raceWithTimeout } from '../utils/async.js';
 import { auditTenantAccess } from '../services/tenantIsolation.js';
 import { isTransientAuthError } from '../auth/saasSessionResolver.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
@@ -12,6 +12,8 @@ import { getTenantSnapshotTimeoutMessage } from '../config/adminApiBase.js';
 import { backfillCollaboratorTenantIds, reconcileSaasTeamRoster } from '../services/tenantTeamRosterSync.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
+import { syncTenantClinicProfileToLocalDb } from '../services/tenantClinicProfileSync.js';
+import { tenantAudit, startTenantAuditTimer } from '../services/tenantAuditLog.js';
 
 /** Curto o suficiente para não travar a tela; o erro oferece retry e volta ao login. */
 const TENANT_SNAPSHOT_TIMEOUT_MS = 20000;
@@ -20,11 +22,15 @@ const TENANT_SNAPSHOT_TIMEOUT_MSG = getTenantSnapshotTimeoutMessage();
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const EMPTY_CONTEXT = {
   tenant: null,
+  clinicProfile: null,
   modules: {},
   flags: {},
   limits: {},
   subscription: null,
   warnings: [],
+  currentUser: null,
+  teamRoster: [],
+  access: null,
 };
 
 export function TenantProvider({ children }) {
@@ -43,11 +49,20 @@ export function TenantProvider({ children }) {
       return;
     }
     const silent = isBackground && hasLoadedOnce.current;
+    const elapsed = startTenantAuditTimer();
     try {
       if (!silent) {
         setError('');
         setLoading(true);
       }
+      tenantAudit('TENANT_CONTEXT', {
+        user_id: user?.id,
+        email: user?.email,
+        tenant_id: user?.tenantId,
+        role: user?.role,
+        source: 'tenant_users',
+        status: 'start',
+      });
       const context = await raceWithTimeout(
         (async () => {
           let lastErr;
@@ -71,13 +86,29 @@ export function TenantProvider({ children }) {
       hasLoadedOnce.current = true;
       if (!silent) setError('');
       emitStabilityLog('TENANT_CONTEXT_OK', { tenantId: user.tenantId, source: silent ? 'background' : 'foreground' });
+      tenantAudit('TENANT_CONTEXT', {
+        user_id: user?.id,
+        email: user?.email,
+        tenant_id: user?.tenantId,
+        role: context?.currentUser?.role || user?.role,
+        source: 'tenant_users',
+        duration_ms: elapsed(),
+        status: 'ok',
+        extra: { clinic_profile: Boolean(context?.clinicProfile?.tenant_id) },
+      });
       if (isSaasModeEnabled() && user?.tenantId) {
+        if (!context?.clinicProfile?.tenant_id) {
+          emitStabilityLog('TENANT_PROFILE_MISSING', { tenantId: user.tenantId, userId: user.id });
+        } else {
+          syncTenantClinicProfileToLocalDb(context.clinicProfile, user.tenantId);
+        }
         try {
           reconcileSaasTeamRoster(context?.teamRoster, user.tenantId);
           backfillCollaboratorTenantIds(user.tenantId);
           ensureSaasUserInLocalDb({
             ...user,
             collaboratorId: context?.currentUser?.collaboratorId || user.collaboratorId,
+            permissionOverrides: context?.currentUser?.permissionOverrides || user.permissionOverrides,
           });
         } catch (syncErr) {
           if (import.meta.env?.DEV) {
@@ -95,13 +126,24 @@ export function TenantProvider({ children }) {
         /* sessão sem tenant — RequireTenantAccess bloqueia */
       }
     } catch (err) {
+      const message = String(err?.message || err || 'Falha ao carregar contexto do tenant.');
       emitStabilityLog('TENANT_CONTEXT_FAILED', {
         tenantId: user?.tenantId || null,
         source: silent ? 'background' : 'foreground',
-        reason: String(err?.message || err || ''),
+        reason: message,
+      });
+      tenantAudit('TENANT_CONTEXT', {
+        user_id: user?.id,
+        email: user?.email,
+        tenant_id: user?.tenantId,
+        role: user?.role,
+        source: 'tenant_users',
+        duration_ms: elapsed(),
+        status: 'error',
+        error: message,
       });
       if (!silent) {
-        setError(err?.message || 'Falha ao carregar contexto do tenant.');
+        setError(message);
       }
     } finally {
       if (!silent) setLoading(false);

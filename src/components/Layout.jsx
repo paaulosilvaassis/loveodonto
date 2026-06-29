@@ -167,12 +167,12 @@ export default function Layout({ children }) {
           <div className="brand-logo-wrap">
             <img
               src={clinicSummary?.logoUrl || appLogo}
-              alt={clinicSummary?.logoUrl ? 'Logo da clínica' : 'Logo do app LOVE ODONTO'}
+              alt={clinicSummary?.logoUrl ? `Logo ${clinicSummary?.nomeClinica || 'da clínica'}` : 'Logo do app LOVE ODONTO'}
               className="brand-logo"
             />
           </div>
           <div className="brand-text">
-            <strong>{clinicSummary?.nomeClinica || 'LOVE ODONTO'}</strong>
+            <strong>{clinicSummary?.nomeClinica || (tenant.loading ? 'Carregando…' : 'LOVE ODONTO')}</strong>
           </div>
         </div>
 

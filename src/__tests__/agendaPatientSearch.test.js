@@ -40,17 +40,17 @@ describe('Agenda - busca de paciente', () => {
     expect(empty.results).toEqual([]);
   });
 
-  it('suggestPatients inclui pacientes legados tenant-1 na clínica SaaS única', () => {
+  it('suggestPatients isola pacientes pelo tenant_id da clínica SaaS', () => {
     const saasTenantId = 'a1111111-1111-4111-8111-111111111111';
     withDb((db) => {
       db.tenants = [{ id: saasTenantId, name: 'Implanprime', status: 'active' }];
       db.patients = [
-        { id: 'p-legacy', full_name: 'Carlos Legado', cpf: '39053344705', tenant_id: 'tenant-1' },
+        { id: 'p-saas', full_name: 'Carlos SaaS', cpf: '39053344705', tenant_id: saasTenantId },
       ];
       return db;
     });
     const scoped = suggestPatients('name', 'carlos', 10, saasTenantId);
     expect(scoped.results).toHaveLength(1);
-    expect(scoped.results[0].id).toBe('p-legacy');
+    expect(scoped.results[0].id).toBe('p-saas');
   });
 });
