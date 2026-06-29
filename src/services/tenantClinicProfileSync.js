@@ -4,6 +4,7 @@
  */
 import { loadDb, withDb } from '../db/index.js';
 import { normalizeTenantId } from './tenantIsolation.js';
+import { getClinicLogo } from '../utils/clinicLogo.js';
 import { emitStabilityLog } from './stabilityLogService.js';
 
 const CLINIC_SUMMARY_CACHE_KEY = 'clinic.summary.cache';
@@ -33,7 +34,7 @@ export function mapServerClinicProfileToLocal(serverProfile) {
     razaoSocial: legal || fantasy || name,
     nomeClinica: name || fantasy || legal,
     emailPrincipal: String(serverProfile?.email || '').trim(),
-    logoUrl: String(serverProfile?.logo_url || '').trim(),
+    logoUrl: getClinicLogo(serverProfile, { includeDefault: false }),
     status: String(serverProfile?.status || 'ativo').toLowerCase() === 'inactive' ? 'inativo' : 'ativo',
   };
 }
@@ -77,8 +78,6 @@ export function syncTenantClinicProfileToLocalDb(serverProfile, expectedTenantId
 
     if (localProfile.logoUrl) {
       db.clinicProfile.logoUrl = localProfile.logoUrl;
-    } else if (prev.tenant_id === expected && prev.logoUrl) {
-      db.clinicProfile.logoUrl = prev.logoUrl;
     }
 
     db.clinicDocumentation = {
@@ -124,10 +123,11 @@ export function syncTenantClinicProfileToLocalDb(serverProfile, expectedTenantId
 export function buildClinicSummaryFromServerProfile(serverProfile) {
   const local = mapServerClinicProfileToLocal(serverProfile);
   if (!local) return null;
+  const logoUrl = getClinicLogo(serverProfile, { includeDefault: false });
   return {
     nomeClinica: local.nomeClinica,
     nomeFantasia: local.nomeFantasia,
-    logoUrl: local.logoUrl,
+    logoUrl,
     cnpj: String(serverProfile?.cnpj || '').trim(),
     telefonePrincipal: String(serverProfile?.phone || '').trim(),
     enderecoPrincipal: null,

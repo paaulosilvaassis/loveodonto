@@ -3,6 +3,8 @@
  * Fonte: clinic_profiles → fallback tenants (auto-upsert).
  */
 
+import { persistClinicLogoUrl } from './clinicLogoStorage.js';
+
 function normalizeText(value) {
   return String(value || '').trim();
 }
@@ -33,13 +35,13 @@ export function buildClinicProfileFromTenantRow(tenantRow) {
 }
 
 function mapClinicProfileRow(row, tenantRow) {
-  if (!row?.tenant_id) return buildClinicProfileFromTenantRow(tenantRow);
+  if (!row?.tenant_id) return normalizeClinicProfileForClient(buildClinicProfileFromTenantRow(tenantRow));
   const tenantId = normalizeText(row.tenant_id);
   const name = normalizeText(row.name)
     || normalizeText(row.fantasy_name)
     || normalizeText(tenantRow?.trade_name)
     || 'Minha Clínica';
-  return {
+  return normalizeClinicProfileForClient({
     id: normalizeText(row.id) || buildClinicId(tenantId),
     tenant_id: tenantId,
     clinic_id: buildClinicId(tenantId),
@@ -51,6 +53,29 @@ function mapClinicProfileRow(row, tenantRow) {
     phone: normalizeText(row.phone) || normalizeText(tenantRow?.phone) || null,
     cnpj: normalizeText(row.cnpj) || normalizeText(tenantRow?.cnpj) || null,
     status: normalizeText(row.status) || normalizeText(tenantRow?.status) || 'active',
+  });
+}
+
+export function normalizeClinicProfileForClient(profile) {
+  if (!profile) return null;
+  const tenant_id = normalizeText(profile.tenant_id || profile.tenantId);
+  const logo_url = normalizeText(profile.logo_url || profile.logoUrl) || null;
+  const name = normalizeText(profile.name || profile.nomeClinica);
+  const fantasy_name = normalizeText(profile.fantasy_name || profile.fantasyName || profile.nomeFantasia) || name;
+  const legal_name = normalizeText(profile.legal_name || profile.legalName || profile.razaoSocial) || fantasy_name || name;
+  return {
+    ...profile,
+    id: profile.id || (tenant_id ? buildClinicId(tenant_id) : null),
+    tenant_id: tenant_id || null,
+    tenantId: tenant_id || null,
+    clinic_id: profile.clinic_id || (tenant_id ? buildClinicId(tenant_id) : null),
+    name: name || fantasy_name || legal_name || 'Minha Clínica',
+    fantasy_name: fantasy_name || name,
+    fantasyName: fantasy_name || name,
+    legal_name: legal_name || fantasy_name || name,
+    legalName: legal_name || fantasy_name || name,
+    logo_url,
+    logoUrl: logo_url,
   };
 }
 
@@ -140,7 +165,10 @@ export async function upsertClinicProfileForTenant(supabase, tenantId, payload =
   if (payload.name !== undefined) updatePayload.name = normalizeText(payload.name);
   if (payload.fantasy_name !== undefined) updatePayload.fantasy_name = normalizeText(payload.fantasy_name);
   if (payload.legal_name !== undefined) updatePayload.legal_name = normalizeText(payload.legal_name);
-  if (payload.logo_url !== undefined) updatePayload.logo_url = normalizeText(payload.logo_url) || null;
+  if (payload.logo_url !== undefined || payload.logoUrl !== undefined) {
+    const rawLogo = payload.logo_url ?? payload.logoUrl;
+    updatePayload.logo_url = await persistClinicLogoUrl(supabase, normalizedTenantId, rawLogo);
+  }
   if (payload.email !== undefined) updatePayload.email = normalizeText(payload.email) || null;
   if (payload.phone !== undefined) updatePayload.phone = normalizeText(payload.phone) || null;
   if (payload.cnpj !== undefined) updatePayload.cnpj = normalizeText(payload.cnpj) || null;
@@ -153,5 +181,5 @@ export async function upsertClinicProfileForTenant(supabase, tenantId, payload =
     .single();
 
   if (error) throw error;
-  return data;
+  return normalizeClinicProfileForClient(data);
 }

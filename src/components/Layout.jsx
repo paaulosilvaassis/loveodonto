@@ -5,6 +5,7 @@ import { useAuth } from '../auth/useAuth.js';
 import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
 import { useTenant } from '../tenant/useTenant.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
+import { useClinicLogo } from '../hooks/useClinicLogo.js';
 import { navCategories, getActiveCategory, getActiveItem } from '../navigation/navCategories.js';
 import { resolveRoutePermission } from '../navigation/routePermissionMap.js';
 import { canAccessRoute } from '../tenant/tenantAccess.js';
@@ -15,7 +16,7 @@ import PatientQuickCreateModal from './PatientQuickCreateModal.jsx';
 import OpeningScreen, { shouldShowOpening } from './OpeningScreen.jsx';
 import { ImportJobProvider } from '../context/ImportJobContext.jsx';
 import ImportProgressFooter from './ImportProgressFooter.jsx';
-import appLogo from '../assets/love-odonto-logo.png';
+import { DEFAULT_CLINIC_LOGO } from '../utils/clinicLogo.js';
 
 const ACTIVE_CATEGORY_KEY = 'appgestaoodonto.nav.activeCategory';
 const SIDEBAR_COLLAPSED_KEY = 'appgestaoodonto.nav.sidebarCollapsed';
@@ -63,6 +64,7 @@ export default function Layout({ children }) {
   const isClinicalFocusMode = location.pathname.startsWith('/atendimento-clinico/')
     && !location.pathname.endsWith('/central');
   const clinicSummary = useClinicSummary();
+  const { clinicLogo, hasLogo: clinicHasLogo } = useClinicLogo();
 
   // Estado da categoria ativa (restaurado do localStorage ou detectado pela rota)
   const [activeCategoryId, setActiveCategoryId] = useState(() => {
@@ -166,13 +168,13 @@ export default function Layout({ children }) {
         <div className="brand">
           <div className="brand-logo-wrap">
             <img
-              src={clinicSummary?.logoUrl || appLogo}
-              alt={clinicSummary?.logoUrl ? `Logo ${clinicSummary?.nomeClinica || 'da clínica'}` : 'Logo do app LOVE ODONTO'}
+              src={clinicLogo}
+              alt={clinicHasLogo ? `Logo ${clinicSummary?.nomeClinica || tenant.clinicProfile?.name || 'da clínica'}` : 'Logo do app LOVE ODONTO'}
               className="brand-logo"
             />
           </div>
           <div className="brand-text">
-            <strong>{clinicSummary?.nomeClinica || (tenant.loading ? 'Carregando…' : 'LOVE ODONTO')}</strong>
+            <strong>{clinicSummary?.nomeClinica || tenant.clinicProfile?.name || (tenant.loading ? 'Carregando…' : 'LOVE ODONTO')}</strong>
           </div>
         </div>
 
@@ -310,10 +312,10 @@ export default function Layout({ children }) {
             <div className="brand-container">
               <div className="logo-wrapper">
                 <img
-                  src="/logo-header.png"
-                  alt="Logo"
+                  src={clinicLogo}
+                  alt={clinicHasLogo ? 'Logo da clínica' : 'Logo LOVE ODONTO'}
                   className="header-logo"
-                  onError={(e) => { e.target.onerror = null; e.target.src = appLogo; }}
+                  onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_CLINIC_LOGO; }}
                 />
               </div>
             </div>

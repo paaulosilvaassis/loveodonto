@@ -14,6 +14,7 @@ import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
 import { syncTenantClinicProfileToLocalDb } from '../services/tenantClinicProfileSync.js';
 import { tenantAudit, startTenantAuditTimer } from '../services/tenantAuditLog.js';
+import { normalizeClinicProfileForClient } from '../utils/clinicLogo.js';
 
 /** Curto o suficiente para não travar a tela; o erro oferece retry e volta ao login. */
 const TENANT_SNAPSHOT_TIMEOUT_MS = 20000;
@@ -82,7 +83,10 @@ export function TenantProvider({ children }) {
         TENANT_SNAPSHOT_TIMEOUT_MS,
         TENANT_SNAPSHOT_TIMEOUT_MSG,
       );
-      setTenantContext(context);
+      setTenantContext({
+        ...context,
+        clinicProfile: normalizeClinicProfileForClient(context?.clinicProfile),
+      });
       hasLoadedOnce.current = true;
       if (!silent) setError('');
       emitStabilityLog('TENANT_CONTEXT_OK', { tenantId: user.tenantId, source: silent ? 'background' : 'foreground' });

@@ -65,7 +65,7 @@ export const getClinicSummary = (sessionTenantId = '') => {
 /** Versão assíncrona para não bloquear o thread (usa loadDbAsync). */
 export const getClinicSummaryAsync = (sessionTenantId = '') => loadDbAsync().then((db) => buildClinicSummaryFromDb(db, sessionTenantId));
 
-export const updateClinicProfile = (user, payload) => {
+export const updateClinicProfile = async (user, payload) => {
   requirePermission(user, 'team:write');
   assertRequired(payload.nomeClinica, 'Nome da clínica é obrigatório.');
   const tenantId = isSaasModeEnabled() ? requireSessionTenantId(user) : normalizeTenantId(user?.tenantId);
@@ -86,22 +86,18 @@ export const updateClinicProfile = (user, payload) => {
   });
 
   if (isSaasModeEnabled() && tenantId) {
-    saveClinicProfileRemote({
+    const res = await saveClinicProfileRemote({
       tenant_id: tenantId,
       nomeClinica: updated.nomeClinica,
       nomeFantasia: updated.nomeFantasia,
       razaoSocial: updated.razaoSocial,
       logoUrl: updated.logoUrl,
       emailPrincipal: updated.emailPrincipal,
-    }).then((res) => {
-      if (res?.clinicProfile) {
-        syncTenantClinicProfileToLocalDb(res.clinicProfile, tenantId);
-      }
-    }).catch((err) => {
-      if (import.meta.env?.DEV) {
-        console.debug('[updateClinicProfile] remote sync skipped', err?.message);
-      }
     });
+    if (res?.clinicProfile) {
+      syncTenantClinicProfileToLocalDb(res.clinicProfile, tenantId);
+    }
+    return { profile: updated, clinicProfile: res?.clinicProfile || null };
   }
 
   return updated;

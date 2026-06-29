@@ -8,6 +8,7 @@ import {
 } from '../tenant/tenantAccess.js';
 import { emitStabilityLog } from './stabilityLogService.js';
 import { tenantAudit, startTenantAuditTimer } from './tenantAuditLog.js';
+import { normalizeClinicProfileForClient } from '../utils/clinicLogo.js';
 import {
   assertAdminApiFetchAllowed,
   buildAdminApiUrl,
@@ -297,6 +298,79 @@ function resolveLimits(limitsRow, subscription) {
   return {};
 }
 
+function buildClinicIdFromTenant(tenantId) {
+  return `clinic-${String(tenantId || '').slice(0, 8)}`;
+}
+
+function buildClinicProfileFromTenantRow(tenantRow) {
+  const tenantId = String(tenantRow?.id || '').trim();
+  if (!tenantId) return null;
+  const tradeName = String(tenantRow?.trade_name || '').trim();
+  const legalName = String(tenantRow?.legal_name || '').trim();
+  const displayName = tradeName || legalName || 'Minha Clínica';
+  return {
+    id: buildClinicIdFromTenant(tenantId),
+    tenant_id: tenantId,
+    clinic_id: buildClinicIdFromTenant(tenantId),
+    name: displayName,
+    fantasy_name: tradeName || displayName,
+    legal_name: legalName || tradeName || displayName,
+    logo_url: String(tenantRow?.logo_url || '').trim() || null,
+    email: String(tenantRow?.owner_email || '').trim() || null,
+    phone: String(tenantRow?.phone || '').trim() || null,
+    cnpj: String(tenantRow?.cnpj || '').trim() || null,
+    status: String(tenantRow?.status || 'active').trim() || 'active',
+  };
+}
+
+function mapClinicProfileRow(row, tenantRow) {
+  if (!row?.tenant_id) return buildClinicProfileFromTenantRow(tenantRow);
+  const tenantId = String(row.tenant_id).trim();
+  const name = String(row.name || row.fantasy_name || tenantRow?.trade_name || '').trim() || 'Minha Clínica';
+  return {
+    id: String(row.id || buildClinicIdFromTenant(tenantId)).trim(),
+    tenant_id: tenantId,
+    clinic_id: buildClinicIdFromTenant(tenantId),
+    name,
+    fantasy_name: String(row.fantasy_name || tenantRow?.trade_name || name).trim() || name,
+    legal_name: String(row.legal_name || tenantRow?.legal_name || name).trim() || name,
+    logo_url: String(row.logo_url || '').trim() || null,
+    email: String(row.email || tenantRow?.owner_email || '').trim() || null,
+    phone: String(row.phone || tenantRow?.phone || '').trim() || null,
+    cnpj: String(row.cnpj || tenantRow?.cnpj || '').trim() || null,
+    status: String(row.status || tenantRow?.status || 'active').trim() || 'active',
+  };
+}
+
+function isMissingClinicProfilesTableError(error) {
+  const code = String(error?.code || '').toUpperCase();
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    code === 'PGRST205'
+    || code === '42P01'
+    || (message.includes('relation') && message.includes('clinic_profiles'))
+  );
+}
+
+async function fetchOptionalClinicProfile(client, tenantId, tenantRow) {
+  if (!client || !tenantId || !tenantRow) return null;
+  try {
+    const { data, error } = await client
+      .from('clinic_profiles')
+      .select('id, tenant_id, name, fantasy_name, legal_name, logo_url, email, phone, cnpj, status')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (error && !isMissingClinicProfilesTableError(error)) throw error;
+    if (error) return buildClinicProfileFromTenantRow(tenantRow);
+    return mapClinicProfileRow(data, tenantRow) || buildClinicProfileFromTenantRow(tenantRow);
+  } catch (err) {
+    if (import.meta.env?.DEV) {
+      console.debug('[tenant-context] clinic_profiles fallback:', err?.message);
+    }
+    return buildClinicProfileFromTenantRow(tenantRow);
+  }
+}
+
 export async function getTenantContext(tenantId) {
   if (!tenantId) {
     throw new Error('Clínica não informada para carregar o contexto.');
@@ -340,7 +414,7 @@ export async function getTenantContext(tenantId) {
     });
     return {
       tenant: apiContext.tenant || null,
-      clinicProfile: apiContext.clinicProfile || null,
+      clinicProfile: normalizeClinicProfileForClient(apiContext.clinicProfile),
       modules: apiContext.modules || createDefaultModuleMap(),
       flags: apiContext.flags || {},
       limits: apiContext.limits || {},
@@ -399,8 +473,12 @@ export async function getTenantContext(tenantId) {
   if (String(tenant.billing_status || '').toLowerCase() === 'overdue') {
     warnings.push('Existem pendências de cobrança');
   }
+  const clinicProfile = normalizeClinicProfileForClient(
+    await fetchOptionalClinicProfile(client, tenantId, tenant),
+  );
   return {
     tenant,
+    clinicProfile,
     modules,
     flags,
     limits,
@@ -425,6 +503,7 @@ export function subscribeTenantRealtimeChanges(tenantId, onChange) {
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tenant_subscriptions', filter: `tenant_id=eq.${tenantId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'feature_flags' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_profiles', filter: `tenant_id=eq.${tenantId}` }, onChange)
     .subscribe();
 
   return () => {

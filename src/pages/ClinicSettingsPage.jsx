@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/useAuth.js';
+import { useTenant } from '../tenant/useTenant.js';
+import { getClinicLogo } from '../utils/clinicLogo.js';
 import { Field } from '../components/Field.jsx';
 import { can } from '../permissions/permissions.js';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
@@ -48,6 +50,7 @@ const dayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 export default function ClinicSettingsPage() {
   const { user } = useAuth();
+  const { clinicProfile, refreshTenantContext } = useTenant();
   const [activeSection, setActiveSection] = useState('geral');
   const [editingSection, setEditingSection] = useState('');
   const [error, setError] = useState('');
@@ -144,7 +147,17 @@ export default function ClinicSettingsPage() {
     setSuccess('');
     try {
       const section = editingSection || activeSection;
-      if (section === 'cadastro') updateClinicProfile(user, draft.profile);
+      if (section === 'cadastro') {
+        const result = await updateClinicProfile(user, draft.profile);
+        await refreshTenantContext(false);
+        const remoteLogo = result?.clinicProfile?.logoUrl || result?.clinicProfile?.logo_url;
+        if (remoteLogo) {
+          setDraft((prev) => ({
+            ...prev,
+            profile: { ...prev.profile, logoUrl: remoteLogo },
+          }));
+        }
+      }
       else if (section === 'documentacao') updateClinicDocumentation(user, draft.documentation);
       else if (section === 'tributacao') updateClinicTax(user, draft.tax);
       else if (section === 'horarios') updateBusinessHours(user, draft.businessHours);
@@ -1147,7 +1160,9 @@ export default function ClinicSettingsPage() {
   }, [activeSection, editingSection, clinic, draft, user, isAdmin, cepLoading, cepError, isAutoFilled, handleCepChange, handleCepBlur, handleAddressFieldChange, lookupCep]);
 
   const headerProps = {
-    logoUrl: draft.profile?.logoUrl,
+    logoUrl: isRecordEditing
+      ? (draft.profile?.logoUrl || getClinicLogo(clinicProfile, { includeDefault: false }))
+      : getClinicLogo(clinicProfile, { includeDefault: false }) || draft.profile?.logoUrl,
     displayName: draft.profile?.nomeClinica || draft.profile?.nomeMarca || draft.profile?.nomeFantasia,
     razaoSocial: draft.profile?.razaoSocial,
     documento: formatCnpj(draft.documentation?.cnpj || ''),

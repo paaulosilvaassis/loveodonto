@@ -3,6 +3,7 @@ import { getClinicSummaryAsync } from '../services/clinicService.js';
 import { useAuth } from '../auth/useAuth.js';
 import { useTenant } from '../tenant/useTenant.js';
 import { buildClinicSummaryFromServerProfile } from '../services/tenantClinicProfileSync.js';
+import { normalizeClinicProfileForClient } from '../utils/clinicLogo.js';
 import { normalizeTenantId } from '../services/tenantIsolation.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
 
@@ -31,8 +32,9 @@ export const useClinicSummary = () => {
 
   const serverSummary = useMemo(() => {
     if (!clinicProfile || !sessionTenantId) return null;
-    if (normalizeTenantId(clinicProfile.tenant_id) !== sessionTenantId) return null;
-    return buildClinicSummaryFromServerProfile(clinicProfile);
+    const normalized = normalizeClinicProfileForClient(clinicProfile);
+    if (normalizeTenantId(normalized?.tenant_id) !== sessionTenantId) return null;
+    return buildClinicSummaryFromServerProfile(normalized);
   }, [clinicProfile, sessionTenantId]);
 
   const [summary, setSummary] = useState(() => serverSummary || readCache(sessionTenantId));
@@ -45,6 +47,10 @@ export const useClinicSummary = () => {
     }
 
     if (isSaasModeEnabled() && tenantLoading) {
+      return undefined;
+    }
+
+    if (isSaasModeEnabled() && clinicProfile && sessionTenantId) {
       return undefined;
     }
 
@@ -69,7 +75,7 @@ export const useClinicSummary = () => {
       window.removeEventListener('saas:tenant-bootstrapped', onBootstrap);
       window.removeEventListener('saas:clinic-profile-synced', onBootstrap);
     };
-  }, [serverSummary, sessionTenantId, tenantLoading]);
+  }, [serverSummary, sessionTenantId, tenantLoading, clinicProfile]);
 
   return summary;
 };
