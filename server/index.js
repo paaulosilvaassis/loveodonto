@@ -84,7 +84,7 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Platform-Key'],
   }),
 );
-app.use(express.json());
+app.use(express.json({ limit: '12mb' }));
 
 /** Health check leve (sem Supabase) — usado pelo script `npm run console:stack` para saber quando a API está escutando. */
 app.get('/health', (_req, res) => {

@@ -31,6 +31,12 @@ async function putJson(path, body) {
       });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (response.status === 413) {
+          throw new Error(
+            'A logomarca é grande demais para enviar diretamente. '
+              + 'O upload deve ir para o Supabase Storage antes de salvar — atualize a página e tente novamente.',
+          );
+        }
         throw new Error(json?.error || `Erro HTTP ${response.status} ao salvar perfil da clínica.`);
       }
       return json;

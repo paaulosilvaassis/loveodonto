@@ -12,6 +12,7 @@ import { encryptSecret, decryptSecret } from '../utils/crypto.js';
 import { normalizeTenantId, requireSessionTenantId } from './tenantIsolation.js';
 import { isSaasModeEnabled } from './saasAuthService.js';
 import { saveClinicProfileRemote } from './clinicProfileApi.js';
+import { resolveClinicLogoUrlForSave } from './clinicLogoUploadService.js';
 import { syncTenantClinicProfileToLocalDb } from './tenantClinicProfileSync.js';
 
 export const getClinic = () => {
@@ -86,12 +87,33 @@ export const updateClinicProfile = async (user, payload) => {
   });
 
   if (isSaasModeEnabled() && tenantId) {
+    let logoUrlForRemote = updated.logoUrl;
+    try {
+      logoUrlForRemote = await resolveClinicLogoUrlForSave(tenantId, updated.logoUrl) ?? logoUrlForRemote;
+    } catch (uploadErr) {
+      const isBase64 = String(updated.logoUrl || '').startsWith('data:');
+      if (!isBase64) throw uploadErr;
+      if (import.meta.env?.DEV) {
+        console.debug('[updateClinicProfile] upload client falhou — fallback server', uploadErr?.message);
+      }
+    }
+    if (logoUrlForRemote && logoUrlForRemote !== updated.logoUrl) {
+      withDb((db) => {
+        db.clinicProfile = {
+          ...db.clinicProfile,
+          logoUrl: logoUrlForRemote,
+          updatedAt: new Date().toISOString(),
+        };
+        return db.clinicProfile;
+      });
+      updated.logoUrl = logoUrlForRemote;
+    }
     const res = await saveClinicProfileRemote({
       tenant_id: tenantId,
       nomeClinica: updated.nomeClinica,
       nomeFantasia: updated.nomeFantasia,
       razaoSocial: updated.razaoSocial,
-      logoUrl: updated.logoUrl,
+      logoUrl: logoUrlForRemote || updated.logoUrl,
       emailPrincipal: updated.emailPrincipal,
     });
     if (res?.clinicProfile) {
