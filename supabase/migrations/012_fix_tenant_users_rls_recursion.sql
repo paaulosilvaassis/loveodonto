@@ -1,5 +1,7 @@
--- Hardening multi-tenant: tenant_users read restrito + bloqueio de troca de tenant_id
--- Helpers SECURITY DEFINER evitam recursão infinita (nunca consultar tenant_users na policy).
+-- 012: Corrige recursão infinita em RLS de tenant_users (PostgreSQL 42P17).
+-- Causa: tenant_users_select_scoped e tenant_users_modify_admin (009) consultavam
+-- public.tenant_users dentro da própria policy → loop infinito.
+-- Padrão: SECURITY DEFINER (igual console/009_platform_rls_security_definer_helpers).
 
 create or replace function public.app_user_is_tenant_admin(p_tenant_id uuid)
 returns boolean
@@ -42,11 +44,10 @@ revoke all on function public.app_user_admin_tenant_id() from public;
 grant execute on function public.app_user_is_tenant_admin(uuid) to authenticated;
 grant execute on function public.app_user_admin_tenant_id() to authenticated;
 
--- Remove policy genérica de SELECT em tenant_users (002) se existir
-drop policy if exists tenant_users_tenant_select_policy on public.tenant_users;
-drop policy if exists tenant_users_tenant_modify_policy on public.tenant_users;
+-- Remove policies recursivas
+drop policy if exists tenant_users_select_scoped on public.tenant_users;
+drop policy if exists tenant_users_modify_admin on public.tenant_users;
 
--- Usuário lê apenas a própria linha OU admins do tenant
 create policy tenant_users_select_scoped on public.tenant_users
   for select
   using (
@@ -57,7 +58,6 @@ create policy tenant_users_select_scoped on public.tenant_users
     )
   );
 
--- Writes apenas admins do mesmo tenant
 create policy tenant_users_modify_admin on public.tenant_users
   for all
   using (
@@ -70,13 +70,10 @@ create policy tenant_users_modify_admin on public.tenant_users
     and tenant_id = public.app_user_admin_tenant_id()
   );
 
--- Identities: admin-only read/write (substitui policy permissiva de 008)
-drop policy if exists identities_read_admin on public.identities;
-drop policy if exists identity_events_read_admin on public.identity_events;
-drop policy if exists identities_tenant_select_policy on public.identities;
-drop policy if exists identities_tenant_modify_policy on public.identities;
-drop policy if exists identity_events_tenant_select_policy on public.identity_events;
-drop policy if exists identity_events_tenant_modify_policy on public.identity_events;
+-- identities / identity_events: elimina subconsultas diretas em tenant_users
+drop policy if exists identities_tenant_admin_select on public.identities;
+drop policy if exists identities_tenant_admin_modify on public.identities;
+drop policy if exists identity_events_tenant_admin_select on public.identity_events;
 
 create policy identities_tenant_admin_select on public.identities
   for select using (
