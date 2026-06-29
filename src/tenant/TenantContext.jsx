@@ -4,6 +4,7 @@ import { TenantContext } from './tenantContext.js';
 import { subscribeTenantRealtimeChanges } from '../services/tenantContextService.js';
 import { readTenantAccessSnapshot } from '../services/platformAccessService.js';
 import { isFeatureFlagEnabled, isModuleEnabled } from './tenantAccess.js';
+import { raceWithTimeout } from '../utils/promiseTimeout.js';
 import { auditTenantAccess } from '../services/tenantIsolation.js';
 import { isTransientAuthError } from '../auth/saasSessionResolver.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
