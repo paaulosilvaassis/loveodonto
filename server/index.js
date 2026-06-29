@@ -853,6 +853,37 @@ async function getAuthUserMeta(userId) {
   };
 }
 
+function extractPermissionFieldsFromAppMetadata(appMetadata) {
+  const meta = appMetadata && typeof appMetadata === 'object' ? appMetadata : {};
+  const permissionOverrides = meta.permission_overrides
+    && typeof meta.permission_overrides === 'object'
+    && !Array.isArray(meta.permission_overrides)
+    ? meta.permission_overrides
+    : {};
+  const hasCustomPermissions = meta.has_custom_permissions === true;
+  const customPermissions = hasCustomPermissions
+    && meta.custom_permissions
+    && typeof meta.custom_permissions === 'object'
+    && !Array.isArray(meta.custom_permissions)
+    ? meta.custom_permissions
+    : null;
+  return {
+    has_custom_permissions: hasCustomPermissions,
+    custom_permissions: customPermissions,
+    permission_overrides: permissionOverrides,
+  };
+}
+
+async function enrichTeamRosterWithPermissionFields(rosterRows = []) {
+  return Promise.all((rosterRows || []).map(async (row) => {
+    const userId = normalizeText(row?.user_id);
+    if (!userId) return { ...row, has_custom_permissions: false, custom_permissions: null, permission_overrides: {} };
+    const authMeta = await getAuthUserMeta(userId);
+    const permissionFields = extractPermissionFieldsFromAppMetadata(authMeta?.app_metadata);
+    return { ...row, ...permissionFields };
+  }));
+}
+
 async function appendAccessAuditToAuthUser(authUserId, auditEntry) {
   const meta = await getAuthUserMeta(authUserId);
   if (!meta) return null;
@@ -2004,7 +2035,9 @@ app.get('/internal/app/tenant-context', requireAppUser, async (req, res) => {
         .eq('tenant_id', tenantId)
         .order('full_name', { ascending: true });
       if (!rosterErr) {
-        teamRoster = (rosterRows || []).filter(isActiveTenantUserRow);
+        teamRoster = await enrichTeamRosterWithPermissionFields(
+          (rosterRows || []).filter(isActiveTenantUserRow),
+        );
         break;
       }
       if (!isMissingHasSystemAccessColumnError(rosterErr)) throw rosterErr;
@@ -2241,6 +2274,14 @@ app.post('/internal/app/collaborators/access-bundle', requireAppUser, async (req
     const rawOverrides = req.body?.permission_overrides;
     const permissionOverrides =
       rawOverrides && typeof rawOverrides === 'object' && !Array.isArray(rawOverrides) ? rawOverrides : {};
+    const hasCustomPermissions = req.body?.has_custom_permissions === true;
+    const rawCustomPermissions = req.body?.custom_permissions;
+    const customPermissions = hasCustomPermissions
+      && rawCustomPermissions
+      && typeof rawCustomPermissions === 'object'
+      && !Array.isArray(rawCustomPermissions)
+      ? rawCustomPermissions
+      : null;
 
     if (!targetUserIdInput) {
       return res.status(400).json({ error: 'target_user_id é obrigatório.' });
@@ -2360,8 +2401,14 @@ app.post('/internal/app/collaborators/access-bundle', requireAppUser, async (req
       ...prevMeta,
       tenant_id: tenantId,
       role: roleSlug,
-      permission_overrides: permissionOverrides,
+      has_custom_permissions: hasCustomPermissions,
+      permission_overrides: hasCustomPermissions ? permissionOverrides : {},
     };
+    if (hasCustomPermissions && customPermissions) {
+      nextMeta.custom_permissions = customPermissions;
+    } else {
+      delete nextMeta.custom_permissions;
+    }
     const authUpdate = { app_metadata: nextMeta };
     const prevEmail = normalizeEmail(authData.user.email);
     if (email && email !== prevEmail) {
@@ -2733,6 +2780,7 @@ app.get('/internal/app/users/list', requireAppUser, async (req, res) => {
       const invitationStatus = normalizeInvitationStatus(row?.invitation_status || invitation?.status || 'none');
       const authUserValid = row?.user_id ? Boolean(await getValidAuthUserId(row.user_id)) : false;
       const authMeta = row?.user_id ? await getAuthUserMeta(row.user_id) : null;
+      const permissionFields = extractPermissionFieldsFromAppMetadata(authMeta?.app_metadata);
       return {
         id: row.id,
         tenant_id: row.tenant_id,
@@ -2751,6 +2799,7 @@ app.get('/internal/app/users/list', requireAppUser, async (req, res) => {
         last_sign_in_at: authMeta?.last_sign_in_at || null,
         password_reset_sent_at: authMeta?.app_metadata?.last_password_reset_requested_at || null,
         auth_meta: authMeta?.app_metadata || null,
+        ...permissionFields,
         invitation,
       };
     }));

@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { RotateCcw, Save, Settings2 } from 'lucide-react';
 import Button from '../../Button.jsx';
+import {
+  ModalRoot, ModalContent, ModalHeader, ModalBody, ModalFooter, ModalTitle, ModalDescription,
+} from '../../ui/Modal.jsx';
 import { useCollaboratorAccessForm } from '../../../hooks/useCollaboratorAccessForm.js';
 import PermissionsModuleModal from './permissions/PermissionsModuleModal.jsx';
 import PermissionsProgress from './permissions/PermissionsProgress.jsx';
@@ -35,9 +38,25 @@ export default function CollaboratorPermissionsHub({
   });
 
   const [configModule, setConfigModule] = useState(null);
+  const [roleChangePrompt, setRoleChangePrompt] = useState(null);
   const readOnly = form.readOnly || !canEdit;
 
   const closeModal = useCallback(() => setConfigModule(null), []);
+
+  const handleRoleSelectChange = useCallback((nextRole) => {
+    if (readOnly || nextRole === form.role) return;
+    setRoleChangePrompt({ previousRole: form.role, nextRole });
+  }, [readOnly, form.role]);
+
+  const confirmRoleChange = useCallback(() => {
+    if (!roleChangePrompt?.nextRole) return;
+    form.applyRoleWithDefaults(roleChangePrompt.nextRole);
+    setRoleChangePrompt(null);
+  }, [form, roleChangePrompt]);
+
+  const cancelRoleChange = useCallback(() => {
+    setRoleChangePrompt(null);
+  }, []);
 
   const saveHandlers = useMemo(() => ({
     onSaveSuccess: (result) => {
@@ -70,7 +89,7 @@ export default function CollaboratorPermissionsHub({
               id="perm-role-select"
               value={form.role}
               disabled={readOnly}
-              onChange={(e) => { form.setRole(e.target.value); form.setDirty(true); }}
+              onChange={(e) => handleRoleSelectChange(e.target.value)}
             >
               {form.roleOptions.map((r) => (
                 <option key={r} value={r}>{form.ROLE_LABELS[r] || r}</option>
@@ -132,6 +151,28 @@ export default function CollaboratorPermissionsHub({
         saveHandlers={saveHandlers}
         onClose={closeModal}
       />
+
+      <ModalRoot open={Boolean(roleChangePrompt)} onOpenChange={(next) => { if (!next) cancelRoleChange(); }}>
+        <ModalContent size="sm">
+          <ModalHeader>
+            <ModalTitle>Alterar perfil</ModalTitle>
+            <ModalDescription>
+              Deseja aplicar o perfil padrão e substituir as permissões atuais?
+            </ModalDescription>
+          </ModalHeader>
+          <ModalBody>
+            <p className="muted">
+              O perfil será alterado para{' '}
+              <strong>{form.ROLE_LABELS[roleChangePrompt?.nextRole] || roleChangePrompt?.nextRole}</strong>.
+              {' '}As permissões personalizadas serão substituídas pelo padrão deste perfil.
+            </p>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="secondary" onClick={cancelRoleChange}>Cancelar</Button>
+            <Button variant="primary" onClick={confirmRoleChange}>Aplicar perfil padrão</Button>
+          </ModalFooter>
+        </ModalContent>
+      </ModalRoot>
     </div>
   );
 }

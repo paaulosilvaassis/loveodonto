@@ -267,6 +267,8 @@ export function getUserAccess(userId) {
     userId: u.id,
     has_system_access: u.has_system_access !== false,
     role: u.role || 'atendimento',
+    has_custom_permissions: u.has_custom_permissions === true,
+    custom_permissions: u.custom_permissions && typeof u.custom_permissions === 'object' ? u.custom_permissions : null,
     overrides,
   };
 }
@@ -340,6 +342,18 @@ export function updateUserAccess(actor, targetUserId, payload) {
       db.users[userIndex].role = payload.role;
     }
 
+    if (typeof payload.has_custom_permissions === 'boolean') {
+      db.users[userIndex].has_custom_permissions = payload.has_custom_permissions;
+      if (!payload.has_custom_permissions) {
+        delete db.users[userIndex].custom_permissions;
+      }
+    }
+    if (payload.custom_permissions && typeof payload.custom_permissions === 'object') {
+      db.users[userIndex].custom_permissions = payload.custom_permissions;
+    } else if (payload.has_custom_permissions === false) {
+      delete db.users[userIndex].custom_permissions;
+    }
+
     if (payload.overrides && typeof payload.overrides === 'object') {
       db.userPermissions = db.userPermissions || [];
       db.userPermissions = db.userPermissions.filter((x) => x.user_id !== targetUserId);
@@ -351,6 +365,9 @@ export function updateUserAccess(actor, targetUserId, payload) {
           allowed,
         });
       }
+      db.users[userIndex].permissionOverrides = payload.overrides;
+    } else if (payload.has_custom_permissions === false) {
+      db.users[userIndex].permissionOverrides = {};
     }
 
     const after = getUserAccess(targetUserId);

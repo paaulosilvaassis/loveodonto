@@ -20,6 +20,10 @@ import { resolveCollaboratorAccessDisplayStatus } from '../utils/inviteStatus.js
 import { isTenantSystemAccessActive } from '../utils/collaboratorAccessManagement.js';
 import { normalizeTenantAccessRole, resolveAccessTargetUserId } from '../utils/collaboratorAccessPanel.js';
 import { PERMS_CLIPBOARD_PREFIX } from '../components/collaborators/record/permissions/permissionsConstants.js';
+import {
+  resolvePermissionStateFromTenantUser,
+  syncPermissionStateToLocalDb,
+} from '../services/collaboratorPermissionPersistence.js';
 
 export function useCollaboratorAccessForm({
   collaboratorId,
@@ -39,6 +43,8 @@ export function useCollaboratorAccessForm({
   const [dirty, setDirty] = useState(false);
   const [initialSnapshot, setInitialSnapshot] = useState(null);
   const [credEmail, setCredEmail] = useState('');
+  const [resetCustomPermissions, setResetCustomPermissions] = useState(false);
+  const [hasCustomPermissions, setHasCustomPermissions] = useState(false);
 
   const catalog = useMemo(() => getPermissionsCatalog(), []);
   const effectiveTargetUserId = useMemo(
@@ -61,13 +67,31 @@ export function useCollaboratorAccessForm({
       setHasSystemAccess(tenantUser?.has_system_access !== false);
       setRole(tenantUser?.role ? normalizeTenantAccessRole(tenantUser.role) : 'atendimento');
       setOverrides({});
+      setHasCustomPermissions(false);
+      setResetCustomPermissions(false);
       setInitialSnapshot(null);
       setDirty(false);
       setCredEmail(emailFromTenant);
       return;
     }
 
-    if (isSaasModeEnabled() && !getUserAccess(effectiveTargetUserId)) {
+    const normalizedRole = normalizeTenantAccessRole(tenantUser?.role);
+
+    if (isSaasModeEnabled() && tenantUser?.user_id) {
+      const catalogIds = catalog.map((p) => p.id);
+      const serverState = resolvePermissionStateFromTenantUser(tenantUser, normalizedRole, catalogIds);
+      syncPermissionStateToLocalDb(effectiveTargetUserId, {
+        role: normalizedRole,
+        hasCustomPermissions: serverState.hasCustomPermissions,
+        sparseOverrides: serverState.sparseOverrides,
+        customPermissions: serverState.customPermissions,
+        email: emailFromTenant,
+        displayName: linkedDisplayName,
+        tenantId: saasTenantId || '',
+        collaboratorId: collaboratorId || '',
+        has_system_access: tenantUser?.has_system_access !== false,
+      });
+    } else if (isSaasModeEnabled() && !getUserAccess(effectiveTargetUserId)) {
       ensureLocalUserForSaasAccess(effectiveTargetUserId, {
         email: emailFromTenant,
         role: normalizeTenantAccessRole(tenantUser?.role),
@@ -87,6 +111,8 @@ export function useCollaboratorAccessForm({
       setHasSystemAccess(serverHasAccess !== null ? serverHasAccess : access.has_system_access);
       setRole(normalizeTenantAccessRole(access.role));
       setOverrides(access.overrides || {});
+      setHasCustomPermissions(access.has_custom_permissions === true);
+      setResetCustomPermissions(false);
       setInitialSnapshot(JSON.stringify({
         ...access,
         has_system_access: serverHasAccess !== null ? serverHasAccess : access.has_system_access,
@@ -96,12 +122,14 @@ export function useCollaboratorAccessForm({
       setHasSystemAccess(serverHasAccess !== null ? serverHasAccess : tenantUser.has_system_access !== false);
       setRole(normalizeTenantAccessRole(tenantUser.role));
       setOverrides({});
+      setHasCustomPermissions(false);
+      setResetCustomPermissions(false);
       setInitialSnapshot(null);
       setDirty(false);
     }
 
     setCredEmail(emailFromTenant);
-  }, [effectiveTargetUserId, tenantUser, collaboratorId, collaboratorEmail, linkedDisplayName, saasTenantId]);
+  }, [effectiveTargetUserId, tenantUser, collaboratorId, collaboratorEmail, linkedDisplayName, saasTenantId, catalog]);
 
   const effectivePermission = useCallback((permId) => {
     if (overrides[permId] !== undefined) return overrides[permId];
@@ -135,6 +163,7 @@ export function useCollaboratorAccessForm({
       }
       return next;
     });
+    setResetCustomPermissions(false);
     setDirty(true);
   }, [roleDefaultIds]);
 
@@ -242,6 +271,16 @@ export function useCollaboratorAccessForm({
 
   const restoreRoleDefaults = useCallback(() => {
     setOverrides({});
+    setResetCustomPermissions(true);
+    setHasCustomPermissions(false);
+    setDirty(true);
+  }, []);
+
+  const applyRoleWithDefaults = useCallback((nextRole) => {
+    setRole(nextRole);
+    setOverrides({});
+    setResetCustomPermissions(true);
+    setHasCustomPermissions(false);
     setDirty(true);
   }, []);
 
@@ -275,9 +314,11 @@ export function useCollaboratorAccessForm({
     }
     setSaving(true);
     let inviteSent = false;
+    const savingRoleDefaultsOnly = resetCustomPermissions;
     try {
       let resolvedTargetUserId = effectiveTargetUserId;
       const normalizedEmail = (credEmail || collaboratorEmail || '').trim().toLowerCase();
+      const customPermissions = buildEffectiveMap();
 
       if (isSaasModeEnabled() && hasSystemAccess) {
         if (!saasTenantId) throw new Error('Clínica não identificada para salvar no servidor. Faça login novamente.');
@@ -314,7 +355,9 @@ export function useCollaboratorAccessForm({
           email: normalizedEmail,
           role: role || 'atendimento',
           has_system_access: hasSystemAccess,
-          permission_overrides: overrides || {},
+          has_custom_permissions: !savingRoleDefaultsOnly,
+          custom_permissions: savingRoleDefaultsOnly ? undefined : customPermissions,
+          permission_overrides: savingRoleDefaultsOnly ? {} : (overrides || {}),
         }, { onRepairNotice, tenantUser });
       } else if (hasSystemAccess && !resolvedTargetUserId) {
         onSaveError?.('Crie o acesso do colaborador antes de salvar permissões individuais.');
@@ -335,7 +378,9 @@ export function useCollaboratorAccessForm({
         updateUserAccess(currentUser, resolvedTargetUserId, {
           has_system_access: hasSystemAccess,
           role: role || 'atendimento',
-          overrides,
+          overrides: savingRoleDefaultsOnly ? {} : overrides,
+          has_custom_permissions: !savingRoleDefaultsOnly,
+          custom_permissions: savingRoleDefaultsOnly ? null : customPermissions,
         });
         if (tenantUser?.user_id) {
           syncCollaboratorAccessFromTenantUser(collaboratorId || '', tenantUser, {
@@ -346,6 +391,8 @@ export function useCollaboratorAccessForm({
         }
         setInitialSnapshot(JSON.stringify(getUserAccess(resolvedTargetUserId)));
       }
+      setResetCustomPermissions(false);
+      setHasCustomPermissions(!savingRoleDefaultsOnly);
       setDirty(false);
       onSaveSuccess?.({ inviteSent });
       return true;
@@ -355,7 +402,7 @@ export function useCollaboratorAccessForm({
     } finally {
       setSaving(false);
     }
-  }, [currentUser, validateCredentials, effectiveTargetUserId, credEmail, collaboratorEmail, hasSystemAccess, saasTenantId, collaboratorId, linkedDisplayName, role, overrides, onAccessChanged, tenantUser]);
+  }, [currentUser, validateCredentials, effectiveTargetUserId, credEmail, collaboratorEmail, hasSystemAccess, saasTenantId, collaboratorId, linkedDisplayName, role, overrides, resetCustomPermissions, buildEffectiveMap, onAccessChanged, tenantUser]);
 
   const formatInviteDate = (value) => {
     if (!value) return '—';
@@ -435,6 +482,8 @@ export function useCollaboratorAccessForm({
     copyPermissions,
     pastePermissions,
     restoreRoleDefaults,
+    applyRoleWithDefaults,
+    hasCustomPermissions,
     handleRevert,
     handleSave,
     handleResendInvite,

@@ -4,10 +4,15 @@ import { isCollaboratorEmailValid } from '../utils/collaboratorAccessRole.js';
 import {
   ensureLocalUserForSaasAccess,
   getUserAccess,
+  getPermissionsCatalog,
   setUserSystemAccess,
   updateUserAccess,
   canManageAccess,
 } from './accessService.js';
+import {
+  resolvePermissionStateFromTenantUser,
+  syncPermissionStateToLocalDb,
+} from './collaboratorPermissionPersistence.js';
 import {
   linkCollaboratorTenantAccess,
   listTenantUsersAccess,
@@ -53,6 +58,19 @@ export function syncCollaboratorAccessFromTenantUser(
   ).trim();
 
   syncLocalCollaboratorAccess(collaboratorId, tenantUser, role);
+  const catalogIds = getPermissionsCatalog().map((p) => p.id);
+  const serverState = resolvePermissionStateFromTenantUser(tenantUser, role, catalogIds);
+  syncPermissionStateToLocalDb(userId, {
+    role,
+    hasCustomPermissions: serverState.hasCustomPermissions,
+    sparseOverrides: serverState.sparseOverrides,
+    customPermissions: serverState.customPermissions,
+    email,
+    displayName,
+    tenantId,
+    collaboratorId,
+    has_system_access: tenantUser?.has_system_access !== false,
+  });
   ensureLocalUserForSaasAccess(userId, {
     email,
     role,

@@ -41,6 +41,10 @@ import {
   resolveAccessTargetUserId,
 } from '../../utils/collaboratorAccessPanel.js';
 import { isTenantSystemAccessActive } from '../../utils/collaboratorAccessManagement.js';
+import {
+  resolvePermissionStateFromTenantUser,
+  syncPermissionStateToLocalDb,
+} from '../../services/collaboratorPermissionPersistence.js';
 
 const FIXED_MATRIX_ACTIONS = ['view', 'create', 'edit', 'delete', 'export', 'send', 'cancel'];
 const DEFAULT_EXPANDED_SECTORS = [];
@@ -105,7 +109,23 @@ export default function AccessTab({
       return;
     }
 
-    if (isSaasModeEnabled() && !getUserAccess(effectiveTargetUserId)) {
+    const normalizedRole = normalizeTenantAccessRole(tenantUser?.role);
+
+    if (isSaasModeEnabled() && tenantUser?.user_id) {
+      const catalogIds = catalog.map((p) => p.id);
+      const serverState = resolvePermissionStateFromTenantUser(tenantUser, normalizedRole, catalogIds);
+      syncPermissionStateToLocalDb(effectiveTargetUserId, {
+        role: normalizedRole,
+        hasCustomPermissions: serverState.hasCustomPermissions,
+        sparseOverrides: serverState.sparseOverrides,
+        customPermissions: serverState.customPermissions,
+        email: emailFromTenant,
+        displayName: linkedDisplayName,
+        tenantId: saasTenantId || '',
+        collaboratorId: collaboratorId || '',
+        has_system_access: tenantUser?.has_system_access !== false,
+      });
+    } else if (isSaasModeEnabled() && !getUserAccess(effectiveTargetUserId)) {
       ensureLocalUserForSaasAccess(effectiveTargetUserId, {
         email: emailFromTenant,
         role: normalizeTenantAccessRole(tenantUser?.role),
@@ -139,7 +159,7 @@ export default function AccessTab({
     }
 
     setCredEmail(emailFromTenant);
-  }, [effectiveTargetUserId, tenantUser, collaboratorId, collaboratorEmail, linkedDisplayName, saasTenantId]);
+  }, [effectiveTargetUserId, tenantUser, collaboratorId, collaboratorEmail, linkedDisplayName, saasTenantId, catalog]);
 
   const effectivePermission = (permId) => {
     if (overrides[permId] !== undefined) return overrides[permId];
@@ -280,6 +300,12 @@ export default function AccessTab({
     try {
       let resolvedTargetUserId = effectiveTargetUserId;
       const normalizedEmail = (credEmail || '').trim().toLowerCase();
+      const effectiveMap = {};
+      for (const perm of catalog) {
+        effectiveMap[perm.id] = overrides[perm.id] !== undefined
+          ? overrides[perm.id]
+          : roleDefaultIds.has(perm.id);
+      }
 
       if (isSaasModeEnabled() && hasSystemAccess) {
         if (!saasTenantId) {
@@ -318,6 +344,8 @@ export default function AccessTab({
           email: normalizedEmail,
           role: role || 'atendimento',
           has_system_access: hasSystemAccess,
+          has_custom_permissions: true,
+          custom_permissions: effectiveMap,
           permission_overrides: overrides || {},
         }, { tenantUser });
       } else if (hasSystemAccess && !resolvedTargetUserId) {
@@ -340,6 +368,8 @@ export default function AccessTab({
           has_system_access: hasSystemAccess,
           role: role || 'atendimento',
           overrides,
+          has_custom_permissions: true,
+          custom_permissions: effectiveMap,
         });
         setInitialSnapshot(JSON.stringify(getUserAccess(resolvedTargetUserId)));
       }
