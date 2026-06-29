@@ -16,30 +16,50 @@ function rejectTruncatedKey(value) {
   return s;
 }
 
+/** Só aplica valores não vazios — evita .env.local na raiz apagar console/.env. */
+function mergeNonEmptyEnv(...sources) {
+  const out = {};
+  for (const src of sources) {
+    for (const [key, value] of Object.entries(src || {})) {
+      const trimmed = String(value ?? '').trim();
+      if (trimmed) out[key] = trimmed;
+    }
+  }
+  return out;
+}
+
+/** Prefere anon JWT (eyJ) — login Auth costuma falhar com publishable em alguns browsers. */
+function pickPublicKey(...candidates) {
+  const keys = candidates.map(rejectTruncatedKey).filter(Boolean);
+  const jwt = keys.find((k) => k.startsWith('eyJ'));
+  if (jwt) return jwt;
+  return keys.find((k) => k.startsWith('sb_publishable_')) || keys[0] || '';
+}
+
 export default defineConfig(({ mode }) => {
-  /** Raiz prevalece sobre `console/.env` — mesmo projeto que `server/` (veja .env.example na raiz). */
-  const env = {
-    ...loadEnv(mode, __dirname, ''),
-    ...loadEnv(mode, repoRoot, ''),
-  };
-  /**
-   * Nomes canónicos: VITE_CONSOLE_SUPABASE_*.
-   * Fallback: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (mesmo projeto, um único .env na raiz).
-   */
+  const consoleEnv = mergeNonEmptyEnv(loadEnv(mode, __dirname, ''));
+  const rootEnv = mergeNonEmptyEnv(loadEnv(mode, repoRoot, ''));
+  const env = { ...consoleEnv, ...rootEnv };
+
   const resolvedConsoleUrl = (
     env.VITE_CONSOLE_SUPABASE_URL
+    || env.VITE_SUPABASE_PLATFORM_URL
     || env.VITE_SUPABASE_URL
     || ''
   ).trim();
-  const resolvedConsoleAnon = rejectTruncatedKey(
-    env.VITE_CONSOLE_SUPABASE_ANON_KEY
-    || env.VITE_SUPABASE_ANON_KEY,
+
+  const resolvedConsoleAnon = pickPublicKey(
+    env.VITE_CONSOLE_SUPABASE_ANON_KEY,
+    env.VITE_SUPABASE_PLATFORM_ANON_KEY,
+    env.VITE_SUPABASE_ANON_KEY,
+    env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY,
   );
+
   const resolvedConsolePublishable = rejectTruncatedKey(env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY);
 
   const backendTarget = env.VITE_PLATFORM_API_BASE_URL || 'http://127.0.0.1:3001';
 
-  const platformApiProxy = {
+  const devProxy = {
     '/internal/platform': {
       target: backendTarget,
       changeOrigin: true,
@@ -64,6 +84,14 @@ export default defineConfig(({ mode }) => {
     },
   };
 
+  if (resolvedConsoleUrl) {
+    devProxy['/__supabase'] = {
+      target: resolvedConsoleUrl.replace(/\/+$/, ''),
+      changeOrigin: true,
+      secure: true,
+    };
+  }
+
   return {
     define: {
       'import.meta.env.VITE_CONSOLE_SUPABASE_URL': JSON.stringify(resolvedConsoleUrl),
@@ -72,20 +100,16 @@ export default defineConfig(({ mode }) => {
     },
     plugins: [react(), tailwindcss()],
     server: {
-      /** Em Windows o Node pode fazer bind só em [::1]; sem isso, http://127.0.0.1:5177 falha (só IPv6). */
       host: true,
-      /** Porta fixa 5177 (`console:dev` / `console:vite` sobem API+Console; `console:vite-only` = só Vite). App: 5176. */
       port: 5177,
       strictPort: true,
-      /** Igual ao app na raiz: abre o login da Console no navegador ao subir o Vite. */
       open: '/login',
-      proxy: platformApiProxy,
+      proxy: devProxy,
     },
-    /** Porta distinta do dev (5177) para evitar conflito ao testar build + preview. */
     preview: {
       port: 4177,
       strictPort: true,
-      proxy: platformApiProxy,
+      proxy: devProxy,
     },
     build: {
       outDir: 'dist',
@@ -93,4 +117,3 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
-

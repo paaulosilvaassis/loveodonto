@@ -2,7 +2,7 @@
  * Chamadas à Admin API (3001): provisionamento e dados exigem o mesmo projeto Supabase
  * que `server/.env` (service role). `VITE_PLATFORM_API_KEY` deve coincidir com `PLATFORM_API_KEY` no server.
  */
-import { supabaseConsole } from '../lib/supabaseConsole.js';
+import { getSupabaseConsole } from '../lib/supabaseConsole.js';
 import { mapAuditLogForDisplay } from '../utils/auditLogDisplay.js';
 import {
   ALLOWED_ONBOARDING_ROLES,
@@ -207,12 +207,13 @@ export function getPlatformApiConfigError() {
 }
 
 function getClient() {
-  if (!supabaseConsole) {
+  const client = getSupabaseConsole();
+  if (!client) {
     throw new Error(
       'Supabase da Console não está configurado. Defina VITE_CONSOLE_SUPABASE_URL e VITE_CONSOLE_SUPABASE_ANON_KEY ou VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY.',
     );
   }
-  return supabaseConsole;
+  return client;
 }
 
 function currency(value) {

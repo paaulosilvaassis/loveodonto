@@ -16,7 +16,7 @@ import PatientQuickCreateModal from './PatientQuickCreateModal.jsx';
 import OpeningScreen, { shouldShowOpening } from './OpeningScreen.jsx';
 import { ImportJobProvider } from '../context/ImportJobContext.jsx';
 import ImportProgressFooter from './ImportProgressFooter.jsx';
-import { DEFAULT_CLINIC_LOGO } from '../utils/clinicLogo.js';
+import { SYSTEM_BRAND_LOGO } from '../utils/systemBrand.js';
 
 const ACTIVE_CATEGORY_KEY = 'appgestaoodonto.nav.activeCategory';
 const SIDEBAR_COLLAPSED_KEY = 'appgestaoodonto.nav.sidebarCollapsed';
@@ -312,10 +312,9 @@ export default function Layout({ children }) {
             <div className="brand-container">
               <div className="logo-wrapper">
                 <img
-                  src={clinicLogo}
-                  alt={clinicHasLogo ? 'Logo da clínica' : 'Logo LOVE ODONTO'}
+                  src={SYSTEM_BRAND_LOGO}
+                  alt="LoveOdonto"
                   className="header-logo"
-                  onError={(e) => { e.target.onerror = null; e.target.src = DEFAULT_CLINIC_LOGO; }}
                 />
               </div>
             </div>

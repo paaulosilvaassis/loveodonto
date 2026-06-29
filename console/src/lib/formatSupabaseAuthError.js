@@ -76,9 +76,9 @@ export function formatConsoleSupabaseAuthError(err) {
     || (err?.name === 'TypeError' && (lower.includes('fetch') || lower.includes('network')))
   ) {
     return (
-      'Não foi possível conectar ao Supabase (rede). Confira: VITE_CONSOLE_SUPABASE_URL aponta para o projeto '
-      + 'correto (https://…supabase.co); variáveis na Vercel sem aspas e com redeploy; firewall/adblock; '
-      + 'e no Supabase → Authentication → URL Configuration se o Site URL inclui o domínio da Console.'
+      'Não foi possível conectar ao Supabase (rede). Em dev: reinicie com `npm run console:dev` (API + Console). '
+      + 'Confira VITE_CONSOLE_SUPABASE_URL (https://…supabase.co); prefira anon JWT (eyJ…) em VITE_CONSOLE_SUPABASE_ANON_KEY; '
+      + 'desative adblock; e no Supabase → Authentication → URL Configuration inclua http://localhost:5177.'
     );
   }
 

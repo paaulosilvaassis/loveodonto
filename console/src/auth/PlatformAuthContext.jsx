@@ -7,10 +7,11 @@ import {
 } from 'react';
 import { PlatformAuthContext } from './platformAuthContext.js';
 import {
-  supabaseConsole,
+  getSupabaseConsole,
   getConsoleSupabaseConfigError,
   getConsoleSupabasePublicKey,
-  supabaseConsoleConfig,
+  getSupabaseConsoleRequestBaseUrl,
+  supabaseReady,
 } from '../lib/supabaseConsole.js';
 import { PLATFORM_ROLES } from './platformRoles.js';
 
@@ -170,7 +171,7 @@ export function PlatformAuthProvider({ children }) {
   const bootIdRef = useRef(0);
 
   const fetchPlatformUser = useCallback(async (authId, source = 'unknown') => {
-    if (!supabaseConsole || !authId) {
+    if (!getSupabaseConsole() || !authId) {
       authLog('fetchPlatformUser:skipped', { reason: 'no client or id', source });
       return { ok: false, code: 'NO_CLIENT', message: 'Cliente Supabase indisponível.' };
     }
@@ -184,7 +185,7 @@ export function PlatformAuthProvider({ children }) {
     const job = (async () => {
       authLog('fetchPlatformUser:started', { authId, source, via: 'admin-api' });
       try {
-        const { data: sessionData, error: sessionErr } = await supabaseConsole.auth.getSession();
+        const { data: sessionData, error: sessionErr } = await getSupabaseConsole().auth.getSession();
         if (sessionErr) {
           return { ok: false, code: 'SESSION', message: sessionErr.message || 'Sessão inválida.' };
         }
@@ -309,7 +310,7 @@ export function PlatformAuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (configError || !supabaseConsole) {
+    if (configError || !supabaseReady) {
       authLog('init:noSupabase', { configError: Boolean(configError) });
       setSession(null);
       setPlatformUser(null);
@@ -333,7 +334,7 @@ export function PlatformAuthProvider({ children }) {
         let s = null;
         try {
           const { data, error } = await withTimeout(
-            supabaseConsole.auth.getSession(),
+            getSupabaseConsole().auth.getSession(),
             GET_SESSION_TIMEOUT_MS,
             'getSession',
           );
@@ -341,7 +342,7 @@ export function PlatformAuthProvider({ children }) {
             authLog('bootstrap:getSessionError', error.message);
             if (isInvalidJwtSessionMessage(error.message)) {
               try {
-                await supabaseConsole.auth.signOut({ scope: 'local' });
+                await getSupabaseConsole().auth.signOut({ scope: 'local' });
                 authLog('bootstrap:clearedStaleAuthStorage');
               } catch {
                 /* ignore */
@@ -366,7 +367,7 @@ export function PlatformAuthProvider({ children }) {
           } else {
             authLog('bootstrap:profileInvalid', res);
             setPlatformUser(null);
-            await supabaseConsole.auth.signOut();
+            await getSupabaseConsole().auth.signOut();
             setSession(null);
           }
         } else {
@@ -384,7 +385,7 @@ export function PlatformAuthProvider({ children }) {
       }
     })();
 
-    const { data: { subscription } } = supabaseConsole.auth.onAuthStateChange((event, s) => {
+    const { data: { subscription } } = getSupabaseConsole().auth.onAuthStateChange((event, s) => {
       authLog('onAuthStateChange', { event, userId: s?.user?.id });
       if (event === 'INITIAL_SESSION') return;
 
@@ -397,7 +398,7 @@ export function PlatformAuthProvider({ children }) {
           } else {
             authLog('onAuthStateChange:profileInvalid', res);
             setPlatformUser(null);
-            await supabaseConsole.auth.signOut();
+            await getSupabaseConsole().auth.signOut();
             setSession(null);
           }
         } else {
@@ -414,12 +415,12 @@ export function PlatformAuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const emailNormalized = String(email || '').trim().toLowerCase();
     authLog('login:started', { email: emailNormalized });
-    if (configError || !supabaseConsole) {
+    if (configError || !supabaseReady) {
       throw new Error(configError || 'Supabase da Console não está configurado.');
     }
 
     try {
-      await supabaseConsole.auth.signOut({ scope: 'local' });
+      await getSupabaseConsole().auth.signOut({ scope: 'local' });
     } catch {
       /* evita sessão/refresh token antigo atrapalhar o próximo login */
     }
@@ -428,7 +429,7 @@ export function PlatformAuthProvider({ children }) {
     let tokenEndpointUnavailable = false;
     try {
       connectivityProbe = { attempted: true, online: navigator.onLine };
-      const probeResponse = await fetch(`${supabaseConsoleConfig.url}/auth/v1/health`, {
+      const probeResponse = await fetch(`${getSupabaseConsoleRequestBaseUrl()}/auth/v1/health`, {
         method: 'GET',
       });
       connectivityProbe.status = probeResponse.status;
@@ -440,7 +441,7 @@ export function PlatformAuthProvider({ children }) {
 
     try {
       const tokenProbeResponse = await fetch(
-        `${supabaseConsoleConfig.url}/auth/v1/token?grant_type=password`,
+        `${getSupabaseConsoleRequestBaseUrl()}/auth/v1/token?grant_type=password`,
         {
           method: 'POST',
           headers: {
@@ -457,14 +458,14 @@ export function PlatformAuthProvider({ children }) {
     let sdkResult;
     try {
       sdkResult = await withTimeout(
-        supabaseConsole.auth.signInWithPassword({ email: emailNormalized, password }),
+        getSupabaseConsole().auth.signInWithPassword({ email: emailNormalized, password }),
         8000,
         'signInWithPassword',
       );
     } catch (sdkError) {
       try {
         const restResponse = await withTimeout(
-          fetch(`${supabaseConsoleConfig.url}/auth/v1/token?grant_type=password`, {
+          fetch(`${getSupabaseConsoleRequestBaseUrl()}/auth/v1/token?grant_type=password`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -491,7 +492,7 @@ export function PlatformAuthProvider({ children }) {
           throw restError;
         }
 
-        const { error: setSessionError } = await supabaseConsole.auth.setSession({
+        const { error: setSessionError } = await getSupabaseConsole().auth.setSession({
           access_token: fallbackSession.access_token,
           refresh_token: fallbackSession.refresh_token,
         });
@@ -526,7 +527,7 @@ export function PlatformAuthProvider({ children }) {
         && emailNormalized === 'admin@loveodonto.com';
       if (shouldAutoResetDevAdmin) {
         await resetConsoleAdminDevCredentials();
-        const retried = await supabaseConsole.auth.signInWithPassword({
+        const retried = await getSupabaseConsole().auth.signInWithPassword({
           email: emailNormalized,
           password: 'admin123',
         });
@@ -539,7 +540,7 @@ export function PlatformAuthProvider({ children }) {
         }
         const retryProfile = await fetchPlatformUser(retriedData.user.id, 'login-retry-after-reset');
         if (!retryProfile.ok) {
-          await supabaseConsole.auth.signOut();
+          await getSupabaseConsole().auth.signOut();
           setSession(null);
           setPlatformUser(null);
           const retryProfileError = new Error(retryProfile.message);
@@ -568,7 +569,7 @@ export function PlatformAuthProvider({ children }) {
     const res = await fetchPlatformUser(data.user.id, 'login');
     if (!res.ok) {
       authLog('login:profileFailed', res);
-      await supabaseConsole.auth.signOut();
+      await getSupabaseConsole().auth.signOut();
       setSession(null);
       setPlatformUser(null);
       const err = new Error(res.message);
@@ -583,8 +584,8 @@ export function PlatformAuthProvider({ children }) {
   }, [configError, fetchPlatformUser]);
 
   const logout = async () => {
-    if (supabaseConsole) {
-      await supabaseConsole.auth.signOut();
+    if (getSupabaseConsole()) {
+      await getSupabaseConsole().auth.signOut();
     }
     setSession(null);
     setPlatformUser(null);
@@ -608,7 +609,7 @@ export function PlatformAuthProvider({ children }) {
       logout,
       hasPermission,
       configError,
-      supabaseReady: Boolean(supabaseConsole && !configError),
+      supabaseReady: Boolean(supabaseReady && !configError),
       isOwner: platformUser?.role === PLATFORM_ROLES.OWNER,
     }),
     [session, platformUser, loading, configError, login, hasPermission],
