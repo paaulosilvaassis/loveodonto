@@ -9,7 +9,9 @@
  *   CONTRACTS_V2_STAGING_APPLY=true
  *   LOVE_ODONTO_STAGING_CONFIRMATION=STAGING_APPLY_ONLY
  *   STAGING_SUPABASE_URL=https://tckdjyunwmdpqmewrwvt.supabase.co
- *   STAGING_DATABASE_URL=postgresql://... (host deve conter staging ref)
+ *   E um dos canais DDL:
+ *     STAGING_DATABASE_URL=postgresql://...  (requer psql)
+ *     SUPABASE_ACCESS_TOKEN=...              (Management API SQL)
  *
  * Nunca: produção (uoep…), force, bucket público, flags ON.
  *
@@ -19,7 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   APP_MIGRATIONS,
   PRODUCTION_REF,
@@ -73,19 +75,25 @@ function assertStagingGuard(env) {
   }
   const url = String(env.STAGING_SUPABASE_URL || '').trim();
   const dbUrl = String(env.STAGING_DATABASE_URL || env.CONTRACTS_V2_STAGING_DATABASE_URL || '').trim();
+  const accessToken = String(env.SUPABASE_ACCESS_TOKEN || '').trim();
   if (!url.includes(STAGING_REF) || !url.includes('supabase.co')) {
     errors.push('STAGING_SUPABASE_URL must target staging project ref');
   }
   if (url.includes(PRODUCTION_REF) || dbUrl.includes(PRODUCTION_REF)) {
     errors.push('PRODUCTION_REF detected — blocked');
   }
-  if (!dbUrl) {
-    errors.push('STAGING_DATABASE_URL required for DDL apply (psql)');
+  if (!dbUrl && !accessToken) {
+    errors.push('STAGING_DATABASE_URL (psql) ou SUPABASE_ACCESS_TOKEN (Management API) é obrigatório para DDL');
   }
   if (dbUrl && !dbUrl.includes(STAGING_REF) && !/staging/i.test(dbUrl)) {
-    // pooler hosts sometimes use different naming; require explicit marker
     if (!isTruthy(env.CONTRACTS_V2_STAGING_DB_HOST_CONFIRMED)) {
       errors.push('STAGING_DATABASE_URL host must include staging ref or set CONTRACTS_V2_STAGING_DB_HOST_CONFIRMED=true after manual review');
+    }
+  }
+  if (dbUrl) {
+    const psql = spawnSync('psql', ['--version'], { encoding: 'utf8' });
+    if (psql.status !== 0 && !accessToken) {
+      errors.push('psql não encontrado no PATH; instale libpq ou use SUPABASE_ACCESS_TOKEN');
     }
   }
   if (errors.length) {
@@ -94,7 +102,13 @@ function assertStagingGuard(env) {
     err.details = errors;
     throw err;
   }
-  return { url, dbUrl, ref: STAGING_REF };
+  return {
+    url,
+    dbUrl: dbUrl || null,
+    accessToken: accessToken || null,
+    channel: dbUrl ? 'psql' : 'management-api',
+    ref: STAGING_REF,
+  };
 }
 
 function runPsql(dbUrl, sqlFile) {
@@ -118,6 +132,25 @@ function runPsql(dbUrl, sqlFile) {
   });
 }
 
+async function runManagementSql(accessToken, projectRef, sql) {
+  const res = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query: sql }),
+  });
+  const text = await res.text();
+  let body;
+  try { body = JSON.parse(text); } catch { body = { raw: text.slice(0, 500) }; }
+  return {
+    exitCode: res.ok ? 0 : res.status,
+    stdoutSanitized: res.ok ? JSON.stringify(body).slice(0, 2000) : '',
+    stderrSanitized: res.ok ? '' : JSON.stringify(body).slice(0, 2000),
+  };
+}
+
 export async function runStagingContractsV2Apply(options = {}) {
   const env = options.env || loadEnv();
   const dryRun = options.dryRun !== false && !options.apply;
@@ -137,7 +170,12 @@ export async function runStagingContractsV2Apply(options = {}) {
 
   try {
     const guard = assertStagingGuard(env);
-    report.guard = { ok: true, ref: guard.ref, urlHost: new URL(guard.url).hostname };
+    report.guard = {
+      ok: true,
+      ref: guard.ref,
+      urlHost: new URL(guard.url).hostname,
+      channel: guard.channel,
+    };
 
     for (const file of STAGING_ORDER) {
       const abs = path.join(APP_MIGRATIONS, file);
@@ -150,10 +188,17 @@ export async function runStagingContractsV2Apply(options = {}) {
         report.steps.push({ file, action: 'DRY_RUN_SKIP_APPLY', bytes: fs.statSync(abs).size });
         continue;
       }
-      const result = await runPsql(guard.dbUrl, abs);
+      let result;
+      if (guard.channel === 'psql') {
+        result = await runPsql(guard.dbUrl, abs);
+      } else {
+        const sql = fs.readFileSync(abs, 'utf8');
+        result = await runManagementSql(guard.accessToken, guard.ref, sql);
+      }
       report.steps.push({
         file,
         action: 'APPLY',
+        channel: guard.channel,
         exitCode: result.exitCode,
         ok: result.exitCode === 0,
         stderrSanitized: result.stderrSanitized,
