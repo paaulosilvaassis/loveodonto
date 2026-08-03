@@ -21,6 +21,7 @@ Relatórios descrevem **estado observado** em um ponto no tempo. Constituições
 | [PHASE_9_4A_SECURITY_HARDENING.md](./PHASE_9_4A_SECURITY_HARDENING.md) | **Phase 9.4A Security Hardening — JWT membership + RLS fail-closed + budgets quarantine (026)** |
 | [PHASE_9_4A_WAVE2_PATIENT_DETAILS.md](./PHASE_9_4A_WAVE2_PATIENT_DETAILS.md) | **Phase 9.4A Wave 2 — Patient details satélites + repository Supabase real (027)** |
 | [PHASE_9_4A_WAVE3A_PATIENT_DATA_READINESS_AUDIT.md](./PHASE_9_4A_WAVE3A_PATIENT_DATA_READINESS_AUDIT.md) | **Phase 9.4A Wave 3A — Patient data readiness audit (IndexedDB read-only; gate Wave 3B)** |
+| [PHASE_9_4A_OPERATIONAL_RECOVERY.md](./PHASE_9_4A_OPERATIONAL_RECOVERY.md) | **Phase 9.4A — Encerramento incidente operacional Console/Auth/primeiro acesso (checkpoint 5b29249)** |
 | [architecture-audit-love-odonto-v2.md](./architecture-audit-love-odonto-v2.md) | Auditoria arquitetural completa (Etapa 2) |
 | [feature-audit.md](./feature-audit.md) | Auditoria de features |
 | [PHASE_REPORT_TEMPLATE.md](./PHASE_REPORT_TEMPLATE.md) | Template oficial relatório por phase |

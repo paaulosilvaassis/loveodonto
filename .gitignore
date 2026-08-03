@@ -7,3 +7,10 @@ dist/
 !.env.example
 !**/.env.example
 .vercel
+
+# Phase 9.4A Wave 3A — snapshots clínicos IndexedDB (nunca versionar PII)
+love-odonto-idb-snapshot*.json
+**/love-odonto-idb-snapshot*.json
+artifacts/patients/
+*.idb-snapshot.json
+local-idb-snapshot*.json

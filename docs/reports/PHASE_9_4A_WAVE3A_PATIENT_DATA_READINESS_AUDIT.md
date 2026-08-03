@@ -223,6 +223,42 @@ Wave 3B (backfill dry-run real) só com:
 
 ---
 
+## Retomada pós Operational Recovery (2026-08-03)
+
+| Item | Estado |
+|------|--------|
+| Incidente operacional | encerrado — ver `PHASE_9_4A_OPERATIONAL_RECOVERY.md` + checkpoint `5b29249` |
+| Gate estabilidade | PASS (com residual `tsc -b`; vite/console OK) |
+| Artefatos Wave 3A | presentes e testes **14/14** |
+| Export browser | `scripts/patients/exportIndexedDbSnapshot.browser.js` — txn `readonly`, confirmação `LOCAL_READ_ONLY`, sem `put/add/delete` |
+| Stores exportadas | IndexedDB `appgestaoodonto` / object store `data` → chaves top-level `{ k, v }` (todas as collections do `loadDb`) |
+| Snapshot no Git | ignorado via `.gitignore` (`love-odonto-idb-snapshot*.json`, `artifacts/patients/`, …) |
+| Snapshot real disponível | **não** (nenhum arquivo clínico localizado) |
+| Flags Pacientes | false (suite Wave 3A) |
+| IndexedDB SSOT / patientService | intactos |
+| remoteActionsExecuted | false |
+| Gate Wave 3B | **não** |
+
+### Ação humana única necessária
+
+Com o App aberto em `http://localhost:5176` (tenant correto / dashboard):
+
+1. DevTools → Console  
+2. Colar o conteúdo de `scripts/patients/exportIndexedDbSnapshot.browser.js`  
+3. Digitar exatamente `LOCAL_READ_ONLY`  
+4. Salvar o JSON baixado **fora do Git** (ex.: `~/Downloads/`, já coberto pelo ignore se o nome seguir o padrão)  
+5. Informar o caminho ao agente **ou** executar:
+
+```bash
+LOVE_ODONTO_PATIENT_AUDIT_CONFIRMATION=LOCAL_READ_ONLY \
+  node scripts/patients/auditIndexedDbPatientData.mjs \
+  --snapshot CAMINHO_REAL_DO_SNAPSHOT.json
+```
+
+Não usar a fixture sintética como dado clínico.
+
+---
+
 ## Testes
 
 ```bash

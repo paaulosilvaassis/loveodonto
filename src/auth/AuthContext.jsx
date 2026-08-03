@@ -7,7 +7,12 @@ import { getMembership } from '../services/membershipService.js';
 import { ROLE_MASTER } from '../constants/tenantRoles.js';
 import { assertTenantAllowed } from '../services/platformAccessService.js';
 import { resolveTrustedTenantId } from '../services/tenantIdentityService.js';
-import { supabasePlatformClient } from '../lib/supabaseClients.js';
+import { supabaseAppClient, supabasePlatformClient } from '../lib/supabaseClients.js';
+import {
+  clearAppClientSessionIfSameProject,
+  propagatePlatformSessionToAppClient,
+  startSupabaseSessionBridge,
+} from '../lib/supabaseSessionBridge.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
 import { LOGOUT_REASON_KEY } from './logoutReason.js';
 import { auditTenantAccess } from '../services/tenantIsolation.js';
@@ -52,8 +57,16 @@ const AUTH_LOCAL_DB_TIMEOUT_MS = 20000;
 
 async function clearSaasAuthOnLogout(client) {
   clearSaasAuthStorage();
+  await clearAppClientSessionIfSameProject({
+    platformClient: client || supabasePlatformClient,
+    appClient: supabaseAppClient,
+    reason: 'logout',
+  });
   if (client) {
     await client.auth.signOut({ scope: 'local' }).catch(() => {});
+  }
+  if (supabaseAppClient && supabaseAppClient !== client) {
+    await supabaseAppClient.auth.signOut({ scope: 'local' }).catch(() => {});
   }
 }
 
@@ -333,6 +346,19 @@ export const AuthProvider = ({ children }) => {
   }, [session]);
 
   /**
+   * Bridge Platform → App: mesma sessão JWT quando APP e PLATFORM são o mesmo projeto.
+   * Evita consultas `.from('collaborators')` como role `anon` (42501).
+   */
+  useEffect(() => {
+    if (!isSaasModeEnabled()) return undefined;
+    startSupabaseSessionBridge({
+      platformClient: supabasePlatformClient,
+      appClient: supabaseAppClient,
+    });
+    return undefined;
+  }, []);
+
+  /**
    * Eventos do Supabase Auth (modo SaaS).
    * - SIGNED_OUT: limpa tudo.
    * - TOKEN_REFRESHED/USER_UPDATED: o client já persiste o token; tenant/role não mudam — sem refetch.
@@ -399,6 +425,12 @@ export const AuthProvider = ({ children }) => {
         cachedUser: sanitizeCachedUser(enriched),
       };
       writeStoredSession(next);
+      await propagatePlatformSessionToAppClient({
+        platformClient: supabasePlatformClient,
+        appClient: supabaseAppClient,
+        session: currentSession,
+        reason: 'login',
+      });
       try {
         await bootstrapSaasTenantLocalDb(enriched, { previousTenantId });
         ensureSaasUserInLocalDb(enriched);

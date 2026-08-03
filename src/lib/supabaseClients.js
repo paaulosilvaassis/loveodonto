@@ -9,6 +9,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { validateCriticalEnv } from '../config/envGuard.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
+import { extractSupabaseProjectRefFromUrl } from './supabaseSessionBridge.js';
 
 function normalizeEnvString(value) {
   let s = String(value ?? '').trim();
@@ -118,9 +119,27 @@ export const supabasePlatformClient =
 // Alias para compatibilidade com código que importa supabase (app)
 export const supabase = supabaseAppClient;
 
+export const supabasePlatformProjectRef = extractSupabaseProjectRefFromUrl(platformUrl);
+export const supabaseAppProjectRef = extractSupabaseProjectRefFromUrl(appUrl);
+export const supabaseClientsSameProject =
+  Boolean(supabasePlatformProjectRef)
+  && Boolean(supabaseAppProjectRef)
+  && supabasePlatformProjectRef === supabaseAppProjectRef;
+
 if (!supabasePlatformClient && !supabaseAppClient) {
   emitStabilityLog('SUPABASE_CONFIG_FAILED', {
     hasAppClient: Boolean(supabaseAppClient),
     hasPlatformClient: Boolean(supabasePlatformClient),
+  });
+} else if (
+  import.meta.env?.DEV
+  && supabasePlatformClient
+  && supabaseAppClient
+  && !supabaseClientsSameProject
+) {
+  emitStabilityLog('SUPABASE_CLIENTS_HOST_MISMATCH', {
+    platformRef: supabasePlatformProjectRef,
+    appRef: supabaseAppProjectRef,
+    hint: 'Session bridge Platform→App fica desligado até alinhar VITE_SUPABASE_APP_URL ao PLATFORM.',
   });
 }
