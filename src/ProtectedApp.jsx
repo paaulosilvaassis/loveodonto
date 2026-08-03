@@ -73,6 +73,8 @@ import MarketingChatIntegrationsPage from './pages/marketing/chatInteligente/Mar
 import MarketingChatSettingsPage from './pages/marketing/chatInteligente/MarketingChatSettingsPage.jsx';
 import MarketingChatReportsPage from './pages/marketing/chatInteligente/MarketingChatReportsPage.jsx';
 import StabilityHealthPage from './pages/StabilityHealthPage.jsx';
+import QaToolsPage from './pages/dev/QaToolsPage.jsx';
+import { isQaToolsRouteEnabled } from './config/qaToolsGuard.js';
 import ConveniosShellLayout from './convenios/ui/ConveniosShellLayout.jsx';
 import ConveniosDashboardPage from './pages/convenios/ConveniosDashboardPage.jsx';
 import ConveniosOperadorasPage from './pages/convenios/ConveniosOperadorasPage.jsx';
@@ -177,6 +179,16 @@ export default function ProtectedApp() {
         <Route path="/onboarding/clinica" element={<RequireRole allowedRoles={['admin', 'master']} routePath="/onboarding/clinica"><OnboardingClinicaPage /></RequireRole>} />
         <Route path="/configuracoes/usuarios" element={<RequireRole allowedRoles={['admin', 'master']} routePath="/configuracoes/usuarios"><ConfiguracoesUsuariosPage /></RequireRole>} />
         <Route path="/stability/health" element={<RequireRole allowedRoles={['admin', 'master', 'gerente']} routePath="/stability/health"><StabilityHealthPage /></RequireRole>} />
+        {isQaToolsRouteEnabled() ? (
+          <Route
+            path="/dev/qa-tools"
+            element={(
+              <RequireRole allowedRoles={['admin', 'master']} routePath="/dev/qa-tools">
+                <QaToolsPage />
+              </RequireRole>
+            )}
+          />
+        ) : null}
         <Route path="/master" element={<Navigate to="/gestao/dashboard" replace />} />
         <Route path="/admin" element={<Navigate to="/admin/dados-clinica" replace />} />
         <Route path="/admin/dados-clinica" element={withAdminGate(withRole('/admin/dados-clinica', <ClinicSettingsPage />))} />

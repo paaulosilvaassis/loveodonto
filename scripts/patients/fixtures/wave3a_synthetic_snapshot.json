@@ -1,0 +1,319 @@
+{
+  "_meta": {
+    "purpose": "synthetic fixture for Phase 9.4A Wave 3A unit tests only",
+    "not_production_data": true
+  },
+  "patients": [
+    {
+      "id": "patient-ready-001",
+      "guid": "11111111-1111-4111-8111-111111111111",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "full_name": "Ana Silva Ready",
+      "cpf": "52998224725",
+      "birth_date": "1990-05-10",
+      "status": "active",
+      "created_at": "2024-01-01T10:00:00.000Z",
+      "updated_at": "2024-06-01T10:00:00.000Z"
+    },
+    {
+      "id": "patient-warn-002",
+      "guid": "22222222-2222-4222-8222-222222222222",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "full_name": "Bruno Warning",
+      "cpf": "39053344705",
+      "birth_date": "1985-03-20",
+      "status": "active",
+      "created_at": "2024-01-02T10:00:00.000Z",
+      "updated_at": "2024-06-02T10:00:00.000Z"
+    },
+    {
+      "id": "patient-dup-cpf-a",
+      "guid": "33333333-3333-4333-8333-333333333333",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "full_name": "Carla Dup A",
+      "cpf": "11144477735",
+      "birth_date": "1980-01-01",
+      "status": "active",
+      "created_at": "2024-01-03T10:00:00.000Z",
+      "updated_at": "2024-06-03T10:00:00.000Z"
+    },
+    {
+      "id": "patient-dup-cpf-b",
+      "guid": "44444444-4444-4444-8444-444444444444",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "full_name": "Carla Dup B",
+      "cpf": "11144477735",
+      "birth_date": "1981-01-01",
+      "status": "inactive",
+      "created_at": "2024-01-04T10:00:00.000Z",
+      "updated_at": "2024-06-04T10:00:00.000Z"
+    },
+    {
+      "id": "patient-no-tenant",
+      "guid": "55555555-5555-4555-8555-555555555555",
+      "tenant_id": "",
+      "full_name": "Diego Sem Tenant",
+      "cpf": "15350946056",
+      "birth_date": "1975-07-07",
+      "status": "active",
+      "created_at": "2024-01-05T10:00:00.000Z",
+      "updated_at": "2024-06-05T10:00:00.000Z"
+    },
+    {
+      "id": "patient-legacy-tenant",
+      "guid": "66666666-6666-4666-8666-666666666666",
+      "tenant_id": "tenant-1",
+      "full_name": "Elena Legacy Tenant",
+      "cpf": "86288366757",
+      "birth_date": "1992-11-11",
+      "status": "active",
+      "created_at": "2024-01-06T10:00:00.000Z",
+      "updated_at": "2024-06-06T10:00:00.000Z"
+    },
+    {
+      "id": "patient-bad-cpf",
+      "guid": "77777777-7777-4777-8777-777777777777",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "full_name": "Fabio Cpf Invalido",
+      "cpf": "12345678901",
+      "birth_date": "1991-02-02",
+      "status": "active",
+      "created_at": "2024-01-07T10:00:00.000Z",
+      "updated_at": "2024-06-07T10:00:00.000Z"
+    },
+    {
+      "id": "patient-cross-tenant",
+      "guid": "88888888-8888-4888-8888-888888888888",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "full_name": "Gisele Cross",
+      "cpf": "07696431080",
+      "birth_date": "1993-08-08",
+      "status": "active",
+      "created_at": "2024-01-08T10:00:00.000Z",
+      "updated_at": "2024-06-08T10:00:00.000Z"
+    },
+    {
+      "id": "patient-multi-primary",
+      "guid": "99999999-9999-4999-8999-999999999999",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "full_name": "Hugo Multi Primary",
+      "cpf": "28126584017",
+      "birth_date": "1988-09-09",
+      "status": "active",
+      "created_at": "2024-01-09T10:00:00.000Z",
+      "updated_at": "2024-06-09T10:00:00.000Z"
+    },
+    {
+      "id": "not-a-legacy",
+      "guid": "",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "full_name": "",
+      "cpf": "",
+      "status": "active",
+      "created_at": null,
+      "updated_at": null
+    }
+  ],
+  "patientDocuments": [
+    {
+      "patient_id": "patient-ready-001",
+      "personal_email": "ana.ready@example.com",
+      "rg": "1234567",
+      "responsible_name": "",
+      "responsible_cpf": ""
+    },
+    {
+      "patient_id": "patient-warn-002",
+      "personal_email": "not-an-email",
+      "rg": "7654321",
+      "responsible_name": "",
+      "responsible_cpf": ""
+    },
+    {
+      "patient_id": "orphan-doc-xyz",
+      "personal_email": "ghost@example.com"
+    },
+    {
+      "patient_id": "patient-ready-001",
+      "personal_email": "dup@example.com"
+    }
+  ],
+  "patientBirth": [
+    { "patient_id": "patient-ready-001", "birth_city": "Sao Paulo" }
+  ],
+  "patientEducation": [
+    { "patient_id": "patient-ready-001", "schooling": "superior" }
+  ],
+  "patientPhones": [
+    {
+      "id": "phone-1",
+      "patient_id": "patient-ready-001",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "ddd": "11",
+      "number": "988887777",
+      "is_primary": true
+    },
+    {
+      "id": "phone-2",
+      "patient_id": "patient-cross-tenant",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "ddd": "21",
+      "number": "977776666",
+      "is_primary": true
+    },
+    {
+      "id": "phone-3",
+      "patient_id": "patient-multi-primary",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "ddd": "31",
+      "number": "966665555",
+      "is_primary": true
+    },
+    {
+      "id": "phone-4",
+      "patient_id": "patient-multi-primary",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "ddd": "31",
+      "number": "955554444",
+      "is_primary": true
+    },
+    {
+      "id": "phone-orphan",
+      "patient_id": "patient-missing-xxx",
+      "ddd": "11",
+      "number": "900001111",
+      "is_primary": true
+    },
+    {
+      "id": "phone-bad",
+      "patient_id": "patient-legacy-tenant",
+      "tenant_id": "tenant-1",
+      "ddd": "1",
+      "number": "123",
+      "is_primary": true
+    }
+  ],
+  "patientAddresses": [
+    {
+      "id": "addr-1",
+      "patient_id": "patient-ready-001",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "cep": "01310100",
+      "state": "SP",
+      "city": "Sao Paulo",
+      "is_primary": true
+    },
+    {
+      "id": "addr-cross",
+      "patient_id": "patient-cross-tenant",
+      "tenant_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "cep": "20040020",
+      "state": "RJ",
+      "is_primary": true
+    },
+    {
+      "id": "addr-bad-cep",
+      "patient_id": "patient-legacy-tenant",
+      "tenant_id": "tenant-1",
+      "cep": "123",
+      "state": "XX",
+      "is_primary": true
+    },
+    {
+      "id": "addr-orphan",
+      "patient_id": "patient-ghost-addr",
+      "cep": "01310100",
+      "state": "SP",
+      "is_primary": true
+    }
+  ],
+  "patientRelationships": [
+    { "patient_id": "patient-ready-001", "emergency_name": "Contato" }
+  ],
+  "patientInsurances": [
+    {
+      "id": "ins-1",
+      "patient_id": "patient-ready-001",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "insurance_name": "Unimed",
+      "membership_number": "ABC123"
+    },
+    {
+      "id": "ins-orphan",
+      "patient_id": "patient-ghost-ins",
+      "insurance_name": "Amil",
+      "membership_number": ""
+    }
+  ],
+  "patientAccess": [
+    { "patient_id": "patient-ready-001", "portal_enabled": false }
+  ],
+  "patientActivitySummary": [
+    { "patient_id": "patient-ready-001", "last_visit_at": "2024-05-01T00:00:00.000Z" }
+  ],
+  "patientRecords": [
+    {
+      "id": "record-1",
+      "patient_id": "patient-ready-001",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "record_number": "PR-100"
+    },
+    {
+      "id": "record-dup-a",
+      "patient_id": "patient-dup-cpf-a",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "record_number": "PR-DUP"
+    },
+    {
+      "id": "record-dup-b",
+      "patient_id": "patient-dup-cpf-b",
+      "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "record_number": "PR-DUP"
+    },
+    {
+      "id": "record-orphan",
+      "patient_id": "patient-ghost-rec",
+      "record_number": "PR-ORPH"
+    }
+  ],
+  "appointments": [
+    { "id": "appt-1", "patientId": "patient-ready-001", "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+    { "id": "appt-broken", "patientId": "patient-does-not-exist", "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+    { "id": "appt-uuid", "patientId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc" }
+  ],
+  "crmLeads": [
+    { "id": "lead-1", "patient_id": "patient-ready-001", "tenant_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+    { "id": "lead-orphan", "patient_id": "patient-missing-lead" }
+  ],
+  "generatedContracts": [
+    { "id": "ct-1", "patient_id": "patient-ready-001" }
+  ],
+  "accountsReceivable": [
+    { "id": "ar-1", "patient_id": "patient-ready-001" },
+    { "id": "ar-broken", "patient_id": "patient-ar-missing" }
+  ],
+  "financings": [
+    { "id": "fin-1", "patient_id": "patient-ready-001" }
+  ],
+  "budgets": [
+    { "id": "bud-1", "patient_id": "patient-ready-001" }
+  ],
+  "patientJourneyEntries": [
+    { "id": "j-1", "patient_id": "patient-ready-001" }
+  ],
+  "patientCharts": [
+    { "id": "ch-1", "patient_id": "patient-ready-001" }
+  ],
+  "patientOdontograms": [
+    { "id": "od-1", "patient_id": "patient-ready-001" }
+  ],
+  "patientOdontogramsV2": [
+    { "id": "od2-1", "patientId": "patient-ready-001" }
+  ],
+  "patientFiles": [
+    { "id": "f-1", "patient_id": "patient-ready-001" }
+  ],
+  "patientConfidentialFiles": [
+    { "id": "cf-1", "patient_id": "patient-ready-001" }
+  ]
+}

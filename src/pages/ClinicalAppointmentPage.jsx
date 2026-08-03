@@ -20,8 +20,9 @@ import {
   updateBudgetStatus,
   BUDGET_STATUS
 } from '../services/clinicalService.js';
-import { createBudget, listBudgets, updateBudgetTotal } from '../services/budgetsService.js';
-import { createBudgetItems, listBudgetItemsByBudgetIds } from '../services/budgetItemsService.js';
+// budgetsService / budgetItemsService quarantined (Phase 9.4A) — sem PostgREST até 9.4B.
+import { listBudgets } from '../services/budgetsService.js';
+import { listBudgetItemsByBudgetIds } from '../services/budgetItemsService.js';
 import { supabase } from '../lib/supabaseClient.ts';
 import { SectionCard } from '../components/SectionCard.jsx';
 import { 

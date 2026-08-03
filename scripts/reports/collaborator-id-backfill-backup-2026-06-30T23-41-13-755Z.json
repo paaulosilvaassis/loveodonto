@@ -1,0 +1,86 @@
+{
+  "applied_at": "2026-06-30T23:41:13.755Z",
+  "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+  "dry_run_report": "C:\\Users\\paaul\\Desktop\\appgestaoodonto-main\\appgestaoodonto\\scripts\\reports\\collaborator-id-backfill-dryrun-2026-06-30T23-41-13-316Z.json",
+  "applied": 2,
+  "errors": [],
+  "backup": [
+    {
+      "table": "tenant_users",
+      "id": "6305a4a3-4c64-4cfd-9b96-d81f99e23826",
+      "before": {
+        "id": "6305a4a3-4c64-4cfd-9b96-d81f99e23826",
+        "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+        "user_id": "052c1b67-513e-4c91-b8d0-bf9d4f36d158",
+        "full_name": "Juliana Staging Freire",
+        "email": "juliana+staging@implanprime.test",
+        "role_slug": "administrativo",
+        "status": "active",
+        "created_at": "2026-06-29T23:18:02.428859+00:00",
+        "updated_at": "2026-06-29T23:28:18.480356+00:00",
+        "role": "administrativo",
+        "is_active": true,
+        "collaborator_id": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+        "has_system_access": true,
+        "invitation_status": "accepted",
+        "collaborator_uuid": "6eeabd6b-0a8b-4d88-8715-400e092d3212",
+        "has_custom_permissions": false
+      }
+    },
+    {
+      "table": "identities",
+      "id": "453c932d-f7a6-4935-84cc-f409a3feb442",
+      "before": {
+        "id": "453c932d-f7a6-4935-84cc-f409a3feb442",
+        "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+        "tenant_user_id": "6305a4a3-4c64-4cfd-9b96-d81f99e23826",
+        "collaborator_id": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+        "email": "juliana+staging@implanprime.test",
+        "full_name": "Juliana Staging Freire",
+        "role_slug": "administrativo",
+        "status": "active",
+        "invitation_status": "accepted",
+        "updated_at": "2026-06-29T23:18:02.940053+00:00"
+      }
+    },
+    {
+      "table": "tenant_users",
+      "id": "50f188fe-94f4-4459-840e-7f9b62ac06c0",
+      "before": {
+        "id": "50f188fe-94f4-4459-840e-7f9b62ac06c0",
+        "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+        "user_id": "9bd9368c-a43d-406d-8bcf-877c15b754d2",
+        "full_name": "Renata Staging Assis",
+        "email": "renata+staging@implanprime.test",
+        "role_slug": "administrativo",
+        "status": "active",
+        "created_at": "2026-06-29T23:18:02.598241+00:00",
+        "updated_at": "2026-06-29T23:28:18.560114+00:00",
+        "role": "administrativo",
+        "is_active": true,
+        "collaborator_id": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+        "has_system_access": true,
+        "invitation_status": "accepted",
+        "collaborator_uuid": "e3f0f230-4dfa-44f3-9f4d-41c6babcef03",
+        "has_custom_permissions": false
+      }
+    },
+    {
+      "table": "identities",
+      "id": "bd1a72a8-1c85-468c-8b71-edca91031052",
+      "before": {
+        "id": "bd1a72a8-1c85-468c-8b71-edca91031052",
+        "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+        "tenant_user_id": "50f188fe-94f4-4459-840e-7f9b62ac06c0",
+        "collaborator_id": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+        "email": "renata+staging@implanprime.test",
+        "full_name": "Renata Staging Assis",
+        "role_slug": "administrativo",
+        "status": "active",
+        "invitation_status": "accepted",
+        "updated_at": "2026-06-29T23:18:02.98654+00:00"
+      }
+    }
+  ],
+  "rollback_command": "node scripts/collaborator-id-backfill.mjs --rollback \"C:\\Users\\paaul\\Desktop\\appgestaoodonto-main\\appgestaoodonto\\scripts\\reports\\collaborator-id-backfill-backup-2026-06-30T23-41-13-755Z.json\""
+}

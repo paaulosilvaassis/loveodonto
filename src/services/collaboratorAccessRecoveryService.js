@@ -1,4 +1,4 @@
-import { loadDb } from '../db/index.js';
+import { readGetCollaboratorAccessLink } from './collaboratorServiceReadAdapter.js';
 import { normalizeTenantAccessRole } from '../utils/collaboratorAccessPanel.js';
 import { isCollaboratorEmailValid } from '../utils/collaboratorAccessRole.js';
 import {
@@ -24,16 +24,7 @@ import { syncLocalCollaboratorAccess } from './collaboratorService.js';
 import { isSaasModeEnabled } from './saasAuthService.js';
 
 export function getCollaboratorAccessLink(collaboratorId) {
-  const id = String(collaboratorId || '').trim();
-  if (!id) return null;
-  const db = loadDb();
-  const row = (db.collaboratorAccess || []).find((item) => item.collaboratorId === id);
-  if (!row?.userId) return null;
-  return {
-    collaboratorId: id,
-    userId: row.userId,
-    role: row.role || 'atendimento',
-  };
+  return readGetCollaboratorAccessLink(collaboratorId);
 }
 
 export function syncCollaboratorAccessFromTenantUser(
@@ -103,8 +94,10 @@ async function resolveTenantUserForCollaborator({
   collaboratorId,
   collaborator,
   tenantUser = null,
+  skipRemoteFetch = false,
 }) {
   if (tenantUser?.id && tenantUser?.user_id) return tenantUser;
+  if (skipRemoteFetch) return tenantUser || null;
 
   const email = String(collaborator?.email || tenantUser?.email || '').trim().toLowerCase();
   if (!tenantId || !isCollaboratorEmailValid(email)) return tenantUser || null;
@@ -132,6 +125,8 @@ export async function reconcileCollaboratorAccessState({
   tenantUser = null,
   tenantId = '',
   currentUser = null,
+  skipRemoteFetch = false,
+  skipRemoteLink = false,
 }) {
   if (!collaboratorId || !tenantId) {
     return { tenantUser: tenantUser || null, access: null, recovered: false };
@@ -142,6 +137,7 @@ export async function reconcileCollaboratorAccessState({
     collaboratorId,
     collaborator,
     tenantUser,
+    skipRemoteFetch,
   });
 
   const email = String(
@@ -149,7 +145,8 @@ export async function reconcileCollaboratorAccessState({
   ).trim().toLowerCase();
 
   if (
-    isSaasModeEnabled()
+    !skipRemoteLink
+    && isSaasModeEnabled()
     && resolvedTenantUser?.id
     && email
     && resolvedTenantUser.collaborator_id !== collaboratorId

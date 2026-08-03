@@ -1,5 +1,15 @@
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
-import { buildResolvedSaasUser, getPlatformAccessToken, readPlatformAccessTokenFromStorage } from '../auth/saasSessionResolver.js';
+import {
+  buildResolvedSaasUser,
+  getPlatformAccessToken,
+  readPlatformAccessTokenFromStorage,
+  recoverFromStalePlatformAuth,
+} from '../auth/saasSessionResolver.js';
+import {
+  hasPersistedPlatformAuth,
+  isLoginBlockedByStaleAuth,
+  isStaleRefreshAuthError,
+} from '../auth/saasAuthStorage.js';
 import { normalizeSaasBootstrapRole } from '../utils/rbacHelpers.js';
 import {
   assertAdminApiFetchAllowed,
@@ -20,17 +30,70 @@ function mapSaasAuthError(error) {
     return 'E-mail ou senha inválidos.';
   }
   if (
+    lower.includes('unexpected end of json')
+    || lower.includes('invalid_http_response')
+    || lower.includes('sem json válido')
+    || lower.includes('corpo vazio')
+  ) {
+    const statusMatch = message.match(/HTTP\s+(\d{3})/i);
+    const status = statusMatch?.[1] || error?.status || '';
+    return status
+      ? `Falha na autenticação Supabase (HTTP ${status}): resposta sem JSON válido.`
+      : 'Falha na autenticação Supabase: resposta sem JSON válido.';
+  }
+  const hasPlatformConfig = Boolean(import.meta.env.VITE_SUPABASE_PLATFORM_URL)
+    && Boolean(import.meta.env.VITE_SUPABASE_PLATFORM_ANON_KEY);
+  if (
     lower.includes('failed to fetch')
     || lower.includes('networkerror')
     || lower.includes('network request failed')
     || lower.includes('fetch failed')
+    || lower.includes('unexpected token')
+    || lower.includes('<!doctype')
   ) {
+    if (hasPlatformConfig) {
+      return (
+        'Supabase Auth está indisponível no momento (falha de rede/data plane). '
+        + 'A configuração pública do app está presente; tente novamente em instantes.'
+      );
+    }
     return (
       'Não foi possível conectar ao Supabase para autenticar. '
       + 'Verifique VITE_SUPABASE_PLATFORM_URL, chave pública e sua conexão de rede.'
     );
   }
   return message || 'Falha no login SaaS.';
+}
+
+/** Lê JSON de Response sem lançar em corpo vazio / non-JSON; preserva status HTTP. */
+async function readResponseJsonSafe(response) {
+  const status = Number(response?.status) || 0;
+  const contentType = String(response?.headers?.get?.('content-type') || '').toLowerCase();
+  const raw = await response.text();
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    const err = new Error(`Resposta HTTP ${status} com corpo vazio.`);
+    err.status = status;
+    err.code = 'empty_http_body';
+    throw err;
+  }
+  const looksJson = contentType.includes('application/json')
+    || trimmed.startsWith('{')
+    || trimmed.startsWith('[');
+  if (!looksJson) {
+    const err = new Error(`Resposta HTTP ${status} sem JSON válido.`);
+    err.status = status;
+    err.code = 'invalid_http_response';
+    throw err;
+  }
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const err = new Error(`Resposta HTTP ${status} com JSON inválido.`);
+    err.status = status;
+    err.code = 'invalid_json_body';
+    throw err;
+  }
 }
 
 function normalizeRole(value) {
@@ -86,7 +149,18 @@ async function fetchSaasAccessBootstrapViaAdminApi(client, session = null) {
   for (const url of urls) {
     try {
       const response = await fetch(url, fetchOpts);
-      const json = await response.json().catch(() => ({}));
+      let json = {};
+      try {
+        json = await readResponseJsonSafe(response);
+      } catch (parseErr) {
+        if (!response.ok) {
+          throw new Error(
+            `Erro HTTP ${response.status} ao carregar acesso da clínica `
+            + `(${parseErr?.code || 'invalid_response'}).`,
+          );
+        }
+        throw parseErr;
+      }
       if (!response.ok) {
         throw new Error(json?.error || `Erro HTTP ${response.status} ao carregar acesso da clínica.`);
       }
@@ -174,12 +248,40 @@ export async function signInSaasWithPassword(email, password) {
   if (!client) {
     throw new Error('Supabase da plataforma não configurado para login SaaS.');
   }
-  const { data: signData, error: signError } = await client.auth.signInWithPassword({
-    email: String(email || '').trim().toLowerCase(),
-    password,
-  });
-  if (signError) {
-    throw new Error(mapSaasAuthError(signError));
+
+  // Evita refresh stale competindo com o password grant (RC-03.4/RC-03.5).
+  if (hasPersistedPlatformAuth()) {
+    await recoverFromStalePlatformAuth().catch(() => {});
+  }
+
+  const attemptSignIn = async () => {
+    const { data: signData, error: signError } = await client.auth.signInWithPassword({
+      email: String(email || '').trim().toLowerCase(),
+      password,
+    });
+    if (signError) {
+      throw signError;
+    }
+    return signData;
+  };
+
+  let signData;
+  try {
+    signData = await attemptSignIn();
+  } catch (error) {
+    const blockedByStale = isLoginBlockedByStaleAuth(error, {
+      hasPlatformAuth: hasPersistedPlatformAuth(),
+    });
+    if (isStaleRefreshAuthError(error) || blockedByStale) {
+      await recoverFromStalePlatformAuth();
+      try {
+        signData = await attemptSignIn();
+      } catch (retryErr) {
+        throw new Error(mapSaasAuthError(retryErr));
+      }
+    } else {
+      throw new Error(mapSaasAuthError(error));
+    }
   }
   const activeSession = signData?.session || null;
   if (!activeSession?.access_token) {

@@ -7,6 +7,23 @@ import { withDb, loadDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { addLeadEvent } from './crmService.js';
 import { CRM_EVENT_TYPE } from './crmService.js';
+import {
+  readGetCrmTaskWaveB,
+  readListCrmTasksWaveB,
+} from './crmWaveBAdapter.js';
+import {
+  scheduleActivityDualWriteCompleteTask,
+  scheduleActivityDualWriteCreateTask,
+  scheduleActivityDualWriteDeleteTask,
+  scheduleActivityDualWriteUpdateTask,
+} from './crmActivityWriteAdapter.js';
+import { getCrmTenantIdFromDbSync } from '../repositories/crm/crmIndexedDbRepository.ts';
+import {
+  scheduleTaskCreatedDomainEvent,
+  scheduleTaskMutationDomainEvent,
+  scheduleTaskCompletedDomainEvent,
+  scheduleTaskDeletedDomainEvent,
+} from './crmTaskDomainEventPublisher.js';
 
 const DEFAULT_CLINIC_ID = 'clinic-1';
 
@@ -71,6 +88,15 @@ function getClinicId() {
  * @returns {Object[]}
  */
 export function listTasks(filters = {}) {
+  const tenantHint = filters.tenantId || getCrmTenantIdFromDbSync() || '';
+  const fromRepo = readListCrmTasksWaveB({ ...filters, tenantId: tenantHint || undefined });
+  if (fromRepo !== null) {
+    const clinicId = filters.clinicId || getClinicId();
+    return fromRepo
+      .filter((t) => !clinicId || t.clinicId === clinicId)
+      .sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
+  }
+
   const db = loadDb();
   const clinicId = filters.clinicId || getClinicId();
   let list = [...(db.crmTasks || [])].filter((t) => t.clinicId === clinicId);
@@ -79,6 +105,18 @@ export function listTasks(filters = {}) {
   if (filters.status) list = list.filter((t) => t.status === filters.status);
   list.sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
   return list;
+}
+
+/**
+ * Obtém tarefa CRM por id.
+ */
+export function getTask(taskId) {
+  const tenantHint = getCrmTenantIdFromDbSync() || '';
+  const fromRepo = readGetCrmTaskWaveB(taskId, tenantHint);
+  if (fromRepo !== null) return fromRepo;
+
+  const db = loadDb();
+  return (db.crmTasks || []).find((t) => t.id === taskId) || null;
 }
 
 /**
@@ -174,13 +212,13 @@ export function createTask(user, data) {
     throw new Error('Data de vencimento inválida.');
   }
 
-  return withDb((db) => {
+  const task = withDb((db) => {
     if (!db.crmTasks) db.crmTasks = [];
     const clinicId = getClinicId();
     const now = new Date().toISOString();
     const id = createId('crmtask');
 
-    const task = {
+    const taskRecord = {
       id,
       clinicId,
       tenant_id: data.tenant_id
@@ -206,20 +244,23 @@ export function createTask(user, data) {
       doneAt: null,
     };
 
-    db.crmTasks.push(task);
+    db.crmTasks.push(taskRecord);
 
-    const leadId = task.leadId;
+    const leadId = taskRecord.leadId;
     if (leadId) {
       addLeadEvent(user, leadId, CRM_EVENT_TYPE.TASK_CREATED, {
         taskId: id,
-        taskTitle: task.title,
-        dueAt: task.dueAt,
-        description: `${task.title} • Venc.: ${formatDueForTimeline(task.dueAt)}`,
+        taskTitle: taskRecord.title,
+        dueAt: taskRecord.dueAt,
+        description: `${taskRecord.title} • Venc.: ${formatDueForTimeline(taskRecord.dueAt)}`,
       });
     }
 
-    return task;
+    return taskRecord;
   });
+  scheduleActivityDualWriteCreateTask(user, task);
+  scheduleTaskCreatedDomainEvent(user, task);
+  return task;
 }
 
 function formatDueForTimeline(iso) {
@@ -244,29 +285,34 @@ function formatDueForTimeline(iso) {
  * @param {Object} data
  */
 export function updateTask(user, taskId, data) {
-  return withDb((db) => {
+  let previous = null;
+  const next = withDb((db) => {
     const idx = (db.crmTasks || []).findIndex((t) => t.id === taskId);
     if (idx < 0) throw new Error('Tarefa não encontrada.');
+    previous = { ...db.crmTasks[idx] };
     const prev = db.crmTasks[idx];
     const now = new Date().toISOString();
-    const next = {
+    const updated = {
       ...prev,
       ...data,
       updatedAt: now,
     };
-    if (data.dueAt !== undefined) next.dueAt = data.dueAt;
-    if (data.title !== undefined) next.title = (data.title || '').trim();
-    if (data.description !== undefined) next.description = (data.description || '').trim() || null;
-    db.crmTasks[idx] = next;
-    return next;
+    if (data.dueAt !== undefined) updated.dueAt = data.dueAt;
+    if (data.title !== undefined) updated.title = (data.title || '').trim();
+    if (data.description !== undefined) updated.description = (data.description || '').trim() || null;
+    db.crmTasks[idx] = updated;
+    return updated;
   });
+  scheduleActivityDualWriteUpdateTask(user, next);
+  scheduleTaskMutationDomainEvent(user, next, previous, data, 'update');
+  return next;
 }
 
 /**
  * Marca tarefa como concluída e registra evento na timeline.
  */
 export function completeTask(user, taskId) {
-  return withDb((db) => {
+  const completed = withDb((db) => {
     const idx = (db.crmTasks || []).findIndex((t) => t.id === taskId);
     if (idx < 0) throw new Error('Tarefa não encontrada.');
     const task = db.crmTasks[idx];
@@ -288,15 +334,20 @@ export function completeTask(user, taskId) {
 
     return db.crmTasks[idx];
   });
+  scheduleActivityDualWriteCompleteTask(user, completed);
+  scheduleTaskCompletedDomainEvent(user, completed);
+  return completed;
 }
 
 /**
  * Cancela tarefa.
  */
 export function cancelTask(user, taskId) {
-  return withDb((db) => {
+  let previous = null;
+  const cancelled = withDb((db) => {
     const idx = (db.crmTasks || []).findIndex((t) => t.id === taskId);
     if (idx < 0) throw new Error('Tarefa não encontrada.');
+    previous = { ...db.crmTasks[idx] };
     const now = new Date().toISOString();
     db.crmTasks[idx] = {
       ...db.crmTasks[idx],
@@ -305,25 +356,35 @@ export function cancelTask(user, taskId) {
     };
     return db.crmTasks[idx];
   });
+  scheduleTaskMutationDomainEvent(user, cancelled, previous, { status: TASK_STATUS.CANCELED }, 'update');
+  return cancelled;
 }
 
 /**
  * Remove tarefa (soft delete via cancelamento) ou remove do array.
  */
 export function deleteTask(user, taskId) {
-  return withDb((db) => {
+  const tenantHint = getCrmTenantIdFromDbSync() || '';
+  let previous = null;
+  withDb((db) => {
     const idx = (db.crmTasks || []).findIndex((t) => t.id === taskId);
     if (idx < 0) throw new Error('Tarefa não encontrada.');
+    previous = { ...db.crmTasks[idx] };
     db.crmTasks.splice(idx, 1);
     return null;
   });
+  scheduleActivityDualWriteDeleteTask(user, taskId, tenantHint);
+  scheduleTaskDeletedDomainEvent(user, taskId, previous, {
+    tenantId: previous?.tenant_id || tenantHint,
+  });
+  return null;
 }
 
 /**
  * Vincula appointmentId à tarefa, marca como done e registra evento na timeline.
  */
 export function linkAppointmentAndComplete(user, taskId, appointmentId) {
-  return withDb((db) => {
+  const completed = withDb((db) => {
     const idx = (db.crmTasks || []).findIndex((t) => t.id === taskId);
     if (idx < 0) throw new Error('Tarefa não encontrada.');
     const task = db.crmTasks[idx];
@@ -352,4 +413,6 @@ export function linkAppointmentAndComplete(user, taskId, appointmentId) {
 
     return db.crmTasks[idx];
   });
+  scheduleTaskCompletedDomainEvent(user, completed);
+  return completed;
 }

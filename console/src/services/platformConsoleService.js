@@ -389,15 +389,22 @@ async function insertAudit(actor, action, targetType, targetId, metadata, tenant
   }
 }
 
+function normalizePlatformRole(value) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+}
+
 function ensureCanCreateClinic(actor) {
-  const role = String(actor?.role || '').toLowerCase();
+  const role = normalizePlatformRole(actor?.role || actor?.role_slug);
   if (!ALLOWED_ONBOARDING_ROLES.has(role)) {
     throw new Error('Somente owner ou super_admin pode criar nova clínica.');
   }
 }
 
 function ensureCanManageMasterAccess(actor) {
-  const role = String(actor?.role || '').toLowerCase();
+  const role = normalizePlatformRole(actor?.role || actor?.role_slug);
   if (ALLOWED_ONBOARDING_ROLES.has(role)) return;
   throw new Error('Somente owner ou super_admin pode gerenciar acesso master.');
 }
@@ -621,7 +628,7 @@ export async function getClinicDetail(tenantId) {
 
   const { data: masterRows, error: masterErr } = await client
     .from('tenant_users')
-    .select('id, email, full_name, role, role_slug, user_id, is_active, status, has_system_access')
+    .select('id, email, full_name, role, role_slug, user_id, is_active, status, has_system_access, invitation_status')
     .eq('tenant_id', tenantId)
     .in('role_slug', ['master', 'owner'])
     .order('created_at', { ascending: true })
@@ -636,6 +643,7 @@ export async function getClinicDetail(tenantId) {
         role: masterRow.role_slug || masterRow.role,
         authLinked: Boolean(masterRow.user_id),
         isActive: masterRow.is_active !== false,
+        invitationStatus: masterRow.invitation_status || 'none',
       }
     : {
         email: legalProfile?.legalRepresentativeEmail || clinic.ownerEmail || '',
@@ -643,6 +651,7 @@ export async function getClinicDetail(tenantId) {
         role: 'master',
         authLinked: false,
         isActive: false,
+        invitationStatus: 'none',
       };
 
   return { clinic, subscription, billingHistory, supportHistory, recentErrors, legalProfile, masterAccess };
@@ -813,11 +822,15 @@ export async function createClinicOnboarding(actor, payload) {
   };
 }
 
-export async function resendClinicOwnerAccess(actor, tenantId) {
+export async function resendClinicOwnerAccess(actor, tenantId, options = {}) {
   ensureCanManageMasterAccess(actor);
+  const body = {};
+  if (options?.email) body.email = String(options.email).trim().toLowerCase();
+  if (options?.tenantUserId) body.tenantUserId = String(options.tenantUserId).trim();
+  if (options?.redirectTo) body.redirectTo = String(options.redirectTo).trim();
   return callPlatformApi(`/internal/platform/tenants/${tenantId}/resend-access`, {
     method: 'POST',
-    body: {},
+    body,
   });
 }
 

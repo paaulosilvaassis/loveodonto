@@ -3,6 +3,43 @@ import { createId } from './helpers.js';
 import { logAction } from './logService.js';
 import { enrichLeadWithTags } from './crmTagService.js';
 import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
+import { getCrmTenantIdFromDbSync } from '../repositories/crm/crmIndexedDbRepository.ts';
+import {
+  readGetKanbanCard,
+  readGetLead,
+  readListKanbanCards,
+  readListLeads,
+  readListPipelineStages,
+} from './crmReadAdapter.js';
+import {
+  scheduleCrmDualWriteCreateLead,
+  scheduleCrmDualWriteMoveLeadToStage,
+  scheduleCrmDualWriteUpdateLead,
+} from './crmWriteAdapter.js';
+import {
+  scheduleLeadCreatedDomainEvent,
+  scheduleLeadMovedDomainEvent,
+  scheduleLeadUpdatedDomainEvent,
+} from './crmLeadDomainEventPublisher.js';
+import {
+  scheduleCrmTimelineEventCreatedDomainEvent,
+} from './crmActivityDomainEventPublisher.js';
+import {
+  scheduleFollowUpCreatedDomainEvent,
+  scheduleFollowUpMutationDomainEvent,
+} from './crmFollowUpDomainEventPublisher.js';
+import {
+  readGetCrmLegacyFollowUpWaveB,
+  readGetLeadEventWaveB,
+  readListCrmLegacyFollowUpsWaveB,
+  readListLeadEventsWaveB,
+} from './crmWaveBAdapter.js';
+import {
+  scheduleActivityDualWriteCreateCrmFollowUp,
+  scheduleActivityDualWriteCreateLeadEvent,
+  scheduleActivityDualWriteUpdateCrmFollowUp,
+  scheduleActivityDualWriteUpdateLeadEvent,
+} from './crmActivityWriteAdapter.js';
 
 // ─── Fontes de Lead (configuráveis) ─────────────────────────────────────────
 export const LEAD_SOURCE = {
@@ -64,6 +101,15 @@ export const CRM_EVENT_TYPE = {
   BUDGET_EM_ANALISE_FOLLOWUP: 'budget_em_analise_followup',
 };
 
+const resolveCrmTenantHint = () => getCrmTenantIdFromDbSync() || '';
+
+const applyLeadListPostProcess = (list) => {
+  const sorted = [...list].sort(
+    (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt),
+  );
+  return sorted.map((l) => enrichLeadWithTags(l));
+};
+
 // ─── CRUD Leads ────────────────────────────────────────────────────────────
 
 const parseEstimatedValue = (value) => {
@@ -86,12 +132,12 @@ const isLostStageForLead = (db, lead, stageKey) => {
  */
 export const createLead = (user, data) => {
   const tenantId = resolveTenantIdForWrite(user, data?.tenant_id || data?.tenantId);
-  return withDb((db) => {
+  const lead = withDb((db) => {
     if (!db.crmLeads) db.crmLeads = [];
     const now = new Date().toISOString();
     const id = createId('crmlead');
     const stageKey = data.stageKey || 'novo_lead';
-    const lead = {
+    const record = {
       id,
       name: data.name?.trim() || '',
       phone: (data.phone || '').replace(/\D/g, ''),
@@ -111,15 +157,19 @@ export const createLead = (user, data) => {
       createdByUserId: user?.id || null,
       tenant_id: tenantId,
     };
-    db.crmLeads.push(lead);
+    db.crmLeads.push(record);
     logLeadEvent(db, id, CRM_EVENT_TYPE.STATUS_CHANGE, user?.id, {
       fromStage: null,
       toStage: stageKey,
       description: 'Lead criado',
     });
-    logAction('crm:lead_created', { leadId: id, source: lead.source, userId: user?.id });
-    return lead;
+    logAction('crm:lead_created', { leadId: id, source: record.source, userId: user?.id });
+    return record;
   });
+  scheduleCrmDualWriteCreateLead(user, lead);
+  // Domain Event Wave A — após IDB ok; fora do dual/primary adapter (sem duplicidade).
+  scheduleLeadCreatedDomainEvent(user, lead);
+  return lead;
 };
 
 /**
@@ -127,6 +177,10 @@ export const createLead = (user, data) => {
  * Retorna leads enriquecidos com tagList (tags categorizadas).
  */
 export const listLeads = (filters = {}) => {
+  const tenantHint = filters.tenantId || resolveCrmTenantHint();
+  const fromRepo = readListLeads({ ...filters, tenantId: tenantHint || undefined });
+  if (fromRepo !== null) return applyLeadListPostProcess(fromRepo);
+
   const db = loadDb();
   let list = [...(db.crmLeads || [])];
   if (filters.stageKey) list = list.filter((l) => l.stageKey === filters.stageKey);
@@ -155,6 +209,10 @@ export const listLeads = (filters = {}) => {
  * Obtém um lead por id (enriquecido com tagList).
  */
 export const getLeadById = (leadId) => {
+  const tenantHint = resolveCrmTenantHint();
+  const fromRepo = readGetLead(leadId, tenantHint);
+  if (fromRepo !== null) return fromRepo ? enrichLeadWithTags(fromRepo) : null;
+
   const db = loadDb();
   const lead = (db.crmLeads || []).find((l) => l.id === leadId) || null;
   return lead ? enrichLeadWithTags(lead) : null;
@@ -164,7 +222,7 @@ export const getLeadById = (leadId) => {
  * Atualiza um lead. Se stageKey mudar, gera evento e log.
  */
 export const updateLead = (user, leadId, data) => {
-  return withDb((db) => {
+  const updated = withDb((db) => {
     const index = (db.crmLeads || []).findIndex((l) => l.id === leadId);
     if (index < 0) throw new Error('Lead não encontrado');
     const prev = db.crmLeads[index];
@@ -184,6 +242,10 @@ export const updateLead = (user, leadId, data) => {
     logAction('crm:lead_updated', { leadId, userId: user?.id });
     return db.crmLeads[index];
   });
+  scheduleCrmDualWriteUpdateLead(user, updated, data);
+  // Domain Event Wave A — LEAD_UPDATED (stage via updateLead não emite LEAD_MOVED).
+  scheduleLeadUpdatedDomainEvent(user, updated, data);
+  return updated;
 };
 
 /**
@@ -368,6 +430,12 @@ const DEFAULT_PIPELINE_STAGES = [
  * Se o DB tiver crmPipelineStages vazio, retorna DEFAULT_PIPELINE_STAGES para evitar tela branca.
  */
 export const getPipelineStages = () => {
+  const tenantHint = resolveCrmTenantHint();
+  const fromRepo = readListPipelineStages(tenantHint, { includeInactive: true });
+  if (fromRepo !== null) {
+    return [...fromRepo].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  }
+
   const db = loadDb();
   const stages = db.crmPipelineStages && db.crmPipelineStages.length > 0
     ? db.crmPipelineStages
@@ -376,33 +444,62 @@ export const getPipelineStages = () => {
 };
 
 /**
+ * Lista cards do Kanban comercial (projeção de leads por stageKey).
+ * Wave A — alias de listLeads com shape Kanban.
+ */
+export const listKanbanCards = (filters = {}) => {
+  const tenantHint = filters.tenantId || resolveCrmTenantHint();
+  const fromRepo = readListKanbanCards({ ...filters, tenantId: tenantHint || undefined });
+  if (fromRepo !== null) return applyLeadListPostProcess(fromRepo);
+  return listLeads(filters);
+};
+
+/**
+ * Obtém card Kanban por id (lead id).
+ */
+export const getKanbanCard = (cardId) => {
+  const tenantHint = resolveCrmTenantHint();
+  const fromRepo = readGetKanbanCard(cardId, tenantHint);
+  if (fromRepo !== null) return fromRepo ? enrichLeadWithTags(fromRepo) : null;
+  return getLeadById(cardId);
+};
+
+/**
  * Atualiza estágio do lead (move card no Kanban) e registra evento.
  * @param {Object} [options] - { lossReason } ao marcar como perdido
  */
 export const moveLeadToStage = (user, leadId, newStageKey, options = {}) => {
-  return withDb((db) => {
-    const lead = (db.crmLeads || []).find((l) => l.id === leadId);
-    if (!lead) throw new Error('Lead não encontrado');
-    const tenantStages = stagesForLeadTenant(db, lead.tenant_id);
+  let fromStageKey = null;
+  const lead = withDb((db) => {
+    const found = (db.crmLeads || []).find((l) => l.id === leadId);
+    if (!found) throw new Error('Lead não encontrado');
+    const tenantStages = stagesForLeadTenant(db, found.tenant_id);
     if (tenantStages.length > 0 && !tenantStages.some((s) => s.key === newStageKey)) {
       throw new Error('Fase do pipeline não encontrada para esta clínica.');
     }
-    const fromStage = lead.stageKey;
+    const fromStage = found.stageKey;
+    fromStageKey = fromStage;
     const now = new Date().toISOString();
-    lead.stageKey = newStageKey;
-    if (isLostStageForLead(db, lead, newStageKey) && options.lossReason != null) {
-      lead.lossReason = String(options.lossReason).trim() || null;
+    found.stageKey = newStageKey;
+    if (isLostStageForLead(db, found, newStageKey) && options.lossReason != null) {
+      found.lossReason = String(options.lossReason).trim() || null;
     }
-    lead.lastContactAt = now;
-    lead.updatedAt = now;
-    lead.updatedByUserId = user?.id || null;
+    found.lastContactAt = now;
+    found.updatedAt = now;
+    found.updatedByUserId = user?.id || null;
     logLeadEvent(db, leadId, CRM_EVENT_TYPE.STATUS_CHANGE, user?.id, {
       fromStage,
       toStage: newStageKey,
     });
     logAction('crm:lead_stage_changed', { leadId, fromStage, toStage: newStageKey, userId: user?.id });
-    return lead;
+    return found;
   });
+  scheduleCrmDualWriteMoveLeadToStage(user, lead, newStageKey, options);
+  // Domain Event Wave A — LEAD_MOVED (nome oficial do registry).
+  scheduleLeadMovedDomainEvent(user, lead, fromStageKey, newStageKey, {
+    lossReason: options.lossReason,
+  });
+  return lead;
 };
 
 // ─── Linha do tempo (eventos) ────────────────────────────────────────────────
@@ -421,26 +518,78 @@ function logLeadEvent(db, leadId, type, userId, data = {}) {
 
 /**
  * Registra evento na linha do tempo do lead (ex.: mensagem enviada, contato).
+ * Alias Phase 6.7: createLeadEvent.
  */
 export const addLeadEvent = (user, leadId, type, data = {}) => {
-  return withDb((db) => {
+  const event = withDb((db) => {
     const lead = (db.crmLeads || []).find((l) => l.id === leadId);
     if (!lead) throw new Error('Lead não encontrado');
     logLeadEvent(db, leadId, type, user?.id, data);
     lead.lastContactAt = new Date().toISOString();
     lead.updatedAt = lead.lastContactAt;
-    return db.crmLeadEvents[db.crmLeadEvents.length - 1];
+    const created = db.crmLeadEvents[db.crmLeadEvents.length - 1];
+    if (lead.tenant_id && created && !created.tenant_id) {
+      created.tenant_id = lead.tenant_id;
+    }
+    return created;
   });
+  scheduleActivityDualWriteCreateLeadEvent(user, event);
+  scheduleCrmTimelineEventCreatedDomainEvent(user, event);
+  return event;
+};
+
+/** Alias explícito Phase 6.7 — createLeadEvent. */
+export const createLeadEvent = addLeadEvent;
+
+/**
+ * Atualiza evento de timeline (payload/data). Dual-write shadow quando flags ON.
+ */
+export const updateLeadEvent = (user, eventId, data = {}) => {
+  const updated = withDb((db) => {
+    const idx = (db.crmLeadEvents || []).findIndex((e) => e.id === eventId);
+    if (idx < 0) throw new Error('Evento não encontrado');
+    const prev = db.crmLeadEvents[idx];
+    db.crmLeadEvents[idx] = {
+      ...prev,
+      data: { ...(prev.data || {}), ...(data.data || data) },
+      type: data.type !== undefined ? data.type : prev.type,
+    };
+    return db.crmLeadEvents[idx];
+  });
+  scheduleActivityDualWriteUpdateLeadEvent(user, updated);
+  return updated;
 };
 
 /**
  * Lista eventos do lead (linha do tempo), mais recentes primeiro.
  */
 export const listLeadEvents = (leadId) => {
+  const tenantHint = resolveCrmTenantHint();
+  const fromRepo = readListLeadEventsWaveB(leadId, tenantHint);
+  if (fromRepo !== null) return fromRepo;
+
   const db = loadDb();
   const events = (db.crmLeadEvents || []).filter((e) => e.leadId === leadId);
   events.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   return events;
+};
+
+/**
+ * Alias / detalhe — lista eventos do lead (mesmo contrato de listLeadEvents).
+ * Phase 6.6: Primary Read via Activity Stream quando flags ON.
+ */
+export const getLeadEvents = (leadId) => listLeadEvents(leadId);
+
+/**
+ * Obtém um evento de timeline por id.
+ */
+export const getLeadEvent = (eventId) => {
+  const tenantHint = resolveCrmTenantHint();
+  const fromRepo = readGetLeadEventWaveB(eventId, tenantHint);
+  if (fromRepo !== null) return fromRepo;
+
+  const db = loadDb();
+  return (db.crmLeadEvents || []).find((e) => e.id === eventId) || null;
 };
 
 /**
@@ -517,13 +666,15 @@ export const logWhatsAppSent = (user, leadId, messageContent, templateId = null)
 
 /**
  * Cria lembrete de follow-up para um lead.
+ * Alias Phase 6.7: createCrmFollowUp.
  */
 export const createFollowUp = (user, leadId, data) => {
-  return withDb((db) => {
+  const followUp = withDb((db) => {
     if (!db.crmFollowUps) db.crmFollowUps = [];
     const id = createId('crmfu');
     const now = new Date().toISOString();
-    const followUp = {
+    const lead = (db.crmLeads || []).find((l) => l.id === leadId);
+    const followUpRecord = {
       id,
       leadId,
       dueAt: data.dueAt,
@@ -532,23 +683,69 @@ export const createFollowUp = (user, leadId, data) => {
       doneAt: null,
       createdAt: now,
       createdByUserId: user?.id || null,
+      tenant_id: lead?.tenant_id || resolveCrmTenantHint() || null,
     };
-    db.crmFollowUps.push(followUp);
+    db.crmFollowUps.push(followUpRecord);
     logLeadEvent(db, leadId, CRM_EVENT_TYPE.FOLLOW_UP_CREATED, user?.id, { followUpId: id, dueAt: data.dueAt });
-    return followUp;
+    return followUpRecord;
   });
+  scheduleActivityDualWriteCreateCrmFollowUp(user, followUp);
+  scheduleFollowUpCreatedDomainEvent(user, followUp, 'crmFollowUps');
+  return followUp;
+};
+
+/** Alias explícito Phase 6.7. */
+export const createCrmFollowUp = createFollowUp;
+
+/**
+ * Atualiza follow-up legado CRM (`crmFollowUps`).
+ */
+export const updateCrmFollowUp = (user, followUpId, data = {}) => {
+  let previous = null;
+  const updated = withDb((db) => {
+    const idx = (db.crmFollowUps || []).findIndex((f) => f.id === followUpId);
+    if (idx < 0) throw new Error('Follow-up não encontrado');
+    previous = { ...db.crmFollowUps[idx] };
+    const prev = db.crmFollowUps[idx];
+    db.crmFollowUps[idx] = {
+      ...prev,
+      ...data,
+      id: prev.id,
+      leadId: prev.leadId,
+    };
+    return db.crmFollowUps[idx];
+  });
+  scheduleActivityDualWriteUpdateCrmFollowUp(user, updated);
+  scheduleFollowUpMutationDomainEvent(user, updated, previous, data, 'crmFollowUps');
+  return updated;
 };
 
 /**
  * Lista follow-ups (por lead ou pendentes).
  */
 export const listFollowUps = (filters = {}) => {
+  const tenantHint = filters.tenantId || resolveCrmTenantHint();
+  const fromRepo = readListCrmLegacyFollowUpsWaveB({ ...filters, tenantId: tenantHint || undefined });
+  if (fromRepo !== null) return fromRepo;
+
   const db = loadDb();
   let list = [...(db.crmFollowUps || [])];
   if (filters.leadId) list = list.filter((f) => f.leadId === filters.leadId);
   if (filters.pending === true) list = list.filter((f) => !f.doneAt);
   list.sort((a, b) => new Date(a.dueAt) - new Date(b.dueAt));
   return list;
+};
+
+/**
+ * Obtém follow-up legado CRM por id (`crmFollowUps`).
+ */
+export const getCrmFollowUp = (followUpId) => {
+  const tenantHint = resolveCrmTenantHint();
+  const fromRepo = readGetCrmLegacyFollowUpWaveB(followUpId, tenantHint);
+  if (fromRepo !== null) return fromRepo;
+
+  const db = loadDb();
+  return (db.crmFollowUps || []).find((f) => f.id === followUpId) || null;
 };
 
 /**

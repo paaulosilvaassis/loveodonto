@@ -8,7 +8,7 @@ import { createId } from './helpers.js';
 import { logAction } from './logService.js';
 import { buildPermissionsCatalog } from '../permissions/catalog.js';
 import { ROLE_DEFAULT_PERMISSIONS } from '../permissions/roleDefaults.js';
-import { isSaasModeEnabled } from './saasAuthService.js';
+import { getDefaultTenant } from './tenantService.js';
 
 const ROLE_ADMIN = 'admin';
 /** Role de membership para admin (db.users.role=admin → membership.role=master) */
@@ -73,7 +73,16 @@ export function can(user, moduleKey, actionKey) {
 
   const rolePerms = getRolePermissionIds(db, u.role);
   const baseAllowed = rolePerms.includes(pid);
-  return resolvePermissionAllowed(u, pid, baseAllowed, db);
+  const saasOverrides = u?.permissionOverrides && typeof u.permissionOverrides === 'object' && !Array.isArray(u.permissionOverrides)
+    ? u.permissionOverrides
+    : null;
+  if (saasOverrides && Object.prototype.hasOwnProperty.call(saasOverrides, pid)) {
+    const overrideVal = saasOverrides[pid];
+    if (typeof overrideVal === 'boolean') return overrideVal;
+  }
+  const userOverride = (db.userPermissions || []).find((x) => x.user_id === u.id && x.permission_id === pid);
+  if (userOverride && typeof userOverride.allowed === 'boolean') return userOverride.allowed;
+  return baseAllowed;
 }
 
 /**
@@ -94,45 +103,14 @@ function resolveEffectiveUser(db, user) {
   if (!user?.id) return user;
   const dbUser = db.users?.find((x) => x.id === user.id);
   if (!dbUser) return user;
-
-  const authOverrides = user.permissionOverrides;
-  const dbOverrides = dbUser.permissionOverrides;
-  const hasAuthOverrides = authOverrides
-    && typeof authOverrides === 'object'
-    && !Array.isArray(authOverrides)
-    && Object.keys(authOverrides).length > 0;
-  const permissionOverrides = hasAuthOverrides ? authOverrides : (dbOverrides || authOverrides || {});
-
   return {
     ...dbUser,
     role: user.role || dbUser.role,
     isMaster: user.isMaster ?? dbUser.isMaster,
-    permissionOverrides,
-    has_custom_permissions: dbUser.has_custom_permissions === true || user.has_custom_permissions === true,
-    custom_permissions: dbUser.custom_permissions || user.custom_permissions || null,
+    permissionOverrides: user.permissionOverrides ?? dbUser.permissionOverrides,
     has_system_access: user.has_system_access ?? dbUser.has_system_access,
     active: user.active ?? dbUser.active,
   };
-}
-
-function resolvePermissionAllowed(u, pid, baseAllowed, db) {
-  if (u.has_custom_permissions && u.custom_permissions && typeof u.custom_permissions === 'object') {
-    if (Object.prototype.hasOwnProperty.call(u.custom_permissions, pid)) {
-      return u.custom_permissions[pid] === true;
-    }
-    return false;
-  }
-
-  const saasOverrides = u?.permissionOverrides && typeof u.permissionOverrides === 'object' && !Array.isArray(u.permissionOverrides)
-    ? u.permissionOverrides
-    : null;
-  if (saasOverrides && Object.prototype.hasOwnProperty.call(saasOverrides, pid)) {
-    const overrideVal = saasOverrides[pid];
-    if (typeof overrideVal === 'boolean') return overrideVal;
-  }
-  const userOverride = (db.userPermissions || []).find((x) => x.user_id === u.id && x.permission_id === pid);
-  if (userOverride && typeof userOverride.allowed === 'boolean') return userOverride.allowed;
-  return baseAllowed;
 }
 
 function getRolePermissionIds(db, role) {
@@ -187,8 +165,7 @@ export function ensureLocalUserForSaasAccess(targetUserId, {
 
   const emailNorm = String(email || '').trim().toLowerCase();
   const now = new Date().toISOString();
-  const tid = String(tenantId || '').trim();
-  if (!tid && isSaasModeEnabled()) return false;
+  const tid = String(tenantId || '').trim() || String(getDefaultTenant()?.id || '').trim();
   const roleNorm = String(role || '').trim().toLowerCase();
   const appRole = ROLES.includes(roleNorm) ? roleNorm : 'atendimento';
   const membershipRole = appRole === ROLE_ADMIN ? ROLE_MASTER : appRole;
@@ -255,7 +232,6 @@ export function ensureLocalUserForSaasAccess(targetUserId, {
       const accessRecord = {
         collaboratorId: collabId,
         userId: targetUserId,
-        tenant_id: tid || undefined,
         role: appRole,
         permissions: aIdx >= 0 ? (d.collaboratorAccess[aIdx].permissions || []) : [],
         lastLoginAt: aIdx >= 0 ? (d.collaboratorAccess[aIdx].lastLoginAt || '') : '',
@@ -289,8 +265,6 @@ export function getUserAccess(userId) {
     userId: u.id,
     has_system_access: u.has_system_access !== false,
     role: u.role || 'atendimento',
-    has_custom_permissions: u.has_custom_permissions === true,
-    custom_permissions: u.custom_permissions && typeof u.custom_permissions === 'object' ? u.custom_permissions : null,
     overrides,
   };
 }
@@ -364,18 +338,6 @@ export function updateUserAccess(actor, targetUserId, payload) {
       db.users[userIndex].role = payload.role;
     }
 
-    if (typeof payload.has_custom_permissions === 'boolean') {
-      db.users[userIndex].has_custom_permissions = payload.has_custom_permissions;
-      if (!payload.has_custom_permissions) {
-        delete db.users[userIndex].custom_permissions;
-      }
-    }
-    if (payload.custom_permissions && typeof payload.custom_permissions === 'object') {
-      db.users[userIndex].custom_permissions = payload.custom_permissions;
-    } else if (payload.has_custom_permissions === false) {
-      delete db.users[userIndex].custom_permissions;
-    }
-
     if (payload.overrides && typeof payload.overrides === 'object') {
       db.userPermissions = db.userPermissions || [];
       db.userPermissions = db.userPermissions.filter((x) => x.user_id !== targetUserId);
@@ -387,9 +349,6 @@ export function updateUserAccess(actor, targetUserId, payload) {
           allowed,
         });
       }
-      db.users[userIndex].permissionOverrides = payload.overrides;
-    } else if (payload.has_custom_permissions === false) {
-      db.users[userIndex].permissionOverrides = {};
     }
 
     const after = getUserAccess(targetUserId);

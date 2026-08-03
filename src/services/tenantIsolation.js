@@ -1,6 +1,5 @@
 import { emitStabilityLog } from './stabilityLogService.js';
 import { isSaasModeEnabled } from './saasAuthService.js';
-import { tenantAudit } from './tenantAuditLog.js';
 
 const NO_TENANT_MESSAGE =
   'Usuário sem vínculo com clínica. Entre em contato com o administrador.';
@@ -77,15 +76,6 @@ export function auditTenantAccess(user, {
     at: new Date().toISOString(),
     ...extra,
   };
-  tenantAudit('TENANT_VALIDATION', {
-    user_id: payload.user_id,
-    email: payload.email,
-    tenant_id: payload.tenant_id,
-    role: payload.role,
-    source: payload.source,
-    status: linkStatus,
-    extra: { auth_mode: payload.auth_mode },
-  });
   if (import.meta.env?.DEV) {
     console.debug('[TENANT_AUDIT]', payload);
   }

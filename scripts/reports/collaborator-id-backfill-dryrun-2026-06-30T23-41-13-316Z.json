@@ -1,0 +1,140 @@
+{
+  "generated_at": "2026-06-30T23:41:13.314Z",
+  "mode": "dry-run",
+  "tables_in_scope": [
+    "tenant_users",
+    "invitations",
+    "identities",
+    "identity_events"
+  ],
+  "local_only_refs": [
+    "collaborators",
+    "collaboratorAccess",
+    "collaboratorWorkHours",
+    "collaboratorDocuments",
+    "userPermissions (local overrides)",
+    "professional_settings / schedule_settings (agenda local)"
+  ],
+  "summary": {
+    "UPDATE_PROPOSED": 2,
+    "OK": 1,
+    "NOT_FOUND": 1
+  },
+  "rows": [
+    {
+      "email": "juliana+staging@implanprime.test",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "tenant_user_id": "6305a4a3-4c64-4cfd-9b96-d81f99e23826",
+      "collaborator_id_current": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+      "collaborator_id_resolved": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+      "user_id": "052c1b67-513e-4c91-b8d0-bf9d4f36d158",
+      "role_slug": "administrativo",
+      "status": "active",
+      "resolution_source": "rh_export",
+      "resolution_sources": {
+        "rh": [
+          "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70"
+        ],
+        "invitation": [
+          "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70"
+        ],
+        "identity": []
+      },
+      "action": "UPDATE_PROPOSED",
+      "reason": "Substituir ID sintético col-saas-* pelo RH/convite."
+    },
+    {
+      "email": "melissa+staging@implanprime.test",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "tenant_user_id": "a8fc9cc4-6302-40ac-a021-eb3364bd948d",
+      "collaborator_id_current": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+      "collaborator_id_resolved": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+      "user_id": "ce976841-78e3-416d-ad53-25e428645ec9",
+      "role_slug": "gerente",
+      "status": "inactive",
+      "resolution_source": "rh_export",
+      "resolution_sources": {
+        "rh": [
+          "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+        ],
+        "invitation": [
+          "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+        ],
+        "identity": [
+          "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+        ]
+      },
+      "action": "OK",
+      "reason": "collaborator_id já alinhado."
+    },
+    {
+      "email": "paulo+staging@implanprime.test",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "tenant_user_id": "e32ae325-ca51-41f9-9494-b591eceef94f",
+      "collaborator_id_current": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+      "collaborator_id_resolved": null,
+      "user_id": "2f2925a6-dca3-4e7b-abec-8fe611ee3fd4",
+      "role_slug": "master",
+      "status": "active",
+      "resolution_source": null,
+      "resolution_sources": {
+        "rh": [],
+        "invitation": [],
+        "identity": []
+      },
+      "action": "NOT_FOUND",
+      "reason": "Apenas ID sintético (col-saas-*) sem RH/convite correspondente."
+    },
+    {
+      "email": "renata+staging@implanprime.test",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "tenant_user_id": "50f188fe-94f4-4459-840e-7f9b62ac06c0",
+      "collaborator_id_current": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+      "collaborator_id_resolved": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+      "user_id": "9bd9368c-a43d-406d-8bcf-877c15b754d2",
+      "role_slug": "administrativo",
+      "status": "active",
+      "resolution_source": "rh_export",
+      "resolution_sources": {
+        "rh": [
+          "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2"
+        ],
+        "invitation": [
+          "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2"
+        ],
+        "identity": [
+          "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06"
+        ]
+      },
+      "action": "UPDATE_PROPOSED",
+      "reason": "Atualizar collaborator_id divergente."
+    }
+  ],
+  "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+  "rh_export_rows": 4,
+  "fetch_warnings": [],
+  "impact_preview": [
+    {
+      "email": "juliana+staging@implanprime.test",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "old_collaborator_id": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+      "new_collaborator_id": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+      "tenant_users": 1,
+      "invitations": 0,
+      "identities": 1,
+      "identity_events": 0
+    },
+    {
+      "email": "renata+staging@implanprime.test",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "old_collaborator_id": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+      "new_collaborator_id": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+      "tenant_users": 1,
+      "invitations": 0,
+      "identities": 1,
+      "identity_events": 0
+    }
+  ],
+  "sql_audit": "-- Queries de auditoria (substitua :tenant_id)\nSELECT id, tenant_id, collaborator_id, user_id, email, role_slug, invitation_status, status, updated_at\nFROM tenant_users WHERE tenant_id = :tenant_id ORDER BY email;\n\nSELECT id, tenant_id, email, collaborator_id, status, profile_role, accepted_at\nFROM invitations WHERE tenant_id = :tenant_id ORDER BY email, created_at DESC;\n\nSELECT id, tenant_id, tenant_user_id, email, collaborator_id, role_slug, status\nFROM identities WHERE tenant_id = :tenant_id ORDER BY email;\n\nSELECT table_name FROM information_schema.columns\nWHERE table_schema = 'public' AND column_name = 'collaborator_id';\n",
+  "apply_required_flag": "--apply --confirm APPLY"
+}

@@ -37,6 +37,7 @@ export default function CollaboratorCompactHeader({
           fallbackInitials={initials}
           className="cr-header__avatar"
           size="inherit"
+          perfEvent="COLLABORATOR_AVATAR_LOAD"
         />
         <div className="cr-header__identity">
           <h1 className="cr-header__name">{displayName}</h1>

@@ -227,87 +227,30 @@ export async function resendClinicOwnerAccess(supabase, {
   email,
   fullName,
   roleSlug = 'master',
+  tenantUserId = null,
+  redirectTo = null,
+  actorUserId = null,
 }) {
-  const normalizedEmail = normalizeEmail(email);
-  if (!normalizedEmail) throw new Error('E-mail de acesso é obrigatório.');
-  if (!tenantId) throw new Error('tenant_id é obrigatório.');
+  const { resendAccessInvite } = await import('./lib/platform/resendAccessInvite.js');
+  const { findAuthUserByEmail: findAuth } = await import('./email/accessEmailHelpers.js');
 
-  emailAudit('iniciando reenvio acesso master', { email: normalizedEmail, tenantId });
+  emailAudit('iniciando reenvio acesso master', { email: normalizeEmail(email), tenantId });
 
-  const authUser = await findAuthUserByEmail(supabase, normalizedEmail);
-
-  if (!authUser?.id) {
-    return provisionClinicOwnerAccess(supabase, {
-      email: normalizedEmail,
-      password: '',
-      fullName,
+  return resendAccessInvite(
+    {
+      supabase,
+      sendClinicOwnerAccessEmail,
+      provisionClinicOwnerAccess,
+      findAuthUserByEmail: findAuth,
+    },
+    {
       tenantId,
-      roleSlug,
-      passwordWasGenerated: true,
-    }).then((result) => ({
-      sent: Boolean(result.accessEmailSent),
-      setupLink: result.setupLink || null,
-      emailDelivery: result.emailDelivery,
-      accessEmailSent: Boolean(result.accessEmailSent),
-      accessEmail: normalizedEmail,
-      authUserId: result.authUserId,
-      message: result.message,
-    }));
-  }
-
-  await syncAuthUserAppMetadata(supabase, authUser.id, { tenantId, roleSlug, fullName });
-
-  const { data: existingTenantUser, error: existingTenantUserError } = await supabase
-    .from('tenant_users')
-    .select('id, user_id')
-    .eq('tenant_id', tenantId)
-    .eq('email', normalizedEmail)
-    .maybeSingle();
-  if (existingTenantUserError) throw existingTenantUserError;
-
-  if (!existingTenantUser?.id) {
-    await linkTenantUser(supabase, {
-      tenantId,
-      authUserId: authUser.id,
-      email: normalizedEmail,
+      email,
       fullName,
       roleSlug,
-    });
-  }
-
-  const shouldInvite = !authUser.last_sign_in_at;
-  const emailResult = await sendClinicOwnerAccessEmail(supabase, {
-    tenantId,
-    email: normalizedEmail,
-    fullName,
-    roleSlug,
-    allowInvite: shouldInvite,
-  });
-
-  const finalAuthUserId = emailResult.authUserId || authUser.id;
-  await syncAuthUserAppMetadata(supabase, finalAuthUserId, { tenantId, roleSlug, fullName });
-
-  if (existingTenantUser?.id && finalAuthUserId) {
-    await supabase
-      .from('tenant_users')
-      .update({
-        role: roleSlug,
-        role_slug: roleSlug,
-        has_system_access: true,
-        is_active: true,
-        status: 'active',
-        user_id: finalAuthUserId,
-      })
-      .eq('id', existingTenantUser.id);
-  }
-
-  return {
-    sent: Boolean(emailResult.sent),
-    setupLink: emailResult.setupLink || null,
-    emailDelivery: emailResult.emailDelivery,
-    accessEmailSent: Boolean(emailResult.accessEmailSent),
-    accessEmail: normalizedEmail,
-    authUserId: finalAuthUserId,
-    message: emailResult.message,
-  };
+      tenantUserId,
+      redirectTo,
+      actorUserId,
+    },
+  );
 }

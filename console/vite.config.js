@@ -36,28 +36,58 @@ function pickPublicKey(...candidates) {
   return keys.find((k) => k.startsWith('sb_publishable_')) || keys[0] || '';
 }
 
+function firstNonEmpty(...candidates) {
+  for (const value of candidates) {
+    const trimmed = String(value ?? '').trim();
+    if (trimmed) return trimmed;
+  }
+  return '';
+}
+
 export default defineConfig(({ mode }) => {
   const consoleEnv = mergeNonEmptyEnv(loadEnv(mode, __dirname, ''));
   const rootEnv = mergeNonEmptyEnv(loadEnv(mode, repoRoot, ''));
-  const env = { ...consoleEnv, ...rootEnv };
 
-  const resolvedConsoleUrl = (
-    env.VITE_CONSOLE_SUPABASE_URL
-    || env.VITE_SUPABASE_PLATFORM_URL
-    || env.VITE_SUPABASE_URL
-    || ''
-  ).trim();
-
-  const resolvedConsoleAnon = pickPublicKey(
-    env.VITE_CONSOLE_SUPABASE_ANON_KEY,
-    env.VITE_SUPABASE_PLATFORM_ANON_KEY,
-    env.VITE_SUPABASE_ANON_KEY,
-    env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY,
+  /**
+   * Console (`console/.env*`) SEMPRE prevalece sobre a raiz.
+   * A raiz (app staging) só entra como fallback de compatibilidade quando a Console
+   * não define a variável específica — evita `rootEnv` sobrescrever produção com staging.
+   */
+  const resolvedConsoleUrl = firstNonEmpty(
+    consoleEnv.VITE_CONSOLE_SUPABASE_URL,
+    consoleEnv.VITE_SUPABASE_PLATFORM_URL,
+    consoleEnv.VITE_SUPABASE_URL,
+    rootEnv.VITE_CONSOLE_SUPABASE_URL,
+    rootEnv.VITE_SUPABASE_PLATFORM_URL,
+    rootEnv.VITE_SUPABASE_URL,
   );
 
-  const resolvedConsolePublishable = rejectTruncatedKey(env.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY);
+  /** Chaves da Console primeiro (grupo isolado) — evita pickPublicKey preferir eyJ de staging na raiz. */
+  const resolvedConsoleAnon = firstNonEmpty(
+    pickPublicKey(
+      consoleEnv.VITE_CONSOLE_SUPABASE_ANON_KEY,
+      consoleEnv.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY,
+      consoleEnv.VITE_SUPABASE_PLATFORM_ANON_KEY,
+      consoleEnv.VITE_SUPABASE_ANON_KEY,
+    ),
+    pickPublicKey(
+      rootEnv.VITE_CONSOLE_SUPABASE_ANON_KEY,
+      rootEnv.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY,
+      rootEnv.VITE_SUPABASE_PLATFORM_ANON_KEY,
+      rootEnv.VITE_SUPABASE_ANON_KEY,
+    ),
+  );
 
-  const backendTarget = env.VITE_PLATFORM_API_BASE_URL || 'http://127.0.0.1:3001';
+  const resolvedConsolePublishable = firstNonEmpty(
+    rejectTruncatedKey(consoleEnv.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY),
+    rejectTruncatedKey(rootEnv.VITE_CONSOLE_SUPABASE_PUBLISHABLE_KEY),
+  );
+
+  const backendTarget = firstNonEmpty(
+    consoleEnv.VITE_PLATFORM_API_BASE_URL,
+    rootEnv.VITE_PLATFORM_API_BASE_URL,
+    'http://127.0.0.1:3001',
+  );
 
   const devProxy = {
     '/internal/platform': {
@@ -89,6 +119,8 @@ export default defineConfig(({ mode }) => {
       target: resolvedConsoleUrl.replace(/\/+$/, ''),
       changeOrigin: true,
       secure: true,
+      /** Remove o prefixo local; query string (ex.: grant_type=password) é preservada. */
+      rewrite: (requestPath) => requestPath.replace(/^\/__supabase/, ''),
     };
   }
 

@@ -66,14 +66,20 @@ export function getBackendSupabaseUrl() {
   return String(merged.SUPABASE_URL || '').trim();
 }
 
-/** Igual a console/vite.config: raiz prevalece sobre console para VITE_* */
+/**
+ * Igual a console/vite.config.js: console/.env* prevalece; raiz só como fallback.
+ * (Antes root sobrescrevia console e forçava staging na Console.)
+ */
 export function getConsoleViteSupabaseUrl() {
   const consoleM = mergeDirEnv(path.join(REPO_ROOT, 'console'));
   const rootM = mergeDirEnv(REPO_ROOT);
-  const merged = { ...consoleM, ...rootM };
   return String(
-    merged.VITE_CONSOLE_SUPABASE_URL
-    || merged.VITE_SUPABASE_URL
+    consoleM.VITE_CONSOLE_SUPABASE_URL
+    || consoleM.VITE_SUPABASE_PLATFORM_URL
+    || consoleM.VITE_SUPABASE_URL
+    || rootM.VITE_CONSOLE_SUPABASE_URL
+    || rootM.VITE_SUPABASE_PLATFORM_URL
+    || rootM.VITE_SUPABASE_URL
     || '',
   ).trim();
 }
@@ -99,7 +105,7 @@ export function printSupabaseEnvDiagnosis() {
   const consoleLocal = parseEnvFile(path.join(REPO_ROOT, 'console', '.env.local'));
 
   const backMerged = { ...serverEnv, ...rootEnv, ...rootLocal };
-  const viteMerged = { ...consoleEnv, ...consoleLocal, ...rootEnv, ...rootLocal };
+  const consoleMerged = { ...rootEnv, ...rootLocal, ...consoleEnv, ...consoleLocal };
 
   const line = (label, key, obj) => {
     const v = obj[key];
@@ -121,7 +127,9 @@ export function printSupabaseEnvDiagnosis() {
   line('.env', 'VITE_SUPABASE_URL', rootEnv);
   line('.env.local', 'VITE_SUPABASE_URL', rootLocal);
   console.error(`  → Console Vite efetivo: ${hostOf(
-    viteMerged.VITE_CONSOLE_SUPABASE_URL || viteMerged.VITE_SUPABASE_URL,
+    consoleMerged.VITE_CONSOLE_SUPABASE_URL
+    || consoleMerged.VITE_SUPABASE_PLATFORM_URL
+    || consoleMerged.VITE_SUPABASE_URL,
   ) || '(vazio)'}`);
 }
 

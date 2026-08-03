@@ -11,6 +11,7 @@ import {
   getConsoleSupabaseConfigError,
   getConsoleSupabasePublicKey,
   getSupabaseConsoleRequestBaseUrl,
+  readResponseJsonSafe,
   supabaseReady,
 } from '../lib/supabaseConsole.js';
 import { PLATFORM_ROLES } from './platformRoles.js';
@@ -24,6 +25,17 @@ function authLog(phase, detail) {
     console.info('[PlatformConsole][Auth]', phase, detail);
   } else {
     console.info('[PlatformConsole][Auth]', phase);
+  }
+}
+
+async function readJsonOrEmpty(response) {
+  try {
+    return await readResponseJsonSafe(response, { allowEmpty: true }) || {};
+  } catch (err) {
+    if (err?.code === 'empty_http_body' || err?.code === 'invalid_http_response' || err?.code === 'invalid_json_body') {
+      return {};
+    }
+    throw err;
   }
 }
 
@@ -76,10 +88,11 @@ async function resetConsoleAdminDevCredentials() {
       full_name: 'Admin Love Odonto',
     }),
   });
-  const json = await response.json().catch(() => ({}));
+  const json = await readJsonOrEmpty(response);
   if (!response.ok) {
     const error = new Error(json?.error || `Falha ao restaurar admin dev (HTTP ${response.status}).`);
     error.code = 'DEV_RESET_FAILED';
+    error.status = response.status;
     throw error;
   }
   return json;
@@ -240,7 +253,7 @@ export function PlatformAuthProvider({ children }) {
           };
         }
 
-        const json = await response.json().catch(() => ({}));
+        const json = await readJsonOrEmpty(response);
         if (response.status === 404) {
           authLog('fetchPlatformUser:not_found', { source });
           return {
@@ -476,12 +489,23 @@ export function PlatformAuthProvider({ children }) {
           8000,
           'directTokenFetch',
         );
-        const restJson = await restResponse.json().catch(() => null);
+        let restJson = null;
+        try {
+          restJson = await readResponseJsonSafe(restResponse, { allowEmpty: true });
+        } catch (parseErr) {
+          const restError = new Error(
+            `Falha no login via endpoint REST do Supabase (HTTP ${restResponse.status}: ${parseErr?.code || 'invalid_response'}).`,
+          );
+          restError.code = parseErr?.code || 'AUTH_REST_INVALID_BODY';
+          restError.status = restResponse.status;
+          throw restError;
+        }
         if (!restResponse.ok) {
           const restError = new Error(
-            String(restJson?.error_description || restJson?.msg || 'Falha no login via endpoint REST do Supabase.'),
+            String(restJson?.error_description || restJson?.msg || `Falha no login via endpoint REST do Supabase (HTTP ${restResponse.status}).`),
           );
           restError.code = restJson?.error_code || 'AUTH_REST_ERROR';
+          restError.status = restResponse.status;
           throw restError;
         }
 

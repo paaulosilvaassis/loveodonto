@@ -78,24 +78,24 @@ drop policy if exists identity_events_tenant_admin_select on public.identity_eve
 create policy identities_tenant_admin_select on public.identities
   for select using (
     auth.uid() is not null
-    and public.app_user_can_access_tenant(tenant_id)
+    and public.app_user_can_access_tenant(tenant_id::text)
     and public.app_user_is_tenant_admin(tenant_id)
   );
 
 create policy identities_tenant_admin_modify on public.identities
   for all using (
     auth.uid() is not null
-    and public.app_user_can_access_tenant(tenant_id)
+    and public.app_user_can_access_tenant(tenant_id::text)
     and public.app_user_is_tenant_admin(tenant_id)
   )
   with check (
     tenant_id is not null
-    and public.app_user_can_access_tenant(tenant_id)
+    and public.app_user_can_access_tenant(tenant_id::text)
   );
 
 create policy identity_events_tenant_admin_select on public.identity_events
   for select using (
     auth.uid() is not null
-    and public.app_user_can_access_tenant(tenant_id)
+    and public.app_user_can_access_tenant(tenant_id::text)
     and public.app_user_is_tenant_admin(tenant_id)
   );

@@ -2,6 +2,12 @@ import { withDb, loadDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { logAction } from './logService.js';
 import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
+import { readGetPipelineStage, readListPipelineStages } from './crmReadAdapter.js';
+import {
+  scheduleCrmDualWriteCreatePipelineStage,
+  scheduleCrmDualWriteDeletePipelineStage,
+  scheduleCrmDualWriteUpdatePipelineStage,
+} from './crmWriteAdapter.js';
 
 // ─── Tipos de fase ───────────────────────────────────────────────────────────
 export const STAGE_TYPE = {
@@ -93,12 +99,29 @@ const buildUniqueKey = (label, usedKeys) => {
  * Fallback: fases legadas sem tenant_id (compatibilidade pré-migração 48).
  */
 export const listPipelineStagesForTenant = (tenantId, { includeInactive = false } = {}) => {
+  const fromRepo = readListPipelineStages(tenantId, { includeInactive });
+  if (fromRepo !== null) {
+    return sortByOrder(fromRepo.map(normalizeStage));
+  }
+
   const db = loadDb();
   const all = (db.crmPipelineStages || []).map(normalizeStage);
   let stages = all.filter((s) => s.tenant_id === tenantId);
   if (!stages.length) stages = all.filter((s) => s.tenant_id == null);
   if (!includeInactive) stages = stages.filter((s) => s.isActive);
   return sortByOrder(stages);
+};
+
+/**
+ * Obtém fase do pipeline por id ou key (Wave A read cutover).
+ */
+export const getPipelineStageForTenant = (tenantId, ref) => {
+  const needle = String(ref || '').trim();
+  if (!needle) return null;
+  const fromRepo = readGetPipelineStage(tenantId, needle);
+  if (fromRepo !== null) return fromRepo ? normalizeStage(fromRepo) : null;
+  const stages = listPipelineStagesForTenant(tenantId, { includeInactive: true });
+  return stages.find((stage) => stage.id === needle || stage.key === needle) || null;
 };
 
 /**
@@ -227,8 +250,87 @@ export const savePipelineStagesForTenant = (user, stagesInput) => {
       total: nextStages.length,
       removed: removed.map((s) => s.key),
     });
+
+    nextStages.forEach((stage) => {
+      if (previousById.has(stage.id)) {
+        scheduleCrmDualWriteUpdatePipelineStage(user, stage);
+      } else {
+        scheduleCrmDualWriteCreatePipelineStage(user, stage);
+      }
+    });
+    removed.forEach((stage) => {
+      scheduleCrmDualWriteDeletePipelineStage(user, stage.id, tenantId);
+    });
+
     return sortByOrder(nextStages);
   });
+};
+
+/**
+ * Cria uma fase individual no pipeline (Wave A write cutover).
+ */
+export const createPipelineStage = (user, data = {}) => {
+  const tenantId = resolveTenantIdForWrite(user);
+  const stage = withDb((draft) => {
+    if (!Array.isArray(draft.crmPipelineStages)) draft.crmPipelineStages = [];
+    const owned = draft.crmPipelineStages.filter((s) => isOwnedByTenant(s, tenantId));
+    const now = new Date().toISOString();
+    const usedKeys = new Set(owned.map((s) => s.key));
+    const key = data.key || buildUniqueKey(data.label || 'Nova fase', usedKeys);
+    const record = {
+      id: createId('crmstage'),
+      key,
+      label: String(data.label || '').trim(),
+      color: data.color || '#94a3b8',
+      order: owned.length + 1,
+      isActive: data.isActive !== false,
+      stageType: VALID_STAGE_TYPES.includes(data.stageType) ? data.stageType : STAGE_TYPE.NORMAL,
+      tenant_id: tenantId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const next = sortByOrder([...owned.map(normalizeStage), normalizeStage(record)]);
+    const validationError = validateStageSet(next);
+    if (validationError) throw new Error(validationError);
+    draft.crmPipelineStages = [
+      ...draft.crmPipelineStages.filter((s) => !isOwnedByTenant(s, tenantId)),
+      ...next,
+    ];
+    logAction('crm:pipeline_stage_created', { tenantId, stageId: record.id, userId: user?.id });
+    return normalizeStage(record);
+  });
+  scheduleCrmDualWriteCreatePipelineStage(user, stage);
+  return stage;
+};
+
+/**
+ * Atualiza uma fase individual (Wave A write cutover).
+ */
+export const updatePipelineStage = (user, stageId, data = {}) => {
+  const tenantId = resolveTenantIdForWrite(user);
+  const stage = withDb((draft) => {
+    const owned = (draft.crmPipelineStages || []).filter((s) => isOwnedByTenant(s, tenantId));
+    const target = owned.find((s) => s.id === stageId);
+    if (!target) throw new Error('Fase não encontrada.');
+    const now = new Date().toISOString();
+    const updated = normalizeStage({
+      ...target,
+      ...data,
+      label: data.label != null ? String(data.label).trim() : target.label,
+      updatedAt: now,
+    });
+    const next = owned.map((s) => (s.id === stageId ? updated : normalizeStage(s)));
+    const validationError = validateStageSet(next);
+    if (validationError) throw new Error(validationError);
+    draft.crmPipelineStages = [
+      ...draft.crmPipelineStages.filter((s) => !isOwnedByTenant(s, tenantId)),
+      ...next,
+    ];
+    logAction('crm:pipeline_stage_updated', { tenantId, stageId, userId: user?.id });
+    return updated;
+  });
+  scheduleCrmDualWriteUpdatePipelineStage(user, stage, data);
+  return stage;
 };
 
 /**
@@ -257,7 +359,7 @@ export const setPipelineStageActive = (user, stageId, isActive) => {
  */
 export const deletePipelineStage = (user, stageId) => {
   const tenantId = resolveTenantIdForWrite(user);
-  return withDb((draft) => {
+  const result = withDb((draft) => {
     const owned = (draft.crmPipelineStages || []).filter((s) => isOwnedByTenant(s, tenantId));
     const target = owned.find((s) => s.id === stageId);
     if (!target) throw new Error('Fase não encontrada.');
@@ -275,4 +377,6 @@ export const deletePipelineStage = (user, stageId) => {
     logAction('crm:pipeline_stage_deleted', { tenantId, stageId, key: target.key, userId: user?.id });
     return true;
   });
+  scheduleCrmDualWriteDeletePipelineStage(user, stageId, tenantId);
+  return result;
 };

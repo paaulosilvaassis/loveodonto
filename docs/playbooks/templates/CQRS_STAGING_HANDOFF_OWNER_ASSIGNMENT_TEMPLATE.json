@@ -1,0 +1,98 @@
+{
+  "submittedBy": "",
+  "submittedAt": "",
+  "architectureVersion": "3.8.5-cqrs-local",
+  "handoffId": "",
+  "notes": "",
+  "assignments": [
+    {
+      "roleId": "architecture_owner",
+      "assignedPerson": "",
+      "assignedBy": "",
+      "assignedAt": "",
+      "contactReference": "",
+      "acknowledged": false,
+      "responsibilitiesAccepted": false,
+      "limitationsAccepted": false,
+      "notes": "",
+      "justification": ""
+    },
+    {
+      "roleId": "staging_environment_owner",
+      "assignedPerson": "",
+      "assignedBy": "",
+      "assignedAt": "",
+      "contactReference": "",
+      "acknowledged": false,
+      "responsibilitiesAccepted": false,
+      "limitationsAccepted": false
+    },
+    {
+      "roleId": "security_readonly_verifier",
+      "assignedPerson": "",
+      "assignedBy": "",
+      "assignedAt": "",
+      "acknowledged": false,
+      "responsibilitiesAccepted": false,
+      "limitationsAccepted": false
+    },
+    {
+      "roleId": "tenant_owner",
+      "assignedPerson": "",
+      "assignedBy": "",
+      "assignedAt": "",
+      "acknowledged": false,
+      "responsibilitiesAccepted": false,
+      "limitationsAccepted": false
+    },
+    {
+      "roleId": "business_owner",
+      "assignedPerson": "",
+      "assignedBy": "",
+      "assignedAt": "",
+      "acknowledged": false,
+      "responsibilitiesAccepted": false,
+      "limitationsAccepted": false
+    },
+    {
+      "roleId": "stage_one_approver",
+      "assignedPerson": "",
+      "assignedBy": "",
+      "assignedAt": "",
+      "acknowledged": false,
+      "responsibilitiesAccepted": false,
+      "limitationsAccepted": false
+    },
+    {
+      "roleId": "execution_operator",
+      "assignedPerson": "",
+      "assignedBy": "",
+      "assignedAt": "",
+      "acknowledged": false,
+      "responsibilitiesAccepted": false,
+      "limitationsAccepted": false
+    },
+    {
+      "roleId": "rollback_operator",
+      "assignedPerson": "",
+      "assignedBy": "",
+      "assignedAt": "",
+      "acknowledged": false,
+      "responsibilitiesAccepted": false,
+      "limitationsAccepted": false
+    },
+    {
+      "roleId": "evidence_reviewer",
+      "assignedPerson": "",
+      "assignedBy": "",
+      "assignedAt": "",
+      "acknowledged": false,
+      "responsibilitiesAccepted": false,
+      "limitationsAccepted": false
+    }
+  ],
+  "environmentReference": null,
+  "tenantReference": null,
+  "approvalReferences": [],
+  "attachmentsMetadata": []
+}

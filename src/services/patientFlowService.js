@@ -8,6 +8,7 @@ import {
   getJourneyStageFromStatus,
   upsertJourneyEntryForAppointment,
 } from './journeyEntryService.js';
+import { readFetchAppointmentsByDate } from './agendaReadAdapter.js';
 import {
   FLOW_COLUMN,
   getFlowColumn,
@@ -32,11 +33,15 @@ function enrichWithJourney(db, apt, entry) {
 }
 
 export const fetchAppointmentsByDate = (date, { tenantId } = {}) => {
+  const fromRepo = readFetchAppointmentsByDate(date, tenantId);
   return withDb((db) => {
-    const { appointments, entriesByAppointmentId } = ensureJourneyEntriesForDate(db, date);
-    return appointments
-      .filter((apt) => !tenantId || !apt.tenant_id || apt.tenant_id === tenantId)
-      .map((apt) => enrichWithJourney(db, apt, entriesByAppointmentId.get(apt.id)));
+    const { entriesByAppointmentId } = ensureJourneyEntriesForDate(db, date);
+    const base = fromRepo !== null
+      ? fromRepo.filter((apt) => !tenantId || !apt.tenant_id || apt.tenant_id === tenantId)
+      : (db.appointments || [])
+        .filter((apt) => apt.date === date)
+        .filter((apt) => !tenantId || !apt.tenant_id || apt.tenant_id === tenantId);
+    return base.map((apt) => enrichWithJourney(db, apt, entriesByAppointmentId.get(apt.id)));
   });
 };
 

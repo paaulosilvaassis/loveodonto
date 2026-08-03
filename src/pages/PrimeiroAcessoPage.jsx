@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Button from '../components/Button.jsx';
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
@@ -6,9 +6,11 @@ import { clearStoredSession } from '../auth/saasSessionResolver.js';
 import {
   auditFirstAccess,
   bootstrapFirstAccessSession,
+  captureAuthCallbackFromUrl,
   classifyFirstAccessError,
   completeFirstAccess,
   EXPIRED_LINK_MESSAGE,
+  isAbortError,
   markFirstAccessPasswordPending,
   NO_TOKEN_MESSAGE,
 } from '../utils/firstAccessSession.js';
@@ -17,6 +19,13 @@ import appLogo from '../assets/love-odonto-logo.png';
 const MIN_PASSWORD_LENGTH = 8;
 
 function resolveBootstrapError({ supabaseError, errorCode, hadAuthParams }) {
+  if (supabaseError && isAbortError(supabaseError)) {
+    // Abort transitório nunca deve aparecer como falha final ao usuário.
+    return null;
+  }
+  if (errorCode === 'aborted') {
+    return null;
+  }
   if (supabaseError) {
     return classifyFirstAccessError(supabaseError).message;
   }
@@ -33,13 +42,17 @@ export default function PrimeiroAcessoPage() {
   const [loading, setLoading] = useState(true);
   const [ready, setReady] = useState(false);
   const [email, setEmail] = useState('');
+  const bootstrappedRef = useRef(false);
 
   useEffect(() => {
+    // Captura o hash imediatamente (antes de qualquer cleanup/StrictMode).
+    captureAuthCallbackFromUrl();
     markFirstAccessPasswordPending(true);
     let active = true;
 
     async function bootstrap() {
       if (!supabasePlatformClient) {
+        if (!active) return;
         setError('Configuração de autenticação indisponível.');
         setLoading(false);
         return;
@@ -52,6 +65,8 @@ export default function PrimeiroAcessoPage() {
           supabaseError,
           errorCode,
         } = await bootstrapFirstAccessSession(supabasePlatformClient);
+
+        // StrictMode: 1ª execução pode ter active=false; a 2ª reutiliza o mesmo resultado.
         if (!active) return;
 
         const hadAuthParams = Boolean(
@@ -61,15 +76,37 @@ export default function PrimeiroAcessoPage() {
         );
 
         if (supabaseError || errorCode || !session?.user) {
-          const message = resolveBootstrapError({ supabaseError, errorCode, hadAuthParams });
+          if (isAbortError(supabaseError) || errorCode === 'aborted') {
+            auditFirstAccess('PrimeiroAcessoPage abort ignored — retry', {
+              setSessionError: supabaseError?.message || null,
+            });
+            // Re-tenta uma vez após o single-flight liberar (StrictMode/race).
+            await new Promise((r) => { setTimeout(r, 200); });
+            if (!active) return;
+            const retry = await bootstrapFirstAccessSession(supabasePlatformClient);
+            if (!active) return;
+            if (retry.session?.user) {
+              bootstrappedRef.current = true;
+              setEmail(retry.session.user.email || '');
+              setReady(true);
+              setLoading(false);
+              setError('');
+              return;
+            }
+          }
+
+          const message = resolveBootstrapError({
+            supabaseError,
+            errorCode,
+            hadAuthParams,
+          });
           auditFirstAccess('PrimeiroAcessoPage blocked', {
             setSessionError: supabaseError?.message || null,
             errorCode: errorCode || classifyFirstAccessError(supabaseError)?.code || null,
             hadAuthParams,
           });
-          setError(message);
+          if (message) setError(message);
           setLoading(false);
-          markFirstAccessPasswordPending(false);
           return;
         }
 
@@ -77,21 +114,47 @@ export default function PrimeiroAcessoPage() {
           sessionUserId: session.user.id,
           sessionUserEmail: session.user.email || null,
         });
+        bootstrappedRef.current = true;
         setEmail(session.user.email || '');
         setReady(true);
         setLoading(false);
+        setError('');
       } catch (err) {
         if (!active) return;
+        if (isAbortError(err)) {
+          auditFirstAccess('PrimeiroAcessoPage catch abort ignored', {
+            setSessionError: err?.message || null,
+          });
+          // Mantém "Validando convite…" e tenta de novo.
+          try {
+            const retry = await bootstrapFirstAccessSession(supabasePlatformClient);
+            if (!active) return;
+            if (retry.session?.user) {
+              bootstrappedRef.current = true;
+              setEmail(retry.session.user.email || '');
+              setReady(true);
+              setLoading(false);
+              setError('');
+              return;
+            }
+          } catch {
+            /* cai no erro amigável abaixo */
+          }
+          if (!active) return;
+          setError(EXPIRED_LINK_MESSAGE);
+          setLoading(false);
+          return;
+        }
         const classified = classifyFirstAccessError(err);
         setError(classified.message);
         setLoading(false);
-        markFirstAccessPasswordPending(false);
       }
     }
 
     bootstrap();
     return () => {
       active = false;
+      // Libera lock de montagem; isFirstAccessProtected continua true pela pathname.
       markFirstAccessPasswordPending(false);
     };
   }, []);
@@ -124,6 +187,10 @@ export default function PrimeiroAcessoPage() {
         sessionUserEmail: data?.user?.email || null,
       });
       if (updateError) {
+        if (isAbortError(updateError)) {
+          setError('Não foi possível salvar a senha (requisição interrompida). Tente novamente.');
+          return;
+        }
         const classified = classifyFirstAccessError(updateError);
         setError(classified.message);
         return;
@@ -136,6 +203,7 @@ export default function PrimeiroAcessoPage() {
       setError(classified.message);
     } finally {
       setLoading(false);
+      markFirstAccessPasswordPending(false);
     }
   };
 

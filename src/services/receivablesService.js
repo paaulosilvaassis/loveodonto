@@ -14,6 +14,16 @@ import {
   normalizeEnumValue,
 } from './auditEventCatalog.js';
 import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
+import { readGetReceivable, readListReceivables } from './financialReadAdapter.js';
+import {
+  scheduleFinancialDualWriteCreateReceivable,
+  scheduleFinancialDualWriteUpdateReceivable,
+} from './financialWriteAdapter.js';
+import {
+  schedulePaymentReceivedDomainEvent,
+  scheduleReceivableCreatedDomainEvent,
+  scheduleReceivableUpdatedDomainEvent,
+} from './financialDomainEventPublisher.js';
 
 export const RECEIVABLE_TABS = {
   A_RECEBER: 'a_receber',
@@ -181,8 +191,11 @@ const applyTabFilter = (items, tabKey) => {
 };
 
 export const listReceivables = (filters = {}) => {
+  const fromRepo = readListReceivables(filters);
   const db = loadDb();
-  let items = Array.isArray(db.accountsReceivable) ? [...db.accountsReceivable] : [];
+  let items = fromRepo !== null
+    ? [...fromRepo]
+    : (Array.isArray(db.accountsReceivable) ? [...db.accountsReceivable] : []);
   const todayIso = TODAY();
 
   items = items.map((r) => ({
@@ -375,6 +388,8 @@ export const createReceivable = (user, payload) => {
       .catch(() => {});
   }
 
+  scheduleFinancialDualWriteCreateReceivable(user, record);
+  scheduleReceivableCreatedDomainEvent(user, record);
   return record;
 };
 
@@ -465,6 +480,8 @@ export const updateReceivable = (user, id, payload) => {
     return d;
   });
 
+  scheduleFinancialDualWriteUpdateReceivable(user, updated, payload);
+  scheduleReceivableUpdatedDomainEvent(user, updated, payload);
   return updated;
 };
 
@@ -558,6 +575,7 @@ export const registerReceivablePayment = (user, receivableId, payload) => {
     return d;
   });
 
+  schedulePaymentReceivedDomainEvent(user, paymentRecord, updatedReceivable);
   return {
     receivable: updatedReceivable,
     payment: paymentRecord,
@@ -603,6 +621,8 @@ export const getReceivablePayments = (receivableId) => {
 };
 
 export const getReceivableById = (id) => {
+  const fromRepo = readGetReceivable(id);
+  if (fromRepo !== null) return fromRepo;
   const db = loadDb();
   const items = Array.isArray(db.accountsReceivable) ? db.accountsReceivable : [];
   return items.find((r) => r.id === id) || null;

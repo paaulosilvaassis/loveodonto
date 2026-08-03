@@ -16,14 +16,13 @@ import {
 } from '../components/ui/Modal.jsx';
 import {
   createTenantUserAccess,
-  listCollaborators,
   listTenantUsersAccess,
   provisionCollaboratorSystemAccess,
-  reconcileCollaboratorTenantLinks,
   resendCollaboratorInvite,
   setTenantUserSystemAccess,
   removeTenantUserAccess,
 } from '../services/collaboratorAccessProvisionService.js';
+import { listTenantCollaborators } from '../services/tenantCollaboratorService.js';
 import { canManageTenantUsers } from '../utils/rbacHelpers.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
 import {
@@ -371,25 +370,16 @@ export default function ConfiguracoesUsuariosPage() {
     if (!tenantId) return;
     let active = true;
     setSaving(true);
-    const collaborators = listCollaborators({ tenantId });
-    const collaboratorMaps = buildCollaboratorLookupMaps(collaborators);
+    setError('');
 
-    listTenantUsersAccess(tenantId)
-      .then(async (result) => {
-        let users = Array.isArray(result?.users) ? result.users : [];
-        users = users.filter((row) => String(row?.tenant_id || tenantId) === tenantId);
-        try {
-          const reconciled = await reconcileCollaboratorTenantLinks(tenantId, collaborators);
-          if (Array.isArray(reconciled?.users) && reconciled.users.length > 0) {
-            users = reconciled.users.filter((row) => String(row?.tenant_id || tenantId) === tenantId);
-          }
-        } catch {
-          /* mantém lista da API — fonte autoritativa */
-        }
-        return users;
-      })
-      .then((users) => {
+    listTenantCollaborators(tenantId, { bundle: true, reconcileLinks: true })
+      .then((bundle) => {
         if (!active) return;
+        const collaborators = bundle.collaborators || [];
+        const collaboratorMaps = buildCollaboratorLookupMaps(collaborators);
+        const users = (bundle.tenantUsers || []).filter(
+          (row) => String(row?.tenant_id || tenantId) === tenantId,
+        );
         setMembers(users.map((u) => ({
           ...u,
           name: u.full_name || '',
@@ -406,7 +396,7 @@ export default function ConfiguracoesUsuariosPage() {
       })
       .catch((err) => {
         if (!active) return;
-        showError(normalizeUiAccessErrorMessage(err?.message || 'Erro ao carregar usuários.'));
+        showError(normalizeUiAccessErrorMessage(err?.message || 'Não foi possível carregar colaboradores da clínica.'));
       })
       .finally(() => {
         if (!active) return;

@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-06-29T21:16:23.713Z",
+  "tenant_id": "b2f95268-101c-42cb-8a8e-8d3681aa7dfa",
+  "source": "prior_export",
+  "source_format": "collaborators_export",
+  "summary": {
+    "total_found": 4,
+    "total_exported": 4,
+    "total_ignored": 0,
+    "duplicate_emails": 0,
+    "duplicate_legacy_ids": 0,
+    "missing_name_rejected": 0,
+    "missing_cargo_flagged": 0,
+    "missing_category_flagged": 0,
+    "base64_photos": 0
+  },
+  "duplicate_email_groups": [],
+  "duplicate_legacy_groups": [],
+  "warnings": [],
+  "ignored": [],
+  "exported_ids": [
+    "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+    "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+    "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+    "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+  ],
+  "input_file": "C:\\Users\\paaul\\Desktop\\appgestaoodonto-main\\appgestaoodonto\\collaborators-export.json",
+  "detection": {
+    "format": "collaborators_export",
+    "source": "prior_export"
+  }
+}

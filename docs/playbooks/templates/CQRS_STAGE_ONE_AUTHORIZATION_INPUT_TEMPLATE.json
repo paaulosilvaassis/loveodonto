@@ -1,0 +1,117 @@
+{
+  "inputSource": "manual-form",
+  "submittedBy": "",
+  "submittedAt": "",
+  "architectureVersion": "3.8.5-cqrs-local",
+  "packageId": "",
+  "notes": "",
+  "attachmentsMetadata": [],
+  "environmentDeclaration": {
+    "environmentId": "",
+    "environmentName": "",
+    "environmentType": "staging",
+    "host": "",
+    "projectRef": "",
+    "owner": "",
+    "declaredBy": "",
+    "declaredAt": "",
+    "expiresAt": "",
+    "isProduction": false,
+    "isStaging": true,
+    "dataClassification": "",
+    "allowedOperations": ["read", "inspect"],
+    "forbiddenOperations": ["write", "mutate", "migrate", "seed", "flag_activate"]
+  },
+  "humanApproval": {
+    "approvalId": "",
+    "approvalScope": "stage_one_observability",
+    "environmentId": "",
+    "tenantIds": [],
+    "requestedBy": "",
+    "requestedAt": "",
+    "status": "pending",
+    "approvedBy": "",
+    "approvedAt": "",
+    "expiresAt": "",
+    "riskAcknowledged": false,
+    "rollbackAcknowledged": false
+  },
+  "tenantSelection": {
+    "pilotTenantIds": [],
+    "controlTenantIds": [],
+    "excludedTenantIds": [],
+    "selectionReason": "",
+    "selectedBy": "",
+    "selectedAt": "",
+    "dataSensitivityReviewed": false,
+    "tenantOwnersNotified": false
+  },
+  "readonlyAccessDeclaration": {
+    "connectionId": "",
+    "environmentId": "",
+    "verifiedBy": "",
+    "verifiedAt": "",
+    "verificationMethod": "",
+    "expiresAt": "",
+    "status": "unverified",
+    "mutationBlocked": true,
+    "migrationBlocked": true,
+    "storageWriteBlocked": true,
+    "secretAccessBlocked": true,
+    "environmentVariableWriteBlocked": true,
+    "readOperations": ["inspect", "metrics_read"],
+    "writeOperations": []
+  },
+  "stageOneAuthorization": {
+    "stageId": "stage-1-observability",
+    "authorizedFlags": [
+      "DOMAIN_EVENTS",
+      "DOMAIN_EVENT_AUDIT",
+      "DOMAIN_EVENT_OBSERVABILITY"
+    ],
+    "forbiddenFlags": [
+      "DOMAIN_EVENT_CONSUMERS",
+      "DOMAIN_EVENT_PROJECTION",
+      "DOMAIN_EVENT_ANALYTICS",
+      "CQRS_READ_MODEL",
+      "CQRS_READ_MODEL_SOAK",
+      "CQRS_READ_MODEL_CONSISTENCY",
+      "LEAD_ANALYTICS_READ_MODEL",
+      "APPOINTMENT_ANALYTICS_READ_MODEL",
+      "FINANCIAL_ANALYTICS_READ_MODEL"
+    ],
+    "environmentId": "",
+    "tenantIds": [],
+    "authorizationId": "",
+    "authorizedBy": "",
+    "authorizedAt": "",
+    "expiresAt": "",
+    "maximumDurationHours": 72,
+    "successCriteria": [],
+    "failureCriteria": [],
+    "rollbackPlanId": "stage1-rollback-observability",
+    "evidenceRequirements": [],
+    "status": "pending"
+  },
+  "rollbackAcknowledgement": {
+    "rollbackPlanId": "stage1-rollback-observability",
+    "reviewed": false,
+    "reviewedBy": "",
+    "reviewedAt": "",
+    "flagsToDisable": [
+      "DOMAIN_EVENT_OBSERVABILITY",
+      "DOMAIN_EVENT_AUDIT",
+      "DOMAIN_EVENTS"
+    ],
+    "maximumRollbackTimeMinutes": 15,
+    "status": "pending"
+  },
+  "evidenceAcknowledgement": {
+    "acknowledgedTypes": [],
+    "reviewed": false,
+    "reviewedBy": "",
+    "reviewedAt": "",
+    "status": "pending"
+  },
+  "riskAcknowledgements": []
+}

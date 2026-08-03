@@ -1,11 +1,16 @@
 /**
  * Bootstrap de sessão Supabase para /primeiro-acesso.
  * Suporta PKCE (?code=), implicit (hash tokens) e setSession manual.
+ *
+ * Idempotente sob React StrictMode: captura tokens uma vez, single-flight,
+ * e trata AbortError (corrida getSession/setSession do supabase-js) com retry.
  */
+import { clearSaasAuthStorage, PLATFORM_AUTH_STORAGE_KEY } from '../auth/saasAuthStorage.js';
 
 const DEFAULT_MAX_WAIT_MS = 5000;
 const DEFAULT_RETRY_MS = 250;
-const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
+const ABORT_RETRY_ATTEMPTS = 4;
+const ABORT_RETRY_BASE_MS = 120;
 
 export const FIRST_ACCESS_PUBLIC_PATHS = [
   '/primeiro-acesso',
@@ -18,12 +23,36 @@ export const FIRST_ACCESS_PUBLIC_PATHS = [
 export const EXPIRED_LINK_MESSAGE = 'Este link já foi usado ou expirou. Solicite um novo acesso.';
 export const STALE_AUTH_USER_MESSAGE = 'Este convite pertence a um usuário antigo. Gere um novo convite pela Console.';
 export const NO_TOKEN_MESSAGE = 'Abra o link de primeiro acesso enviado por e-mail para definir sua senha. Esse link contém seu acesso seguro à plataforma.';
+export const ABORT_RETRY_MESSAGE = 'Validando convite… Se a tela não avançar, atualize a página mantendo o link do e-mail.';
 
 /** Bloqueia hidratação/logout destrutivo enquanto a senha não foi salva. */
 let firstAccessPasswordPending = false;
+/** Contador de montagens da página — evita StrictMode cleanup liberar proteção cedo. */
+let firstAccessMountLocks = 0;
+/** Tokens/code capturados na 1ª leitura (hash pode ser limpo por outros efeitos). */
+let capturedAuthCallback = null;
+/** Single-flight do bootstrap (StrictMode compartilha a mesma Promise). */
+let bootstrapInFlight = null;
 
 export function markFirstAccessPasswordPending(active) {
-  firstAccessPasswordPending = Boolean(active);
+  if (active) {
+    firstAccessMountLocks += 1;
+  } else {
+    firstAccessMountLocks = Math.max(0, firstAccessMountLocks - 1);
+  }
+  firstAccessPasswordPending = firstAccessMountLocks > 0;
+}
+
+export function isAbortError(error) {
+  if (!error) return false;
+  if (error.name === 'AbortError') return true;
+  const raw = String(error?.message || error || '').toLowerCase();
+  return (
+    raw.includes('signal is aborted')
+    || raw.includes('aborted without reason')
+    || raw.includes('the operation was aborted')
+    || raw.includes('aborterror')
+  );
 }
 
 export function isPrimeiroAcessoPath(pathname) {
@@ -84,6 +113,10 @@ export function classifyFirstAccessError(error) {
   const raw = String(error?.message || error || '').trim();
   const lower = raw.toLowerCase();
 
+  if (isAbortError(error)) {
+    return { code: 'aborted', message: ABORT_RETRY_MESSAGE, transient: true };
+  }
+
   if (
     lower.includes('user from sub claim')
     || (lower.includes('jwt') && lower.includes('does not exist'))
@@ -128,6 +161,68 @@ export function parseAuthCallbackFromUrl(locationLike) {
     error: hashParams.get('error') || searchParams.get('error'),
     errorDescription: hashParams.get('error_description') || searchParams.get('error_description'),
   };
+}
+
+/**
+ * Lê e memoriza tokens/code da URL uma única vez.
+ * Preferir o cache se a 2ª execução do StrictMode encontrar hash vazio.
+ */
+export function captureAuthCallbackFromUrl(locationLike) {
+  const parsed = parseAuthCallbackFromUrl(locationLike);
+  const hasUsable = Boolean(
+    parsed.code
+    || (parsed.accessToken && parsed.refreshToken)
+    || parsed.error,
+  );
+  if (hasUsable) {
+    capturedAuthCallback = parsed;
+    return parsed;
+  }
+  if (capturedAuthCallback) {
+    return {
+      ...capturedAuthCallback,
+      href: parsed.href || capturedAuthCallback.href,
+    };
+  }
+  return parsed;
+}
+
+export function peekCapturedAuthCallback() {
+  return capturedAuthCallback;
+}
+
+/** @internal testes */
+export function __resetFirstAccessSessionForTests() {
+  capturedAuthCallback = null;
+  bootstrapInFlight = null;
+  firstAccessPasswordPending = false;
+  firstAccessMountLocks = 0;
+}
+
+async function withAbortRetry(operation, label) {
+  let lastError = null;
+  for (let attempt = 0; attempt < ABORT_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await operation();
+      // supabase-js frequentemente devolve AbortError em `error` sem throw.
+      if (result && typeof result === 'object' && result.error && isAbortError(result.error)) {
+        throw result.error;
+      }
+      return result;
+    } catch (err) {
+      lastError = err;
+      if (!isAbortError(err) || attempt === ABORT_RETRY_ATTEMPTS - 1) {
+        throw err;
+      }
+      auditFirstAccess('abort retry', {
+        label,
+        attempt: attempt + 1,
+        setSessionError: err?.message || null,
+      });
+      await sleep(ABORT_RETRY_BASE_MS * (attempt + 1));
+    }
+  }
+  throw lastError;
 }
 
 export function hasSupabaseAuthCallback(locationLike = window.location) {
@@ -179,11 +274,7 @@ export function clearAuthParamsFromUrl(pathname = '/login') {
 
 export function clearPlatformAuthStorage() {
   if (typeof window === 'undefined') return;
-  try {
-    localStorage.removeItem(PLATFORM_AUTH_STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
+  clearSaasAuthStorage(window.localStorage, { includeAppSession: false });
 }
 
 function sleep(ms) {
@@ -193,26 +284,37 @@ function sleep(ms) {
 }
 
 async function readSession(client) {
-  const { data, error } = await client.auth.getSession();
-  if (error) throw error;
-  return data?.session || null;
+  return withAbortRetry(async () => {
+    const { data, error } = await client.auth.getSession();
+    if (error) throw error;
+    return data?.session || null;
+  }, 'getSession');
 }
 
 async function verifySessionUser(client, session) {
-  const { data, error } = await client.auth.getUser();
-  auditFirstAccess('getUser validation', {
-    sessionUserId: data?.user?.id || session?.user?.id || null,
-    sessionUserEmail: data?.user?.email || session?.user?.email || null,
-    setSessionError: error?.message || null,
-    ok: !error && Boolean(data?.user?.id),
-  });
-  if (error) {
-    return { session: null, error };
+  try {
+    const { data, error } = await withAbortRetry(async () => {
+      const result = await client.auth.getUser();
+      if (result.error && isAbortError(result.error)) throw result.error;
+      return result;
+    }, 'getUser');
+
+    auditFirstAccess('getUser validation', {
+      sessionUserId: data?.user?.id || session?.user?.id || null,
+      sessionUserEmail: data?.user?.email || session?.user?.email || null,
+      setSessionError: error?.message || null,
+      ok: !error && Boolean(data?.user?.id),
+    });
+    if (error) {
+      return { session: null, error };
+    }
+    if (!data?.user?.id) {
+      return { session: null, error: new Error('Sessão inválida.') };
+    }
+    return { session: session || { user: data.user }, error: null };
+  } catch (err) {
+    return { session: null, error: err };
   }
-  if (!data?.user?.id) {
-    return { session: null, error: new Error('Sessão inválida.') };
-  }
-  return { session: session || { user: data.user }, error: null };
 }
 
 async function waitForSession(client, maxWaitMs, retryMs) {
@@ -253,15 +355,31 @@ async function waitForSession(client, maxWaitMs, retryMs) {
  * @returns {Promise<{ session: import('@supabase/supabase-js').Session | null, urlState: object, supabaseError: Error | null, errorCode: string | null }>}
  */
 export async function bootstrapFirstAccessSession(client, options = {}) {
+  if (bootstrapInFlight) {
+    auditFirstAccess('bootstrap join in-flight');
+    return bootstrapInFlight;
+  }
+
+  bootstrapInFlight = runBootstrapFirstAccessSession(client, options).finally(() => {
+    bootstrapInFlight = null;
+  });
+  return bootstrapInFlight;
+}
+
+async function runBootstrapFirstAccessSession(client, options = {}) {
   const maxWaitMs = options.maxWaitMs ?? DEFAULT_MAX_WAIT_MS;
   const retryMs = options.retryMs ?? DEFAULT_RETRY_MS;
-  const urlState = parseAuthCallbackFromUrl();
+  // Captura única: evita perder access/refresh no 2º mount do StrictMode.
+  const urlState = captureAuthCallbackFromUrl();
 
   auditFirstAccess('bootstrap start', {
     href: urlState.href,
     hashPresent: urlState.hasHash,
     searchPresent: Boolean(urlState.search && urlState.search.length > 1),
     codePresent: Boolean(urlState.code),
+    hasAccessRefresh: Boolean(urlState.accessToken && urlState.refreshToken),
+    type: urlState.type || null,
+    usedCaptureCache: Boolean(capturedAuthCallback && !urlState.hasHash && capturedAuthCallback.hasHash),
   });
 
   if (urlState.error) {
@@ -281,44 +399,83 @@ export async function bootstrapFirstAccessSession(client, options = {}) {
   );
 
   if (urlState.code) {
-    const { data, error } = await client.auth.exchangeCodeForSession(urlState.code);
-    auditFirstAccess('exchangeCodeForSession', {
-      setSessionError: error?.message || null,
-      sessionUserId: data?.session?.user?.id || null,
-      sessionUserEmail: data?.session?.user?.email || null,
-    });
-    if (error) {
-      const classified = classifyFirstAccessError(error);
-      return { session: null, urlState, supabaseError: error, errorCode: classified.code };
+    try {
+      const { data, error } = await withAbortRetry(
+        () => client.auth.exchangeCodeForSession(urlState.code),
+        'exchangeCodeForSession',
+      );
+      auditFirstAccess('exchangeCodeForSession', {
+        setSessionError: error?.message || null,
+        sessionUserId: data?.session?.user?.id || null,
+        sessionUserEmail: data?.session?.user?.email || null,
+      });
+      if (error) {
+        const classified = classifyFirstAccessError(error);
+        return { session: null, urlState, supabaseError: error, errorCode: classified.code };
+      }
+      const verified = await verifySessionUser(client, data?.session);
+      if (verified.error) {
+        const classified = classifyFirstAccessError(verified.error);
+        return { session: null, urlState, supabaseError: verified.error, errorCode: classified.code };
+      }
+      return { session: verified.session, urlState, supabaseError: null, errorCode: null };
+    } catch (err) {
+      const classified = classifyFirstAccessError(err);
+      return { session: null, urlState, supabaseError: err, errorCode: classified.code };
     }
-    const verified = await verifySessionUser(client, data?.session);
-    if (verified.error) {
-      const classified = classifyFirstAccessError(verified.error);
-      return { session: null, urlState, supabaseError: verified.error, errorCode: classified.code };
-    }
-    return { session: verified.session, urlState, supabaseError: null, errorCode: null };
   }
 
   if (urlState.accessToken && urlState.refreshToken) {
-    const { data, error } = await client.auth.setSession({
-      access_token: urlState.accessToken,
-      refresh_token: urlState.refreshToken,
-    });
-    auditFirstAccess('setSession from hash', {
-      setSessionError: error?.message || null,
-      sessionUserId: data?.session?.user?.id || null,
-      sessionUserEmail: data?.session?.user?.email || null,
-    });
-    if (error) {
-      const classified = classifyFirstAccessError(error);
-      return { session: null, urlState, supabaseError: error, errorCode: classified.code };
+    try {
+      const { data, error } = await withAbortRetry(
+        () => client.auth.setSession({
+          access_token: urlState.accessToken,
+          refresh_token: urlState.refreshToken,
+        }),
+        'setSession',
+      );
+      auditFirstAccess('setSession from hash', {
+        setSessionError: error?.message || null,
+        sessionUserId: data?.session?.user?.id || null,
+        sessionUserEmail: data?.session?.user?.email || null,
+        type: urlState.type || null,
+      });
+      if (error) {
+        if (isAbortError(error)) {
+          // Sessão pode ter sido gravada mesmo com abort — tenta ler.
+          const recovered = await readSession(client);
+          if (recovered?.user) {
+            const verified = await verifySessionUser(client, recovered);
+            if (!verified.error) {
+              return { session: verified.session, urlState, supabaseError: null, errorCode: null };
+            }
+          }
+        }
+        const classified = classifyFirstAccessError(error);
+        return { session: null, urlState, supabaseError: error, errorCode: classified.code };
+      }
+      const verified = await verifySessionUser(client, data?.session);
+      if (verified.error) {
+        if (isAbortError(verified.error)) {
+          const recovered = await readSession(client);
+          if (recovered?.user) {
+            return { session: recovered, urlState, supabaseError: null, errorCode: null };
+          }
+        }
+        const classified = classifyFirstAccessError(verified.error);
+        return { session: null, urlState, supabaseError: verified.error, errorCode: classified.code };
+      }
+      return { session: verified.session, urlState, supabaseError: null, errorCode: null };
+    } catch (err) {
+      if (isAbortError(err)) {
+        const recovered = await readSession(client).catch(() => null);
+        if (recovered?.user) {
+          return { session: recovered, urlState, supabaseError: null, errorCode: null };
+        }
+      }
+      const classified = classifyFirstAccessError(err);
+      return { session: null, urlState, supabaseError: err, errorCode: classified.code };
     }
-    const verified = await verifySessionUser(client, data?.session);
-    if (verified.error) {
-      const classified = classifyFirstAccessError(verified.error);
-      return { session: null, urlState, supabaseError: verified.error, errorCode: classified.code };
-    }
-    return { session: verified.session, urlState, supabaseError: null, errorCode: null };
   }
 
   if (hadAuthParams) {

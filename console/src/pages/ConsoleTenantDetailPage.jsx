@@ -35,7 +35,11 @@ export default function ConsoleTenantDetailPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const catalogs = useMemo(() => listCatalogs(), []);
-  const canManageMasterAccess = ['owner', 'super_admin'].includes(String(platformUser?.role || '').toLowerCase())
+  const normalizedRole = String(platformUser?.role || platformUser?.role_slug || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_');
+  const canManageMasterAccess = ['owner', 'super_admin'].includes(normalizedRole)
     || hasPermission('clinics:write');
 
   useEffect(() => {

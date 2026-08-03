@@ -1,8 +1,17 @@
 -- 005_app_collaborator_access_invites.sql
 -- Expansão aditiva para vínculo colaborador-usuário e convites canônicos.
+-- Phase 9.2G: garante colunas legadas (status/is_active) antes do UPDATE de backfill,
+-- para bancos vazios (bootstrap local) e legados (console sem 007). Idempotente.
 
 alter table if exists public.tenant_users
   add column if not exists collaborator_id text;
+
+-- Colunas assumidas pelo COALESCE abaixo (podem faltar em schema legado/console parcial).
+alter table if exists public.tenant_users
+  add column if not exists status text;
+
+alter table if exists public.tenant_users
+  add column if not exists is_active boolean;
 
 alter table if exists public.tenant_users
   add column if not exists has_system_access boolean;
@@ -104,7 +113,7 @@ on public.invitations
 for select
 using (
   auth.uid() is not null
-  and public.app_user_can_access_tenant(tenant_id)
+  and public.app_user_can_access_tenant(tenant_id::text)
 );
 
 drop policy if exists invitations_manage_admin on public.invitations;

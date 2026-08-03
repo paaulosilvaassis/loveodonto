@@ -25,6 +25,14 @@ import PlatformBillingPage from './pages/platform/PlatformBillingPage.jsx';
 import PlatformProvidersPage from './pages/platform/PlatformProvidersPage.jsx';
 import PlatformTeamPage from './pages/platform/PlatformTeamPage.jsx';
 
+function PlatformAuthShell({ children }) {
+  return (
+    <PlatformAuthProvider>
+      {children}
+    </PlatformAuthProvider>
+  );
+}
+
 const ProtectedApp = lazy(() => import('./ProtectedApp.jsx'));
 const StabilityHealthPage = lazy(() => import('./pages/StabilityHealthPage.jsx'));
 const DevMigratePage = lazy(() => import('./pages/DevMigratePage.jsx'));
@@ -37,7 +45,6 @@ export default function App() {
       <TenantProvider>
         <BrowserRouter>
           <FirstAccessRedirectGuard />
-          <PlatformAuthProvider>
             <Routes>
             {import.meta.env?.DEV ? (
               <>
@@ -62,8 +69,8 @@ export default function App() {
             <Route path="/redefinir-senha" element={<RedefinirSenhaPage />} />
             <Route path="/convite" element={<ConvitePage />} />
             <Route path="/assinatura/:token" element={<ContractSignPublicPage />} />
-            <Route path="/platform/login" element={<PlatformLoginPage />} />
-            <Route path="/platform" element={<RequirePlatformAuth><PlatformLayout /></RequirePlatformAuth>}>
+            <Route path="/platform/login" element={<PlatformAuthShell><PlatformLoginPage /></PlatformAuthShell>} />
+            <Route path="/platform" element={<PlatformAuthShell><RequirePlatformAuth><PlatformLayout /></RequirePlatformAuth></PlatformAuthShell>}>
               <Route index element={<Navigate to="/platform/dashboard" replace />} />
               <Route path="dashboard" element={<PlatformDashboardPage />} />
               <Route path="tenants" element={<PlatformTenantsPage />} />
@@ -96,7 +103,6 @@ export default function App() {
               }
             />
             </Routes>
-          </PlatformAuthProvider>
         </BrowserRouter>
       </TenantProvider>
     </AuthProvider>

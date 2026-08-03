@@ -14,11 +14,18 @@ import { isSaasModeEnabled } from './saasAuthService.js';
 import { saveClinicProfileRemote } from './clinicProfileApi.js';
 import { resolveClinicLogoUrlForSave, assertLogoUrlSafeForApi } from './clinicLogoUploadService.js';
 import { syncTenantClinicProfileToLocalDb } from './tenantClinicProfileSync.js';
+import {
+  readGetClinicProfile,
+  readGetClinicSummary,
+} from './clinicProfileServiceReadAdapter.js';
+import { scheduleClinicProfileDualWriteUpdate } from './clinicProfileServiceWriteAdapter.js';
+import { shouldUseClinicProfileRepositoryWrite } from './clinicProfileServiceRepositoryBridge.js';
 
 export const getClinic = () => {
   const db = loadDb();
+  const profile = readGetClinicProfile() ?? db.clinicProfile;
   return {
-    profile: db.clinicProfile,
+    profile,
     documentation: db.clinicDocumentation,
     phones: db.clinicPhones,
     addresses: db.clinicAddresses,
@@ -59,12 +66,18 @@ const buildClinicSummaryFromDb = (db, sessionTenantId = '') => {
 };
 
 export const getClinicSummary = (sessionTenantId = '') => {
+  const fromRepository = readGetClinicSummary(sessionTenantId);
+  if (fromRepository !== null) return fromRepository;
   const db = loadDb();
   return buildClinicSummaryFromDb(db, sessionTenantId);
 };
 
 /** Versão assíncrona para não bloquear o thread (usa loadDbAsync). */
-export const getClinicSummaryAsync = (sessionTenantId = '') => loadDbAsync().then((db) => buildClinicSummaryFromDb(db, sessionTenantId));
+export const getClinicSummaryAsync = (sessionTenantId = '') => {
+  const fromRepository = readGetClinicSummary(sessionTenantId);
+  if (fromRepository !== null) return Promise.resolve(fromRepository);
+  return loadDbAsync().then((db) => buildClinicSummaryFromDb(db, sessionTenantId));
+};
 
 export const updateClinicProfile = async (user, payload, options = {}) => {
   requirePermission(user, 'team:write');
@@ -115,6 +128,11 @@ export const updateClinicProfile = async (user, payload, options = {}) => {
     };
     if (safeLogoUrl) {
       remotePayload.logoUrl = safeLogoUrl;
+    }
+
+    if (shouldUseClinicProfileRepositoryWrite()) {
+      scheduleClinicProfileDualWriteUpdate(user, updated, tenantId, safeLogoUrl);
+      return { profile: updated, clinicProfile: null };
     }
 
     const res = await saveClinicProfileRemote(remotePayload);

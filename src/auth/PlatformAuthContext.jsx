@@ -1,3 +1,9 @@
+/**
+ * Auth legado do módulo /platform embutido no app (5176).
+ * NÃO consulta platform_users — tabela do console antigo, ausente no projeto SaaS atual.
+ * O app da clínica usa AuthContext + tenant-context (tenant_users via backend).
+ * O Console oficial fica em console/ (5177) com PlatformAuthContext próprio.
+ */
 import { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
 
@@ -13,63 +19,39 @@ const PlatformAuthContext = createContext(null);
 
 export function PlatformAuthProvider({ children }) {
   const [session, setSession] = useState(null);
-  const [platformUser, setPlatformUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!supabasePlatformClient) {
       setLoading(false);
-      return;
+      return undefined;
     }
     supabasePlatformClient.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
-      if (s?.user) fetchPlatformUser(s.user.id);
-      else setLoading(false);
+      setLoading(false);
     });
     const { data: { subscription } } = supabasePlatformClient.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      if (s?.user) fetchPlatformUser(s.user.id);
-      else {
-        setPlatformUser(null);
-        setLoading(false);
-      }
+      setLoading(false);
     });
     return () => subscription.unsubscribe();
   }, []);
-
-  async function fetchPlatformUser(authId) {
-    try {
-      const { data, error } = await supabasePlatformClient
-        .from('platform_users')
-        .select('*')
-        .eq('id', authId)
-        .eq('is_active', true)
-        .single();
-      if (error || !data) {
-        setPlatformUser(null);
-        return;
-      }
-      setPlatformUser(data);
-    } catch {
-      setPlatformUser(null);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const login = async (email, password) => {
     if (!supabasePlatformClient) throw new Error('Supabase Plataforma não configurado.');
     const { data, error } = await supabasePlatformClient.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    await fetchPlatformUser(data.user.id);
+    setSession(data.session);
     return data;
   };
 
   const logout = async () => {
     if (supabasePlatformClient) await supabasePlatformClient.auth.signOut();
     setSession(null);
-    setPlatformUser(null);
   };
+
+  /** Módulo /platform legado — sem platform_users; use Console 5177 para admin SaaS. */
+  const platformUser = null;
 
   const value = useMemo(
     () => ({
@@ -78,16 +60,16 @@ export function PlatformAuthProvider({ children }) {
       loading,
       login,
       logout,
-      isOwner: platformUser?.role === PLATFORM_ROLES.PLATFORM_OWNER,
-      isAdmin: platformUser?.role === PLATFORM_ROLES.PLATFORM_ADMIN,
-      canManageTeam: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN].includes(platformUser?.role),
-      canManageTenants: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN, PLATFORM_ROLES.SALES].includes(platformUser?.role),
-      canManageBilling: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN, PLATFORM_ROLES.FINANCE].includes(platformUser?.role),
-      canManageProviders: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN].includes(platformUser?.role),
-      canManagePlans: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN].includes(platformUser?.role),
-      canViewTenants: [PLATFORM_ROLES.PLATFORM_OWNER, PLATFORM_ROLES.PLATFORM_ADMIN, PLATFORM_ROLES.SALES, PLATFORM_ROLES.SUPPORT].includes(platformUser?.role),
+      isOwner: false,
+      isAdmin: false,
+      canManageTeam: false,
+      canManageTenants: false,
+      canManageBilling: false,
+      canManageProviders: false,
+      canManagePlans: false,
+      canViewTenants: false,
     }),
-    [session, platformUser, loading],
+    [session, loading],
   );
 
   return (

@@ -5,6 +5,7 @@ import { canManageAccess } from '../services/accessService.js';
 import { listUsersWithAccess, ROLE_LABELS } from '../services/accessService.js';
 import { listUserInvites, createUserInvite } from '../services/userInviteService.js';
 import { listCollaborators, getCollaborator } from '../services/collaboratorService.js';
+import { listTenantCollaborators } from '../services/tenantCollaboratorService.js';
 import { loadDb } from '../db/index.js';
 import { Section } from '../components/Section.jsx';
 import { Field } from '../components/Field.jsx';
@@ -42,8 +43,14 @@ export default function AdminUsuariosPage() {
     }
     setInvites(listUserInvites({}));
     setUsers(listUsersWithAccess());
-    setCollaborators(listCollaborators({ status: 'ativo' }));
-  }, [canAccess, navigate]);
+    if (user?.tenantId) {
+      listTenantCollaborators(user.tenantId, { legacy: true })
+        .then((rows) => setCollaborators(rows.filter((c) => c.status === 'ativo')))
+        .catch(() => setCollaborators([]));
+    } else {
+      setCollaborators(listCollaborators({ status: 'ativo' }));
+    }
+  }, [canAccess, navigate, user?.tenantId]);
 
   const refreshInvites = () => {
     setInvites(listUserInvites({}));

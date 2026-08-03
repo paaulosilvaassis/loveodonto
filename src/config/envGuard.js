@@ -20,10 +20,18 @@ function hasLikelyKey(value) {
 }
 
 export function collectEnvSnapshot() {
-  const appUrl = toTrimmed(import.meta.env.VITE_SUPABASE_APP_URL || import.meta.env.VITE_SUPABASE_URL);
-  const appAnonKey = toTrimmed(import.meta.env.VITE_SUPABASE_APP_ANON_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY);
   const platformUrl = toTrimmed(import.meta.env.VITE_SUPABASE_PLATFORM_URL);
   const platformAnonKey = toTrimmed(import.meta.env.VITE_SUPABASE_PLATFORM_ANON_KEY);
+  const appUrl = toTrimmed(
+    import.meta.env.VITE_SUPABASE_APP_URL
+    || import.meta.env.VITE_SUPABASE_URL
+    || platformUrl,
+  );
+  const appAnonKey = toTrimmed(
+    import.meta.env.VITE_SUPABASE_APP_ANON_KEY
+    || import.meta.env.VITE_SUPABASE_ANON_KEY
+    || platformAnonKey,
+  );
   const backendUrl = getConfiguredAdminApiBaseUrl();
   const consoleUrl = toTrimmed(import.meta.env.VITE_CONSOLE_SUPABASE_URL);
   const consoleAnonKey = toTrimmed(import.meta.env.VITE_CONSOLE_SUPABASE_ANON_KEY);
@@ -49,9 +57,15 @@ export function validateCriticalEnv() {
   const issues = [];
 
   if (!env.platformUrl) issues.push('VITE_SUPABASE_PLATFORM_URL ausente.');
-  if (!hasLikelyKey(env.platformAnonKey)) issues.push('VITE_SUPABASE_PLATFORM_ANON_KEY ausente ou inválida.');
-  if (!env.appUrl) issues.push('VITE_SUPABASE_APP_URL (ou VITE_SUPABASE_URL) ausente.');
-  if (!hasLikelyKey(env.appAnonKey)) issues.push('VITE_SUPABASE_APP_ANON_KEY (ou VITE_SUPABASE_ANON_KEY) ausente ou inválida.');
+  if (!hasLikelyKey(env.platformAnonKey)) {
+    issues.push('VITE_SUPABASE_PLATFORM_ANON_KEY ausente ou inválida.');
+  }
+  if (!env.appUrl) {
+    issues.push('VITE_SUPABASE_APP_URL (ou VITE_SUPABASE_URL / fallback PLATFORM) ausente.');
+  }
+  if (!hasLikelyKey(env.appAnonKey)) {
+    issues.push('VITE_SUPABASE_APP_ANON_KEY (ou VITE_SUPABASE_ANON_KEY / fallback PLATFORM) ausente ou inválida.');
+  }
 
   if (env.hosts.console && env.hosts.app && env.hosts.console !== env.hosts.app) {
     issues.push('Supabase do App e Console apontam para hosts diferentes.');

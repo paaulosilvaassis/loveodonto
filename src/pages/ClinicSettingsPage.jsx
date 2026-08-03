@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/useAuth.js';
-import { useTenant } from '../tenant/useTenant.js';
-import { getClinicLogo } from '../utils/clinicLogo.js';
 import { Field } from '../components/Field.jsx';
 import { can } from '../permissions/permissions.js';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
@@ -30,7 +28,6 @@ import {
 } from '../services/clinicService.js';
 import { ClinicPhonesSection } from '../components/clinic/ClinicPhonesSection.jsx';
 import { formatCep, formatCnpj, validateFileMeta } from '../utils/validators.js';
-import { validateClinicLogoFile } from '../utils/clinicLogoImage.js';
 
 const EDITABLE_SECTIONS = new Set([
   'cadastro', 'documentacao', 'tributacao', 'horarios', 'correspondencias', 'adicionais',
@@ -51,13 +48,10 @@ const dayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 export default function ClinicSettingsPage() {
   const { user } = useAuth();
-  const { clinicProfile, refreshTenantContext } = useTenant();
   const [activeSection, setActiveSection] = useState('geral');
   const [editingSection, setEditingSection] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [logoFile, setLogoFile] = useState(null);
-  const [logoPreviewUrl, setLogoPreviewUrl] = useState('');
   const [clinic, setClinic] = useState(() => getClinic());
   const [draft, setDraft] = useState(() => ({
     ...getClinic(),
@@ -105,19 +99,6 @@ export default function ClinicSettingsPage() {
   }, []);
 
   useEffect(() => {
-    if (!clinicProfile || editingSection === 'cadastro') return;
-    const remoteLogo = clinicProfile.logoUrl || clinicProfile.logo_url;
-    if (!remoteLogo) return;
-    setDraft((prev) => {
-      if (prev.profile?.logoUrl === remoteLogo) return prev;
-      return {
-        ...prev,
-        profile: { ...prev.profile, logoUrl: remoteLogo },
-      };
-    });
-  }, [clinicProfile?.logoUrl, clinicProfile?.logo_url, editingSection]);
-
-  useEffect(() => {
     if (!editingSection) return undefined;
     const handler = (event) => {
       event.preventDefault();
@@ -155,13 +136,7 @@ export default function ClinicSettingsPage() {
 
   const cancelEdit = () => {
     setEditingSection('');
-    setDraft((prev) => ({
-      ...clinic,
-      newPhone: prev?.newPhone || { tipo: '', ddd: '', numero: '', principal: false },
-      newAddress: prev?.newAddress || { tipo: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', principal: false },
-      newFile: prev?.newFile || { categoria: '', nomeArquivo: '', fileUrl: '', validade: '' },
-      newMailServer: prev?.newMailServer || { provider: '', smtpHost: '', smtpPort: '', smtpUser: '', smtpPassword: '', fromName: '', fromEmail: '' },
-    }));
+    setDraft(clinic);
   };
 
   const saveActiveSection = async () => {
@@ -169,22 +144,7 @@ export default function ClinicSettingsPage() {
     setSuccess('');
     try {
       const section = editingSection || activeSection;
-      if (section === 'cadastro') {
-        const result = await updateClinicProfile(user, draft.profile, { logoFile });
-        await refreshTenantContext(false);
-        const remoteLogo = result?.clinicProfile?.logoUrl || result?.clinicProfile?.logo_url;
-        if (remoteLogo) {
-          setDraft((prev) => ({
-            ...prev,
-            profile: { ...prev.profile, logoUrl: remoteLogo },
-          }));
-        }
-        setLogoFile(null);
-        if (logoPreviewUrl.startsWith('blob:')) {
-          URL.revokeObjectURL(logoPreviewUrl);
-        }
-        setLogoPreviewUrl('');
-      }
+      if (section === 'cadastro') updateClinicProfile(user, draft.profile);
       else if (section === 'documentacao') updateClinicDocumentation(user, draft.documentation);
       else if (section === 'tributacao') updateClinicTax(user, draft.tax);
       else if (section === 'horarios') updateBusinessHours(user, draft.businessHours);
@@ -229,11 +189,11 @@ export default function ClinicSettingsPage() {
   };
 
   const primaryPhone = useMemo(() => {
-    const phones = clinic?.phones || [];
+    const phones = clinic.phones || [];
     const p = phones.find((item) => item.principal) || phones[0];
     if (!p?.numero) return '—';
     return p.ddd ? `(${p.ddd}) ${p.numero}` : p.numero;
-  }, [clinic?.phones]);
+  }, [clinic.phones]);
 
   const isRecordEditing = Boolean(editingSection && editingSection === activeSection);
   const hasUnsavedChanges = Boolean(editingSection);
@@ -243,21 +203,19 @@ export default function ClinicSettingsPage() {
   const onUploadLogo = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const validation = validateClinicLogoFile(file);
+    const validation = validateFileMeta(file, ['image/png', 'image/svg+xml']);
     if (!validation.ok) {
       setError(validation.message);
       return;
     }
-    setError('');
-    setLogoFile(file);
-    if (logoPreviewUrl.startsWith('blob:')) {
-      URL.revokeObjectURL(logoPreviewUrl);
-    }
-    setLogoPreviewUrl(URL.createObjectURL(file));
-    setDraft((prev) => ({
-      ...prev,
-      profile: { ...prev.profile, logoUrl: '' },
-    }));
+    const reader = new FileReader();
+    reader.onload = () => {
+      setDraft((prev) => ({
+        ...prev,
+        profile: { ...prev.profile, logoUrl: reader.result },
+      }));
+    };
+    reader.readAsDataURL(file);
   };
 
   const refreshClinicPhones = () => {
@@ -368,14 +326,8 @@ export default function ClinicSettingsPage() {
                   />
                 </Field>
                 <Field label="Logomarca">
-                  {(logoPreviewUrl || draft.profile.logoUrl) ? (
-                    <img
-                      className="logo-preview clinic-logo-preview"
-                      src={logoPreviewUrl || draft.profile.logoUrl}
-                      alt="Logo"
-                    />
-                  ) : null}
-                  <input type="file" accept="image/jpeg,image/png,image/webp" onChange={onUploadLogo} disabled={editingSection !== 'cadastro'} />
+                  {draft.profile.logoUrl ? <img className="logo-preview clinic-logo-preview" src={draft.profile.logoUrl} alt="Logo" /> : null}
+                  <input type="file" accept="image/png,image/svg+xml" onChange={onUploadLogo} disabled={editingSection !== 'cadastro'} />
                 </Field>
             </div>
           </ClinicFormCard>
@@ -624,7 +576,7 @@ export default function ClinicSettingsPage() {
       return (
               <ClinicPhonesSection
                 user={user}
-                phones={clinic?.phones || []}
+                phones={clinic.phones}
                 isAdmin={isAdmin}
                 isEditing={editingSection === 'telefones'}
                 onRefresh={refreshClinicPhones}
@@ -732,7 +684,7 @@ export default function ClinicSettingsPage() {
                 </form>
                 <div className="card">
                   <ul className="list">
-                    {(clinic?.addresses || []).map((item) => (
+                    {clinic.addresses.map((item) => (
                       <li key={item.id} className="list-item">
                         {item.tipo} · {item.logradouro}, {item.numero} · {item.cidade}-{item.uf} {item.principal ? '★' : ''}
                         {isAdmin ? (
@@ -877,7 +829,7 @@ export default function ClinicSettingsPage() {
                 </form>
                 <div className="card">
                   <ul className="list">
-                    {(clinic?.files || []).map((item) => (
+                    {clinic.files.map((item) => (
                       <li key={item.id} className="list-item">
                         {item.categoria} · {item.nomeArquivo}
                         {item.fileUrl ? (
@@ -910,7 +862,7 @@ export default function ClinicSettingsPage() {
                     disabled={editingSection !== 'correspondencias'}
                   >
                     <option value="">Selecione</option>
-                    {(clinic?.addresses || []).map((item) => (
+                    {clinic.addresses.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.logradouro}, {item.numero}
                       </option>
@@ -1033,7 +985,7 @@ export default function ClinicSettingsPage() {
                 <ClinicFormCard title="Servidores configurados" description="Teste a conexão ou remova servidores existentes.">
                 <div className="clinic-list-card">
                   <ul className="list">
-                    {(clinic?.mailServers || []).map((item) => (
+                    {clinic.mailServers.map((item) => (
                       <li key={item.id} className="list-item">
                         {item.provider} · {item.smtpHost} · {item.testStatus}
                         {isAdmin ? (
@@ -1195,16 +1147,8 @@ export default function ClinicSettingsPage() {
   }, [activeSection, editingSection, clinic, draft, user, isAdmin, cepLoading, cepError, isAutoFilled, handleCepChange, handleCepBlur, handleAddressFieldChange, lookupCep]);
 
   const headerProps = {
-    logoUrl: logoPreviewUrl
-      || (isRecordEditing ? draft.profile?.logoUrl : null)
-      || getClinicLogo(clinicProfile, { includeDefault: false }),
-    displayName:
-      draft.profile?.nomeClinica
-      || draft.profile?.nomeMarca
-      || draft.profile?.nomeFantasia
-      || clinicProfile?.fantasyName
-      || clinicProfile?.fantasy_name
-      || clinicProfile?.name,
+    logoUrl: draft.profile?.logoUrl,
+    displayName: draft.profile?.nomeClinica || draft.profile?.nomeMarca || draft.profile?.nomeFantasia,
     razaoSocial: draft.profile?.razaoSocial,
     documento: formatCnpj(draft.documentation?.cnpj || ''),
     statusLabel: 'Ativa',

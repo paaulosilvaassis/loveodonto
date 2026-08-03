@@ -1,0 +1,307 @@
+{
+  "tag": "[RH_SHADOW]",
+  "tenant": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+  "comparedAt": "2026-06-30T18:57:24.168Z",
+  "durationMs": 1100,
+  "matchPercent": 0,
+  "diffCount": 8,
+  "blockingDiffCount": 0,
+  "transitionalDiffCount": 4,
+  "informationalDiffCount": 4,
+  "canPromoteReadPrimary": true,
+  "promotionBlockers": [],
+  "localCount": 4,
+  "remoteCount": 4,
+  "summary": {
+    "localCount": 4,
+    "remoteCount": 4,
+    "matchCount": 0,
+    "missingLocalCount": 0,
+    "missingRemoteCount": 0,
+    "fieldDiffCount": 4,
+    "duplicateCount": 0,
+    "invalidUuidCount": 4,
+    "invalidLegacyCount": 0,
+    "countMismatch": false,
+    "blockingDiffCount": 0,
+    "transitionalDiffCount": 4,
+    "informationalDiffCount": 4,
+    "canPromoteReadPrimary": true
+  },
+  "classification": {
+    "blockingDiffCount": 0,
+    "transitionalDiffCount": 4,
+    "informationalDiffCount": 4,
+    "canPromoteReadPrimary": true,
+    "promotionBlockers": [],
+    "blocking_diff": [],
+    "transitional_diff": [
+      {
+        "ref": {
+          "legacyId": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+          "uuid": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "uuid",
+            "localValue": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+            "remoteValue": "9284488d-c0b1-4200-b728-82f757aaf1e0",
+            "tier": "transitional_diff",
+            "reason": "UUID local ausente ou legacy_id usado como fallback — IDB ainda não espelha collaborator_uuid."
+          },
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:47.286Z",
+            "remoteValue": "2026-06-29T23:28:17.967937+00:00",
+            "tier": "informational_diff",
+            "reason": "updated_at divergente — esperado durante backfill/sync; remoto igual ou mais recente."
+          }
+        ],
+        "highestTier": "transitional_diff"
+      },
+      {
+        "ref": {
+          "legacyId": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+          "uuid": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "uuid",
+            "localValue": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+            "remoteValue": "6eeabd6b-0a8b-4d88-8715-400e092d3212",
+            "tier": "transitional_diff",
+            "reason": "UUID local ausente ou legacy_id usado como fallback — IDB ainda não espelha collaborator_uuid."
+          },
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:46.241Z",
+            "remoteValue": "2026-06-29T23:28:18.082968+00:00",
+            "tier": "informational_diff",
+            "reason": "updated_at divergente — esperado durante backfill/sync; remoto igual ou mais recente."
+          }
+        ],
+        "highestTier": "transitional_diff"
+      },
+      {
+        "ref": {
+          "legacyId": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+          "uuid": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "uuid",
+            "localValue": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+            "remoteValue": "e3f0f230-4dfa-44f3-9f4d-41c6babcef03",
+            "tier": "transitional_diff",
+            "reason": "UUID local ausente ou legacy_id usado como fallback — IDB ainda não espelha collaborator_uuid."
+          },
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:46.241Z",
+            "remoteValue": "2026-06-29T23:28:18.131636+00:00",
+            "tier": "informational_diff",
+            "reason": "updated_at divergente — esperado durante backfill/sync; remoto igual ou mais recente."
+          }
+        ],
+        "highestTier": "transitional_diff"
+      },
+      {
+        "ref": {
+          "legacyId": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+          "uuid": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "uuid",
+            "localValue": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+            "remoteValue": "140c5833-7fe8-429a-ace2-ba79d774d85a",
+            "tier": "transitional_diff",
+            "reason": "UUID local ausente ou legacy_id usado como fallback — IDB ainda não espelha collaborator_uuid."
+          },
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T19:01:39.910Z",
+            "remoteValue": "2026-06-29T23:28:18.177561+00:00",
+            "tier": "informational_diff",
+            "reason": "updated_at divergente — esperado durante backfill/sync; remoto igual ou mais recente."
+          }
+        ],
+        "highestTier": "transitional_diff"
+      }
+    ],
+    "informational_diff": [],
+    "structural": [
+      {
+        "tier": "transitional_diff",
+        "kind": "invalid_uuid_local_fallback",
+        "reason": "UUID local ausente ou legacy usado como fallback — aguardando espelhamento collaborator_uuid.",
+        "side": "local",
+        "legacyId": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+        "uuid": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341"
+      },
+      {
+        "tier": "transitional_diff",
+        "kind": "invalid_uuid_local_fallback",
+        "reason": "UUID local ausente ou legacy usado como fallback — aguardando espelhamento collaborator_uuid.",
+        "side": "local",
+        "legacyId": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+        "uuid": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70"
+      },
+      {
+        "tier": "transitional_diff",
+        "kind": "invalid_uuid_local_fallback",
+        "reason": "UUID local ausente ou legacy usado como fallback — aguardando espelhamento collaborator_uuid.",
+        "side": "local",
+        "legacyId": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+        "uuid": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2"
+      },
+      {
+        "tier": "transitional_diff",
+        "kind": "invalid_uuid_local_fallback",
+        "reason": "UUID local ausente ou legacy usado como fallback — aguardando espelhamento collaborator_uuid.",
+        "side": "local",
+        "legacyId": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+        "uuid": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+      }
+    ]
+  },
+  "flags": {
+    "RH_SUPABASE_READ": true,
+    "RH_SHADOW_READ": true,
+    "RH_COMPARE_IDB_SUPABASE": true,
+    "RH_SUPABASE_READ_PRIMARY": false,
+    "RH_SUPABASE_WRITE": false,
+    "RH_IDB_WRITE_DISABLED": false,
+    "RH_ALLOW_SYNTHETIC_STUBS": true
+  },
+  "writesExecuted": false,
+  "productionTouched": false,
+  "details": {
+    "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+    "comparedAt": "2026-06-30T18:57:24.168Z",
+    "counts": {
+      "local": 4,
+      "remote": 4
+    },
+    "match": [],
+    "missing_local": [],
+    "missing_remote": [],
+    "field_diff": [
+      {
+        "ref": {
+          "legacyId": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+          "uuid": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "uuid",
+            "localValue": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+            "remoteValue": "9284488d-c0b1-4200-b728-82f757aaf1e0"
+          },
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:47.286Z",
+            "remoteValue": "2026-06-29T23:28:17.967937+00:00"
+          }
+        ]
+      },
+      {
+        "ref": {
+          "legacyId": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+          "uuid": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "uuid",
+            "localValue": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+            "remoteValue": "6eeabd6b-0a8b-4d88-8715-400e092d3212"
+          },
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:46.241Z",
+            "remoteValue": "2026-06-29T23:28:18.082968+00:00"
+          }
+        ]
+      },
+      {
+        "ref": {
+          "legacyId": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+          "uuid": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "uuid",
+            "localValue": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+            "remoteValue": "e3f0f230-4dfa-44f3-9f4d-41c6babcef03"
+          },
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:46.241Z",
+            "remoteValue": "2026-06-29T23:28:18.131636+00:00"
+          }
+        ]
+      },
+      {
+        "ref": {
+          "legacyId": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+          "uuid": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "uuid",
+            "localValue": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+            "remoteValue": "140c5833-7fe8-429a-ace2-ba79d774d85a"
+          },
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T19:01:39.910Z",
+            "remoteValue": "2026-06-29T23:28:18.177561+00:00"
+          }
+        ]
+      }
+    ],
+    "duplicate": [],
+    "invalid_uuid": [
+      {
+        "side": "local",
+        "legacyId": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+        "uuid": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341"
+      },
+      {
+        "side": "local",
+        "legacyId": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+        "uuid": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70"
+      },
+      {
+        "side": "local",
+        "legacyId": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+        "uuid": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2"
+      },
+      {
+        "side": "local",
+        "legacyId": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+        "uuid": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+      }
+    ],
+    "invalid_legacy": []
+  },
+  "meta": {
+    "method": "cli-rh-shadow-read-qa",
+    "supabaseProjectRef": "tckdjyunwmdpqmewrwvt",
+    "rhExportPath": "C:\\Users\\paaul\\Desktop\\appgestaoodonto-main\\appgestaoodonto\\collaborators-export.json",
+    "remapExportForStaging": true,
+    "readOnly": true,
+    "writesExecuted": false,
+    "productionTouched": false,
+    "functionalChanges": false,
+    "gitCommit": false
+  }
+}

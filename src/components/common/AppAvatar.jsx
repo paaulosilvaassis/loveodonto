@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { clsx } from 'clsx';
 import { getInitialsFromName, getUserAvatarUrl, getDisplayName } from '../../utils/avatarUtils.js';
+import { startCollaboratorPerf, endCollaboratorPerf } from '../../services/collaboratorPerfLogService.js';
 
 const LOAD_TIMEOUT_MS = 8000;
 
@@ -22,6 +23,7 @@ function AppAvatar({
   alt = '',
   title,
   loading = 'eager',
+  perfEvent = '',
 }) {
   const entity = user;
   const resolvedUrl = useMemo(
@@ -34,17 +36,43 @@ function AppAvatar({
   const [loaded, setLoaded] = useState(false);
   const [broken, setBroken] = useState(false);
   const imgRef = useRef(null);
+  const perfMarkRef = useRef(null);
 
-  const markLoaded = useCallback(() => setLoaded(true), []);
+  const markLoaded = useCallback(() => {
+    setLoaded(true);
+    if (perfMarkRef.current) {
+      endCollaboratorPerf(perfMarkRef.current, { ok: true });
+      perfMarkRef.current = null;
+    }
+  }, []);
   const markBroken = useCallback(() => {
     setBroken(true);
     setLoaded(true);
+    if (perfMarkRef.current) {
+      endCollaboratorPerf(perfMarkRef.current, { ok: false, broken: true });
+      perfMarkRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
     setLoaded(false);
     setBroken(false);
-  }, [resolvedUrl]);
+    if (!perfEvent) return undefined;
+    perfMarkRef.current = startCollaboratorPerf(perfEvent, {
+      url: resolvedUrl || null,
+    });
+    if (!resolvedUrl) {
+      endCollaboratorPerf(perfMarkRef.current, { ok: true, fallback: 'initials' });
+      perfMarkRef.current = null;
+      return undefined;
+    }
+    return () => {
+      if (perfMarkRef.current) {
+        endCollaboratorPerf(perfMarkRef.current, { cancelled: true });
+        perfMarkRef.current = null;
+      }
+    };
+  }, [resolvedUrl, perfEvent]);
 
   useEffect(() => {
     if (!resolvedUrl) return undefined;

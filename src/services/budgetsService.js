@@ -1,51 +1,33 @@
-import { supabase } from '../lib/supabaseClient.ts';
+/**
+ * budgetsService — QUARANTINED (Phase 9.4A Security Hardening).
+ *
+ * Motivo: referenciava `public.budgets` sem migration app, sem RLS e sem tenant filter
+ * (update/delete por id). Consumidor residual: ClinicalAppointmentPage (listagem).
+ *
+ * Até Phase 9.4B (schema + RLS + tenant SSOT), qualquer chamada falha de forma explícita.
+ * Substituto: IndexedDB / crmBudgetService.
+ */
 
-export const createBudget = async ({ patient_id, price_table_id, status }) => {
-  if (!supabase) {
-    throw new Error('Supabase não configurado. Configure as variáveis de ambiente VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
-  }
-  const { data, error } = await supabase
-    .from('budgets')
-    .insert([{ patient_id, price_table_id, status }])
-    .select('id, status, started_at, finished_at, updated_at')
-    .single();
+export const BUDGETS_SERVICE_QUARANTINED = true;
+export const BUDGETS_QUARANTINE_CODE = 'BUDGETS_SERVICE_QUARANTINED';
+export const BUDGETS_QUARANTINE_REASON =
+  'Acesso PostgREST a budgets bloqueado até schema+RLS+tenant filtering (Phase 9.4B). Use IndexedDB/crmBudgetService.';
 
-  if (error) {
-    throw new Error(error.message);
-  }
+function deny(operation) {
+  const err = new Error(`${BUDGETS_QUARANTINE_CODE}: ${operation} — ${BUDGETS_QUARANTINE_REASON}`);
+  err.code = BUDGETS_QUARANTINE_CODE;
+  err.operation = operation;
+  throw err;
+}
 
-  return data;
+export const createBudget = async () => {
+  deny('createBudget');
 };
 
 export const listBudgets = async () => {
-  if (!supabase) {
-    return [];
-  }
-  const { data, error } = await supabase
-    .from('budgets')
-    .select('id, status, started_at, finished_at, updated_at');
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data || [];
+  deny('listBudgets');
 };
 
-export const updateBudgetTotal = async (budget_id, total) => {
-  if (!supabase) {
-    throw new Error('Supabase não configurado. Configure as variáveis de ambiente VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
-  }
-  const { data, error } = await supabase
-    .from('budgets')
-    .update({ total })
-    .eq('id', budget_id)
-    .select('id, total')
-    .single();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data;
+export const updateBudgetTotal = async () => {
+  deny('updateBudgetTotal');
 };

@@ -1,0 +1,379 @@
+{
+  "generated_at": "2026-06-29T23:13:52.275Z",
+  "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+  "prod_tenant_id_blocked": "b2f95268-101c-42cb-8a8e-8d3681aa7dfa",
+  "staging_project_ref": "tckdjyunwmdpqmewrwvt",
+  "password_note": "Senha padrão configurada no apply (não persistida neste relatório).",
+  "scenario": {
+    "aligned_collaborator_id": [
+      "paulo",
+      "melissa"
+    ],
+    "divergent_collaborator_id": [
+      "juliana",
+      "renata"
+    ],
+    "export_legacy_ids": {
+      "paulo": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+      "juliana": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+      "renata": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+      "melissa": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+    }
+  },
+  "summary": {
+    "auth_users": 4,
+    "tenant_users": 4,
+    "invitations": 3,
+    "identities": 4,
+    "identity_events": 5,
+    "tenant_modules": 4,
+    "tenant_limits": 1
+  },
+  "tenant": {
+    "id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+    "clinic_code": "implanprime-staging",
+    "legal_name": "Implanprime Staging LTDA",
+    "trade_name": "Implanprime Odontologia (Staging)",
+    "cnpj": "99999999000199",
+    "status": "active",
+    "billing_status": "ok",
+    "plan_code": "Scale",
+    "owner_name": "Paulo Staging Assis",
+    "owner_email": "paulo+staging@implanprime.test",
+    "city": "Cidade Teste",
+    "state": "MG"
+  },
+  "clinic_profile": {
+    "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+    "name": "Implanprime Odontologia (Staging)",
+    "fantasy_name": "Implanprime Odontologia (Staging)",
+    "legal_name": "Implanprime Staging LTDA",
+    "logo_url": null,
+    "email": "contato+staging@implanprime.test",
+    "phone": "3139000000",
+    "cnpj": "99999999000199",
+    "status": "active"
+  },
+  "users": [
+    {
+      "key": "paulo",
+      "email": "paulo+staging@implanprime.test",
+      "full_name": "Paulo Staging Assis",
+      "role_slug": "master",
+      "status": "active",
+      "has_system_access": true,
+      "invitation_status": "accepted",
+      "collaborator_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+      "collaborator_id_alignment": "export_legacy",
+      "cpf": "00000000191",
+      "phone": "31990000001",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "collaborator_uuid": null,
+      "has_custom_permissions": false,
+      "is_active": true,
+      "role": "master"
+    },
+    {
+      "key": "melissa",
+      "email": "melissa+staging@implanprime.test",
+      "full_name": "Melissa Staging Guimarães",
+      "role_slug": "gerente",
+      "status": "inactive",
+      "has_system_access": false,
+      "invitation_status": "accepted",
+      "collaborator_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+      "collaborator_id_alignment": "export_legacy",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "collaborator_uuid": null,
+      "has_custom_permissions": false,
+      "is_active": false,
+      "role": "gerente"
+    },
+    {
+      "key": "juliana",
+      "email": "juliana+staging@implanprime.test",
+      "full_name": "Juliana Staging Freire",
+      "role_slug": "administrativo",
+      "status": "active",
+      "has_system_access": true,
+      "invitation_status": "accepted",
+      "collaborator_id": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+      "collaborator_id_alignment": "divergent_from_export",
+      "export_legacy_id": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "collaborator_uuid": null,
+      "has_custom_permissions": false,
+      "is_active": true,
+      "role": "administrativo"
+    },
+    {
+      "key": "renata",
+      "email": "renata+staging@implanprime.test",
+      "full_name": "Renata Staging Assis",
+      "role_slug": "administrativo",
+      "status": "active",
+      "has_system_access": true,
+      "invitation_status": "accepted",
+      "collaborator_id": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+      "collaborator_id_alignment": "divergent_from_export",
+      "export_legacy_id": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "collaborator_uuid": null,
+      "has_custom_permissions": false,
+      "is_active": true,
+      "role": "administrativo"
+    }
+  ],
+  "invitations": [
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "email": "melissa+staging@implanprime.test",
+      "collaborator_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+      "profile_role": "atendimento",
+      "status": "accepted",
+      "expires_at": "2026-07-06T23:13:52.276Z",
+      "sent_at": "2026-06-29T23:13:52.275Z",
+      "accepted_at": "2026-06-29T23:13:52.275Z",
+      "user_key": "melissa"
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "email": "juliana+staging@implanprime.test",
+      "collaborator_id": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+      "profile_role": "profissional",
+      "status": "accepted",
+      "expires_at": "2026-07-06T23:13:52.276Z",
+      "sent_at": "2026-06-29T23:13:52.275Z",
+      "accepted_at": "2026-06-29T23:13:52.275Z",
+      "user_key": "juliana"
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "email": "renata+staging@implanprime.test",
+      "collaborator_id": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+      "profile_role": "gerente",
+      "status": "accepted",
+      "expires_at": "2026-07-06T23:13:52.276Z",
+      "sent_at": "2026-06-29T23:13:52.275Z",
+      "accepted_at": "2026-06-29T23:13:52.275Z",
+      "user_key": "renata"
+    }
+  ],
+  "identities": [
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "collaborator_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+      "email": "paulo+staging@implanprime.test",
+      "full_name": "Paulo Staging Assis",
+      "role_slug": "master",
+      "status": "active",
+      "invitation_status": "accepted",
+      "password_status": "created",
+      "identity_health": "healthy",
+      "metadata": {
+        "seed_source": "staging-seed-implanprime",
+        "collaborator_id_alignment": "export_legacy",
+        "export_legacy_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341"
+      },
+      "user_key": "paulo"
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "collaborator_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+      "email": "melissa+staging@implanprime.test",
+      "full_name": "Melissa Staging Guimarães",
+      "role_slug": "gerente",
+      "status": "disabled",
+      "invitation_status": "accepted",
+      "password_status": "created",
+      "identity_health": "healthy",
+      "metadata": {
+        "seed_source": "staging-seed-implanprime",
+        "collaborator_id_alignment": "export_legacy",
+        "export_legacy_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+      },
+      "user_key": "melissa"
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "collaborator_id": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+      "email": "juliana+staging@implanprime.test",
+      "full_name": "Juliana Staging Freire",
+      "role_slug": "administrativo",
+      "status": "active",
+      "invitation_status": "accepted",
+      "password_status": "created",
+      "identity_health": "healthy",
+      "metadata": {
+        "seed_source": "staging-seed-implanprime",
+        "collaborator_id_alignment": "divergent_from_export",
+        "export_legacy_id": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70"
+      },
+      "user_key": "juliana"
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "collaborator_id": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+      "email": "renata+staging@implanprime.test",
+      "full_name": "Renata Staging Assis",
+      "role_slug": "administrativo",
+      "status": "active",
+      "invitation_status": "accepted",
+      "password_status": "created",
+      "identity_health": "healthy",
+      "metadata": {
+        "seed_source": "staging-seed-implanprime",
+        "collaborator_id_alignment": "divergent_from_export",
+        "export_legacy_id": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2"
+      },
+      "user_key": "renata"
+    }
+  ],
+  "identity_events": [
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "action": "staging_seed.tenant_planned",
+      "result": "success",
+      "message": "Plano de seed Implanprime staging (anonimizado).",
+      "origin": "staging-seed-implanprime",
+      "details": {
+        "clinic_code": "implanprime-staging"
+      }
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "action": "staging_seed.user_planned",
+      "result": "success",
+      "message": "Usuário de teste paulo",
+      "origin": "staging-seed-implanprime",
+      "details": {
+        "email": "paulo+staging@implanprime.test",
+        "collaborator_id_alignment": "export_legacy",
+        "collaborator_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341"
+      }
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "action": "staging_seed.user_planned",
+      "result": "success",
+      "message": "Usuário de teste melissa",
+      "origin": "staging-seed-implanprime",
+      "details": {
+        "email": "melissa+staging@implanprime.test",
+        "collaborator_id_alignment": "export_legacy",
+        "collaborator_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+      }
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "action": "staging_seed.user_planned",
+      "result": "success",
+      "message": "Usuário de teste juliana",
+      "origin": "staging-seed-implanprime",
+      "details": {
+        "email": "juliana+staging@implanprime.test",
+        "collaborator_id_alignment": "divergent_from_export",
+        "collaborator_id": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6"
+      }
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "action": "staging_seed.user_planned",
+      "result": "success",
+      "message": "Usuário de teste renata",
+      "origin": "staging-seed-implanprime",
+      "details": {
+        "email": "renata+staging@implanprime.test",
+        "collaborator_id_alignment": "divergent_from_export",
+        "collaborator_id": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06"
+      }
+    }
+  ],
+  "tenant_modules": [
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "module_key": "MARKETING",
+      "enabled": true
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "module_key": "FINANCEIRO",
+      "enabled": true
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "module_key": "AGENDA",
+      "enabled": true
+    },
+    {
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "module_key": "PRONTUARIO",
+      "enabled": true
+    }
+  ],
+  "tenant_limits": {
+    "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+    "limits_json": {
+      "users": 20,
+      "patients": 5000,
+      "collaborators": 50
+    }
+  },
+  "mode": "dry-run",
+  "supabase_project_ref": "tckdjyunwmdpqmewrwvt",
+  "supabase_url_host": "tckdjyunwmdpqmewrwvt.supabase.co",
+  "prod_touched": false,
+  "migration_018_applied": false,
+  "pre_apply_validation": {
+    "ok": true,
+    "issues": [],
+    "environment": {
+      "ok": true,
+      "errors": [],
+      "migration_018_detected": false,
+      "notes": [
+        "Migration 018 (FK NOT NULL) não é aplicada neste seed.",
+        "collaborator_uuid permanece nullable até backfill + gate 018."
+      ]
+    }
+  },
+  "apply_gate": {
+    "ok": true,
+    "blocking_count": 0,
+    "issues": []
+  },
+  "apply_command": "node scripts/staging-seed-implanprime.mjs --tenant-id 7aba7127-409c-4ea4-8dbc-807efc5e189c --apply --confirm APPLY",
+  "next_steps": {
+    "rh_backfill_dry_run": "node scripts/rh-backfill-to-supabase.mjs --tenant-id 7aba7127-409c-4ea4-8dbc-807efc5e189c --rh-export ./collaborators-export.json"
+  },
+  "test_users": [
+    {
+      "key": "paulo",
+      "email": "paulo+staging@implanprime.test",
+      "collaborator_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+      "collaborator_id_alignment": "export_legacy",
+      "export_legacy_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341"
+    },
+    {
+      "key": "melissa",
+      "email": "melissa+staging@implanprime.test",
+      "collaborator_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+      "collaborator_id_alignment": "export_legacy",
+      "export_legacy_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3"
+    },
+    {
+      "key": "juliana",
+      "email": "juliana+staging@implanprime.test",
+      "collaborator_id": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+      "collaborator_id_alignment": "divergent_from_export",
+      "export_legacy_id": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70"
+    },
+    {
+      "key": "renata",
+      "email": "renata+staging@implanprime.test",
+      "collaborator_id": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+      "collaborator_id_alignment": "divergent_from_export",
+      "export_legacy_id": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2"
+    }
+  ]
+}

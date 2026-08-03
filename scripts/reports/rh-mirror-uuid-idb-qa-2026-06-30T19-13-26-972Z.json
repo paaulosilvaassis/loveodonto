@@ -1,0 +1,41 @@
+{
+  "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+  "mirroredAt": "2026-06-30T19:13:26.962Z",
+  "updated": [
+    {
+      "legacyId": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+      "uuid": "9284488d-c0b1-4200-b728-82f757aaf1e0"
+    },
+    {
+      "legacyId": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+      "uuid": "6eeabd6b-0a8b-4d88-8715-400e092d3212"
+    },
+    {
+      "legacyId": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+      "uuid": "e3f0f230-4dfa-44f3-9f4d-41c6babcef03"
+    },
+    {
+      "legacyId": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+      "uuid": "140c5833-7fe8-429a-ace2-ba79d774d85a"
+    }
+  ],
+  "skipped": [],
+  "notFound": [],
+  "conflicts": [],
+  "errors": [],
+  "supabaseWritesExecuted": false,
+  "exportWrite": false,
+  "meta": {
+    "method": "cli-rh-mirror-uuid-idb-qa",
+    "supabaseProjectRef": "tckdjyunwmdpqmewrwvt",
+    "dryRun": true,
+    "productionTouched": false,
+    "supabaseWritesExecuted": false,
+    "summary": {
+      "wouldUpdate": 4,
+      "wouldSkip": 0,
+      "notFound": 0,
+      "conflicts": 0
+    }
+  }
+}

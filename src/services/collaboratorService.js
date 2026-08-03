@@ -1,9 +1,8 @@
 import {
-  isAgendaProfessional,
   isBrUfValid,
   isCorpoClinicoCategory,
 } from '../constants/collaboratorRhCatalog.js';
-import { loadDb, withDb } from '../db/index.js';
+import { withDb } from '../db/index.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
@@ -14,7 +13,15 @@ import {
 } from '../utils/collaboratorAccessRole.js';
 import { provisionCollaboratorSystemAccess, linkCollaboratorTenantAccess, listTenantUsersAccess } from './collaboratorAccessProvisionService.js';
 import { normalizeTenantId } from './tenantIsolation.js';
-import { mapCollaboratorToProfessionalOption } from '../utils/avatarUtils.js';
+import {
+  readGetCollaborator,
+  readGetProfessionalOptions,
+  readListCollaborators,
+} from './collaboratorServiceReadAdapter.js';
+import {
+  scheduleCollaboratorDualWriteCreate,
+  scheduleCollaboratorDualWriteUpdate,
+} from './collaboratorServiceWriteAdapter.js';
 
 export function syncLocalCollaboratorAccess(collaboratorId, tenantUser, profileRole) {
   const userId = String(tenantUser?.user_id || '').trim();
@@ -291,50 +298,9 @@ const ensureUnique = (db, { cpf, email, registro, excludeCollaboratorId } = {}) 
   }
 };
 
-export const listCollaborators = (filters = {}) => {
-  const db = loadDb();
-  const tenantFilter = normalizeTenantId(filters.tenantId || filters.tenant_id);
-  return db.collaborators.filter((item) => {
-    if (tenantFilter) {
-      const rowTenant = normalizeTenantId(item.tenant_id || item.tenantId);
-      if (!rowTenant || rowTenant !== tenantFilter) return false;
-    }
-    if (filters.status && item.status !== filters.status) return false;
-    if (filters.cargo && item.cargo !== filters.cargo) return false;
-    if (filters.especialidade && !item.especialidades?.includes(filters.especialidade)) return false;
-    return true;
-  });
-};
+export const listCollaborators = (filters = {}) => readListCollaborators(filters);
 
-/** Normaliza o objeto de acesso para expor sempre userId (vínculo com auth user). */
-function normalizeAccess(raw) {
-  if (!raw || typeof raw !== 'object') return {};
-  const userId = (raw.userId ?? raw.user_id ?? '').toString().trim();
-  return { ...raw, userId: userId || undefined };
-}
-
-export const getCollaborator = (collaboratorId) => {
-  const db = loadDb();
-  const base = db.collaborators.find((item) => item.id === collaboratorId);
-  if (!base) return null;
-  const rawAccess = db.collaboratorAccess.find((item) => item.collaboratorId === collaboratorId) || {};
-  const access = normalizeAccess(rawAccess);
-  return {
-    profile: base,
-    documents: db.collaboratorDocuments.find((item) => item.collaboratorId === collaboratorId) || {},
-    education: db.collaboratorEducation.filter((item) => item.collaboratorId === collaboratorId),
-    nationality: db.collaboratorNationality.find((item) => item.collaboratorId === collaboratorId) || {},
-    phones: db.collaboratorPhones.filter((item) => item.collaboratorId === collaboratorId),
-    addresses: db.collaboratorAddresses.filter((item) => item.collaboratorId === collaboratorId),
-    relationships: db.collaboratorRelationships.find((item) => item.collaboratorId === collaboratorId) || {},
-    characteristics: db.collaboratorCharacteristics.find((item) => item.collaboratorId === collaboratorId) || {},
-    additional: db.collaboratorAdditional.find((item) => item.collaboratorId === collaboratorId) || { notes: '' },
-    insurances: db.collaboratorInsurances.filter((item) => item.collaboratorId === collaboratorId),
-    access,
-    workHours: db.collaboratorWorkHours.filter((item) => item.collaboratorId === collaboratorId),
-    finance: db.collaboratorFinance.find((item) => item.collaboratorId === collaboratorId) || {},
-  };
-};
+export const getCollaborator = (collaboratorId) => readGetCollaborator(collaboratorId);
 
 export const createCollaborator = (user, payload) => {
   requirePermission(user, 'collaborators:write');
@@ -380,6 +346,7 @@ export const createCollaborator = (user, payload) => {
     logAction('collaborator:create', { collaboratorId: collaborator.id, userId: user.id });
     return db;
   });
+  scheduleCollaboratorDualWriteCreate(user, collaborator);
   return collaborator;
 };
 
@@ -491,7 +458,14 @@ export async function backfillCollaboratorsPendingAccess(user, { provisionMissin
   const tenantId = String(user?.tenantId || '').trim();
   if (!tenantId) return { linked: 0, provisioned: 0, skipped: 0, errors: [] };
 
-  const collaborators = listCollaborators().filter((item) => isCollaboratorEmailValid(item.email));
+  let collaborators = [];
+  try {
+    const { listTenantCollaborators } = await import('./tenantCollaboratorService.js');
+    collaborators = await listTenantCollaborators(tenantId, { legacy: true });
+  } catch {
+    return { linked: 0, provisioned: 0, skipped: 0, errors: ['Falha ao listar colaboradores do tenant.'] };
+  }
+  collaborators = collaborators.filter((item) => isCollaboratorEmailValid(item.email));
   if (collaborators.length === 0) return { linked: 0, provisioned: 0, skipped: 0, errors: [] };
 
   let users = [];
@@ -575,10 +549,12 @@ export async function backfillCollaboratorsPendingAccess(user, { provisionMissin
 
 export const updateCollaborator = (user, collaboratorId, payload) => {
   requirePermission(user, 'collaborators:write');
-  return withDb((db) => {
+  let prevSnapshot = null;
+  const result = withDb((db) => {
     const index = db.collaborators.findIndex((item) => item.id === collaboratorId);
     if (index < 0) throw new Error('Colaborador não encontrado.');
     const prev = db.collaborators[index];
+    prevSnapshot = { ...prev };
     const mergedEspecialidades =
       payload.especialidades !== undefined
         ? (Array.isArray(payload.especialidades)
@@ -625,6 +601,8 @@ export const updateCollaborator = (user, collaboratorId, payload) => {
     logAction('collaborator:update', { collaboratorId, userId: user.id });
     return next;
   });
+  scheduleCollaboratorDualWriteUpdate(user, collaboratorId, result, prevSnapshot);
+  return result;
 };
 
 export const uploadCollaboratorPhoto = (user, collaboratorId, file) => {
@@ -907,20 +885,4 @@ export const updateCollaboratorFinance = (user, collaboratorId, payload) => {
   });
 };
 
-export const getProfessionalOptions = () => {
-  const db = loadDb();
-  const tenantFilter = normalizeTenantId(
-    db.clinicProfile?.tenant_id
-    || db.tenants?.[0]?.id
-    || (db.memberships || []).find((m) => m.status === 'active')?.tenant_id,
-  );
-  const collaborators = (db.collaborators ?? [])
-    .filter((item) => item.status === 'ativo')
-    .filter((item) => {
-      if (!tenantFilter) return true;
-      const rowTenant = normalizeTenantId(item.tenant_id || item.tenantId);
-      return !rowTenant || rowTenant === tenantFilter;
-    })
-    .filter((item) => isAgendaProfessional(item));
-  return collaborators.map((item) => mapCollaboratorToProfessionalOption(item));
-};
+export const getProfessionalOptions = (options = {}) => readGetProfessionalOptions(options);

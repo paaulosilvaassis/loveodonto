@@ -17,6 +17,14 @@ import { AuthContext } from './authContext.js';
 import { ensureSaasUserInLocalDb } from '../services/saasUserSeedService.js';
 import { bootstrapSaasTenantLocalDb } from '../services/saasTenantBootstrapService.js';
 import { reconcileOwnInvitationAcceptance } from '../services/collaboratorAccessProvisionService.js';
+import {
+  initCollaboratorRhOnlineCacheSync,
+  scheduleCollaboratorRhCacheRehydrate,
+} from '../services/collaboratorServiceRepositoryBridge.js';
+import {
+  initClinicProfileOnlineCacheSync,
+  scheduleClinicProfileCacheRehydrate,
+} from '../services/clinicProfileServiceRepositoryBridge.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
 import {
   authDebug,
@@ -29,6 +37,11 @@ import {
   resolveSaasUser,
   enrichSaasUserPrivileges,
   readPlatformAccessTokenFromStorage,
+  isStaleRefreshAuthError,
+  isLoginBlockedByStaleAuth,
+  recoverFromStalePlatformAuth,
+  STALE_SESSION_CLEARED_MESSAGE,
+  clearSaasAuthStorage,
 } from './saasSessionResolver.js';
 import {
   auditFirstAccess,
@@ -36,7 +49,13 @@ import {
 } from '../utils/firstAccessSession.js';
 
 const AUTH_LOCAL_DB_TIMEOUT_MS = 20000;
-const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
+
+async function clearSaasAuthOnLogout(client) {
+  clearSaasAuthStorage();
+  if (client) {
+    await client.auth.signOut({ scope: 'local' }).catch(() => {});
+  }
+}
 
 function resolveUserFromSession(session, loadDbFn) {
   if (!session) return null;
@@ -88,6 +107,8 @@ async function persistResolvedSaasUser(resolved, { previousTenantId } = {}) {
   window.setTimeout(() => {
     reconcileOwnInvitationAcceptance().catch(() => {});
   }, 2500);
+  scheduleCollaboratorRhCacheRehydrate(enriched.tenantId);
+  scheduleClinicProfileCacheRehydrate(enriched.tenantId);
   return enriched;
 }
 
@@ -118,6 +139,14 @@ async function hydrateSaasUser({ stored, isCancelled, onUser, onLogout }) {
   } catch (err) {
     authDebug('hydrate: falha ao obter sessão Supabase —', err?.message);
     const cached = stored.cachedUser;
+    if (
+      isStaleRefreshAuthError(err)
+      || isLoginBlockedByStaleAuth(err, { hasPlatformAuth: Boolean(readPlatformAccessTokenFromStorage()) })
+    ) {
+      await recoverFromStalePlatformAuth();
+      onLogout(STALE_SESSION_CLEARED_MESSAGE);
+      return;
+    }
     if (isTransientAuthError(err) && cached?.id && cached.id === stored.userId) {
       // Falha transitória com cache válido: libera o app; revalidação ocorre depois.
       authDebug('hydrate: liberando com usuário em cache (rede instável)');
@@ -201,6 +230,11 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    initCollaboratorRhOnlineCacheSync(() => userRef.current?.tenantId);
+    initClinicProfileOnlineCacheSync(() => userRef.current?.tenantId);
+  }, []);
 
   useEffect(() => {
     const onPermissionsSynced = (event) => {
@@ -318,8 +352,7 @@ export const AuthProvider = ({ children }) => {
 
       if (event === 'SIGNED_OUT') {
         authDebug('onAuthStateChange: SIGNED_OUT');
-        clearStoredSession();
-        try { localStorage.removeItem(PLATFORM_AUTH_STORAGE_KEY); } catch { /* ignore */ }
+        clearSaasAuthStorage();
         setSession(null);
         setUser(null);
         emitStabilityLog('AUTH_FAILED', { reason: 'SIGNED_OUT_EVENT' });
@@ -415,16 +448,12 @@ export const AuthProvider = ({ children }) => {
     return { ...baseUser, role: membership.role, has_system_access: membership.has_system_access, isMaster: membership.role === ROLE_MASTER };
   };
 
-  const logout = () => {
+  const logout = async () => {
     if (isFirstAccessProtected()) {
       auditFirstAccess('AuthContext logout suppressed', { reason: 'manual logout during first access' });
       return;
     }
-    clearStoredSession();
-    try { localStorage.removeItem(PLATFORM_AUTH_STORAGE_KEY); } catch { /* ignore */ }
-    if (session?.authMode === 'saas' && supabasePlatformClient) {
-      supabasePlatformClient.auth.signOut().catch(() => {});
-    }
+    await clearSaasAuthOnLogout(supabasePlatformClient);
     setSession(null);
     setUser(null);
     emitStabilityLog('AUTH_FAILED', { reason: 'LOGOUT_MANUAL' });
@@ -436,7 +465,7 @@ export const AuthProvider = ({ children }) => {
       return;
     }
     if (reason) sessionStorage.setItem(LOGOUT_REASON_KEY, String(reason));
-    logout();
+    void logout();
   };
 
   const ensureSeedUser = () => {

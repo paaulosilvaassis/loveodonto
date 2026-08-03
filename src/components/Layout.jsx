@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight, LogOut, UserPlus } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
-import { usePlatformAuth } from '../auth/PlatformAuthContext.jsx';
 import { useTenant } from '../tenant/useTenant.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
 import { useClinicLogo } from '../hooks/useClinicLogo.js';
@@ -57,7 +56,6 @@ const canSeeNavItem = (user, item, modules, flags) => {
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
-  const { platformUser } = usePlatformAuth();
   const tenant = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
@@ -252,12 +250,6 @@ export default function Layout({ children }) {
           {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
 
-        {/* Link Plataforma (só para quem tem sessão platform) */}
-        {!isCollapsed && platformUser && (
-          <NavLink to="/platform/dashboard" className="sidebar-platform-link">
-            <span>Plataforma</span>
-          </NavLink>
-        )}
         {/* Botão Sair */}
         {!isCollapsed && (
           <button

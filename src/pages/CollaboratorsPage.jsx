@@ -5,7 +5,6 @@ import { Field } from '../components/Field.jsx';
 import { loadDb } from '../db/index.js';
 import {
   getCollaborator,
-  listCollaborators,
   updateCollaborator,
   updateCollaboratorAccess,
   updateCollaboratorAdditional,
@@ -18,6 +17,7 @@ import {
   uploadCollaboratorPhoto,
   backfillCollaboratorsPendingAccess,
 } from '../services/collaboratorService.js';
+import { listTenantCollaborators } from '../services/tenantCollaboratorService.js';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import { validateFileMeta, formatPhone } from '../utils/validators.js';
 import { getUserAvatarUrl } from '../utils/avatarUtils.js';
@@ -30,10 +30,13 @@ import CollaboratorAccessSection from '../components/collaborators/record/Collab
 import CollaboratorPermissionsHub from '../components/collaborators/record/CollaboratorPermissionsHub.jsx';
 import CollaboratorCadastroTab from '../components/collaborators/CollaboratorCadastroTab.jsx';
 import CollaboratorFormCard from '../components/collaborators/CollaboratorFormCard.jsx';
-import { reconcileCollaboratorTenantLinks } from '../services/collaboratorAccessProvisionService.js';
 import { reconcileCollaboratorAccessState, setCollaboratorSystemAccessWithRecovery } from '../services/collaboratorAccessRecoveryService.js';
 import { getUserAccess } from '../services/accessService.js';
 import { NewCollaboratorDialog } from '../components/collaborators/CollaboratorCreateModal.jsx';
+import {
+  startCollaboratorPerf,
+  endCollaboratorPerf,
+} from '../services/collaboratorPerfLogService.js';
 import {
   resolveCollaboratorAccessDisplayStatus,
 } from '../utils/inviteStatus.js';
@@ -90,6 +93,8 @@ export default function CollaboratorsPage() {
   const { user } = useAuth();
   const [openNewCollaborator, setOpenNewCollaborator] = useState(false);
   const [collaborators, setCollaborators] = useState([]);
+  const [listLoading, setListLoading] = useState(false);
+  const [listError, setListError] = useState('');
   const [selectedId, setSelectedId] = useState('');
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState({ cargo: '', categoria: '', status: 'ativo', acesso: '' });
@@ -105,6 +110,7 @@ export default function CollaboratorsPage() {
   const [identityLifecycle, setIdentityLifecycle] = useState({ open: false, mode: 'deactivate', loading: false });
   const [selectedIdentity, setSelectedIdentity] = useState(null);
   const editFormRef = useRef(null);
+  const accessReconcileGenRef = useRef(0);
 
   const [draft, setDraft] = useState({
     profile: {},
@@ -156,33 +162,61 @@ export default function CollaboratorsPage() {
   const canFinance = can(user, 'collaborators:finance');
   const canAccess = can(user, 'collaborators:access');
   const canEditAcessos = canManageAccess(user);
-  const db = loadDb();
 
   /** Só atualiza a lista (sidebar); nunca reidrata o rascunho — evita apagar digitação ao clicar em Atualizar. */
-  const refreshCollaboratorsListOnly = useCallback(() => {
-    const c = listCollaborators();
-    setCollaborators(c);
-  }, []);
-
-  const refreshTenantAccess = useCallback(async () => {
-    if (!user?.tenantId) return;
-    if (!canEditAcessos && !canAccess && !isEditor) return;
+  const refreshCollaboratorsListOnly = useCallback(async (options = {}) => {
+    const { reconcileLinks = false } = options;
+    const tenantId = user?.tenantId;
+    if (!tenantId) {
+      setCollaborators([]);
+      return;
+    }
+    setListLoading(true);
+    setListError('');
     try {
-      const { users = [] } = await reconcileCollaboratorTenantLinks(user.tenantId, listCollaborators());
+      const bundle = await listTenantCollaborators(tenantId, { bundle: true, reconcileLinks });
+      const rows = bundle.collaborators || [];
+      setCollaborators(rows);
       const byCollaboratorId = {};
       const byEmail = {};
-      for (const row of users) {
-        if (row.collaborator_id) byCollaboratorId[row.collaborator_id] = row;
+      for (const row of rows) {
+        const tenantUser = row._tenantUser;
+        if (!tenantUser?.id) continue;
+        if (row.id) byCollaboratorId[row.id] = tenantUser;
         const emailKey = String(row.email || '').trim().toLowerCase();
-        if (emailKey) byEmail[emailKey] = row;
+        if (emailKey) byEmail[emailKey] = tenantUser;
       }
       setTenantAccessMap({ byCollaboratorId, byEmail });
     } catch (err) {
+      setListError('Não foi possível carregar colaboradores da clínica.');
       if (import.meta.env?.DEV) {
-        console.debug('[CollaboratorsPage] falha ao carregar acessos do tenant', err);
+        console.debug('[CollaboratorsPage] falha ao carregar colaboradores', err?.message);
       }
+    } finally {
+      setListLoading(false);
     }
-  }, [user?.tenantId, canEditAcessos, canAccess, isEditor]);
+  }, [user?.tenantId]);
+
+  const applyDraftFromLocal = useCallback((collaboratorId) => {
+    const id = String(collaboratorId || '').trim();
+    if (!id) return false;
+    const data = getCollaborator(id);
+    if (!data) return false;
+    setDraft((prev) => ({
+      ...prev,
+      ...data,
+      workHours: normalizeWorkHours(data.workHours),
+      newPhone: prev.newPhone,
+      newAddress: prev.newAddress,
+      newEducation: prev.newEducation,
+      newInsurance: prev.newInsurance,
+    }));
+    return true;
+  }, []);
+
+  const refreshTenantAccess = useCallback(async (options = {}) => {
+    await refreshCollaboratorsListOnly(options);
+  }, [refreshCollaboratorsListOnly]);
 
   useEffect(() => {
     refreshTenantAccess();
@@ -219,6 +253,7 @@ export default function CollaboratorsPage() {
   const resolveCollaboratorTenantAccess = useCallback(
     (item) => {
       if (!item) return null;
+      if (item._tenantUser) return item._tenantUser;
       return (
         tenantAccessMap.byCollaboratorId[item.id]
         || tenantAccessMap.byEmail[String(item.email || '').trim().toLowerCase()]
@@ -228,15 +263,57 @@ export default function CollaboratorsPage() {
     [tenantAccessMap],
   );
 
+  const reconcileAccessInBackground = useCallback((collaboratorId, collaboratorRow) => {
+    const tenantId = user?.tenantId;
+    if (!tenantId || !collaboratorId) return;
+
+    const generation = accessReconcileGenRef.current + 1;
+    accessReconcileGenRef.current = generation;
+    const perfMark = startCollaboratorPerf('COLLABORATOR_ACCESS_LOAD', { collaboratorId });
+
+    const tenantUser = collaboratorRow
+      ? resolveCollaboratorTenantAccess(collaboratorRow)
+      : null;
+
+    reconcileCollaboratorAccessState({
+      collaboratorId,
+      collaborator: collaboratorRow,
+      tenantUser,
+      tenantId,
+      currentUser: user,
+      skipRemoteFetch: true,
+      skipRemoteLink: true,
+    })
+      .then((result) => {
+        if (accessReconcileGenRef.current !== generation) return;
+        endCollaboratorPerf(perfMark, { recovered: Boolean(result.recovered) });
+        if (result.recovered) {
+          applyDraftFromLocal(collaboratorId);
+        }
+      })
+      .catch(() => {
+        if (accessReconcileGenRef.current === generation) {
+          endCollaboratorPerf(perfMark, { error: true });
+        }
+      });
+  }, [user, resolveCollaboratorTenantAccess, applyDraftFromLocal]);
+
   /**
    * Reidrata o draft a partir do DB. Com preserveCurrentEdits, mantém fatias em edição (ex.: Dados Principais).
    * forceMergeKeys: após add phone/education/etc., mescla essas chaves do servidor mesmo em modo preserve.
    */
   const refreshCollaboratorDraft = useCallback(
-    (collaboratorIdOverride, options = {}) => {
-      const { preserveCurrentEdits = false, forceMergeKeys = [] } = options;
+    async (collaboratorIdOverride, options = {}) => {
+      const {
+        preserveCurrentEdits = false,
+        forceMergeKeys = [],
+        refreshList = false,
+        reconcileLinks = false,
+      } = options;
       const force = new Set(forceMergeKeys);
-      setCollaborators(listCollaborators());
+      if (refreshList) {
+        await refreshCollaboratorsListOnly({ reconcileLinks });
+      }
       const id = collaboratorIdOverride ?? selectedId;
       if (!id) return;
       const data = getCollaborator(id);
@@ -245,7 +322,7 @@ export default function CollaboratorsPage() {
       setDraft((prev) => {
         if (!preserveCurrentEdits) {
           if (import.meta.env?.DEV) {
-            console.debug('[CollaboratorsPage] refreshCollaboratorDraft:full', { collaboratorId: id });
+            console.debug('[CollaboratorsPage] refreshCollaboratorDraft:full', { collaboratorId: id, refreshList });
           }
           return {
             ...prev,
@@ -317,7 +394,7 @@ export default function CollaboratorsPage() {
         };
       });
     },
-    [editingSection, editingTab, selectedId]
+    [editingSection, editingTab, selectedId, refreshCollaboratorsListOnly]
   );
 
   const selectedCollaboratorRow = useMemo(
@@ -329,30 +406,6 @@ export default function CollaboratorsPage() {
     () => (selectedCollaboratorRow ? resolveCollaboratorTenantAccess(selectedCollaboratorRow) : null),
     [selectedCollaboratorRow, resolveCollaboratorTenantAccess],
   );
-
-  useEffect(() => {
-    if (!selectedId || !user?.tenantId || !selectedTenantAccess?.user_id) return;
-    let active = true;
-    reconcileCollaboratorAccessState({
-      collaboratorId: selectedId,
-      collaborator: selectedCollaboratorRow,
-      tenantUser: selectedTenantAccess,
-      tenantId: user.tenantId,
-      currentUser: user,
-    }).then((result) => {
-      if (!active || !result.recovered) return;
-      refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
-    }).catch(() => {});
-    return () => { active = false; };
-  }, [
-    selectedId,
-    selectedTenantAccess?.id,
-    selectedTenantAccess?.user_id,
-    user?.tenantId,
-    selectedCollaboratorRow?.id,
-    selectedCollaboratorRow?.email,
-    refreshCollaboratorDraft,
-  ]);
 
   const formatDatePtBr = (value) => {
     if (!value) return '—';
@@ -370,10 +423,6 @@ export default function CollaboratorsPage() {
     if (['finalizado', 'atendido'].includes(normalized)) return 'is-finished';
     return 'is-default';
   };
-
-  useEffect(() => {
-    refreshCollaboratorsListOnly();
-  }, [refreshCollaboratorsListOnly]);
 
   useEffect(() => {
     if (!openNewCollaborator) return;
@@ -429,13 +478,39 @@ export default function CollaboratorsPage() {
   }, [collaborators, search, filter, resolveCollaboratorTenantAccess]);
 
   const collaboratorPhonesById = useMemo(() => {
+    const db = loadDb();
     return (db.collaboratorPhones || []).reduce((acc, item) => {
       if (!item?.collaboratorId) return acc;
       if (!acc[item.collaboratorId]) acc[item.collaboratorId] = [];
       acc[item.collaboratorId].push(item);
       return acc;
     }, {});
-  }, [db.collaboratorPhones]);
+  }, [collaborators, selectedId]);
+
+  const selectCollaborator = useCallback((id) => {
+    if (editingSection || editingTab) {
+      if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return false;
+    }
+
+    const perfMark = startCollaboratorPerf('COLLABORATOR_PROFILE_LOAD', { collaboratorId: id });
+    setSelectedId(id);
+    setEditingSection('');
+    setEditingTab('');
+    setActiveTab('geral');
+    setRecordLoading(false);
+    applyDraftFromLocal(id);
+    endCollaboratorPerf(perfMark, { source: 'indexeddb' });
+
+    const row = collaborators.find((item) => item.id === id) || null;
+    queueMicrotask(() => reconcileAccessInBackground(id, row));
+    return true;
+  }, [
+    editingSection,
+    editingTab,
+    applyDraftFromLocal,
+    collaborators,
+    reconcileAccessInBackground,
+  ]);
 
   const handleCollaboratorCreated = async (newId, meta = {}) => {
     setOpenNewCollaborator(false);
@@ -444,8 +519,8 @@ export default function CollaboratorsPage() {
     setEditingSection('');
     setEditingTab('');
     setError('');
-    refreshCollaboratorDraft(newId);
-    await refreshTenantAccess();
+    await refreshCollaboratorDraft(newId, { refreshList: true, reconcileLinks: true });
+    await refreshTenantAccess({ reconcileLinks: true });
     if (meta.successMessage) {
       setSuccess(meta.successMessage);
       return;
@@ -471,16 +546,13 @@ export default function CollaboratorsPage() {
 
   const handleEditCollaboratorAccess = useCallback((collaboratorId) => {
     if (!collaboratorId) return;
-    setSelectedId(collaboratorId);
+    if (!selectCollaborator(collaboratorId)) return;
     setActiveTab('acesso');
-    setEditingSection('');
-    setEditingTab('');
     setError('');
-    refreshCollaboratorDraft(collaboratorId);
     setTimeout(() => {
       editFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 100);
-  }, [refreshCollaboratorDraft]);
+  }, [selectCollaborator]);
 
   const jumpToExistingCollaborator = useCallback(
     ({ id, status }) => {
@@ -488,37 +560,16 @@ export default function CollaboratorsPage() {
       setOpenNewCollaborator(false);
       const active = isCollaboratorActive({ status });
       setFilter({ cargo: '', categoria: '', status: active ? 'ativo' : 'inativo', acesso: '' });
-      setSelectedId(id);
-      setActiveTab('geral');
-      setEditingSection('');
-      setEditingTab('');
       setError('');
       setSuccess(
         active
           ? 'Abrimos o cadastro que já usa esse mesmo registro profissional (CRO).'
           : 'Este colaborador está na lista de Inativos (mesmo CRO). Abrimos a ficha para você editar ou reativar.',
       );
-      refreshCollaboratorDraft(id);
+      selectCollaborator(id);
     },
-    [refreshCollaboratorDraft],
+    [selectCollaborator],
   );
-
-  const selectCollaborator = (id) => {
-    if (editingSection || editingTab) {
-      if (!window.confirm('Existem alterações não salvas. Deseja sair?')) return false;
-    }
-    setRecordLoading(true);
-    setSelectedId(id);
-    const data = getCollaborator(id);
-    if (data) {
-      setDraft((prev) => ({ ...prev, ...data, workHours: normalizeWorkHours(data.workHours) }));
-    }
-    setEditingSection('');
-    setEditingTab('');
-    setActiveTab('geral');
-    window.setTimeout(() => setRecordLoading(false), 280);
-    return true;
-  };
 
   const getCollaboratorInitials = (collaborator) => {
     const name = collaborator?.nomeCompleto || collaborator?.apelido || '';
@@ -699,7 +750,7 @@ export default function CollaboratorsPage() {
       updateCollaboratorCharacteristics(user, selectedId, draft.characteristics);
       updateCollaboratorAdditional(user, selectedId, draft.additional);
       setEditingSection('');
-      refreshCollaboratorDraft();
+      refreshCollaboratorDraft(undefined, { refreshList: true });
       setSuccess('Dados salvos com sucesso.');
     } catch (err) {
       setError(err.message);
@@ -747,7 +798,7 @@ export default function CollaboratorsPage() {
         return;
       }
       setEditingSection('');
-      refreshCollaboratorDraft();
+      refreshCollaboratorDraft(undefined, { refreshList: true });
       setSuccess('Alterações salvas com sucesso.');
     } catch (err) {
       if (err?.code === 'WORK_HOURS_CONFLICT') {
@@ -888,7 +939,7 @@ export default function CollaboratorsPage() {
         updateCollaboratorAccess(user, selectedId, { ...draft.access, userId: effectiveUserId, role: access.role });
       }
     }
-    refreshCollaboratorDraft();
+    refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true, refreshList: true });
     refreshTenantAccess();
     if (passwordResetSent) {
       setSuccess(message || `Link de redefinição enviado para: ${selectedTenantAccess?.email || ''}`);
@@ -918,9 +969,9 @@ export default function CollaboratorsPage() {
   }, [refreshTenantAccess]);
 
   const handleAccessRecovered = useCallback(() => {
-    refreshCollaboratorDraft(selectedId, { preserveCurrentEdits: true });
+    applyDraftFromLocal(selectedId);
     refreshTenantAccess();
-  }, [selectedId, refreshCollaboratorDraft, refreshTenantAccess]);
+  }, [selectedId, applyDraftFromLocal, refreshTenantAccess]);
 
   const handleAccessGoToProfile = useCallback(() => handleEditSection('contatos'), [handleEditSection]);
 
@@ -971,7 +1022,7 @@ export default function CollaboratorsPage() {
           updateCollaboratorAccess(user, selectedId, { ...draft.access, userId: effectiveUserId, role: access.role });
         }
       }
-      refreshCollaboratorDraft();
+      refreshCollaboratorDraft(undefined, { refreshList: true });
       refreshTenantAccess();
       setSuccess(inviteSent ? 'Convite enviado.' : 'Permissões salvas.');
     },
@@ -1189,7 +1240,7 @@ export default function CollaboratorsPage() {
         canEditRh={isEditor}
         canManageAccess={canEditAcessos}
         tenantId={user?.tenantId || ''}
-        onRefresh={refreshCollaboratorsListOnly}
+        onRefresh={() => refreshCollaboratorsListOnly({ reconcileLinks: true })}
         onNewCollaborator={() => {
           if (!canCreateNewCollaborator) return;
           setError('');
@@ -1216,6 +1267,7 @@ export default function CollaboratorsPage() {
         resolveAccessStatus={resolveCollaboratorAccessDisplayStatus}
       />
 
+      {listError && !selectedId ? <div className="error">{listError}</div> : null}
       {error && !selectedId ? <div className="error">{error}</div> : null}
       {success && !selectedId ? <div className="success">{success}</div> : null}
 

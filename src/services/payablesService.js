@@ -5,6 +5,17 @@ import { requirePermission } from '../permissions/permissions.js';
 import { createId } from './helpers.js';
 import { getTodayCashRegister } from './cashRegisterService.js';
 import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
+import { readListPayables } from './financialReadAdapter.js';
+import {
+  scheduleFinancialDualWriteCreatePayable,
+  scheduleFinancialDualWriteUpdatePayable,
+  scheduleFinancialDualWriteDeletePayable,
+} from './financialWriteAdapter.js';
+import {
+  schedulePayableCreatedDomainEvent,
+  schedulePayableDeletedDomainEvent,
+  schedulePayableUpdatedDomainEvent,
+} from './financialDomainEventPublisher.js';
 
 /** Tipos de aba da régua de navegação financeira */
 export const PAYABLES_TABS = {
@@ -123,8 +134,11 @@ const applyTabFilter = (items, tabFilter, today) => {
 };
 
 export const listPayables = (filters = {}) => {
+  const fromRepo = readListPayables(filters);
   const db = loadDb();
-  let items = Array.isArray(db.payables) ? [...db.payables] : [];
+  let items = fromRepo !== null
+    ? [...fromRepo]
+    : (Array.isArray(db.payables) ? [...db.payables] : []);
   const today = TODAY();
 
   items = items.map((p) => {
@@ -329,6 +343,9 @@ export const createPayable = (user, payload) => {
     return db;
   });
 
+  scheduleFinancialDualWriteCreatePayable(user, record);
+  // Domain Event: apenas o título pai (parcelas recorrentes não emitem evento separado).
+  schedulePayableCreatedDomainEvent(user, record);
   return record;
 };
 
@@ -386,6 +403,8 @@ export const updatePayable = (user, id, payload) => {
     return d;
   });
 
+  scheduleFinancialDualWriteUpdatePayable(user, updated, payload);
+  schedulePayableUpdatedDomainEvent(user, updated, payload);
   return updated;
 };
 
@@ -434,12 +453,15 @@ export const deletePayable = (user, id) => {
 
   const current = db.payables[idx];
   if (current.paidDate) throw new Error('Não é possível excluir conta já paga. Considere manter o histórico.');
+  const tenantId = current.tenant_id;
 
   withDb((d) => {
     d.payables.splice(idx, 1);
     return d;
   });
 
+  scheduleFinancialDualWriteDeletePayable(user, id, tenantId);
+  schedulePayableDeletedDomainEvent(user, id, tenantId);
   return { deleted: true };
 };
 

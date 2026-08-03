@@ -7,13 +7,7 @@ import { loadDb, saveDb } from '../db/index.js';
 import { getSeedCrmTags } from '../db/migrations.js';
 import { createId } from './helpers.js';
 import { getTenant } from './tenantService.js';
-import {
-  mapServerClinicProfileToLocal,
-  needsClinicProfileResync,
-  syncTenantClinicProfileToLocalDb,
-} from './tenantClinicProfileSync.js';
 import { readTenantAccessSnapshot } from './platformAccessService.js';
-import { tenantAudit, startTenantAuditTimer } from './tenantAuditLog.js';
 
 const SAAS_TENANT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CLINIC_SUMMARY_CACHE_KEY = 'clinic.summary.cache';
@@ -73,20 +67,7 @@ function normalizeTenantSnapshot(snapshot = {}) {
   };
 }
 
-function applyServerClinicProfile(state, tenantId, serverClinicProfile) {
-  const local = mapServerClinicProfileToLocal(serverClinicProfile);
-  if (!local || local.tenant_id !== tenantId) return state;
-  state.clinicProfile = {
-    ...state.clinicProfile,
-    ...local,
-    tenant_id: tenantId,
-  };
-  if (local.logoUrl) {
-    state.clinicProfile.logoUrl = local.logoUrl;
-  }
-  return state;
-}
-function applyPlatformTenantToFreshState(state, tenantId, snapshot, serverClinicProfile = null) {
+function applyPlatformTenantToFreshState(state, tenantId, snapshot) {
   const tenant = normalizeTenantSnapshot(snapshot);
   const now = new Date().toISOString();
   const clinicId = buildClinicId(tenantId);
@@ -106,10 +87,6 @@ function applyPlatformTenantToFreshState(state, tenantId, snapshot, serverClinic
     createdAt: now,
     updatedAt: now,
   };
-
-  if (serverClinicProfile) {
-    applyServerClinicProfile(state, tenantId, serverClinicProfile);
-  }
 
   state.clinicDocumentation = {
     ...state.clinicDocumentation,
@@ -215,52 +192,21 @@ export async function bootstrapSaasTenantLocalDb(user, options = {}) {
   }
 
   const previousTenantId = String(options.previousTenantId || '').trim();
-  const mustBootstrap = shouldBootstrapFreshTenant(tenantId, previousTenantId);
-  const mustResyncClinic = needsClinicProfileResync(tenantId);
-
-  if (!mustBootstrap && !mustResyncClinic) {
+  if (!shouldBootstrapFreshTenant(tenantId, previousTenantId)) {
     return false;
   }
 
-  const elapsed = startTenantAuditTimer();
-  tenantAudit('TENANT_BOOTSTRAP', {
-    user_id: user?.id,
-    email: user?.email,
-    tenant_id: tenantId,
-    role: user?.role,
-    source: 'tenant_users',
-    status: 'start',
-    extra: { previous_tenant_id: previousTenantId || null, must_bootstrap: mustBootstrap },
-  });
-
   let tenantSnapshot = options.tenantSnapshot;
-  let serverClinicProfile = options.clinicProfile || null;
-  if (!tenantSnapshot || (!serverClinicProfile && mustResyncClinic)) {
+  if (!tenantSnapshot) {
     try {
       const snapshot = await readTenantAccessSnapshot(tenantId);
-      tenantSnapshot = tenantSnapshot || snapshot?.tenant || {};
-      serverClinicProfile = serverClinicProfile || snapshot?.clinicProfile || null;
+      tenantSnapshot = snapshot?.tenant || {};
     } catch {
-      tenantSnapshot = tenantSnapshot || {};
+      tenantSnapshot = {};
     }
   }
 
-  if (!mustBootstrap && mustResyncClinic && serverClinicProfile) {
-    syncTenantClinicProfileToLocalDb(serverClinicProfile, tenantId);
-    clearSaasLocalUiCaches();
-    return true;
-  }
-
-  if (!mustBootstrap) {
-    return false;
-  }
-
-  const fresh = applyPlatformTenantToFreshState(
-    defaultDbState(),
-    tenantId,
-    tenantSnapshot,
-    serverClinicProfile,
-  );
+  const fresh = applyPlatformTenantToFreshState(defaultDbState(), tenantId, tenantSnapshot);
   saveDb(fresh);
   clearSaasLocalUiCaches();
 
@@ -271,17 +217,6 @@ export async function bootstrapSaasTenantLocalDb(user, options = {}) {
   if (import.meta.env?.DEV) {
     console.debug('[saas-bootstrap] IndexedDB limpo para tenant', tenantId);
   }
-
-  tenantAudit('TENANT_BOOTSTRAP', {
-    user_id: user?.id,
-    email: user?.email,
-    tenant_id: tenantId,
-    role: user?.role,
-    source: 'tenant_users',
-    duration_ms: elapsed(),
-    status: 'ok',
-    extra: { cache_cleared: true },
-  });
 
   return true;
 }

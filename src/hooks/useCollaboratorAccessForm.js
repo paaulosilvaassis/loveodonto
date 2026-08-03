@@ -24,6 +24,7 @@ import {
   resolvePermissionStateFromTenantUser,
   syncPermissionStateToLocalDb,
 } from '../services/collaboratorPermissionPersistence.js';
+import { startCollaboratorPerf, endCollaboratorPerf } from '../services/collaboratorPerfLogService.js';
 
 export function useCollaboratorAccessForm({
   collaboratorId,
@@ -61,6 +62,10 @@ export function useCollaboratorAccessForm({
   );
 
   useEffect(() => {
+    const perfMark = startCollaboratorPerf('COLLABORATOR_PERMISSIONS_LOAD', {
+      collaboratorId: collaboratorId || null,
+      targetUserId: effectiveTargetUserId || null,
+    });
     const emailFromTenant = String(tenantUser?.email || collaboratorEmail || '').trim().toLowerCase();
 
     if (!effectiveTargetUserId) {
@@ -72,6 +77,7 @@ export function useCollaboratorAccessForm({
       setInitialSnapshot(null);
       setDirty(false);
       setCredEmail(emailFromTenant);
+      endCollaboratorPerf(perfMark, { skipped: true });
       return;
     }
 
@@ -129,6 +135,10 @@ export function useCollaboratorAccessForm({
     }
 
     setCredEmail(emailFromTenant);
+    endCollaboratorPerf(perfMark, {
+      permissionCount: catalog.length,
+      hasCustomPermissions: access?.has_custom_permissions === true || tenantUser?.has_custom_permissions === true,
+    });
   }, [effectiveTargetUserId, tenantUser, collaboratorId, collaboratorEmail, linkedDisplayName, saasTenantId, catalog]);
 
   const effectivePermission = useCallback((permId) => {

@@ -1,7 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { preflightLoginPageAuthStorage } from './auth/saasAuthStorage.js';
 import './utils/firstAccessSession.js';
 import './index.css';
+
+preflightLoginPageAuthStorage();
 
 const rootElement = document.getElementById('root');
 

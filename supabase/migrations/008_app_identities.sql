@@ -115,12 +115,12 @@ alter table if exists public.identity_events enable row level security;
 
 drop policy if exists identities_read_admin on public.identities;
 create policy identities_read_admin on public.identities for select using (
-  auth.uid() is not null and public.app_user_can_access_tenant(tenant_id)
+  auth.uid() is not null and public.app_user_can_access_tenant(tenant_id::text)
 );
 
 drop policy if exists identity_events_read_admin on public.identity_events;
 create policy identity_events_read_admin on public.identity_events for select using (
-  auth.uid() is not null and public.app_user_can_access_tenant(tenant_id)
+  auth.uid() is not null and public.app_user_can_access_tenant(tenant_id::text)
 );
 
 create or replace function public.touch_identities_updated_at()

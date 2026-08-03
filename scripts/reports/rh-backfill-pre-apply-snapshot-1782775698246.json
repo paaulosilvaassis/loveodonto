@@ -1,0 +1,246 @@
+{
+  "captured_at": "2026-06-29T23:28:18.246Z",
+  "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+  "dry_run_report": "C:\\Users\\paaul\\Desktop\\appgestaoodonto-main\\appgestaoodonto\\scripts\\reports\\rh-backfill-dryrun-2026-06-29T23-28-18-239Z.json",
+  "plan": {
+    "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+    "generated_at": "2026-06-29T23:28:18.238Z",
+    "mode": "dry-run",
+    "export_rows": 4,
+    "remote_collaborators": 0,
+    "tenant_users": 4,
+    "duplicate_email_groups": [],
+    "duplicate_legacy_groups": [],
+    "tenant_validation": {
+      "ok": true,
+      "errors": [],
+      "mismatches": []
+    },
+    "summary": {
+      "INSERT_PROPOSED": 4,
+      "LINK_PROPOSED": 4
+    },
+    "collaborator_summary": {
+      "INSERT_PROPOSED": 4
+    },
+    "link_summary": {
+      "LINK_PROPOSED": 4
+    },
+    "collaborator_rows": [
+      {
+        "entity": "collaborator",
+        "legacy_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+        "email": "paulo+staging@implanprime.test",
+        "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+        "action": "INSERT_PROPOSED",
+        "reason": "Colaborador ausente no Supabase.",
+        "payload": {
+          "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+          "legacy_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+          "status": "ativo",
+          "apelido": "Paulo",
+          "nome_completo": "Paulo Henrique Silva de Assis",
+          "nome_social": null,
+          "sexo": null,
+          "data_nascimento": null,
+          "email": "paulo+staging@implanprime.test",
+          "foto_url": null,
+          "rh_categoria": "Diretoria e Gestão",
+          "cargo": "Gestor Geral",
+          "rh_funcao_descricao": null,
+          "tipo_vinculo": "CLT",
+          "setor": "Gestão",
+          "especialidades": [],
+          "registro_profissional": null,
+          "conselho_nome": null,
+          "conselho_uf": null,
+          "agenda_enabled": false,
+          "updated_at": "2026-06-29T21:06:47.286Z",
+          "created_at": "2026-06-24T15:43:48.895Z"
+        },
+        "remote_id": null,
+        "skip_base64_photo": false
+      },
+      {
+        "entity": "collaborator",
+        "legacy_id": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+        "email": "juliana+staging@implanprime.test",
+        "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+        "action": "INSERT_PROPOSED",
+        "reason": "Colaborador ausente no Supabase.",
+        "payload": {
+          "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+          "legacy_id": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+          "status": "ativo",
+          "apelido": "Dra. Juliana",
+          "nome_completo": "Juliana",
+          "nome_social": null,
+          "sexo": null,
+          "data_nascimento": null,
+          "email": "juliana+staging@implanprime.test",
+          "foto_url": null,
+          "rh_categoria": "Corpo Clínico",
+          "cargo": "Implantodontista",
+          "rh_funcao_descricao": null,
+          "tipo_vinculo": "CLT",
+          "setor": "Clínico",
+          "especialidades": [
+            "Implantodontia"
+          ],
+          "registro_profissional": "27267",
+          "conselho_nome": "CRO",
+          "conselho_uf": "MG",
+          "agenda_enabled": true,
+          "updated_at": "2026-06-29T21:06:46.241Z",
+          "created_at": "2026-06-24T18:34:45.694Z"
+        },
+        "remote_id": null,
+        "skip_base64_photo": false
+      },
+      {
+        "entity": "collaborator",
+        "legacy_id": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+        "email": "renata+staging@implanprime.test",
+        "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+        "action": "INSERT_PROPOSED",
+        "reason": "Colaborador ausente no Supabase.",
+        "payload": {
+          "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+          "legacy_id": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+          "status": "ativo",
+          "apelido": "Renatinha",
+          "nome_completo": "Renata Pereira",
+          "nome_social": "Renata",
+          "sexo": "F",
+          "data_nascimento": "1980-05-30",
+          "email": "renata+staging@implanprime.test",
+          "foto_url": null,
+          "rh_categoria": "Financeiro e Administrativo",
+          "cargo": "Auxiliar Administrativo",
+          "rh_funcao_descricao": null,
+          "tipo_vinculo": "CLT",
+          "setor": "Administrativo",
+          "especialidades": [],
+          "registro_profissional": null,
+          "conselho_nome": "CRO",
+          "conselho_uf": null,
+          "agenda_enabled": false,
+          "updated_at": "2026-06-29T21:06:46.241Z",
+          "created_at": "2026-06-25T17:32:00.693Z"
+        },
+        "remote_id": null,
+        "skip_base64_photo": false
+      },
+      {
+        "entity": "collaborator",
+        "legacy_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+        "email": "melissa+staging@implanprime.test",
+        "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+        "action": "INSERT_PROPOSED",
+        "reason": "Colaborador ausente no Supabase.",
+        "payload": {
+          "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+          "legacy_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+          "status": "ativo",
+          "apelido": "Melissa",
+          "nome_completo": "Melissa Eduarda Guimarães",
+          "nome_social": null,
+          "sexo": null,
+          "data_nascimento": null,
+          "email": "melissa+staging@implanprime.test",
+          "foto_url": null,
+          "rh_categoria": "Recepção e Atendimento",
+          "cargo": "Recepcionista",
+          "rh_funcao_descricao": null,
+          "tipo_vinculo": "CLT",
+          "setor": "Administrativo",
+          "especialidades": [],
+          "registro_profissional": null,
+          "conselho_nome": null,
+          "conselho_uf": null,
+          "agenda_enabled": false,
+          "updated_at": "2026-06-29T19:01:39.910Z",
+          "created_at": "2026-06-29T14:42:46.129Z"
+        },
+        "remote_id": null,
+        "skip_base64_photo": false
+      }
+    ],
+    "link_rows": [
+      {
+        "entity": "tenant_user_link",
+        "tenant_user_id": "e32ae325-ca51-41f9-9494-b591eceef94f",
+        "email": "paulo+staging@implanprime.test",
+        "collaborator_id_text": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+        "collaborator_uuid_current": null,
+        "action": "LINK_PROPOSED",
+        "reason": "Vínculo proposto após insert do colaborador (legacy_id no export). collaborator_id text preservado.",
+        "collaborator_uuid_proposed": null,
+        "pending_legacy_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+        "match_source": "legacy_id_pending_insert"
+      },
+      {
+        "entity": "tenant_user_link",
+        "tenant_user_id": "a8fc9cc4-6302-40ac-a021-eb3364bd948d",
+        "email": "melissa+staging@implanprime.test",
+        "collaborator_id_text": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+        "collaborator_uuid_current": null,
+        "action": "LINK_PROPOSED",
+        "reason": "Vínculo proposto após insert do colaborador (legacy_id no export). collaborator_id text preservado.",
+        "collaborator_uuid_proposed": null,
+        "pending_legacy_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+        "match_source": "legacy_id_pending_insert"
+      },
+      {
+        "entity": "tenant_user_link",
+        "tenant_user_id": "6305a4a3-4c64-4cfd-9b96-d81f99e23826",
+        "email": "juliana+staging@implanprime.test",
+        "collaborator_id_text": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+        "collaborator_uuid_current": null,
+        "action": "LINK_PROPOSED",
+        "reason": "Vínculo proposto após insert do colaborador (e-mail único no export). collaborator_id text preservado.",
+        "collaborator_uuid_proposed": null,
+        "pending_legacy_id": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+        "match_source": "email_pending_insert"
+      },
+      {
+        "entity": "tenant_user_link",
+        "tenant_user_id": "50f188fe-94f4-4459-840e-7f9b62ac06c0",
+        "email": "renata+staging@implanprime.test",
+        "collaborator_id_text": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+        "collaborator_uuid_current": null,
+        "action": "LINK_PROPOSED",
+        "reason": "Vínculo proposto após insert do colaborador (e-mail único no export). collaborator_id text preservado.",
+        "collaborator_uuid_proposed": null,
+        "pending_legacy_id": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+        "match_source": "email_pending_insert"
+      }
+    ],
+    "not_found_documentation": {
+      "collaborator_NOT_FOUND": "Não usado em collaborators; inserts usam INSERT_PROPOSED.",
+      "link_NOT_FOUND": "tenant_user sem colaborador correspondente no export/Supabase — válido para RH sem cadastro ou e-mail divergente."
+    },
+    "export_remap": {
+      "enabled": true,
+      "source_rows": 4,
+      "target_tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "staging_emails_applied": true
+    },
+    "supabase_project_ref": "tckdjyunwmdpqmewrwvt",
+    "supabase_url_host": "tckdjyunwmdpqmewrwvt.supabase.co",
+    "prod_touched": false,
+    "migration_018_applied": false,
+    "apply_gate": {
+      "ok": true,
+      "blocking_count": 0,
+      "blocking_actions": {},
+      "blocking_rows": [],
+      "allowed_skip": {
+        "SKIP_BASE64_PHOTO": 0,
+        "NOT_FOUND": 0
+      }
+    },
+    "post_apply_validation_sql": "-- Substitua :tenant_id\n-- 1) Órfãos collaborator_uuid\nselect tu.id, tu.email, tu.collaborator_uuid\nfrom public.tenant_users tu\nwhere tu.tenant_id = :tenant_id\n  and tu.collaborator_uuid is not null\n  and not exists (\n    select 1 from public.collaborators c\n    where c.id = tu.collaborator_uuid and c.tenant_id = tu.tenant_id and c.deleted_at is null\n  );\n\n-- 2) Cross-tenant\nselect tu.id, tu.email, tu.collaborator_uuid, c.tenant_id as collab_tenant\nfrom public.tenant_users tu\njoin public.collaborators c on c.id = tu.collaborator_uuid\nwhere tu.tenant_id = :tenant_id and tu.tenant_id <> c.tenant_id;\n\n-- 3) Duplicidade de vínculo\nselect collaborator_uuid, count(*) from public.tenant_users\nwhere tenant_id = :tenant_id and collaborator_uuid is not null\ngroup by 1 having count(*) > 1;\n\n-- 4) Fotos base64 (deve ser 0)\nselect id, legacy_id, left(foto_url, 40) from public.collaborators\nwhere tenant_id = :tenant_id and foto_url ~* '^data:';\n\n-- 5) VALIDATE FK (018) quando queries acima retornarem 0 linhas\n-- alter table public.tenant_users validate constraint tenant_users_collaborator_uuid_fkey;\n",
+    "apply_command": "node scripts/rh-backfill-to-supabase.mjs --tenant-id 7aba7127-409c-4ea4-8dbc-807efc5e189c --rh-export \"./collaborators-export.json\" --supabase-url \"https://tckdjyunwmdpqmewrwvt.supabase.co\" --service-role-key \"<redacted>\" --remap-export-for-staging --apply --confirm APPLY"
+  }
+}

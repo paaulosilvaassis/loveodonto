@@ -18,12 +18,12 @@ describe('ClinicProfile - permissões e validações', () => {
     await initDb();
   });
 
-  it('bloqueia edição para usuário sem permissão', () => {
-    expect(() =>
+  it('bloqueia edição para usuário sem permissão', async () => {
+    await expect(
       updateClinicProfile(recepcao, {
         nomeClinica: 'Nova Clínica',
-      })
-    ).toThrow('Permissão insuficiente.');
+      }),
+    ).rejects.toThrow('Permissão insuficiente.');
   });
 
   it('valida CNPJ inválido na documentação', () => {

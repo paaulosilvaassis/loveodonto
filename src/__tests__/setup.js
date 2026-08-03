@@ -1,4 +1,12 @@
+import { beforeEach, vi } from 'vitest';
+import { applyVitestIsolationContract } from './rhTestFlagContract.js';
+
 const store = new Map();
+
+/** Phase 5.1 — isolamento completo: flags RH, SaaS e Supabase. */
+beforeEach(() => {
+  applyVitestIsolationContract(vi);
+});
 
 if (typeof globalThis.window === 'undefined') {
   globalThis.window = globalThis;

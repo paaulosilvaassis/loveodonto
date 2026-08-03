@@ -18,8 +18,22 @@ import {
 } from '../utils/rbacHelpers.js';
 import { resolveSessionDisplayName } from '../utils/userDisplayName.js';
 
-export const SESSION_KEY = 'appgestaoodonto.session';
-const PLATFORM_AUTH_STORAGE_KEY = 'appgestaoodonto-platform-auth';
+import {
+  PLATFORM_AUTH_STORAGE_KEY,
+  SESSION_KEY,
+  isStaleRefreshAuthError,
+  isLoginBlockedByStaleAuth,
+  recoverFromStalePlatformAuth,
+} from './saasAuthStorage.js';
+
+export { SESSION_KEY } from './saasAuthStorage.js';
+export {
+  isStaleRefreshAuthError,
+  isLoginBlockedByStaleAuth,
+  recoverFromStalePlatformAuth,
+  clearSaasAuthStorage,
+  STALE_SESSION_CLEARED_MESSAGE,
+} from './saasAuthStorage.js';
 
 const GET_SESSION_TIMEOUT_MS = 8000;
 const BOOTSTRAP_TIMEOUT_MS = 10000;
@@ -133,7 +147,12 @@ export async function getPlatformSession() {
         GET_SESSION_TIMEOUT_MS,
         'timeout: getSession excedeu o tempo limite',
       );
-      if (error) throw new Error(error.message || 'Falha ao obter sessão SaaS.');
+      if (error) {
+        if (isStaleRefreshAuthError(error)) {
+          await recoverFromStalePlatformAuth();
+        }
+        throw new Error(error.message || 'Falha ao obter sessão SaaS.');
+      }
       return data?.session || null;
     })().finally(() => {
       inFlightGetSession = null;

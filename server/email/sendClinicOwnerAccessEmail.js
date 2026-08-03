@@ -1,6 +1,6 @@
 import { getEmailConfig, getInviteRedirectTo } from './emailConfig.js';
 import { emailAudit } from './emailAuditLog.js';
-import { findAuthUserByEmail, isUserAlreadyRegisteredError, reinviteStaleAuthUser } from './accessEmailHelpers.js';
+import { findAuthUserByEmail, isUserAlreadyRegisteredError } from './accessEmailHelpers.js';
 import { generatePasswordSetupLink, sendUserInviteEmail } from './sendUserInviteEmail.js';
 
 function normalizeEmail(value) {
@@ -34,30 +34,36 @@ export async function sendClinicOwnerAccessEmail(supabase, {
   fullName,
   roleSlug = 'master',
   allowInvite = true,
+  /** Quando true, força recovery/magiclink (Auth já existe; convite expirado). */
+  preferRecovery = false,
+  redirectTo: redirectToOverride = null,
 }) {
   const normalizedEmail = normalizeEmail(email);
-  const redirectTo = getInviteRedirectTo();
+  const redirectTo = String(redirectToOverride || '').trim() || getInviteRedirectTo();
   const metadata = {
     tenant_id: tenantId,
     role: roleSlug,
     full_name: fullName,
   };
   const resendConfigured = getEmailConfig().isConfigured;
+  const forceRecovery = Boolean(preferRecovery) || !allowInvite;
 
   emailAudit('enviando convite', {
     email: normalizedEmail,
     tenantId,
     redirectTo,
     allowInvite,
+    preferRecovery: forceRecovery,
     resendConfigured,
   });
 
   let inviteFailedBecauseExists = false;
 
+  // Caminho prioritário: Resend/transacional com link invite OU recovery.
   if (resendConfigured) {
     emailAudit('envio prioritário via transacional (Resend)', { email: normalizedEmail });
-    let existingUser = !allowInvite;
-    if (allowInvite) {
+    let existingUser = forceRecovery;
+    if (!existingUser && allowInvite) {
       const existing = await findAuthUserByEmail(supabase, normalizedEmail);
       if (existing?.id) existingUser = true;
     }
@@ -84,6 +90,7 @@ export async function sendClinicOwnerAccessEmail(supabase, {
       provider: delivery.provider,
       messageId: delivery.messageId,
       authUserId: authUser?.id || null,
+      existingUser,
     });
 
     return {
@@ -97,7 +104,8 @@ export async function sendClinicOwnerAccessEmail(supabase, {
     };
   }
 
-  if (allowInvite) {
+  // Sem Resend: invite só se Auth ainda não existe e não pedimos recovery.
+  if (allowInvite && !forceRecovery) {
     let { data: inviteData, error: inviteError } = await tryInviteUserByEmail(
       supabase,
       normalizedEmail,
@@ -105,15 +113,13 @@ export async function sendClinicOwnerAccessEmail(supabase, {
     );
 
     if (inviteError && isUserAlreadyRegisteredError(inviteError)) {
-      await reinviteStaleAuthUser(supabase, normalizedEmail);
-      ({ data: inviteData, error: inviteError } = await tryInviteUserByEmail(
-        supabase,
-        normalizedEmail,
-        { redirectTo, metadata },
-      ));
-    }
-
-    if (!inviteError && inviteData?.user?.id) {
+      // Não apaga usuário com last_sign_in — cai no generateLink recovery abaixo.
+      inviteFailedBecauseExists = true;
+      emailAudit('inviteUserByEmail: usuário já existe — fallback recovery', {
+        email: normalizedEmail,
+        error: inviteError.message,
+      });
+    } else if (!inviteError && inviteData?.user?.id) {
       return {
         emailDelivery: 'supabase_auth',
         accessEmailSent: true,
@@ -121,54 +127,62 @@ export async function sendClinicOwnerAccessEmail(supabase, {
         setupLink: null,
         sent: true,
       };
-    }
-
-    if (inviteError && isUserAlreadyRegisteredError(inviteError)) {
-      inviteFailedBecauseExists = true;
     } else if (inviteError) {
       throw inviteError;
     }
-  } else if (inviteFailedBecauseExists === false) {
-    const existing = await findAuthUserByEmail(supabase, normalizedEmail);
-    if (existing?.id && !existing.invited_at && !existing.last_sign_in_at) {
-      await reinviteStaleAuthUser(supabase, normalizedEmail);
-      const { data: inviteData, error: inviteError } = await tryInviteUserByEmail(
-        supabase,
-        normalizedEmail,
-        { redirectTo, metadata },
-      );
-      if (!inviteError && inviteData?.user?.id) {
-        return {
-          emailDelivery: 'supabase_auth',
-          accessEmailSent: true,
-          authUserId: inviteData.user.id,
-          setupLink: null,
-          sent: true,
-        };
-      }
-      if (inviteError && !isUserAlreadyRegisteredError(inviteError)) throw inviteError;
-      inviteFailedBecauseExists = true;
-    }
   }
 
-  const existingUser = !allowInvite || inviteFailedBecauseExists;
-  emailAudit('fallback generateLink sem transacional', {
+  const existingUser = forceRecovery || inviteFailedBecauseExists || !allowInvite;
+
+  // Sem Resend: para Auth existente, dispara recovery pelo SMTP do Supabase Auth
+  // (resetPasswordForEmail envia o e-mail; generateLink sozinho não envia).
+  if (existingUser) {
+    emailAudit('enviando recovery via Supabase Auth SMTP', {
+      email: normalizedEmail,
+      redirectTo,
+    });
+    const { error: recoverError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
+      redirectTo,
+    });
+    const authUser = await findAuthUserByEmail(supabase, normalizedEmail);
+    if (!recoverError) {
+      emailAudit('recovery enviado via Supabase Auth', {
+        email: normalizedEmail,
+        authUserId: authUser?.id || null,
+      });
+      return {
+        emailDelivery: 'supabase_auth_recovery',
+        accessEmailSent: true,
+        authUserId: authUser?.id || null,
+        setupLink: null,
+        sent: true,
+        message: `Novo e-mail de acesso enviado com sucesso para ${normalizedEmail}.`,
+      };
+    }
+    emailAudit('recovery Supabase Auth falhou — fallback generateLink', {
+      email: normalizedEmail,
+      error: recoverError.message,
+    });
+  }
+
+  emailAudit('fallback generateLink', {
     email: normalizedEmail,
     existingUser,
+    forceRecovery,
   });
 
   const setupLink = await generatePasswordSetupLink(supabase, {
     email: normalizedEmail,
     redirectTo,
     data: metadata,
-    existingUser,
+    existingUser: true,
   });
 
   const authUser = await findAuthUserByEmail(supabase, normalizedEmail);
 
   emailAudit('link gerado sem envio automático', {
     email: normalizedEmail,
-    reason: 'Convite Supabase indisponível ou usuário já existente — use reenvio ou link manual',
+    reason: 'SMTP/Resend e recovery Auth indisponíveis — link operacional gerado',
     setupLinkGenerated: Boolean(setupLink),
     authUserId: authUser?.id || null,
   });
@@ -180,6 +194,7 @@ export async function sendClinicOwnerAccessEmail(supabase, {
     setupLink,
     sent: false,
     message:
-      'E-mail não enviado automaticamente. Use "Enviar acesso master" na Console ou copie o link abaixo.',
+      'Não foi possível enviar o e-mail automaticamente. '
+      + 'Verifique o SMTP do Supabase Auth ou configure EMAIL_API_KEY (Resend).',
   };
 }

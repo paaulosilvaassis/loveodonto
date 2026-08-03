@@ -15579,6 +15579,70 @@ a.button {
   text-align: center;
 }
 
+.qa-tools-page {
+  padding: 1.5rem 1.5rem 3rem;
+  max-width: 960px;
+  margin: 0 auto;
+  gap: 1.25rem;
+}
+
+.qa-tools-header {
+  padding-bottom: 0.25rem;
+}
+
+.qa-tools-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+.qa-tools-panel__title {
+  margin: 0 0 1rem;
+  font-size: 1.05rem;
+}
+
+.qa-tools-env-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.qa-tools-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.qa-tools-metric {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.qa-tools-metric__label {
+  font-size: 0.8rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.qa-tools-metric__value {
+  justify-self: start;
+  font-size: 0.95rem;
+}
+
+.qa-tools-pre {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  overflow: auto;
+  max-height: 240px;
+}
+
 .search-input {
   min-height: 44px;
   font-size: 1rem;

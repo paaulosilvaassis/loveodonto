@@ -1,60 +1,30 @@
-import { supabase } from '../lib/supabaseClient.ts';
+/**
+ * budgetItemsService — QUARANTINED (Phase 9.4A Security Hardening).
+ * Ver budgetsService.js. Substituto: IndexedDB / crmBudgetService.
+ */
 
-export const createBudgetItems = async (budget_id, items) => {
-  if (!supabase) {
-    throw new Error('Supabase não configurado. Configure as variáveis de ambiente VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.');
-  }
-  const payload = items.map((item) => ({
-    budget_id,
-    name: item.name,
-    quantity: item.quantity ?? 1,
-    unit_price: item.unit_price ?? 0,
-    tooth: item.tooth || null,
-    region: item.region || null,
-    notes: item.notes || null,
-  }));
+export const BUDGET_ITEMS_SERVICE_QUARANTINED = true;
+export const BUDGET_ITEMS_QUARANTINE_CODE = 'BUDGET_ITEMS_SERVICE_QUARANTINED';
+export const BUDGET_ITEMS_QUARANTINE_REASON =
+  'Acesso PostgREST a budget_items bloqueado até schema+RLS+tenant filtering (Phase 9.4B).';
 
-  const { data, error } = await supabase
-    .from('budget_items')
-    .insert(payload)
-    .select('id, budget_id, name, quantity, unit_price, tooth, region, notes');
+function deny(operation) {
+  const err = new Error(
+    `${BUDGET_ITEMS_QUARANTINE_CODE}: ${operation} — ${BUDGET_ITEMS_QUARANTINE_REASON}`,
+  );
+  err.code = BUDGET_ITEMS_QUARANTINE_CODE;
+  err.operation = operation;
+  throw err;
+}
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data || [];
+export const createBudgetItems = async () => {
+  deny('createBudgetItems');
 };
 
-export const listBudgetItemsByBudget = async (budget_id) => {
-  if (!supabase) {
-    return [];
-  }
-  const { data, error } = await supabase
-    .from('budget_items')
-    .select('id, budget_id, name, quantity, unit_price, tooth, region, notes, status')
-    .eq('budget_id', budget_id);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data || [];
+export const listBudgetItemsByBudget = async () => {
+  deny('listBudgetItemsByBudget');
 };
 
-export const listBudgetItemsByBudgetIds = async (budgetIds) => {
-  if (!budgetIds.length) return [];
-  if (!supabase) {
-    return [];
-  }
-  const { data, error } = await supabase
-    .from('budget_items')
-    .select('id, budget_id, name, quantity, unit_price, tooth, region, notes, status')
-    .in('budget_id', budgetIds);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  return data || [];
+export const listBudgetItemsByBudgetIds = async () => {
+  deny('listBudgetItemsByBudgetIds');
 };

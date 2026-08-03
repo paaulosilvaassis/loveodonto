@@ -21,9 +21,12 @@ export async function fetchPlatformPlans() {
 }
 
 export async function fetchPlatformUsers() {
-  if (!supabasePlatformClient) return { data: [], error: new Error('Supabase Plataforma não configurado') };
-  const { data, error } = await supabasePlatformClient.from('platform_users').select('*').order('created_at', { ascending: false });
-  return { data: data ?? [], error };
+  return {
+    data: [],
+    error: new Error(
+      'Listagem de platform_users descontinuada neste app. Use o Console SaaS (porta 5177) ou a Admin API.',
+    ),
+  };
 }
 
 export async function fetchPaymentProviders() {

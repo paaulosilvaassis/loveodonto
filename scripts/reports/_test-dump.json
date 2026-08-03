@@ -1,0 +1,17 @@
+﻿{
+  "version": 50,
+  "collaborators": [
+    {
+      "id": "col-test-1",
+      "tenant_id": "b2f95268-101c-42cb-8a8e-8d3681aa7dfa",
+      "apelido": "Maria",
+      "nomeCompleto": "Maria Teste",
+      "rhCategoria": "Corpo Clínico",
+      "cargo": "Dentista",
+      "tipoVinculo": "CLT",
+      "setor": "Clínico",
+      "email": "maria@test.com",
+      "fotoUrl": "data:image/png;base64,abc"
+    }
+  ]
+}

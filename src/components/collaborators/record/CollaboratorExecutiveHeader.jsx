@@ -1,14 +1,12 @@
-import { Mail, MoreHorizontal, Pencil, Phone, Save, X } from 'lucide-react';
+import { ChevronDown, Mail, MoreHorizontal, Pencil, Phone, Save, X } from 'lucide-react';
 import { useState } from 'react';
 import Button from '../../Button.jsx';
-import AppAvatar from '../../common/AppAvatar.jsx';
 import { accessStatusBadgeClass } from '../../../utils/inviteStatus.js';
 
 export default function CollaboratorExecutiveHeader({
   fotoUrl,
   initials,
   displayName,
-  collaborator,
   cargo,
   categoria,
   especialidade,
@@ -34,79 +32,69 @@ export default function CollaboratorExecutiveHeader({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const facts = [
-    especialidade ? { label: 'Especialidade', value: especialidade } : null,
-    conselho ? { label: 'Conselho', value: conselho } : null,
-    { label: 'Situação RH', value: <span className={`team-rh-badge ${rhActive ? 'team-rh-badge--active' : 'team-rh-badge--inactive'}`}>{rhStatusLabel}</span> },
-    tempoEmpresa && tempoEmpresa !== '—' ? { label: 'Tempo na clínica', value: tempoEmpresa } : null,
-    tipoVinculo && tipoVinculo !== '—' ? { label: 'Vínculo', value: tipoVinculo } : null,
-    { label: 'Status do acesso', value: <span className={accessStatusBadgeClass(accessStatus?.key)}>{accessStatus?.label || '—'}</span> },
-    { label: 'Perfil', value: accessProfile || '—' },
-    { label: 'Último acesso', value: ultimoAcesso || '—' },
-    { label: 'Última alteração', value: ultimaAlteracao || '—' },
-    { label: 'Criado em', value: criadoEm || '—' },
-  ].filter(Boolean);
-
   return (
     <section className="cr-executive">
-      <div className="cr-executive__top">
-        <div className="cr-executive__identity">
-          <AppAvatar
-            user={collaborator}
-            name={displayName}
-            photoUrl={fotoUrl}
-            fallbackInitials={initials}
-            className="cr-executive__avatar"
-            size="inherit"
-          />
-          <div className="cr-executive__identity-text">
+      <div className="cr-executive__grid">
+        <div className="cr-executive__profile">
+          {fotoUrl ? (
+            <img src={fotoUrl} alt="" className="cr-executive__avatar cr-executive__avatar--photo" />
+          ) : (
+            <span className="cr-executive__avatar" aria-hidden>{initials}</span>
+          )}
+          <div className="cr-executive__identity">
             <h1 className="cr-executive__name">{displayName}</h1>
             <p className="cr-executive__headline">{[cargo, categoria].filter(Boolean).join(' · ') || 'Colaborador'}</p>
-            {(email || phone) ? (
-              <div className="cr-executive__contacts">
-                {email ? <span><Mail size={12} aria-hidden /> {email}</span> : null}
-                {phone ? <span><Phone size={12} aria-hidden /> {phone}</span> : null}
-              </div>
-            ) : null}
+            <dl className="cr-executive__meta">
+              {especialidade ? <div><dt>Especialidade</dt><dd>{especialidade}</dd></div> : null}
+              {conselho ? <div><dt>Conselho</dt><dd>{conselho}</dd></div> : null}
+              <div><dt>Situação RH</dt><dd><span className={`team-rh-badge ${rhActive ? 'team-rh-badge--active' : 'team-rh-badge--inactive'}`}>{rhStatusLabel}</span></dd></div>
+              {tempoEmpresa ? <div><dt>Tempo na clínica</dt><dd>{tempoEmpresa}</dd></div> : null}
+              {tipoVinculo ? <div><dt>Vínculo</dt><dd>{tipoVinculo}</dd></div> : null}
+            </dl>
+            <div className="cr-executive__contacts">
+              {email ? <span><Mail size={14} aria-hidden /> {email}</span> : null}
+              {phone ? <span><Phone size={14} aria-hidden /> {phone}</span> : null}
+            </div>
           </div>
         </div>
 
-        <div className="cr-executive__actions">
-          {isEditing ? (
-            <>
-              <Button variant="ghost" size="sm" icon={X} onClick={onCancel}>Cancelar</Button>
-              <Button variant="primary" size="sm" icon={Save} onClick={onSave} disabled={!canSave}>Salvar</Button>
-            </>
-          ) : (
-            <>
-              {canEdit ? <Button variant="secondary" size="sm" icon={Pencil} onClick={onEdit}>Editar</Button> : null}
-              {menuItems.length > 0 ? (
-                <div className={`cr-executive__menu ${menuOpen ? 'is-open' : ''}`}>
-                  <button type="button" className="cr-executive__menu-trigger" aria-label="Mais ações" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
-                    <MoreHorizontal size={16} />
-                  </button>
-                  <div className="cr-executive__menu-list">
-                    {menuItems.map((item) => (
-                      <button key={item.label} type="button" className={`cr-executive__menu-item ${item.danger ? 'is-danger' : ''}`} onClick={() => { setMenuOpen(false); item.onClick?.(); }}>
-                        {item.label}
-                      </button>
-                    ))}
+        <div className="cr-executive__aside">
+          <dl className="cr-executive__stats">
+            <div><dt>Status do acesso</dt><dd><span className={accessStatusBadgeClass(accessStatus?.key)}>{accessStatus?.label || '—'}</span></dd></div>
+            <div><dt>Perfil</dt><dd>{accessProfile || '—'}</dd></div>
+            <div><dt>Último acesso</dt><dd>{ultimoAcesso || '—'}</dd></div>
+            <div><dt>Última alteração</dt><dd>{ultimaAlteracao || '—'}</dd></div>
+            <div><dt>Criado em</dt><dd>{criadoEm || '—'}</dd></div>
+          </dl>
+
+          <div className="cr-executive__actions">
+            {isEditing ? (
+              <>
+                <Button variant="ghost" icon={X} onClick={onCancel}>Cancelar</Button>
+                <Button variant="primary" icon={Save} onClick={onSave} disabled={!canSave}>Salvar</Button>
+              </>
+            ) : (
+              <>
+                {canEdit ? <Button variant="secondary" icon={Pencil} onClick={onEdit}>Editar</Button> : null}
+                {menuItems.length > 0 ? (
+                  <div className={`cr-executive__menu ${menuOpen ? 'is-open' : ''}`}>
+                    <button type="button" className="cr-executive__menu-trigger" aria-label="Mais ações" aria-expanded={menuOpen} onClick={() => setMenuOpen((v) => !v)}>
+                      <MoreHorizontal size={18} />
+                    </button>
+                    <div className="cr-executive__menu-list">
+                      {menuItems.map((item) => (
+                        <button key={item.label} type="button" className={`cr-executive__menu-item ${item.danger ? 'is-danger' : ''}`} onClick={() => { setMenuOpen(false); item.onClick?.(); }}>
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ) : null}
-            </>
-          )}
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
       </div>
-
-      <dl className="cr-executive__facts">
-        {facts.map((item) => (
-          <div key={item.label} className="cr-executive__fact">
-            <dt>{item.label}</dt>
-            <dd>{item.value}</dd>
-          </div>
-        ))}
-      </dl>
     </section>
   );
 }

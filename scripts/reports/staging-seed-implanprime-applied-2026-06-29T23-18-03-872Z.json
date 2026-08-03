@@ -1,0 +1,177 @@
+{
+  "mode": "apply",
+  "applied_at": "2026-06-29T23:18:03.872Z",
+  "dry_run_report": "C:\\Users\\paaul\\Desktop\\appgestaoodonto-main\\appgestaoodonto\\scripts\\reports\\staging-seed-implanprime-2026-06-29T23-18-02-150Z.json",
+  "supabase_project_ref": "tckdjyunwmdpqmewrwvt",
+  "prod_touched": false,
+  "migration_018_applied": false,
+  "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+  "applied": {
+    "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+    "auth_users": [
+      {
+        "key": "paulo",
+        "auth_user_id": "2f2925a6-dca3-4e7b-abec-8fe611ee3fd4",
+        "email": "paulo+staging@implanprime.test"
+      },
+      {
+        "key": "melissa",
+        "auth_user_id": "ce976841-78e3-416d-ad53-25e428645ec9",
+        "email": "melissa+staging@implanprime.test"
+      },
+      {
+        "key": "juliana",
+        "auth_user_id": "052c1b67-513e-4c91-b8d0-bf9d4f36d158",
+        "email": "juliana+staging@implanprime.test"
+      },
+      {
+        "key": "renata",
+        "auth_user_id": "9bd9368c-a43d-406d-8bcf-877c15b754d2",
+        "email": "renata+staging@implanprime.test"
+      }
+    ],
+    "tenant_users": [
+      {
+        "key": "paulo",
+        "id": "e32ae325-ca51-41f9-9494-b591eceef94f",
+        "email": "paulo+staging@implanprime.test",
+        "collaborator_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+        "collaborator_uuid": null,
+        "role_slug": "master",
+        "has_system_access": true
+      },
+      {
+        "key": "melissa",
+        "id": "a8fc9cc4-6302-40ac-a021-eb3364bd948d",
+        "email": "melissa+staging@implanprime.test",
+        "collaborator_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+        "collaborator_uuid": null,
+        "role_slug": "gerente",
+        "has_system_access": false
+      },
+      {
+        "key": "juliana",
+        "id": "6305a4a3-4c64-4cfd-9b96-d81f99e23826",
+        "email": "juliana+staging@implanprime.test",
+        "collaborator_id": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+        "collaborator_uuid": null,
+        "role_slug": "administrativo",
+        "has_system_access": true
+      },
+      {
+        "key": "renata",
+        "id": "50f188fe-94f4-4459-840e-7f9b62ac06c0",
+        "email": "renata+staging@implanprime.test",
+        "collaborator_id": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+        "collaborator_uuid": null,
+        "role_slug": "administrativo",
+        "has_system_access": true
+      }
+    ],
+    "invitations": [
+      {
+        "user_key": "melissa",
+        "id": "f18cf649-50bb-4d27-af53-e2353c5782c1",
+        "email": "melissa+staging@implanprime.test",
+        "collaborator_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+        "status": "accepted"
+      },
+      {
+        "user_key": "juliana",
+        "id": "9736f66f-1a86-47d8-813c-47e25bbff8a7",
+        "email": "juliana+staging@implanprime.test",
+        "collaborator_id": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+        "status": "accepted"
+      },
+      {
+        "user_key": "renata",
+        "id": "b25ca80d-e71a-4ff3-ac24-e79f8a4b76c8",
+        "email": "renata+staging@implanprime.test",
+        "collaborator_id": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+        "status": "accepted"
+      }
+    ],
+    "identities": [
+      {
+        "user_key": "paulo",
+        "id": "02123677-dbd0-4839-b998-9a1e73ca0afb",
+        "email": "paulo+staging@implanprime.test",
+        "collaborator_id": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+        "status": "active"
+      },
+      {
+        "user_key": "melissa",
+        "id": "7bf7b054-c5b6-4a16-838c-c71a13b1d2e5",
+        "email": "melissa+staging@implanprime.test",
+        "collaborator_id": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+        "status": "disabled"
+      },
+      {
+        "user_key": "juliana",
+        "id": "453c932d-f7a6-4935-84cc-f409a3feb442",
+        "email": "juliana+staging@implanprime.test",
+        "collaborator_id": "col-saas-c9a3cc7e-d4ab-4934-aad3-56cb0558f1d6",
+        "status": "active"
+      },
+      {
+        "user_key": "renata",
+        "id": "bd1a72a8-1c85-468c-8b71-edca91031052",
+        "email": "renata+staging@implanprime.test",
+        "collaborator_id": "col-c92cf731-eddc-4b0d-9e40-8c77a7a2ee06",
+        "status": "active"
+      }
+    ],
+    "identity_events": [
+      {
+        "id": "6f5db0da-29c5-4c5f-8400-5031725f0014",
+        "action": "staging_seed.tenant_planned"
+      },
+      {
+        "id": "ced1987d-fbdd-4607-9f1d-6cf0508908cc",
+        "action": "staging_seed.user_planned"
+      },
+      {
+        "id": "857bdd83-a125-4c4d-98d8-48a160882d97",
+        "action": "staging_seed.user_planned"
+      },
+      {
+        "id": "5d5e2eaf-7c40-4454-8b38-0da37a47d631",
+        "action": "staging_seed.user_planned"
+      },
+      {
+        "id": "4efc8330-a595-4a57-99f1-3a132fc01c71",
+        "action": "staging_seed.user_planned"
+      }
+    ],
+    "clinic_profile": {
+      "id": "279fa186-3bf2-4395-a9ef-aa8b8fbbf4ba",
+      "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "name": "Implanprime Odontologia (Staging)"
+    },
+    "tenant_modules": [
+      {
+        "module_key": "MARKETING",
+        "enabled": true
+      },
+      {
+        "module_key": "FINANCEIRO",
+        "enabled": true
+      },
+      {
+        "module_key": "AGENDA",
+        "enabled": true
+      },
+      {
+        "module_key": "PRONTUARIO",
+        "enabled": true
+      }
+    ],
+    "tenant_limits": null,
+    "tenant": {
+      "id": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "clinic_code": "implanprime-staging",
+      "trade_name": "Implanprime Odontologia (Staging)"
+    }
+  },
+  "rh_backfill_dry_run": "node scripts/rh-backfill-to-supabase.mjs --tenant-id 7aba7127-409c-4ea4-8dbc-807efc5e189c --rh-export ./collaborators-export.json"
+}

@@ -10,7 +10,7 @@ import {
   probeApiHealth,
   probeAppDev,
   REPO_ROOT,
-  validateEnvStackOrExit,
+  validateEnvAppOrExit,
 } from './preflight-local.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -67,7 +67,8 @@ function spawnAppVite() {
 }
 
 async function main() {
-  validateEnvStackOrExit();
+  /** App local só exige App ↔ API no mesmo projeto. Console pode ser outro (produção). */
+  validateEnvAppOrExit();
 
   let serverProc = null;
   let serverStartedByUs = false;

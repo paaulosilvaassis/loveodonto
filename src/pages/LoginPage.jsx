@@ -3,7 +3,13 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
 import { consumeLogoutReason } from '../auth/logoutReason.js';
-import { clearStoredSession } from '../auth/saasSessionResolver.js';
+import {
+  STALE_SESSION_CLEARED_MESSAGE,
+  hasPersistedPlatformAuth,
+  isLoginBlockedByStaleAuth,
+  isStaleRefreshAuthError,
+} from '../auth/saasAuthStorage.js';
+import { recoverFromStalePlatformAuth } from '../auth/saasSessionResolver.js';
 import { authenticateByEmailPassword } from '../services/userAuthService.js';
 import { isSaasModeEnabled, signInSaasWithPassword } from '../services/saasAuthService.js';
 import { getAdminApiBaseConfigError } from '../config/adminApiBase.js';
@@ -139,6 +145,15 @@ export default function LoginPage() {
   useEffect(() => {
     const reason = consumeLogoutReason();
     if (reason) setError(reason);
+    try {
+      if (sessionStorage.getItem('love-odonto-stale-auth-cleared') === '1') {
+        sessionStorage.removeItem('love-odonto-stale-auth-cleared');
+        setToast({ message: STALE_SESSION_CLEARED_MESSAGE, type: 'success' });
+        setTimeout(() => setToast(null), 6000);
+      }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const handleSubmit = async (event) => {
@@ -152,8 +167,8 @@ export default function LoginPage() {
     setLoading(true);
     try {
       if (saasEnabled) {
-        clearStoredSession();
         let lastErr;
+        let staleRecovered = false;
         for (let attempt = 0; attempt < 2; attempt += 1) {
           if (attempt > 0) {
             await new Promise((resolve) => { setTimeout(resolve, 600); });
@@ -172,6 +187,16 @@ export default function LoginPage() {
             lastErr = err;
             if (import.meta.env?.DEV) {
               console.error('[LoginPage] falha no login SaaS', err?.name, err?.message);
+            }
+            const blockedByStale = isLoginBlockedByStaleAuth(err, {
+              hasPlatformAuth: hasPersistedPlatformAuth(),
+            });
+            if (!staleRecovered && (isStaleRefreshAuthError(err) || blockedByStale)) {
+              await recoverFromStalePlatformAuth();
+              staleRecovered = true;
+              setToast({ message: STALE_SESSION_CLEARED_MESSAGE, type: 'success' });
+              setTimeout(() => setToast(null), 6000);
+              continue;
             }
             if (attempt === 0 && isAbortLikeError(err)) continue;
             throw err;

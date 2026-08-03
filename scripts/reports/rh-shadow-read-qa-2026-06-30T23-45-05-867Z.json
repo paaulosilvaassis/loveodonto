@@ -1,0 +1,205 @@
+{
+  "tag": "[RH_SHADOW]",
+  "tenant": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+  "comparedAt": "2026-06-30T23:45:05.864Z",
+  "durationMs": 905,
+  "matchPercent": 0,
+  "diffCount": 4,
+  "blockingDiffCount": 0,
+  "transitionalDiffCount": 0,
+  "informationalDiffCount": 4,
+  "canPromoteReadPrimary": true,
+  "promotionBlockers": [],
+  "localCount": 4,
+  "remoteCount": 4,
+  "summary": {
+    "localCount": 4,
+    "remoteCount": 4,
+    "matchCount": 0,
+    "missingLocalCount": 0,
+    "missingRemoteCount": 0,
+    "fieldDiffCount": 4,
+    "duplicateCount": 0,
+    "invalidUuidCount": 0,
+    "invalidLegacyCount": 0,
+    "countMismatch": false,
+    "blockingDiffCount": 0,
+    "transitionalDiffCount": 0,
+    "informationalDiffCount": 4,
+    "canPromoteReadPrimary": true
+  },
+  "classification": {
+    "blockingDiffCount": 0,
+    "transitionalDiffCount": 0,
+    "informationalDiffCount": 4,
+    "canPromoteReadPrimary": true,
+    "promotionBlockers": [],
+    "blocking_diff": [],
+    "transitional_diff": [],
+    "informational_diff": [
+      {
+        "ref": {
+          "legacyId": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+          "uuid": "9284488d-c0b1-4200-b728-82f757aaf1e0",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:47.286Z",
+            "remoteValue": "2026-06-29T23:28:17.967937+00:00",
+            "tier": "informational_diff",
+            "reason": "updated_at divergente — esperado durante backfill/sync; remoto igual ou mais recente."
+          }
+        ],
+        "highestTier": "informational_diff"
+      },
+      {
+        "ref": {
+          "legacyId": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+          "uuid": "6eeabd6b-0a8b-4d88-8715-400e092d3212",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:46.241Z",
+            "remoteValue": "2026-06-29T23:28:18.082968+00:00",
+            "tier": "informational_diff",
+            "reason": "updated_at divergente — esperado durante backfill/sync; remoto igual ou mais recente."
+          }
+        ],
+        "highestTier": "informational_diff"
+      },
+      {
+        "ref": {
+          "legacyId": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+          "uuid": "e3f0f230-4dfa-44f3-9f4d-41c6babcef03",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:46.241Z",
+            "remoteValue": "2026-06-29T23:28:18.131636+00:00",
+            "tier": "informational_diff",
+            "reason": "updated_at divergente — esperado durante backfill/sync; remoto igual ou mais recente."
+          }
+        ],
+        "highestTier": "informational_diff"
+      },
+      {
+        "ref": {
+          "legacyId": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+          "uuid": "140c5833-7fe8-429a-ace2-ba79d774d85a",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T19:01:39.910Z",
+            "remoteValue": "2026-06-29T23:28:18.177561+00:00",
+            "tier": "informational_diff",
+            "reason": "updated_at divergente — esperado durante backfill/sync; remoto igual ou mais recente."
+          }
+        ],
+        "highestTier": "informational_diff"
+      }
+    ],
+    "structural": []
+  },
+  "flags": {
+    "RH_SUPABASE_READ": true,
+    "RH_SHADOW_READ": true,
+    "RH_COMPARE_IDB_SUPABASE": true,
+    "RH_SUPABASE_READ_PRIMARY": false,
+    "RH_SUPABASE_WRITE": false,
+    "RH_IDB_WRITE_DISABLED": false,
+    "RH_ALLOW_SYNTHETIC_STUBS": true
+  },
+  "writesExecuted": false,
+  "productionTouched": false,
+  "details": {
+    "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+    "comparedAt": "2026-06-30T23:45:05.864Z",
+    "counts": {
+      "local": 4,
+      "remote": 4
+    },
+    "match": [],
+    "missing_local": [],
+    "missing_remote": [],
+    "field_diff": [
+      {
+        "ref": {
+          "legacyId": "col-saas-362c17b7-0abd-4d3f-8669-69c8f409b341",
+          "uuid": "9284488d-c0b1-4200-b728-82f757aaf1e0",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:47.286Z",
+            "remoteValue": "2026-06-29T23:28:17.967937+00:00"
+          }
+        ]
+      },
+      {
+        "ref": {
+          "legacyId": "col-f93e5dbf-bcc0-4c6d-8f94-f90f7f46bb70",
+          "uuid": "6eeabd6b-0a8b-4d88-8715-400e092d3212",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:46.241Z",
+            "remoteValue": "2026-06-29T23:28:18.082968+00:00"
+          }
+        ]
+      },
+      {
+        "ref": {
+          "legacyId": "col-6b85c4cb-345a-4cff-9636-f07ac1aea9f2",
+          "uuid": "e3f0f230-4dfa-44f3-9f4d-41c6babcef03",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T21:06:46.241Z",
+            "remoteValue": "2026-06-29T23:28:18.131636+00:00"
+          }
+        ]
+      },
+      {
+        "ref": {
+          "legacyId": "col-c52fd5ce-4bc9-4c7d-a4c0-298525d401a3",
+          "uuid": "140c5833-7fe8-429a-ace2-ba79d774d85a",
+          "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+        },
+        "diffs": [
+          {
+            "field": "updated_at",
+            "localValue": "2026-06-29T19:01:39.910Z",
+            "remoteValue": "2026-06-29T23:28:18.177561+00:00"
+          }
+        ]
+      }
+    ],
+    "duplicate": [],
+    "invalid_uuid": [],
+    "invalid_legacy": []
+  },
+  "meta": {
+    "method": "cli-rh-shadow-read-qa",
+    "supabaseProjectRef": "tckdjyunwmdpqmewrwvt",
+    "rhExportPath": "C:\\Users\\paaul\\Desktop\\appgestaoodonto-main\\appgestaoodonto\\collaborators-export.json",
+    "remapExportForStaging": true,
+    "readOnly": true,
+    "writesExecuted": false,
+    "productionTouched": false,
+    "functionalChanges": false,
+    "gitCommit": false
+  }
+}

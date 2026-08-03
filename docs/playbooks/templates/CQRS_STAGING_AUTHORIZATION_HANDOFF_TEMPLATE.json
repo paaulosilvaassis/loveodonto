@@ -1,0 +1,61 @@
+{
+  "handoffId": "",
+  "architectureVersion": "3.8.5-cqrs-local",
+  "status": "incomplete",
+  "owners": [],
+  "roleAssignments": {
+    "architecture_owner": null,
+    "staging_environment_owner": null,
+    "security_readonly_verifier": null,
+    "tenant_owner": null,
+    "business_owner": null,
+    "stage_one_approver": null,
+    "execution_operator": null,
+    "rollback_operator": null,
+    "evidence_reviewer": null
+  },
+  "requiredApprovals": {
+    "humanApproval": "pending",
+    "readonlyVerificationApproval": "pending",
+    "stageOneAuthorization": "pending",
+    "stageOneExecutionApproval": "pending"
+  },
+  "evidence": {
+    "local": "prepared",
+    "human": "manual_required",
+    "remote": "remote_required"
+  },
+  "readonlyVerification": "blocked",
+  "stageOne": "blocked",
+  "blockers": [
+    "MISSING_STAGING_ENVIRONMENT",
+    "MISSING_ENVIRONMENT_OWNER",
+    "MISSING_HUMAN_APPROVAL",
+    "MISSING_PILOT_TENANTS",
+    "READONLY_ACCESS_UNVERIFIED",
+    "MISSING_READONLY_VERIFICATION_APPROVAL",
+    "REMOTE_VERIFICATION_NOT_PERFORMED",
+    "MISSING_STAGE_ONE_AUTHORIZATION",
+    "MISSING_EXECUTION_APPROVAL",
+    "ROLLBACK_NOT_HUMAN_REVIEWED",
+    "RISKS_NOT_HUMAN_ACCEPTED"
+  ],
+  "flags": {
+    "DOMAIN_EVENTS": false,
+    "DOMAIN_EVENT_AUDIT": false,
+    "DOMAIN_EVENT_OBSERVABILITY": false,
+    "DOMAIN_EVENT_CONSUMERS": false,
+    "CQRS_READ_MODEL": false
+  },
+  "remoteConnectionOpened": false,
+  "remoteReadsExecuted": false,
+  "remoteWritesExecuted": false,
+  "flagsChanged": false,
+  "stageOneExecuted": false,
+  "nextAllowedAction": "assign_handoff_owners",
+  "forbiddenActions": [
+    "execute_stage_one",
+    "change_flags",
+    "connect_remotely_without_approval"
+  ]
+}

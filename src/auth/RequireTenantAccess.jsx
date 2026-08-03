@@ -3,7 +3,6 @@ import TenantNoMembershipPage from '../pages/TenantNoMembershipPage.jsx';
 import { useTenant } from '../tenant/useTenant.js';
 import { useAuth } from './useAuth.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
-import { tenantAudit } from '../services/tenantAuditLog.js';
 import { DEV_BACKEND_NOT_RUNNING_MSG } from '../config/adminApiBase.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
 
@@ -14,13 +13,6 @@ function classifyTenantError(message) {
       code: 'AUTH_FAILED',
       title: 'Sua sessão precisa ser renovada',
       help: 'Faça login novamente somente se o problema persistir após tentar recarregar.',
-    };
-  }
-  if (lower.includes('clínica não configurada') || lower.includes('tenant_profile_missing')) {
-    return {
-      code: 'TENANT_PROFILE_MISSING',
-      title: 'Clínica não configurada para este usuário',
-      help: 'Entre em contato com o administrador da clínica para concluir o cadastro.',
     };
   }
   if (lower.includes('tenant') || lower.includes('clínica') || lower.includes('vínculo')) {
@@ -70,22 +62,13 @@ function classifyTenantError(message) {
 }
 
 export default function RequireTenantAccess({ children }) {
-  const { loading, error, isTenantBlocked, refreshTenantContext, tenant, clinicProfile } = useTenant();
+  const { loading, error, isTenantBlocked, refreshTenantContext, tenant } = useTenant();
   const { logoutWithReason, user } = useAuth();
 
   const sessionTenantId = String(user?.tenantId || user?.tenant_id || '').trim();
   const contextTenantId = String(tenant?.id || '').trim();
 
   if (user && isSaasModeEnabled() && !sessionTenantId) {
-    tenantAudit('TENANT_GUARD', {
-      user_id: user.id,
-      email: user.email,
-      tenant_id: null,
-      role: user.role,
-      source: 'session',
-      status: 'blocked',
-      error: 'missing_session_tenant_id',
-    });
     emitStabilityLog('TENANT_GUARD_BLOCKED', { reason: 'missing_session_tenant_id', userId: user.id });
     return <TenantNoMembershipPage />;
   }
@@ -96,15 +79,6 @@ export default function RequireTenantAccess({ children }) {
     && contextTenantId
     && sessionTenantId !== contextTenantId
   ) {
-    tenantAudit('TENANT_GUARD', {
-      user_id: user.id,
-      email: user.email,
-      tenant_id: sessionTenantId,
-      role: user.role,
-      source: 'session',
-      status: 'mismatch',
-      error: `context=${contextTenantId}`,
-    });
     emitStabilityLog('TENANT_GUARD_MISMATCH', {
       userId: user.id,
       sessionTenantId,
@@ -142,27 +116,12 @@ export default function RequireTenantAccess({ children }) {
 
   if (error) {
     const classified = classifyTenantError(error);
-    tenantAudit('TENANT_GUARD', {
-      user_id: user?.id,
-      email: user?.email,
-      tenant_id: sessionTenantId || null,
-      role: user?.role,
-      source: 'tenant_users',
-      status: 'error',
-      error: String(error),
-      extra: { code: classified.code },
-    });
     emitStabilityLog(classified.code, { reason: String(error || '') });
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#94a3b8', textAlign: 'center', padding: '1.5rem' }}>
         <div style={{ maxWidth: '28rem' }}>
           <p style={{ margin: '0 0 0.75rem' }}>{classified.title}</p>
-          <p style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', color: '#ef4444' }}>{error}</p>
-          {classified.code ? (
-            <p className="muted" style={{ margin: '0 0 1rem', fontSize: '0.8rem' }}>
-              Código: {classified.code}
-            </p>
-          ) : null}
+          <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: '#ef4444' }}>{error}</p>
           <p className="muted" style={{ margin: '0 0 1rem', fontSize: '0.85rem' }}>{classified.help}</p>
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center' }}>
             <button
@@ -199,40 +158,6 @@ export default function RequireTenantAccess({ children }) {
 
   if (isTenantBlocked) {
     return <TenantAccessBlockedPage />;
-  }
-
-  if (
-    user
-    && isSaasModeEnabled()
-    && sessionTenantId
-    && !loading
-    && !error
-    && tenant?.id
-    && !clinicProfile?.tenant_id
-  ) {
-    tenantAudit('TENANT_GUARD', {
-      user_id: user.id,
-      email: user.email,
-      tenant_id: sessionTenantId,
-      role: user.role,
-      source: 'tenant_users',
-      status: 'blocked',
-      error: 'missing_clinic_profile',
-    });
-    emitStabilityLog('TENANT_GUARD_BLOCKED', { reason: 'missing_clinic_profile', userId: user.id });
-    return (
-      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', color: '#94a3b8', textAlign: 'center', padding: '1.5rem' }}>
-        <div style={{ maxWidth: '28rem' }}>
-          <p style={{ margin: '0 0 0.75rem' }}>Clínica não configurada para este usuário</p>
-          <p className="muted" style={{ margin: '0 0 1rem', fontSize: '0.85rem' }}>
-            O vínculo com a clínica existe, mas o perfil visual ainda não foi provisionado no servidor.
-          </p>
-          <button type="button" className="button primary" onClick={() => refreshTenantContext(false)}>
-            Tentar novamente
-          </button>
-        </div>
-      </div>
-    );
   }
 
   return children;

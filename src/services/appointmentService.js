@@ -11,6 +11,20 @@ import {
 } from './commissionCalculationService.js';
 import { addMinutesToTime, toMinutes as agendaToMinutes, minutesToTime } from '../utils/agendaUtils.js';
 import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
+import {
+  readGetAppointment,
+  readListAppointmentBlocks,
+  readListAppointments,
+} from './agendaReadAdapter.js';
+import {
+  scheduleAgendaDualWriteCreate,
+  scheduleAgendaDualWriteUpdate,
+} from './agendaWriteAdapter.js';
+import { getAgendaTenantIdFromDbSync } from '../repositories/agenda/agendaIndexedDbRepository.ts';
+import {
+  scheduleAppointmentCreatedDomainEvent,
+  scheduleAppointmentMutationDomainEvent,
+} from './agendaAppointmentDomainEventPublisher.js';
 
 export const APPOINTMENT_STATUS = {
   AGENDADO: 'agendado',
@@ -161,15 +175,45 @@ export const hasConflict = ({
   return appointmentConflict || professionalDoubleBooked || blockConflict;
 };
 
-export const listAppointments = () => {
+const resolveAgendaTenantHint = () => getAgendaTenantIdFromDbSync() || '';
+
+const applyLocalAppointmentFilters = (rows, filters = {}) => {
+  let list = Array.isArray(rows) ? rows : [];
+  if (filters.date) list = list.filter((item) => item.date === filters.date);
+  if (filters.dateFrom) list = list.filter((item) => String(item.date) >= filters.dateFrom);
+  if (filters.dateTo) list = list.filter((item) => String(item.date) <= filters.dateTo);
+  if (filters.professionalId) {
+    list = list.filter((item) => item.professionalId === filters.professionalId);
+  }
+  if (filters.roomId) list = list.filter((item) => item.roomId === filters.roomId);
+  if (filters.status) {
+    const statuses = Array.isArray(filters.status) ? filters.status : [filters.status];
+    list = list.filter((item) => statuses.includes(String(item.status || '')));
+  }
+  if (filters.tenantId) {
+    list = list.filter((item) => !item.tenant_id || item.tenant_id === filters.tenantId);
+  }
+  return list;
+};
+
+export const listAppointments = (filters = {}) => {
+  const tenantHint = filters.tenantId || resolveAgendaTenantHint();
+  const fromRepo = readListAppointments({ ...filters, tenantId: tenantHint || undefined });
+  if (fromRepo !== null) return fromRepo.map(normalizeWorkflow);
   const db = loadDb();
-  return (db.appointments || []).map(normalizeWorkflow);
+  return applyLocalAppointmentFilters(db.appointments || [], filters).map(normalizeWorkflow);
 };
 
 export const getAppointmentDetails = (appointmentId) => {
+  const tenantHint = resolveAgendaTenantHint();
+  const fromRepo = readGetAppointment(appointmentId, tenantHint);
   const db = loadDb();
   const appointments = db.appointments || [];
-  const appointment = normalizeWorkflow(appointments.find((item) => item.id === appointmentId));
+  const appointment = normalizeWorkflow(
+    fromRepo !== null
+      ? fromRepo
+      : appointments.find((item) => item.id === appointmentId),
+  );
   if (!appointment) return null;
 
   const patients = db.patients || [];
@@ -195,7 +239,13 @@ export const getAppointmentDetails = (appointmentId) => {
     email: patient?.email || null,
   };
 };
-export const listBlocks = () => loadDb().appointmentBlocks || [];
+export const listBlocks = (filters = {}) => {
+  const fromRepo = readListAppointmentBlocks(filters);
+  if (fromRepo !== null) return fromRepo;
+  const blocks = loadDb().appointmentBlocks || [];
+  if (!filters?.date) return blocks;
+  return blocks.filter((block) => block.date === filters.date);
+};
 
 const SLOT_STEP_MINUTES = 15;
 const DEFAULT_WORK_START = '08:00';
@@ -362,6 +412,8 @@ export const createAppointmentFromCrm = (user, payload) => {
     leadId: payload.leadId,
     userId: user?.id,
   });
+  scheduleAgendaDualWriteCreate(user, appointment);
+  scheduleAppointmentCreatedDomainEvent(user, appointment);
   return appointment;
 };
 
@@ -428,16 +480,20 @@ export const createAppointment = (user, payload) => {
     return db;
   });
   logAction('agenda:create', { appointmentId: appointment.id, userId: user.id });
+  scheduleAgendaDualWriteCreate(user, appointment);
+  scheduleAppointmentCreatedDomainEvent(user, appointment);
   return appointment;
 };
 
 export const updateAppointment = (user, appointmentId, payload) => {
   requirePermission(user, 'agenda:write');
-  return withDb((db) => {
+  let previous = null;
+  const updated = withDb((db) => {
     const index = db.appointments.findIndex((item) => item.id === appointmentId);
     if (index < 0) {
       throw new Error('Consulta não encontrada.');
     }
+    previous = { ...db.appointments[index] };
     const next = normalizeWorkflow({
       ...db.appointments[index],
       ...payload,
@@ -470,6 +526,9 @@ export const updateAppointment = (user, appointmentId, payload) => {
     logAction('agenda:update', { appointmentId, userId: user.id });
     return db.appointments[index];
   });
+  scheduleAgendaDualWriteUpdate(user, updated, payload);
+  scheduleAppointmentMutationDomainEvent(user, updated, previous, payload);
+  return updated;
 };
 
 export const cancelAppointment = (user, appointmentId, reason = '') => {

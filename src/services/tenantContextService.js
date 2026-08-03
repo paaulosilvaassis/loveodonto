@@ -7,8 +7,6 @@ import {
   normalizeModuleKey,
 } from '../tenant/tenantAccess.js';
 import { emitStabilityLog } from './stabilityLogService.js';
-import { tenantAudit, startTenantAuditTimer } from './tenantAuditLog.js';
-import { normalizeClinicProfileForClient } from '../utils/clinicLogo.js';
 import {
   assertAdminApiFetchAllowed,
   buildAdminApiUrl,
@@ -89,12 +87,6 @@ function shouldUseSupabaseFallback(err) {
 
 const TENANT_CONTEXT_FETCH_TIMEOUT_MS = 8000;
 
-function formatHttpTenantError(response, json, fallback) {
-  const code = json?.code ? ` (${json.code})` : '';
-  const msg = json?.error || fallback;
-  return `[HTTP ${response.status}]${code} ${msg}`;
-}
-
 async function runQuery(queryFactory) {
   try {
     const result = await queryFactory();
@@ -110,12 +102,6 @@ async function fetchTenantContextViaAdminApiAttempt() {
   if (!accessToken) {
     throw new Error('Sessão SaaS ausente para carregar contexto da clínica.');
   }
-  const elapsed = startTenantAuditTimer();
-  tenantAudit('TENANT_API', {
-    source: 'tenant_users',
-    status: 'start',
-    extra: { endpoint: '/internal/app/tenant-context' },
-  });
   const fetchOpts = {
     method: 'GET',
     headers: {
@@ -149,62 +135,32 @@ async function fetchTenantContextViaAdminApiAttempt() {
           backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
         });
         if (response.status === 401) {
-          throw new Error(formatHttpTenantError(
-            response,
-            json,
-            'Sua sessão SaaS não foi aceita pelo backend. '
+          throw new Error(
+            json?.error
+            || 'Sua sessão SaaS não foi aceita pelo backend local. '
               + 'Alinhe `VITE_SUPABASE_PLATFORM_*` no app com `SUPABASE_URL` no server (mesmo projeto Supabase).',
-          ));
+          );
         }
         if (response.status === 404) {
-          throw new Error(formatHttpTenantError(
-            response,
-            json,
-            'Usuário sem vínculo em tenant_users ou clínica inexistente. '
+          throw new Error(
+            json?.error
+            || 'Usuário sem vínculo em tenant_users ou clínica inexistente. '
               + 'Provisione a clínica na Platform Console (5177) antes de usar o app.',
-          ));
-        }
-        if (response.status === 422 && json?.code === 'TENANT_PROFILE_MISSING') {
-          const err = new Error(formatHttpTenantError(response, json, 'Clínica não configurada para este usuário.'));
-          err.code = 'TENANT_PROFILE_MISSING';
-          throw err;
-        }
-        if (response.status === 403 && json?.code === 'TENANT_PROFILE_MISMATCH') {
-          const err = new Error(formatHttpTenantError(response, json, 'Perfil da clínica inconsistente com o vínculo do usuário.'));
-          err.code = 'TENANT_PROFILE_MISMATCH';
-          throw err;
-        }
-        if (response.status === 403) {
-          throw new Error(formatHttpTenantError(response, json, 'Acesso negado à clínica.'));
+          );
         }
         if (response.status === 502 || response.status === 503 || response.status === 504 || response.status >= 500) {
-          throw new Error(formatHttpTenantError(response, json, formatAdminApiServerError(response.status)));
+          throw new Error(json?.error || formatAdminApiServerError(response.status));
         }
-        throw new Error(formatHttpTenantError(response, json, 'Erro ao carregar contexto da clínica.'));
+        throw new Error(json?.error || `Erro HTTP ${response.status} ao carregar contexto da clínica.`);
       }
       emitStabilityLog('BACKEND_OK', {
         url,
         backendBaseConfigured: Boolean(getConfiguredAdminApiBaseUrl()),
       });
-      tenantAudit('TENANT_API', {
-        tenant_id: json?.tenant?.id || json?.tenantId || null,
-        role: json?.currentUser?.role || null,
-        source: 'tenant_users',
-        duration_ms: elapsed(),
-        status: 'ok',
-      });
       return json;
     } catch (error) {
       lastError = error;
-      if (!isTransientTenantContextError(error)) {
-        tenantAudit('TENANT_API', {
-          source: 'tenant_users',
-          duration_ms: elapsed(),
-          status: 'error',
-          error: String(error?.message || error),
-        });
-        throw error;
-      }
+      if (!isTransientTenantContextError(error)) throw error;
     } finally {
       clearTimeout(abortTimer);
     }
@@ -298,79 +254,6 @@ function resolveLimits(limitsRow, subscription) {
   return {};
 }
 
-function buildClinicIdFromTenant(tenantId) {
-  return `clinic-${String(tenantId || '').slice(0, 8)}`;
-}
-
-function buildClinicProfileFromTenantRow(tenantRow) {
-  const tenantId = String(tenantRow?.id || '').trim();
-  if (!tenantId) return null;
-  const tradeName = String(tenantRow?.trade_name || '').trim();
-  const legalName = String(tenantRow?.legal_name || '').trim();
-  const displayName = tradeName || legalName || 'Minha Clínica';
-  return {
-    id: buildClinicIdFromTenant(tenantId),
-    tenant_id: tenantId,
-    clinic_id: buildClinicIdFromTenant(tenantId),
-    name: displayName,
-    fantasy_name: tradeName || displayName,
-    legal_name: legalName || tradeName || displayName,
-    logo_url: String(tenantRow?.logo_url || '').trim() || null,
-    email: String(tenantRow?.owner_email || '').trim() || null,
-    phone: String(tenantRow?.phone || '').trim() || null,
-    cnpj: String(tenantRow?.cnpj || '').trim() || null,
-    status: String(tenantRow?.status || 'active').trim() || 'active',
-  };
-}
-
-function mapClinicProfileRow(row, tenantRow) {
-  if (!row?.tenant_id) return buildClinicProfileFromTenantRow(tenantRow);
-  const tenantId = String(row.tenant_id).trim();
-  const name = String(row.name || row.fantasy_name || tenantRow?.trade_name || '').trim() || 'Minha Clínica';
-  return {
-    id: String(row.id || buildClinicIdFromTenant(tenantId)).trim(),
-    tenant_id: tenantId,
-    clinic_id: buildClinicIdFromTenant(tenantId),
-    name,
-    fantasy_name: String(row.fantasy_name || tenantRow?.trade_name || name).trim() || name,
-    legal_name: String(row.legal_name || tenantRow?.legal_name || name).trim() || name,
-    logo_url: String(row.logo_url || '').trim() || null,
-    email: String(row.email || tenantRow?.owner_email || '').trim() || null,
-    phone: String(row.phone || tenantRow?.phone || '').trim() || null,
-    cnpj: String(row.cnpj || tenantRow?.cnpj || '').trim() || null,
-    status: String(row.status || tenantRow?.status || 'active').trim() || 'active',
-  };
-}
-
-function isMissingClinicProfilesTableError(error) {
-  const code = String(error?.code || '').toUpperCase();
-  const message = String(error?.message || '').toLowerCase();
-  return (
-    code === 'PGRST205'
-    || code === '42P01'
-    || (message.includes('relation') && message.includes('clinic_profiles'))
-  );
-}
-
-async function fetchOptionalClinicProfile(client, tenantId, tenantRow) {
-  if (!client || !tenantId || !tenantRow) return null;
-  try {
-    const { data, error } = await client
-      .from('clinic_profiles')
-      .select('id, tenant_id, name, fantasy_name, legal_name, logo_url, email, phone, cnpj, status')
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
-    if (error && !isMissingClinicProfilesTableError(error)) throw error;
-    if (error) return buildClinicProfileFromTenantRow(tenantRow);
-    return mapClinicProfileRow(data, tenantRow) || buildClinicProfileFromTenantRow(tenantRow);
-  } catch (err) {
-    if (import.meta.env?.DEV) {
-      console.debug('[tenant-context] clinic_profiles fallback:', err?.message);
-    }
-    return buildClinicProfileFromTenantRow(tenantRow);
-  }
-}
-
 export async function getTenantContext(tenantId) {
   if (!tenantId) {
     throw new Error('Clínica não informada para carregar o contexto.');
@@ -414,15 +297,12 @@ export async function getTenantContext(tenantId) {
     });
     return {
       tenant: apiContext.tenant || null,
-      clinicProfile: normalizeClinicProfileForClient(apiContext.clinicProfile),
       modules: apiContext.modules || createDefaultModuleMap(),
       flags: apiContext.flags || {},
       limits: apiContext.limits || {},
       subscription: apiContext.subscription || null,
       warnings: Array.isArray(apiContext.warnings) ? apiContext.warnings : [],
       currentUser: apiContext.currentUser || null,
-      teamRoster: Array.isArray(apiContext.teamRoster) ? apiContext.teamRoster : [],
-      access: apiContext.access || null,
     };
   }
 
@@ -473,12 +353,8 @@ export async function getTenantContext(tenantId) {
   if (String(tenant.billing_status || '').toLowerCase() === 'overdue') {
     warnings.push('Existem pendências de cobrança');
   }
-  const clinicProfile = normalizeClinicProfileForClient(
-    await fetchOptionalClinicProfile(client, tenantId, tenant),
-  );
   return {
     tenant,
-    clinicProfile,
     modules,
     flags,
     limits,
@@ -503,7 +379,6 @@ export function subscribeTenantRealtimeChanges(tenantId, onChange) {
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tenant_subscriptions', filter: `tenant_id=eq.${tenantId}` }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'feature_flags' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'clinic_profiles', filter: `tenant_id=eq.${tenantId}` }, onChange)
     .subscribe();
 
   return () => {

@@ -1,12 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  __resetFirstAccessSessionForTests,
   buildPrimeiroAcessoPathWithAuth,
+  captureAuthCallbackFromUrl,
   classifyFirstAccessError,
   hasSupabaseAuthCallback,
+  isAbortError,
   parseAuthCallbackFromUrl,
   resolvePrimeiroAcessoRedirect,
 } from '../utils/firstAccessSession.js';
+
 describe('firstAccessSession', () => {
+  beforeEach(() => {
+    __resetFirstAccessSessionForTests();
+  });
+
   it('detecta tokens no hash', () => {
     const parsed = parseAuthCallbackFromUrl({
       href: 'https://loveodonto.com.br/primeiro-acesso#access_token=abc&refresh_token=def&type=invite',
@@ -74,5 +82,34 @@ describe('firstAccessSession', () => {
     const result = classifyFirstAccessError(new Error('Email link is invalid or has expired'));
     expect(result.code).toBe('expired_link');
     expect(result.message).toContain('expirou');
+  });
+
+  it('classifica AbortError como transitório (não mostra signal is aborted)', () => {
+    const abort = new Error('signal is aborted without reason');
+    abort.name = 'AbortError';
+    expect(isAbortError(abort)).toBe(true);
+    const result = classifyFirstAccessError(abort);
+    expect(result.code).toBe('aborted');
+    expect(result.transient).toBe(true);
+    expect(result.message.toLowerCase()).not.toContain('signal is aborted');
+  });
+
+  it('preserva tokens do hash na segunda leitura sem hash (StrictMode)', () => {
+    const first = captureAuthCallbackFromUrl({
+      href: 'http://localhost:5176/primeiro-acesso#access_token=tok&refresh_token=ref&type=recovery',
+      search: '',
+      hash: '#access_token=tok&refresh_token=ref&type=recovery',
+    });
+    expect(first.accessToken).toBe('tok');
+    expect(first.refreshToken).toBe('ref');
+
+    const second = captureAuthCallbackFromUrl({
+      href: 'http://localhost:5176/primeiro-acesso',
+      search: '',
+      hash: '',
+    });
+    expect(second.accessToken).toBe('tok');
+    expect(second.refreshToken).toBe('ref');
+    expect(second.type).toBe('recovery');
   });
 });

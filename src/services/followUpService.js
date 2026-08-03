@@ -20,6 +20,20 @@
 
 import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
+import {
+  readGetStrategicFollowUpWaveB,
+  readListStrategicFollowUpsWaveB,
+} from './crmWaveBAdapter.js';
+import {
+  scheduleActivityDualWriteCreateStrategicFollowUp,
+  scheduleActivityDualWriteUpdateStrategicFollowUp,
+} from './crmActivityWriteAdapter.js';
+import { getCrmTenantIdFromDbSync } from '../repositories/crm/crmIndexedDbRepository.ts';
+import {
+  scheduleFollowUpCreatedDomainEvent,
+  scheduleFollowUpMutationDomainEvent,
+  scheduleFollowUpCompletedDomainEvent,
+} from './crmFollowUpDomainEventPublisher.js';
 
 const DEFAULT_CLINIC_ID = 'clinic-1';
 
@@ -37,6 +51,19 @@ const getClinicId = () => {
  * @returns {FollowUp[]}
  */
 export function listFollowUps(filters = {}) {
+  const tenantHint = filters.tenantId || getCrmTenantIdFromDbSync() || '';
+  const fromRepo = readListStrategicFollowUpsWaveB({ ...filters, tenantId: tenantHint || undefined });
+  if (fromRepo !== null) {
+    const clinicId = filters.clinicId || getClinicId();
+    let list = fromRepo.filter((f) => !clinicId || f.clinicId === clinicId);
+    if (filters.patientId) list = list.filter((f) => f.patientId === filters.patientId);
+    if (filters.leadId) list = list.filter((f) => f.leadId === filters.leadId);
+    if (filters.status === 'pending') list = list.filter((f) => f.status === 'pending');
+    if (filters.status === 'completed') list = list.filter((f) => f.status === 'completed');
+    list.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    return list;
+  }
+
   const db = loadDb();
   const clinicId = filters.clinicId || getClinicId();
   let list = [...(db.followUps || [])].filter((f) => f.clinicId === clinicId);
@@ -46,6 +73,18 @@ export function listFollowUps(filters = {}) {
   if (filters.status === 'completed') list = list.filter((f) => f.status === 'completed');
   list.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   return list;
+}
+
+/**
+ * Obtém follow-up estratégico por id (`followUps`).
+ */
+export function getStrategicFollowUp(followUpId) {
+  const tenantHint = getCrmTenantIdFromDbSync() || '';
+  const fromRepo = readGetStrategicFollowUpWaveB(followUpId, tenantHint);
+  if (fromRepo !== null) return fromRepo;
+
+  const db = loadDb();
+  return (db.followUps || []).find((f) => f.id === followUpId) || null;
 }
 
 /**
@@ -83,12 +122,12 @@ export function getFollowUpSummary() {
  * @returns {FollowUp}
  */
 export function createFollowUp(user, data) {
-  return withDb((db) => {
+  const followUp = withDb((db) => {
     if (!db.followUps) db.followUps = [];
     const clinicId = getClinicId();
     const now = new Date().toISOString();
     const dueDate = data.dueDate || now.slice(0, 10);
-    const followUp = {
+    const record = {
       id: createId('fup'),
       clinicId,
       patientId: data.patientId || null,
@@ -103,10 +142,35 @@ export function createFollowUp(user, data) {
       assignedTo: data.assignedTo || user?.id || null,
       createdAt: now,
       completedAt: null,
+      tenant_id: data.tenant_id || user?.tenantId || db.clinicProfile?.tenant_id || null,
     };
-    db.followUps.push(followUp);
-    return followUp;
+    db.followUps.push(record);
+    return record;
   });
+  scheduleActivityDualWriteCreateStrategicFollowUp(user, followUp);
+  scheduleFollowUpCreatedDomainEvent(user, followUp, 'followUps');
+  return followUp;
+}
+
+/** Alias Phase 6.7. */
+export const createStrategicFollowUp = createFollowUp;
+
+/**
+ * Atualiza follow-up estratégico (`followUps`).
+ */
+export function updateStrategicFollowUp(user, followUpId, data = {}) {
+  let previous = null;
+  const updated = withDb((db) => {
+    const list = db.followUps || [];
+    const idx = list.findIndex((f) => f.id === followUpId);
+    if (idx === -1) throw new Error('Follow-up estratégico não encontrado');
+    previous = { ...list[idx] };
+    list[idx] = { ...list[idx], ...data, id: list[idx].id };
+    return list[idx];
+  });
+  scheduleActivityDualWriteUpdateStrategicFollowUp(user, updated);
+  scheduleFollowUpMutationDomainEvent(user, updated, previous, data, 'followUps');
+  return updated;
 }
 
 /**
@@ -115,7 +179,7 @@ export function createFollowUp(user, data) {
  * @param {string} followUpId
  */
 export function completeFollowUp(user, followUpId) {
-  return withDb((db) => {
+  const completed = withDb((db) => {
     const list = db.followUps || [];
     const idx = list.findIndex((f) => f.id === followUpId);
     if (idx === -1) return null;
@@ -123,6 +187,11 @@ export function completeFollowUp(user, followUpId) {
     list[idx] = { ...list[idx], status: 'completed', completedAt: now };
     return list[idx];
   });
+  if (completed) {
+    scheduleActivityDualWriteUpdateStrategicFollowUp(user, completed);
+    scheduleFollowUpCompletedDomainEvent(user, completed, 'followUps');
+  }
+  return completed;
 }
 
 /**

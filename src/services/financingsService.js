@@ -1,6 +1,16 @@
 import { loadDb, withDb } from '../db/index.js';
 import { requirePermission, can } from '../permissions/permissions.js';
 import { createId } from './helpers.js';
+import { readGetFinancing, readListFinancings } from './financialReadAdapter.js';
+import {
+  scheduleFinancialDualWriteCreateFinancing,
+  scheduleFinancialDualWriteUpdateFinancing,
+} from './financialWriteAdapter.js';
+import {
+  scheduleFinancingCreatedDomainEvent,
+  scheduleFinancingUpdatedDomainEvent,
+} from './financialDomainEventPublisher.js';
+import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
 import {
   calculateFinancingSummary,
   buildInstallmentsSchedule,
@@ -99,8 +109,11 @@ const computeFinancingStatusFromInstallments = (installments) => {
 };
 
 export const listFinancings = (filters = {}) => {
+  const fromRepo = readListFinancings(filters);
   const db = loadDb();
-  let items = Array.isArray(db.financings) ? [...db.financings] : [];
+  let items = fromRepo !== null
+    ? [...fromRepo]
+    : (Array.isArray(db.financings) ? [...db.financings] : []);
   const installments = Array.isArray(db.financingInstallments) ? db.financingInstallments : [];
 
   items = items.map((item) => {
@@ -132,6 +145,8 @@ export const listFinancings = (filters = {}) => {
 };
 
 export const getFinancingById = (id) => {
+  const fromRepo = readGetFinancing(id);
+  if (fromRepo !== null) return fromRepo;
   const db = loadDb();
   const list = Array.isArray(db.financings) ? db.financings : [];
   return list.find((item) => item.id === id) || null;
@@ -293,6 +308,10 @@ export const createFinancingProposal = (user, payload, options = {}) => {
       clinical_appointment_id: payload.clinical_appointment_id || null,
       budget_id: payload.budget_id || null,
     },
+  });
+  scheduleFinancialDualWriteCreateFinancing(user, record);
+  scheduleFinancingCreatedDomainEvent(user, record, {
+    tenantId: resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId),
   });
   return record;
 };
@@ -1084,5 +1103,9 @@ export const updateFinancingTerms = (user, financingId, patch = {}) => {
   });
 
   syncClinicalBudgetIfNeeded(financingId, user?.id);
+  scheduleFinancialDualWriteUpdateFinancing(user, updated, patch);
+  scheduleFinancingUpdatedDomainEvent(user, updated, patch, {
+    tenantId: resolveTenantIdForWrite(user, updated?.tenant_id || updated?.tenantId),
+  });
   return updated;
 };
