@@ -37,6 +37,8 @@
     "supabase:local:contracts-v2-phase1010": "node scripts/supabase/runLocalContractsV2Phase1010Validation.mjs",
     "supabase:local:contracts-v2-phase1012": "node scripts/supabase/runLocalContractsV2Phase1012Validation.mjs",
     "contracts-v2:staging-preflight": "node scripts/contracts-v2-staging-preflight.mjs",
+    "contracts-v2:staging-apply": "node scripts/supabase/runStagingContractsV2Apply.mjs",
+    "contracts-v2:staging-apply:execute": "node scripts/supabase/runStagingContractsV2Apply.mjs --apply",
     "test:supabase:phase109": "vitest run src/__tests__/phase109ControlledLocalPersistence.test.js",
     "test:supabase:phase1010": "vitest run src/__tests__/phase1010SecureSigningSessionPersistenceAndPrivateStorage.test.js",
     "test:supabase:phase1011": "vitest run src/__tests__/phase1011PublicSigningEndpointWiringAndDeliverySimulation.test.js",
