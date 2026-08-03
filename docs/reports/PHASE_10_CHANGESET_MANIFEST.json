@@ -1,0 +1,62 @@
+{
+  "baseline": {
+    "branch": "main",
+    "head": "b95eff1b5f151326b218d0f97482bb387c12f993",
+    "phases": ["10.1", "10.2", "10.3", "10.4", "10.5", "10.6", "10.7", "10.8", "10.9", "10.10", "10.11", "10.12"]
+  },
+  "unrelatedOrTemporary": [
+    ".cursor/debug-788b55.log",
+    ".cursor/debug-bf53c2.log",
+    "debug-68fcb4.log",
+    ".DS_Store",
+    "collaborators-export.json",
+    "erro_supabase.txt",
+    "tsconfig.tsbuildinfo"
+  ],
+  "secretsInGit": false,
+  "migrations": [
+    { "file": "028_app_contracts_v2_foundation.sql", "phase": "10.3", "sha256Prefix": "db0a515a6e89", "mirrorsOk": true },
+    { "file": "029_app_contracts_v2_rls.sql", "phase": "10.3", "sha256Prefix": "e02207797c2d", "mirrorsOk": true },
+    { "file": "030_app_contract_ledger.sql", "phase": "10.8/10.9", "sha256Prefix": "ad2d20a2e799", "mirrorsOk": true },
+    { "file": "031_app_contract_number_sequences.sql", "phase": "10.9", "sha256Prefix": "91107b00f12d", "mirrorsOk": true },
+    { "file": "032_app_signature_sessions_and_challenges.sql", "phase": "10.10", "sha256Prefix": "faa509987ad2", "mirrorsOk": true },
+    { "file": "033_app_contract_private_storage_local.sql", "phase": "10.10", "sha256Prefix": "77ca97bf8914", "mirrorsOk": true },
+    { "file": "034_app_signature_delivery_attempts.sql", "phase": "10.11", "sha256Prefix": "3c4dc98836cd", "mirrorsOk": true }
+  ],
+  "legacy006Altered": false,
+  "localBucket": "contracts-v2-private-local",
+  "stagingBucketPlanned": "contracts-v2-private-staging",
+  "stagingBucketCreated": false,
+  "remoteMigrationsApplied": false,
+  "remoteBucketsCreated": false,
+  "featureFlagDefaultsAllFalse": true,
+  "publicEndpoints": [
+    "POST /public/signatures-v2/:token/open",
+    "POST /public/signatures-v2/:token/view",
+    "POST /public/signatures-v2/:token/challenge",
+    "POST /public/signatures-v2/:token/verify",
+    "POST /public/signatures-v2/:token/accept",
+    "POST /public/signatures-v2/:token/sign",
+    "POST /public/signatures-v2/:token/decline",
+    "GET /public/signatures-v2/:token/status",
+    "GET /public/signatures-v2/:token/document"
+  ],
+  "publicUiRoutes": [
+    "/assinar/v2/:token",
+    "/gestao/contratos/entregas-v2"
+  ],
+  "tables": [
+    "app_signature_policies",
+    "app_contract_templates",
+    "app_contracts",
+    "app_signature_envelopes",
+    "app_signature_signers",
+    "app_contract_files",
+    "app_contract_ledger",
+    "app_signature_sessions",
+    "app_signature_challenges",
+    "app_signature_rate_limits",
+    "app_contract_storage_ops",
+    "app_signature_delivery_attempts"
+  ]
+}
