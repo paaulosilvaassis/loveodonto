@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth.js';
+import { isContractFeatureEnabled } from '../../domain/contracts/contract-feature-flags.ts';
 import { contractsShellNavItems } from '../contractsShellConfig.js';
 
 const isAllowed = (user, allowedRoles) => {
@@ -9,10 +10,20 @@ const isAllowed = (user, allowedRoles) => {
   return allowedRoles.includes(user.role);
 };
 
+const isFeatureAllowed = (item) => {
+  if (Array.isArray(item?.featureFlagsAll) && item.featureFlagsAll.length) {
+    return item.featureFlagsAll.every((flag) => isContractFeatureEnabled(flag));
+  }
+  if (!item?.featureFlag) return true;
+  return isContractFeatureEnabled(item.featureFlag);
+};
+
 export default function ContractsShellLayout() {
   const { user } = useAuth();
   const location = useLocation();
-  const visibleItems = contractsShellNavItems.filter((item) => isAllowed(user, item.rolesAllowed));
+  const visibleItems = contractsShellNavItems.filter(
+    (item) => isAllowed(user, item.rolesAllowed) && isFeatureAllowed(item),
+  );
 
   const isActive = (item) => {
     if (item.route === '/gestao/contratos') {

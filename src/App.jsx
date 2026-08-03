@@ -11,6 +11,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import RedefinirSenhaPage from './pages/RedefinirSenhaPage.jsx';
 import ConvitePage from './pages/ConvitePage.jsx';
 import ContractSignPublicPage from './pages/contratos/ContractSignPublicPage.jsx';
+import ContractSignPublicV2Page from './pages/contratos/ContractSignPublicV2Page.jsx';
 import { PlatformAuthProvider } from './auth/PlatformAuthContext.jsx';
 import FirstAccessRedirectGuard from './auth/FirstAccessRedirectGuard.jsx';
 import RequirePlatformAuth from './auth/RequirePlatformAuth.jsx';
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="/redefinir-senha" element={<RedefinirSenhaPage />} />
             <Route path="/convite" element={<ConvitePage />} />
             <Route path="/assinatura/:token" element={<ContractSignPublicPage />} />
+            <Route path="/assinar/v2/:token" element={<ContractSignPublicV2Page />} />
             <Route path="/platform/login" element={<PlatformAuthShell><PlatformLoginPage /></PlatformAuthShell>} />
             <Route path="/platform" element={<PlatformAuthShell><RequirePlatformAuth><PlatformLayout /></RequirePlatformAuth></PlatformAuthShell>}>
               <Route index element={<Navigate to="/platform/dashboard" replace />} />

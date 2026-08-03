@@ -92,6 +92,18 @@ import ContractsDashboardPage from './pages/contratos/ContractsDashboardPage.jsx
 import ContractsPendentesPage from './pages/contratos/ContractsPendentesPage.jsx';
 import ContractsAssinadosPage from './pages/contratos/ContractsAssinadosPage.jsx';
 import ContractsModelosPage from './pages/contratos/ContractsModelosPage.jsx';
+import ContractsModelosV2Page from './pages/contratos/ContractsModelosV2Page.jsx';
+import ContractsInstanciasV2Page from './pages/contratos/ContractsInstanciasV2Page.jsx';
+import ContractsAssinaturasV2Page from './pages/contratos/ContractsAssinaturasV2Page.jsx';
+import ContractsDocumentosV2Page from './pages/contratos/ContractsDocumentosV2Page.jsx';
+import ContractsConclusaoV2Page from './pages/contratos/ContractsConclusaoV2Page.jsx';
+import ContractsEntregasV2Page from './pages/contratos/ContractsEntregasV2Page.jsx';
+import { isContractTemplatesV2UiEnabled } from './services/contractTemplatesV2Service.js';
+import { isContractsV2UiEnabled } from './services/contractsV2Service.js';
+import { isSignaturesV2UiEnabled } from './services/signaturesV2Service.js';
+import { isContractDocumentsV2UiEnabled } from './services/contractDocumentsV2Service.js';
+import { isContractSigningCompletionV2UiEnabled } from './services/contractSigningCompletionV2Service.js';
+import { isPublicSignaturesV2UiEnabled } from './services/publicSignaturesV2Service.js';
 import ContractsTermosPage from './pages/contratos/ContractsTermosPage.jsx';
 import ContractsAssinaturasPage from './pages/contratos/ContractsAssinaturasPage.jsx';
 import ContractsConfigPage from './pages/contratos/ContractsConfigPage.jsx';
@@ -168,8 +180,26 @@ export default function ProtectedApp() {
           <Route path="pendentes" element={withRole('/gestao/contratos', <ContractsPendentesPage />)} />
           <Route path="assinados" element={withRole('/gestao/contratos', <ContractsAssinadosPage />)} />
           <Route path="modelos" element={withRole('/gestao/contratos', <ContractsModelosPage />)} />
+          {isContractTemplatesV2UiEnabled() ? (
+            <Route path="modelos-v2" element={withRole('/gestao/contratos', <ContractsModelosV2Page />)} />
+          ) : null}
+          {isContractsV2UiEnabled() ? (
+            <Route path="instancias-v2" element={withRole('/gestao/contratos', <ContractsInstanciasV2Page />)} />
+          ) : null}
           <Route path="termos" element={withRole('/gestao/contratos', <ContractsTermosPage />)} />
           <Route path="assinaturas" element={withRole('/gestao/contratos', <ContractsAssinaturasPage />)} />
+          {isSignaturesV2UiEnabled() ? (
+            <Route path="assinaturas-v2" element={withRole('/gestao/contratos', <ContractsAssinaturasV2Page />)} />
+          ) : null}
+          {isContractDocumentsV2UiEnabled() ? (
+            <Route path="documentos-v2" element={withRole('/gestao/contratos', <ContractsDocumentosV2Page />)} />
+          ) : null}
+          {isContractSigningCompletionV2UiEnabled() ? (
+            <Route path="conclusao-v2" element={withRole('/gestao/contratos', <ContractsConclusaoV2Page />)} />
+          ) : null}
+          {isPublicSignaturesV2UiEnabled() ? (
+            <Route path="entregas-v2" element={withRole('/gestao/contratos', <ContractsEntregasV2Page />)} />
+          ) : null}
           <Route path="configuracoes" element={withRole('/gestao/contratos', <ContractsConfigPage />)} />
         </Route>
         <Route path="/gestao-comercial/jornada-do-paciente" element={withRole('/gestao-comercial/jornada-do-paciente', <PatientJourneyPage />)} />

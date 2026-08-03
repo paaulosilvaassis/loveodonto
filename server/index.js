@@ -99,6 +99,14 @@ import { createUsersPatchAccessHandler } from './lib/usersPatchAccessApi.js';
 import { createUsersDeleteHandler } from './lib/usersDeleteApi.js';
 import { createCollaboratorAccessToggleHandler } from './lib/collaboratorAccessToggleApi.js';
 import { createContractsGeneratedHandler } from './lib/contractsGeneratedApi.js';
+import { createContractTemplatesV2Handlers } from './lib/contractTemplatesV2Api.js';
+import { createContractsV2Handlers } from './lib/contractsV2Api.js';
+import { createSignatureEnvelopesV2Handlers } from './lib/signatureEnvelopesV2Api.js';
+import { createPublicSignaturesV2Handlers } from './lib/publicSignaturesV2Api.js';
+import { createPublicSignaturesV2CorsMiddleware } from './lib/contractsV2PublicSecurity.js';
+import { createContractsV2RuntimeReadinessHandlers } from './lib/contractsV2RuntimeReadinessApi.js';
+import { createContractDocumentsV2Handlers } from './lib/contractDocumentsV2Api.js';
+import { createContractSigningCompletionV2Handlers } from './lib/contractSigningCompletionV2Api.js';
 import { createCreateTenantUserFromApp } from './lib/createTenantUserFromApp.js';
 import { createResolveTenantUserForCollaboratorAccess } from './lib/resolveTenantUserForCollaboratorAccess.js';
 import { createSetCollaboratorAccessState } from './lib/setCollaboratorAccessState.js';
@@ -640,6 +648,30 @@ const handleContractsGenerated = createContractsGeneratedHandler({
   supabase,
   normalizeDatabaseError,
 });
+
+/** Modelos v2 — flags OFF; sem getService ⇒ storage unavailable se alguém forçar flag. */
+const contractTemplatesV2 = createContractTemplatesV2Handlers({});
+
+/** Instâncias v2 — flags OFF; sem getService. */
+const contractsV2 = createContractsV2Handlers({});
+
+/** Assinaturas/envelopes v2 — flags OFF; sem getService. */
+const signatureEnvelopesV2 = createSignatureEnvelopesV2Handlers({});
+
+/**
+ * Assinatura pública v2 — Phase 10.11 + hardening 10.12.
+ * Flags OFF + sem getSignerService ⇒ 403/501. Sem delivery real.
+ * Rate limit persistido somente quando deps.persistedRateLimitService injetado.
+ */
+const publicSignaturesV2 = createPublicSignaturesV2Handlers({});
+const publicSignaturesV2Cors = createPublicSignaturesV2CorsMiddleware();
+/** Readiness interno — Phase 10.12 (sem secrets; permissão elevada). */
+const contractsV2RuntimeReadiness = createContractsV2RuntimeReadinessHandlers({});
+
+/** Documentos/PDF v2 — flags OFF; sem getPipeline/storage. */
+const contractDocumentsV2 = createContractDocumentsV2Handlers({});
+/** Conclusão SIGNED / ledger v2 — Phase 10.8 (flags OFF; sem wiring de efeitos). */
+const contractSigningCompletionV2 = createContractSigningCompletionV2Handlers({});
 
 const handleTenantContext = createTenantContextHandler({
   supabase,
@@ -1192,6 +1224,94 @@ app.patch('/internal/app/collaborators/:collaboratorId/access', requireAppUser, 
 
 /** Espelha contrato gerado (IndexedDB â†’ Postgres) quando a migration 006 existir. */
 app.post('/internal/app/contracts/generated', requireAppUser, handleContractsGenerated);
+
+/** Contract templates v2 — Phase 10.4 (feature flags OFF por padrão). */
+app.get('/internal/app/contract-templates-v2', requireAppUser, contractTemplatesV2.list);
+app.post('/internal/app/contract-templates-v2', requireAppUser, contractTemplatesV2.create);
+app.get('/internal/app/contract-templates-v2/:id', requireAppUser, contractTemplatesV2.get);
+app.patch('/internal/app/contract-templates-v2/:id', requireAppUser, contractTemplatesV2.patch);
+app.post('/internal/app/contract-templates-v2/:id/duplicate', requireAppUser, contractTemplatesV2.duplicate);
+app.post('/internal/app/contract-templates-v2/:id/archive', requireAppUser, contractTemplatesV2.archive);
+app.get('/internal/app/contract-templates-v2/:id/versions', requireAppUser, contractTemplatesV2.listVersions);
+app.post('/internal/app/contract-templates-v2/:id/versions', requireAppUser, contractTemplatesV2.createVersion);
+app.get('/internal/app/contract-template-versions-v2/:versionId', requireAppUser, contractTemplatesV2.getVersion);
+app.patch('/internal/app/contract-template-versions-v2/:versionId', requireAppUser, contractTemplatesV2.patchVersion);
+app.post('/internal/app/contract-template-versions-v2/:versionId/review', requireAppUser, contractTemplatesV2.reviewVersion);
+app.post('/internal/app/contract-template-versions-v2/:versionId/publish', requireAppUser, contractTemplatesV2.publishVersion);
+app.post('/internal/app/contract-template-versions-v2/:versionId/validate', requireAppUser, contractTemplatesV2.validateVersion);
+app.post('/internal/app/contract-template-versions-v2/:versionId/preview', requireAppUser, contractTemplatesV2.previewVersion);
+
+/** Contracts v2 instances — Phase 10.5 (feature flags OFF por padrão). */
+app.get('/internal/app/contracts-v2', requireAppUser, contractsV2.list);
+app.post('/internal/app/contracts-v2', requireAppUser, contractsV2.create);
+app.get('/internal/app/contracts-v2/:id', requireAppUser, contractsV2.get);
+app.patch('/internal/app/contracts-v2/:id', requireAppUser, contractsV2.patch);
+app.post('/internal/app/contracts-v2/:id/versions', requireAppUser, contractsV2.createVersion);
+app.post('/internal/app/contracts-v2/:id/versions/:versionId/lock', requireAppUser, contractsV2.lockVersion);
+app.post('/internal/app/contracts-v2/:id/validate', requireAppUser, contractsV2.validate);
+app.post('/internal/app/contracts-v2/:id/transition', requireAppUser, contractsV2.transition);
+app.get('/internal/app/contract-packages-v2', requireAppUser, contractsV2.listPackages);
+app.post('/internal/app/contract-packages-v2', requireAppUser, contractsV2.createPackage);
+app.get('/internal/app/contract-packages-v2/:id', requireAppUser, contractsV2.getPackage);
+app.post('/internal/app/contract-packages-v2/:id/validate', requireAppUser, contractsV2.validatePackage);
+
+/** Signature envelopes v2 — Phase 10.6 (feature flags OFF por padrão). */
+app.get('/internal/app/signature-policies-v2', requireAppUser, signatureEnvelopesV2.listPolicies);
+app.post('/internal/app/signature-policies-v2', requireAppUser, signatureEnvelopesV2.createPolicy);
+app.get('/internal/app/signature-envelopes-v2', requireAppUser, signatureEnvelopesV2.listEnvelopes);
+app.post('/internal/app/signature-envelopes-v2', requireAppUser, signatureEnvelopesV2.createEnvelope);
+app.get('/internal/app/signature-envelopes-v2/:id', requireAppUser, signatureEnvelopesV2.getEnvelope);
+app.post('/internal/app/signature-envelopes-v2/:id/signers', requireAppUser, signatureEnvelopesV2.addSigner);
+app.post('/internal/app/signature-envelopes-v2/:id/ready', requireAppUser, signatureEnvelopesV2.markReady);
+app.post('/internal/app/signature-envelopes-v2/:id/send', requireAppUser, signatureEnvelopesV2.sendEnvelope);
+app.post('/internal/app/signature-envelopes-v2/:id/cancel', requireAppUser, signatureEnvelopesV2.cancelEnvelope);
+app.post('/internal/app/signature-envelopes-v2/:id/expire', requireAppUser, signatureEnvelopesV2.expireEnvelope);
+app.post('/internal/app/signature-envelopes-v2/:id/reconcile', requireAppUser, signatureEnvelopesV2.reconcileEnvelope);
+
+/** Rotas públicas signatures-v2 — Phase 10.11/10.12 (flags OFF; CORS allowlist; sem delivery real). */
+app.options('/public/signatures-v2/:token/*', publicSignaturesV2Cors);
+app.options('/public/signatures-v2/:token/open', publicSignaturesV2Cors);
+app.options('/public/signatures-v2/:token/view', publicSignaturesV2Cors);
+app.options('/public/signatures-v2/:token/challenge', publicSignaturesV2Cors);
+app.options('/public/signatures-v2/:token/verify', publicSignaturesV2Cors);
+app.options('/public/signatures-v2/:token/accept', publicSignaturesV2Cors);
+app.options('/public/signatures-v2/:token/sign', publicSignaturesV2Cors);
+app.options('/public/signatures-v2/:token/decline', publicSignaturesV2Cors);
+app.options('/public/signatures-v2/:token/status', publicSignaturesV2Cors);
+app.options('/public/signatures-v2/:token/document', publicSignaturesV2Cors);
+app.post('/public/signatures-v2/:token/open', publicSignaturesV2Cors, publicSignaturesV2.publicOpen);
+app.post('/public/signatures-v2/:token/view', publicSignaturesV2Cors, publicSignaturesV2.publicView);
+app.post('/public/signatures-v2/:token/challenge', publicSignaturesV2Cors, publicSignaturesV2.publicChallenge);
+app.post('/public/signatures-v2/:token/verify', publicSignaturesV2Cors, publicSignaturesV2.publicVerify);
+app.post('/public/signatures-v2/:token/accept', publicSignaturesV2Cors, publicSignaturesV2.publicAccept);
+app.post('/public/signatures-v2/:token/sign', publicSignaturesV2Cors, publicSignaturesV2.publicSign);
+app.post('/public/signatures-v2/:token/decline', publicSignaturesV2Cors, publicSignaturesV2.publicDecline);
+app.get('/public/signatures-v2/:token/status', publicSignaturesV2Cors, publicSignaturesV2.publicStatus);
+app.get('/public/signatures-v2/:token/document', publicSignaturesV2Cors, publicSignaturesV2.publicDocument);
+
+/** Runtime readiness Contracts V2 — Phase 10.12 (interno; sem secrets). */
+app.get(
+  '/internal/app/contracts-v2/runtime-readiness',
+  requireAppUser,
+  contractsV2RuntimeReadiness.getRuntimeReadiness,
+);
+
+/** Contract documents / PDF v2 — Phase 10.7 (feature flags OFF por padrão). */
+app.post('/internal/app/contracts-v2/:id/versions/:versionId/render', requireAppUser, contractDocumentsV2.renderVersion);
+app.post('/internal/app/contracts-v2/:id/versions/:versionId/generate-unsigned-pdf', requireAppUser, contractDocumentsV2.generateUnsignedPdf);
+app.post('/internal/app/signature-envelopes-v2/:id/generate-signed-artifacts', requireAppUser, contractDocumentsV2.generateSignedArtifacts);
+app.get('/internal/app/contracts-v2/:id/files', requireAppUser, contractDocumentsV2.listFiles);
+app.get('/internal/app/contract-files-v2/:fileId', requireAppUser, contractDocumentsV2.getFile);
+app.post('/internal/app/contract-files-v2/:fileId/verify', requireAppUser, contractDocumentsV2.verifyFile);
+app.post('/internal/app/contract-files-v2/:fileId/download', requireAppUser, contractDocumentsV2.downloadFile);
+
+/** Contract signing completion / ledger v2 — Phase 10.8 (feature flags OFF por padrão). */
+app.post('/internal/app/contracts-v2/:id/validate-signing-completion', requireAppUser, contractSigningCompletionV2.validateSigningCompletion);
+app.post('/internal/app/contracts-v2/:id/complete-signing', requireAppUser, contractSigningCompletionV2.completeSigning);
+app.get('/internal/app/contracts-v2/:id/ledger', requireAppUser, contractSigningCompletionV2.getLedger);
+app.post('/internal/app/contracts-v2/:id/ledger/verify', requireAppUser, contractSigningCompletionV2.verifyLedger);
+app.get('/internal/app/contracts-v2/:id/signed-effects', requireAppUser, contractSigningCompletionV2.getSignedEffects);
+app.post('/internal/app/contracts-v2/:id/reconcile-signed-state', requireAppUser, contractSigningCompletionV2.reconcileSignedState);
 
 /** Webhook de plataformas de assinatura eletrÃ´nica (Clicksign, DocuSign, ZapSign, etc.) */
 app.post('/api/signature/webhook', (req, res) => {
