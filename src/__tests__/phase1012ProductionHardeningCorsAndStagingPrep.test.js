@@ -505,6 +505,25 @@ describe('Phase 10.12 — permissions / harness / public handlers', () => {
   });
 });
 
+describe('Phase 10.13C — staging storage migration 035', () => {
+  it('usa app_user_can_access_tenant(text) e não helper 026 ausente no staging', () => {
+    const sqlPath = path.join(ROOT, 'supabase/migrations/035_app_contract_private_storage_staging.sql');
+    expect(fs.existsSync(sqlPath)).toBe(true);
+    const sql = fs.readFileSync(sqlPath, 'utf8');
+    expect(sql).toContain('contracts-v2-private-staging');
+    expect(sql).toMatch(/public\s*=\s*false/);
+    expect(sql).toContain('app_user_can_access_tenant');
+    expect(sql).toMatch(
+      /app_user_can_access_tenant\(\s*public\.contracts_v2_private_storage_tenant_id\(name\)::text\s*\)/,
+    );
+    expect(sql).not.toMatch(
+      /and\s+public\.app_user_has_active_tenant_membership\s*\(/i,
+    );
+    expect(sql).not.toMatch(/create policy\s+contracts_v2_private_staging_insert/i);
+    expect(sql).not.toMatch(/uoepkwhqztmsjnzirpev/);
+  });
+});
+
 describe('Phase 10.12 — staging preflight dry-run', () => {
   it('passa fechado sem mutação remota', () => {
     const report = runStagingPreflightDryRun({

@@ -7,10 +7,10 @@
 --
 -- Relação com 033:
 --   033 permanece LOCAL-ONLY (bucket contracts-v2-private-local).
---   Staging NÃO aplica 033; aplica 035 após 032 e antes/depois de 034
---   conforme runner controlado (ordem: 028–032 → 035 → 034).
+--   Staging NÃO aplica 033; aplica 035 após 034
+--   conforme runner controlado (ordem: 028–032 → 034 → 035).
 -- Schema abaixo é idempotente (IF NOT EXISTS / ADD COLUMN IF NOT EXISTS)
--- para coexistir com stacks locais que já rodaram 033.
+-- para coexistir com stacks locais que já rodaram 033 e com apply parcial.
 
 -- ===========================================================================
 -- Extensão app_contract_files — lifecycle PENDING → STORED → VERIFIED / FAILED
@@ -235,6 +235,11 @@ drop policy if exists contracts_v2_private_staging_delete on storage.objects;
 
 -- SELECT restrito a membros do tenant + path canônico.
 -- INSERT/UPDATE/DELETE authenticated: ausentes (backend/service_role only).
+--
+-- Membership helper: usa app_user_can_access_tenant(text), o mesmo helper
+-- consolidado pelas policies da migration 029 — já presente no staging.
+-- NÃO chamar app_user_has_active_tenant_membership: helper da 026, fora do
+-- pipeline Contracts V2 de staging.
 create policy contracts_v2_private_staging_select on storage.objects
   for select
   to authenticated
@@ -242,7 +247,8 @@ create policy contracts_v2_private_staging_select on storage.objects
     bucket_id = 'contracts-v2-private-staging'
     and auth.uid() is not null
     and public.contracts_v2_private_storage_path_valid(name)
-    and public.app_user_has_active_tenant_membership(
-      public.contracts_v2_private_storage_tenant_id(name)
+    and public.contracts_v2_private_storage_tenant_id(name) is not null
+    and public.app_user_can_access_tenant(
+      public.contracts_v2_private_storage_tenant_id(name)::text
     )
   );
