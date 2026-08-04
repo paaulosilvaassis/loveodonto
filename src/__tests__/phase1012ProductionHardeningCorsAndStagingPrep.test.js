@@ -535,6 +535,10 @@ describe('Phase 10.12 — staging preflight dry-run', () => {
     expect(report.createdRemoteBucket).toBe(false);
     expect(report.readyForProduction).toBe(false);
     expect(report.ok).toBe(true);
+    expect(report.nextGate).toBe('READY_FOR_STAGING_REMOTE_VALIDATION');
+    expect(report.localOnlyMigration?.status).toBe('SKIP_LOCAL_ONLY');
+    expect(report.stagingExpectedMigrations?.some((m) => m.startsWith('035_'))).toBe(true);
+    expect(report.stagingExpectedMigrations?.some((m) => m.startsWith('033_'))).toBe(false);
   });
 
   it('falha se flag ligada', () => {

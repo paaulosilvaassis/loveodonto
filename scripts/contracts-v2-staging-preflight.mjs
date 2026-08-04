@@ -1,7 +1,8 @@
 /**
- * contracts-v2:staging-preflight — dry-run only (Phase 10.12).
+ * contracts-v2:staging-preflight — dry-run only (Phase 10.12 / 10.13D).
  *
  * NÃO aplica migrations, NÃO cria bucket, NÃO faz deploy, NÃO toca staging remoto.
+ * Validação remota real: npm run contracts-v2:staging-validate
  *
  *   node scripts/contracts-v2-staging-preflight.mjs
  *   npm run contracts-v2:staging-preflight
@@ -10,19 +11,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import {
+  STAGING_CONTRACTS_V2_MIGRATIONS,
+  LOCAL_ONLY_CONTRACTS_V2_MIGRATION,
+  LOCAL_MIRROR_CONTRACTS_V2_MIGRATIONS,
+  STAGING_PRIVATE_BUCKET,
+} from './supabase/contractsV2StagingMigrations.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
-
-const EXPECTED_MIGS = [
-  '028_app_contracts_v2_foundation.sql',
-  '029_app_contracts_v2_rls.sql',
-  '030_app_contract_ledger.sql',
-  '031_app_contract_number_sequences.sql',
-  '032_app_signature_sessions_and_challenges.sql',
-  '033_app_contract_private_storage_local.sql',
-  '034_app_signature_delivery_attempts.sql',
-];
 
 const FLAGS = [
   'VITE_CONTRACTS_DOMAIN_V2_ENABLED',
@@ -69,8 +66,29 @@ export function runStagingPreflightDryRun(env = process.env) {
 
   const migDir = path.join(ROOT, 'supabase/migrations');
   const mirrorDir = path.join(ROOT, 'supabase-local/supabase/migrations');
+
+  let stagingFilesOk = true;
+  for (const m of STAGING_CONTRACTS_V2_MIGRATIONS) {
+    if (!fs.existsSync(path.join(migDir, m))) {
+      stagingFilesOk = false;
+      break;
+    }
+  }
+  push(
+    'staging_expected_migrations_present',
+    stagingFilesOk,
+    STAGING_CONTRACTS_V2_MIGRATIONS.join(','),
+  );
+
+  const localOnlyPath = path.join(migDir, LOCAL_ONLY_CONTRACTS_V2_MIGRATION);
+  push(
+    'local_only_033',
+    fs.existsSync(localOnlyPath) && !STAGING_CONTRACTS_V2_MIGRATIONS.includes(LOCAL_ONLY_CONTRACTS_V2_MIGRATION),
+    'SKIP_LOCAL_ONLY',
+  );
+
   let mirrorsOk = true;
-  for (const m of EXPECTED_MIGS) {
+  for (const m of LOCAL_MIRROR_CONTRACTS_V2_MIGRATIONS) {
     const a = path.join(migDir, m);
     const b = path.join(mirrorDir, m);
     if (!fs.existsSync(a) || !fs.existsSync(b)) {
@@ -79,7 +97,7 @@ export function runStagingPreflightDryRun(env = process.env) {
     }
     if (sha256File(a) !== sha256File(b)) mirrorsOk = false;
   }
-  push('expected_migrations_mirrors', mirrorsOk, EXPECTED_MIGS.join(','));
+  push('local_mirror_migrations_ok', mirrorsOk, LOCAL_MIRROR_CONTRACTS_V2_MIGRATIONS.join(','));
 
   const baseUrl = String(env.CONTRACTS_V2_PUBLIC_BASE_URL || '').trim();
   const baseOk = !baseUrl
@@ -94,14 +112,16 @@ export function runStagingPreflightDryRun(env = process.env) {
   push(
     'origins',
     !origins || (!origins.includes('*') && !origins.includes('localhost')),
-    origins ? 'explicit' : 'empty (staging must set before apply)',
+    origins ? 'explicit' : 'empty (staging must set before enable)',
   );
 
   const bucket = String(env.CONTRACTS_V2_PRIVATE_BUCKET || '').trim();
   push(
     'bucket_config',
-    !bucket || bucket === 'contracts-v2-private-staging',
-    bucket || 'planned: contracts-v2-private-staging (NOT created)',
+    !bucket || bucket === STAGING_PRIVATE_BUCKET,
+    bucket
+      ? `configured: ${bucket}`
+      : `expected remote: ${STAGING_PRIVATE_BUCKET} (existence via contracts-v2:staging-validate)`,
   );
 
   const delivery = String(env.CONTRACTS_V2_DELIVERY_MODE || 'disabled').trim().toLowerCase();
@@ -111,7 +131,7 @@ export function runStagingPreflightDryRun(env = process.env) {
   for (const f of FLAGS) {
     if (isTruthy(env[f])) flagsOff = false;
   }
-  push('flags_off', flagsOff, flagsOff ? 'all_false' : 'SOME_TRUE');
+  push('flags_off', flagsOff, flagsOff ? '15/15_false' : 'SOME_TRUE');
 
   const secret = String(env.CONTRACTS_V2_SIGNING_TOKEN_SECRET || '');
   const secretStrong = secret.length >= 32
@@ -119,7 +139,7 @@ export function runStagingPreflightDryRun(env = process.env) {
   push(
     'secrets_strong_or_absent',
     !secret || secretStrong,
-    secret ? (secretStrong ? 'present_strong' : 'WEAK') : 'absent (must set before staging)',
+    secret ? (secretStrong ? 'present_strong' : 'WEAK') : 'absent (must set before staging enable)',
   );
 
   const rateMode = String(env.CONTRACTS_V2_RATE_LIMIT_MODE || '').trim().toLowerCase();
@@ -136,10 +156,9 @@ export function runStagingPreflightDryRun(env = process.env) {
     String(trust ?? 'unset'),
   );
 
-  const legacy006 = path.join(ROOT, 'supabase/migrations/006_generated_contracts.sql');
   const legacyAlt = fs.readdirSync(path.join(ROOT, 'supabase/migrations'))
     .find((f) => f.startsWith('006_'));
-  push('legacy_006_present', Boolean(legacyAlt || fs.existsSync(legacy006)), legacyAlt || '006');
+  push('legacy_006_present', Boolean(legacyAlt), legacyAlt || '006');
 
   const roleDefaults = fs.readFileSync(path.join(ROOT, 'src/permissions/roleDefaults.js'), 'utf8');
   push(
@@ -150,12 +169,11 @@ export function runStagingPreflightDryRun(env = process.env) {
     'catalog-only permissions',
   );
 
-  push('backup_plan_documented', true, 'see PHASE_10_12 report — Preflight/Backup/Apply/Verify/Rollback');
-  push('rollback_plan_documented', true, 'see PHASE_10_12 report');
   push('dry_run_only', true, 'no remote mutation performed');
   push('remote_apply_blocked', true, 'this command never applies migrations');
+  push('remote_validate_separate', true, 'use contracts-v2:staging-validate for remote schema/RLS/smoke');
 
-  const ok = failClosed(checks) && flagsOff && delivery === 'disabled' && mirrorsOk;
+  const ok = failClosed(checks) && flagsOff && delivery === 'disabled' && stagingFilesOk && mirrorsOk;
   return {
     command: 'contracts-v2:staging-preflight',
     mode: 'dry-run',
@@ -164,8 +182,13 @@ export function runStagingPreflightDryRun(env = process.env) {
     appliedMigrations: false,
     createdRemoteBucket: false,
     deployed: false,
+    stagingExpectedMigrations: [...STAGING_CONTRACTS_V2_MIGRATIONS],
+    localOnlyMigration: {
+      file: LOCAL_ONLY_CONTRACTS_V2_MIGRATION,
+      status: 'SKIP_LOCAL_ONLY',
+    },
     checks,
-    nextGate: 'READY_FOR_STAGING_APPLY_APPROVAL',
+    nextGate: 'READY_FOR_STAGING_REMOTE_VALIDATION',
     readyForProduction: false,
   };
 }

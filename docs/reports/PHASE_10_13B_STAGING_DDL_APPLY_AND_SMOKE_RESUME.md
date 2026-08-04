@@ -2,9 +2,9 @@
 
 ## Status
 
-**BLOCKED_WAITING_STAGING_DDL_CREDENTIALS** (preflight)
+**SUPERSEDED_BY_10.13C** — apply parcial concluído (028–034 OK; 035 falhou por helper inexistente).
 
-O processo do agente não herdou as variáveis do Terminal do usuário.
+Correção da 035 e retomada: ver `PHASE_10_13C_STAGING_STORAGE_POLICY_FIX.md`.
 
 ## Preflight (sem valores)
 
