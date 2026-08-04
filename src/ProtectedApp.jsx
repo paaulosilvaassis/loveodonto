@@ -6,6 +6,9 @@ import RequireRole from './auth/RequireRole.jsx';
 import RequireAdminGate from './auth/RequireAdminGate.jsx';
 import RequireModule from './auth/RequireModule.jsx';
 import RequireFeatureFlag from './auth/RequireFeatureFlag.jsx';
+import { useAuth } from './auth/useAuth.js';
+import { useTenant } from './tenant/useTenant.js';
+import { buildContractFeatureFlagContext } from './domain/contracts/contract-feature-flags.ts';
 import Layout from './components/Layout.jsx';
 import AgendaPage from './pages/AgendaPage.jsx';
 import AutomationPage from './pages/AutomationPage.jsx';
@@ -123,6 +126,13 @@ const withRole = (route, element) => (
 const withAdminGate = (element) => <RequireAdminGate>{element}</RequireAdminGate>;
 
 export default function ProtectedApp() {
+  const { user } = useAuth();
+  const tenant = useTenant();
+  const contractsV2FlagContext = buildContractFeatureFlagContext({
+    tenantId: user?.tenantId || tenant?.tenantId,
+    tenantFlags: tenant?.flags,
+  });
+
   return (
     <Layout>
       <Routes>
@@ -180,24 +190,24 @@ export default function ProtectedApp() {
           <Route path="pendentes" element={withRole('/gestao/contratos', <ContractsPendentesPage />)} />
           <Route path="assinados" element={withRole('/gestao/contratos', <ContractsAssinadosPage />)} />
           <Route path="modelos" element={withRole('/gestao/contratos', <ContractsModelosPage />)} />
-          {isContractTemplatesV2UiEnabled() ? (
+          {isContractTemplatesV2UiEnabled(contractsV2FlagContext) ? (
             <Route path="modelos-v2" element={withRole('/gestao/contratos', <ContractsModelosV2Page />)} />
           ) : null}
-          {isContractsV2UiEnabled() ? (
+          {isContractsV2UiEnabled(contractsV2FlagContext) ? (
             <Route path="instancias-v2" element={withRole('/gestao/contratos', <ContractsInstanciasV2Page />)} />
           ) : null}
           <Route path="termos" element={withRole('/gestao/contratos', <ContractsTermosPage />)} />
           <Route path="assinaturas" element={withRole('/gestao/contratos', <ContractsAssinaturasPage />)} />
-          {isSignaturesV2UiEnabled() ? (
+          {isSignaturesV2UiEnabled(contractsV2FlagContext) ? (
             <Route path="assinaturas-v2" element={withRole('/gestao/contratos', <ContractsAssinaturasV2Page />)} />
           ) : null}
-          {isContractDocumentsV2UiEnabled() ? (
+          {isContractDocumentsV2UiEnabled(contractsV2FlagContext) ? (
             <Route path="documentos-v2" element={withRole('/gestao/contratos', <ContractsDocumentosV2Page />)} />
           ) : null}
-          {isContractSigningCompletionV2UiEnabled() ? (
+          {isContractSigningCompletionV2UiEnabled(contractsV2FlagContext) ? (
             <Route path="conclusao-v2" element={withRole('/gestao/contratos', <ContractsConclusaoV2Page />)} />
           ) : null}
-          {isPublicSignaturesV2UiEnabled() ? (
+          {isPublicSignaturesV2UiEnabled(contractsV2FlagContext) ? (
             <Route path="entregas-v2" element={withRole('/gestao/contratos', <ContractsEntregasV2Page />)} />
           ) : null}
           <Route path="configuracoes" element={withRole('/gestao/contratos', <ContractsConfigPage />)} />

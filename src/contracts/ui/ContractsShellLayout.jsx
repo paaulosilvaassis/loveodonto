@@ -1,6 +1,10 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/useAuth.js';
-import { isContractFeatureEnabled } from '../../domain/contracts/contract-feature-flags.ts';
+import { useTenant } from '../../tenant/useTenant.js';
+import {
+  buildContractFeatureFlagContext,
+  isContractFeatureEnabled,
+} from '../../domain/contracts/contract-feature-flags.ts';
 import { contractsShellNavItems } from '../contractsShellConfig.js';
 
 const isAllowed = (user, allowedRoles) => {
@@ -10,19 +14,24 @@ const isAllowed = (user, allowedRoles) => {
   return allowedRoles.includes(user.role);
 };
 
-const isFeatureAllowed = (item) => {
+const isFeatureAllowed = (item, flagContext) => {
   if (Array.isArray(item?.featureFlagsAll) && item.featureFlagsAll.length) {
-    return item.featureFlagsAll.every((flag) => isContractFeatureEnabled(flag));
+    return item.featureFlagsAll.every((flag) => isContractFeatureEnabled(flag, flagContext));
   }
   if (!item?.featureFlag) return true;
-  return isContractFeatureEnabled(item.featureFlag);
+  return isContractFeatureEnabled(item.featureFlag, flagContext);
 };
 
 export default function ContractsShellLayout() {
   const { user } = useAuth();
+  const tenant = useTenant();
   const location = useLocation();
+  const flagContext = buildContractFeatureFlagContext({
+    tenantId: user?.tenantId || tenant?.tenantId,
+    tenantFlags: tenant?.flags,
+  });
   const visibleItems = contractsShellNavItems.filter(
-    (item) => isAllowed(user, item.rolesAllowed) && isFeatureAllowed(item),
+    (item) => isAllowed(user, item.rolesAllowed) && isFeatureAllowed(item, flagContext),
   );
 
   const isActive = (item) => {

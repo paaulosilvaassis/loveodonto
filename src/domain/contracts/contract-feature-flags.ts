@@ -11,6 +11,10 @@ import {
   readEnvFlag,
   readTenantFlag,
 } from '../../repositories/shared/repositoryV3FlagHelpers.js';
+import {
+  getStagingPilotFlagOverrides,
+  resolveCanonicalFlagFromPilotAliases,
+} from './staging/contracts-v2-staging-pilot.js';
 
 export const CONTRACT_FEATURE_FLAGS = [
   'contracts_domain_v2_enabled',
@@ -64,6 +68,11 @@ export interface ContractFeatureFlagContext {
   tenantFlags?: Record<string, unknown>;
   /** Overrides explícitos (testes) — nunca ligados em produção nesta fase. */
   overrides?: Partial<ContractFeatureFlagMap>;
+  /** Project ref / marker para allowlist do piloto staging (Phase 10.14). */
+  projectRef?: string;
+  environmentMarker?: string;
+  /** Somente testes unitários do piloto. */
+  forceAllowPilotInTest?: boolean;
 }
 
 export function isValidContractFeatureFlag(flag: string): flag is ContractFeatureFlag {
@@ -72,7 +81,8 @@ export function isValidContractFeatureFlag(flag: string): flag is ContractFeatur
 
 /**
  * Resolve uma flag. Default e ausência ⇒ false.
- * Precedência: overrides > tenantFlags > env > default(false).
+ * Precedência: overrides > piloto staging (tenant técnico) > tenantFlags
+ * (canônicas + aliases contracts.v2.*) > env > default(false).
  */
 export function isContractFeatureEnabled(
   flag: ContractFeatureFlag | string,
@@ -84,9 +94,48 @@ export function isContractFeatureEnabled(
     return Boolean(context.overrides[flag]);
   }
 
+  const pilotOverrides = getStagingPilotFlagOverrides({
+    tenantId: context.tenantId,
+    projectRef: context.projectRef,
+    environmentMarker: context.environmentMarker,
+    forceAllowInTest: context.forceAllowPilotInTest,
+  });
+  if (pilotOverrides && flag in pilotOverrides) {
+    return Boolean(pilotOverrides[flag]);
+  }
+
   const fallback = CONTRACT_FEATURE_FLAG_DEFAULTS[flag];
-  const fromTenant = readTenantFlag(context.tenantFlags, flag, fallback);
-  return readEnvFlag(ENV_KEY_MAP[flag], fromTenant);
+  if (context.tenantFlags && flag in context.tenantFlags) {
+    const fromTenant = readTenantFlag(context.tenantFlags, flag, fallback);
+    return readEnvFlag(ENV_KEY_MAP[flag], fromTenant);
+  }
+
+  const fromAlias = resolveCanonicalFlagFromPilotAliases(flag, context.tenantFlags);
+  if (fromAlias !== undefined) {
+    return readEnvFlag(ENV_KEY_MAP[flag], fromAlias);
+  }
+
+  return readEnvFlag(ENV_KEY_MAP[flag], fallback);
+}
+
+/**
+ * Monta contexto a partir do TenantContext / flags persistidas.
+ * Seguro: sem tenantId de piloto + staging ⇒ nenhuma flag liga via allowlist.
+ */
+export function buildContractFeatureFlagContext(input: {
+  tenantId?: string | null;
+  tenantFlags?: Record<string, unknown> | null;
+  projectRef?: string;
+  environmentMarker?: string;
+  overrides?: Partial<ContractFeatureFlagMap>;
+} = {}): ContractFeatureFlagContext {
+  return {
+    tenantId: input.tenantId ? String(input.tenantId) : undefined,
+    tenantFlags: input.tenantFlags || undefined,
+    projectRef: input.projectRef,
+    environmentMarker: input.environmentMarker,
+    overrides: input.overrides,
+  };
 }
 
 export function getContractFeatureFlags(

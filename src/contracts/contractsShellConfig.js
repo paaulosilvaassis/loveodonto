@@ -20,8 +20,11 @@ export const contractsShellNavItems = [
     route: '/gestao/contratos/modelos-v2',
     icon: Layers,
     rolesAllowed: ['admin', 'gerente'],
-    /** Só exibe quando contract_templates_v2_enabled === true (default false). */
-    featureFlag: 'contract_templates_v2_enabled',
+    /** Alinhado ao mount: domain + templates (default false; piloto staging por tenant). */
+    featureFlagsAll: [
+      'contracts_domain_v2_enabled',
+      'contract_templates_v2_enabled',
+    ],
   },
   {
     id: 'instancias-v2',

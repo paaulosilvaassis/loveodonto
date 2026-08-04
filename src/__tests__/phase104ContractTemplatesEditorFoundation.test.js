@@ -85,9 +85,12 @@ describe('Phase 10.4 — feature flags', () => {
     expect(isContractTemplatesV2ApiEnabled({})).toBe(false);
   });
 
-  it('nav Modelos v2 exige featureFlag', () => {
+  it('nav Modelos v2 exige domain + templates', () => {
     const item = contractsShellNavItems.find((i) => i.id === 'modelos-v2');
-    expect(item?.featureFlag).toBe('contract_templates_v2_enabled');
+    expect(item?.featureFlagsAll).toEqual([
+      'contracts_domain_v2_enabled',
+      'contract_templates_v2_enabled',
+    ]);
     expect(item?.route).toBe('/gestao/contratos/modelos-v2');
   });
 });

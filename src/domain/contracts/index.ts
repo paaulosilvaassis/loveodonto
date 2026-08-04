@@ -236,3 +236,6 @@ export * from './legacy/legacy-contract.mapper.js';
 
 /** Runtime hardening — Phase 10.12 */
 export * from './runtime/index.js';
+
+/** Staging feature-flag pilot — Phase 10.14 */
+export * from './staging/contracts-v2-staging-pilot.js';
