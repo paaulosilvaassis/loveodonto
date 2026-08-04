@@ -96,4 +96,16 @@ describe('Phase 10.13D — remote validate script contract', () => {
       expect(fs.existsSync(path.join(ROOT, 'supabase/migrations', m))).toBe(true);
     }
   });
+
+  it('fixture app_contracts preenche created_by NOT NULL', () => {
+    const src = fs.readFileSync(
+      path.join(ROOT, 'scripts/supabase/runStagingContractsV2Validate.mjs'),
+      'utf8',
+    );
+    expect(src).toMatch(
+      /insert into public\.app_contracts\s*\([\s\S]*?created_by[\s\S]*?\)\s*values/i,
+    );
+    expect(src).toContain("finally {");
+    expect(src).toContain('cleanupFixtures(guard, report)');
+  });
 });

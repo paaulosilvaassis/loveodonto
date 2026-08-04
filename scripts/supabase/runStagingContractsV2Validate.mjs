@@ -276,14 +276,18 @@ async function seedFixtures(guard, report) {
     ) on conflict (id) do nothing;
   `);
 
+  // created_by: uuid NOT NULL na 028; sem FK a auth.users — actor fictício do harness (ID.actor).
   await sql(guard, `
     insert into public.app_contracts (
-      id, tenant_id, contract_number, title, document_type, origin, status, patient_id, metadata
+      id, tenant_id, contract_number, title, document_type, origin, status,
+      patient_id, created_by, metadata
     ) values
       ('${ID.ctrA}', '${ID.tenantA}', 'DEMO-STG-A-001', 'contract-demo-staging-a', 'SERVICE_CONTRACT',
-        'MANUAL', 'DRAFT', 'patient-demo-staging-a', '{"marker":"${FIXTURE_MARKER}"}'::jsonb),
+        'MANUAL', 'DRAFT', 'patient-demo-staging-a', '${ID.actor}',
+        '{"marker":"${FIXTURE_MARKER}"}'::jsonb),
       ('${ID.ctrB}', '${ID.tenantB}', 'DEMO-STG-B-001', 'contract-demo-staging-b', 'SERVICE_CONTRACT',
-        'MANUAL', 'DRAFT', 'patient-demo-staging-b', '{"marker":"${FIXTURE_MARKER}"}'::jsonb)
+        'MANUAL', 'DRAFT', 'patient-demo-staging-b', '${ID.actor}',
+        '{"marker":"${FIXTURE_MARKER}"}'::jsonb)
     on conflict (id) do nothing;
   `);
 
@@ -664,8 +668,10 @@ export async function runStagingContractsV2Validate(options = {}) {
     status: 'PENDING',
   };
 
+  let guard = null;
+  let fixturesSeeded = false;
   try {
-    const guard = assertStagingValidateGuard(env);
+    guard = assertStagingValidateGuard(env);
     report.guard = {
       ok: true,
       ref: guard.ref,
@@ -677,29 +683,44 @@ export async function runStagingContractsV2Validate(options = {}) {
     await validateMigrations(guard, report);
     await validateSchema(guard, report);
     await seedFixtures(guard, report);
+    fixturesSeeded = true;
     await validateRlsAndImmutability(guard, report);
     await validateHashOnly(guard, report);
     await validateBucket(guard, report);
     validateFlagsAndRuntime(env, report);
     validateLegacyLocal(report);
-    await cleanupFixtures(guard, report);
-
-    const failed = report.checks.filter((c) => !c.ok);
-    report.failedChecks = failed.map((c) => c.name);
-    report.ok = failed.length === 0;
-    report.status = report.ok ? 'STAGING_VALIDATE_PASS' : 'STAGING_VALIDATE_FAIL';
-    report.gate = report.ok
-      ? 'READY_FOR_STAGING_FEATURE_FLAG_PILOT_APPROVAL'
-      : 'BLOCKED_STAGING_VALIDATION_FAILED';
   } catch (error) {
-    report.ok = false;
-    report.status = 'BLOCKED';
-    report.gate = 'BLOCKED_STAGING_VALIDATION_FAILED';
     report.error = {
       code: error.code || 'UNKNOWN',
       message: sanitizeText(error.message),
       details: error.details || null,
     };
+  } finally {
+    // Cleanup mesmo se o seed falhar parcialmente (tenants/templates órfãos).
+    if (guard) {
+      try {
+        await cleanupFixtures(guard, report);
+        if (!fixturesSeeded) {
+          pushCheck(report, 'fixtures_cleanup_after_failure', true, 'attempted after seed/validation error');
+        }
+      } catch (cleanupErr) {
+        pushCheck(report, 'fixtures_cleanup_after_failure', false, sanitizeText(cleanupErr.message));
+      }
+    }
+  }
+
+  const failed = report.checks.filter((c) => !c.ok);
+  report.failedChecks = failed.map((c) => c.name);
+  if (report.error) {
+    report.ok = false;
+    report.status = 'BLOCKED';
+    report.gate = 'BLOCKED_STAGING_VALIDATION_FAILED';
+  } else {
+    report.ok = failed.length === 0;
+    report.status = report.ok ? 'STAGING_VALIDATE_PASS' : 'STAGING_VALIDATE_FAIL';
+    report.gate = report.ok
+      ? 'READY_FOR_STAGING_FEATURE_FLAG_PILOT_APPROVAL'
+      : 'BLOCKED_STAGING_VALIDATION_FAILED';
   }
 
   report.finishedAt = new Date().toISOString();
