@@ -99,6 +99,7 @@ import { createUsersPatchAccessHandler } from './lib/usersPatchAccessApi.js';
 import { createUsersDeleteHandler } from './lib/usersDeleteApi.js';
 import { createCollaboratorAccessToggleHandler } from './lib/collaboratorAccessToggleApi.js';
 import { createContractsGeneratedHandler } from './lib/contractsGeneratedApi.js';
+import { createContractsOperationalRolloutHandlers } from './lib/contractsOperationalRolloutApi.js';
 import { createContractTemplatesV2Handlers } from './lib/contractTemplatesV2Api.js';
 import { createContractsV2Handlers } from './lib/contractsV2Api.js';
 import { createSignatureEnvelopesV2Handlers } from './lib/signatureEnvelopesV2Api.js';
@@ -689,6 +690,13 @@ const handleTenantContext = createTenantContextHandler({
   normalizeDatabaseError,
 });
 
+const contractsOperationalRollout = createContractsOperationalRolloutHandlers({
+  supabase,
+  getTenantAdminActorOrThrow,
+  resolveActiveTenantUser,
+  isActiveTenantUserRow,
+});
+
 const handleClinicProfile = createClinicProfileHandler({
   supabase,
   upsertClinicProfileForTenant,
@@ -816,6 +824,23 @@ const handleCollaboratorAccessToggle = createCollaboratorAccessToggleHandler({
 mountPlatformRoutes(app);
 
 app.get('/internal/app/tenant-context', requireAppUser, handleTenantContext);
+
+/** Phase 10.21C — rollout operacional SSOT em feature_flags (sem migration). */
+app.get(
+  '/internal/app/contracts/operational-rollout',
+  requireAppUser,
+  contractsOperationalRollout.handleGet,
+);
+app.put(
+  '/internal/app/contracts/operational-rollout',
+  requireAppUser,
+  contractsOperationalRollout.handlePut,
+);
+app.post(
+  '/internal/app/contracts/operational-rollout/rollback',
+  requireAppUser,
+  contractsOperationalRollout.handleRollback,
+);
 
 /**
  * DiagnÃ³stico de sincronizaÃ§Ã£o SaaS (admin, DEV/STAGING only).

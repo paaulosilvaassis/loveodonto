@@ -4,7 +4,8 @@
  *
  * NÃO ativa flags Contracts V2 de domínio em produção.
  * NÃO faz cutover. V1 permanece sempre disponível.
- * Persistência local (sem migration/schema).
+ * Persistência SSOT: feature_flags via Admin API (Phase 10.21C).
+ * Browser/localStorage = cache apenas.
  */
 
 import { PRODUCTION_REF, STAGING_REF } from '../staging/contracts-v2-staging-pilot.js';
@@ -38,10 +39,14 @@ export type ContractsRolloutPhase =
 export interface ContractsOperationalModeState {
   mode: ContractsOperationalMode;
   rolloutPhase: ContractsRolloutPhase;
-  /** Tenants explicitamente allowlisted para OPERATIONAL_UX em produção. */
+  /** Compat: lista derivada do tenant flag (SSOT) ou cache legado. */
   productionTenantAllowlist: string[];
-  /** Produção global — sempre false até ativação humana explícita fora deste painel auto. */
+  /** Kill switch global (feature_flags global). Default false. */
   productionGlobalEnabled: boolean;
+  /** Flag tenant (feature_flags tenant). Default false. */
+  tenantEnabled?: boolean;
+  /** Quando 'feature_flags', aplica fórmula server-side canônica. */
+  source?: 'feature_flags' | 'local_cache' | string;
   lastChangedAt: string | null;
   lastChangedBy: string | null;
   rollbackReason: string | null;
@@ -53,6 +58,8 @@ export const DEFAULT_OPERATIONAL_MODE_STATE: Readonly<ContractsOperationalModeSt
   rolloutPhase: CONTRACTS_ROLLOUT_PHASES.READY_FOR_PRODUCTION_ACTIVATION,
   productionTenantAllowlist: [],
   productionGlobalEnabled: false,
+  tenantEnabled: false,
+  source: 'local_cache',
   lastChangedAt: null,
   lastChangedBy: null,
   rollbackReason: null,
@@ -107,12 +114,21 @@ export function normalizeOperationalModeState(
   }
   if (!Array.isArray(base.productionTenantAllowlist)) base.productionTenantAllowlist = [];
   base.productionGlobalEnabled = Boolean(base.productionGlobalEnabled);
+  if (typeof (partial as { tenantEnabled?: unknown } | null | undefined)?.tenantEnabled === 'boolean') {
+    base.tenantEnabled = Boolean((partial as { tenantEnabled: boolean }).tenantEnabled);
+  } else if (typeof base.tenantEnabled !== 'boolean') {
+    base.tenantEnabled = base.productionTenantAllowlist.length > 0;
+  } else {
+    base.tenantEnabled = Boolean(base.tenantEnabled);
+  }
   return base;
 }
 
 /**
- * Produção: OPERATIONAL_UX só se tenant allowlisted E productionGlobalEnabled
- * (ativação humana — este módulo NÃO liga productionGlobalEnabled sozinho).
+ * Runtime:
+ * - SSOT feature_flags: global && tenant && mode ∉ {V1_ONLY, ROLLED_BACK}
+ * - Cache local legado (testes/staging sem server): staging/dev respeita mode;
+ *   produção exige global + allowlist/tenantEnabled.
  */
 export function isContractsOperationalUxEnabled(ctx: OperationalModeContext = {}): boolean {
   const state = normalizeOperationalModeState(ctx.state);
@@ -123,14 +139,21 @@ export function isContractsOperationalUxEnabled(ctx: OperationalModeContext = {}
     return false;
   }
 
+  const tenantId = String(ctx.tenantId || '').trim();
+  const fromFlags = state.source === 'feature_flags';
+
+  if (fromFlags) {
+    if (!state.productionGlobalEnabled) return false;
+    if (state.tenantEnabled === true) return true;
+    if (!tenantId) return false;
+    return state.productionTenantAllowlist.includes(tenantId);
+  }
+
   if (!isProductionRuntime(ctx)) {
-    // Staging/dev: modo OPERATIONAL_UX respeita o painel local.
     return state.mode === CONTRACTS_OPERATIONAL_MODES.OPERATIONAL_UX;
   }
 
-  // Produção: default OFF até allowlist + flag global explícita.
   if (!state.productionGlobalEnabled) return false;
-  const tenantId = String(ctx.tenantId || '').trim();
   if (!tenantId) return false;
   return state.productionTenantAllowlist.includes(tenantId);
 }
@@ -147,7 +170,9 @@ export function buildRollbackState(
   return {
     ...normalizeOperationalModeState(current),
     mode: CONTRACTS_OPERATIONAL_MODES.ROLLED_BACK,
+    tenantEnabled: false,
     productionGlobalEnabled: false,
+    productionTenantAllowlist: [],
     rollbackReason: options.reason || 'Rollback emergencial solicitado pelo administrador.',
     lastChangedAt: new Date().toISOString(),
     lastChangedBy: options.userId || null,

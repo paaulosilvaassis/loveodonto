@@ -32,6 +32,7 @@ import {
   setProductionGlobalEnabled,
   setV1OnlyMode,
   updateProductionTenantAllowlist,
+  __resetContractsOperationalRolloutCacheForTests,
 } from '../services/contractsOperationalRolloutService.js';
 import { PRODUCTION_REF } from '../domain/contracts/staging/contracts-v2-staging-pilot.ts';
 import { contractsShellNavItems } from '../contracts/contractsShellConfig.js';
@@ -44,6 +45,7 @@ const recep = { id: 'u-rec', role: 'recepcao', tenantId: 'tenant-a' };
 
 beforeEach(async () => {
   localStorage.clear();
+  __resetContractsOperationalRolloutCacheForTests();
   await resetDb();
   await initDb();
 });
@@ -97,36 +99,36 @@ describe('Phase 10.20 — modo operacional e rollback', () => {
     })).toBe(false);
   });
 
-  it('rollback imediato desliga UX e registra auditoria', () => {
-    enableOperationalUxMode(admin);
+  it('rollback imediato desliga UX e registra auditoria', async () => {
+    await enableOperationalUxMode(admin);
     expect(isOperationalContractsUxEnabledForCurrentClinic(admin)).toBe(true);
-    const state = emergencyRollbackOperationalUx(admin, 'teste fase 10.20');
+    const state = await emergencyRollbackOperationalUx(admin, 'teste fase 10.20');
     expect(state.mode).toBe(CONTRACTS_OPERATIONAL_MODES.ROLLED_BACK);
     expect(state.productionGlobalEnabled).toBe(false);
     expect(isOperationalContractsUxEnabledForCurrentClinic(admin)).toBe(false);
     expect(getContractsOperationalModeState().rollbackReason).toContain('teste');
   });
 
-  it('recepção não pode rollback', () => {
+  it('recepção não pode rollback', async () => {
     expect(canManageContractsOperationalMode(recep)).toBe(false);
-    expect(() => emergencyRollbackOperationalUx(recep, 'x')).toThrow(/Permissão/);
+    await expect(emergencyRollbackOperationalUx(recep, 'x')).rejects.toThrow(/Permissão/);
   });
 
-  it('V1_ONLY desliga wizard', () => {
-    setV1OnlyMode(admin, 'painel');
+  it('V1_ONLY desliga wizard', async () => {
+    await setV1OnlyMode(admin, 'painel');
     expect(isOperationalContractsUxEnabledForCurrentClinic(admin)).toBe(false);
   });
 
-  it('ativação global exige frase de confirmação', () => {
-    expect(() => setProductionGlobalEnabled(admin, true, 'errada')).toThrow(/Confirmação/);
-    const state = setProductionGlobalEnabled(admin, true, 'ATIVAR_PRODUCAO_OPERATIONAL_UX');
+  it('ativação global exige frase de confirmação', async () => {
+    await expect(setProductionGlobalEnabled(admin, true, 'errada')).rejects.toThrow(/Confirmação/);
+    const state = await setProductionGlobalEnabled(admin, true, 'ATIVAR_PRODUCAO_OPERATIONAL_UX');
     expect(state.productionGlobalEnabled).toBe(true);
-    const off = setProductionGlobalEnabled(admin, false, '');
+    const off = await setProductionGlobalEnabled(admin, false, '');
     expect(off.productionGlobalEnabled).toBe(false);
   });
 
-  it('allowlist não liga global automaticamente', () => {
-    updateProductionTenantAllowlist(admin, ['tenant-a', 'tenant-b']);
+  it('allowlist não liga global automaticamente', async () => {
+    await updateProductionTenantAllowlist(admin, ['tenant-a', 'tenant-b']);
     const state = getContractsOperationalModeState();
     expect(state.productionTenantAllowlist).toEqual(['tenant-a', 'tenant-b']);
     expect(state.productionGlobalEnabled).toBe(false);

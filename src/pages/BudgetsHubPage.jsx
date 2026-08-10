@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Receipt } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
@@ -24,6 +24,7 @@ import { buildFinanceNavigationUrl } from '../services/patientFinancialSummarySe
 import { validateBudgetContractGeneration } from '../services/operationalContractWizardService.js';
 import { formatUxMessage } from '../contracts/operationalUxMessages.js';
 import {
+  fetchContractsOperationalRolloutFromServer,
   isOperationalContractsUxEnabledForCurrentClinic,
   recordContractsRolloutMetric,
 } from '../services/contractsOperationalRolloutService.js';
@@ -54,7 +55,25 @@ export default function BudgetsHubPage() {
 
   const canCreate = can(user, 'comercial:view') || can(user, 'prontuario_contratos:create') || user?.role === 'admin';
   const canViewFinance = can(user, 'financeiro_relatorios:view') || user?.role === 'financeiro';
-  const operationalUxEnabled = isOperationalContractsUxEnabledForCurrentClinic(user);
+  const [rolloutTick, setRolloutTick] = useState(0);
+  const operationalUxEnabled = useMemo(
+    () => isOperationalContractsUxEnabledForCurrentClinic(user),
+    [user, rolloutTick],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchContractsOperationalRolloutFromServer(user)
+      .then(() => {
+        if (!cancelled) setRolloutTick((t) => t + 1);
+      })
+      .catch(() => {
+        /* cache local permanece; hub segue com V1 se OFF */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const allRows = useMemo(
     () => listAllClinicalBudgetRows({}),

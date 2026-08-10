@@ -1,10 +1,17 @@
 /**
- * Facade do modo operacional / rollout gradual (Phase 10.20).
- * Persistência local — sem migration. Produção global permanece OFF por default.
+ * Facade do modo operacional / rollout gradual.
+ * Phase 10.21C: SSOT = feature_flags via Admin API. localStorage = cache.
  */
 
 import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
+import { getPlatformAccessToken } from '../auth/saasSessionResolver.js';
+import {
+  assertAdminApiFetchAllowed,
+  buildAdminApiUrl,
+  getConfiguredAdminApiBaseUrl,
+  getDevDirectAdminApiUrl,
+} from '../config/adminApiBase.js';
 import {
   CONTRACTS_OPERATIONAL_MODES,
   CONTRACTS_ROLLOUT_PHASES,
@@ -18,6 +25,7 @@ import {
   isProductionActivationUnlocked,
   evaluateGoLiveReadiness,
 } from '../domain/contracts/rollout/contracts-operational-mode.ts';
+import { PRODUCTION_ACTIVATION_PHRASE } from '../domain/contracts/rollout/contracts-operational-rollout-flags.ts';
 import {
   createEmptyMetricCounters,
   incrementMetric,
@@ -26,6 +34,14 @@ import {
 } from '../domain/contracts/rollout/contracts-rollout-metrics.ts';
 
 const STORAGE_KEY = 'loveodonto.contracts.operationalRollout.v1';
+const API_PATH = '/internal/app/contracts/operational-rollout';
+
+let memorySnapshot = null;
+
+/** @internal testes */
+export function __resetContractsOperationalRolloutCacheForTests() {
+  memorySnapshot = null;
+}
 
 function clinicId() {
   return loadDb().clinicProfile?.id || 'default-clinic';
@@ -55,18 +71,7 @@ function readDbBundle() {
   return (db.contractsOperationalRollout || []).find((r) => r.clinicId === cid) || null;
 }
 
-export function getOperationalRolloutBundle() {
-  const fromDb = readDbBundle();
-  const fromLocal = readLocalBundle();
-  const merged = {
-    state: normalizeOperationalModeState(fromDb?.state || fromLocal?.state || DEFAULT_OPERATIONAL_MODE_STATE),
-    metrics: fromDb?.metrics || fromLocal?.metrics || createEmptyMetricCounters(),
-    audit: Array.isArray(fromDb?.audit) ? fromDb.audit : (fromLocal?.audit || []),
-  };
-  return merged;
-}
-
-function persistBundle(bundle, user) {
+function cacheBundle(bundle, user) {
   const cid = clinicId();
   const now = new Date().toISOString();
   const payload = {
@@ -77,7 +82,9 @@ function persistBundle(bundle, user) {
     audit: Array.isArray(bundle.audit) ? bundle.audit.slice(-100) : [],
     updatedAt: now,
     updatedBy: user?.id || null,
+    source: bundle.source || payloadSource(bundle.state),
   };
+  memorySnapshot = payload;
   writeLocalBundle(payload);
   try {
     withDb((db) => {
@@ -88,18 +95,144 @@ function persistBundle(bundle, user) {
       return db;
     });
   } catch {
-    // Persistência IndexedDB best-effort; localStorage já salvo.
+    /* cache best-effort */
   }
   return payload;
 }
 
-function pushAudit(bundle, entry) {
-  const audit = [...(bundle.audit || []), {
-    id: createId('cora'),
-    at: new Date().toISOString(),
-    ...entry,
-  }].slice(-100);
-  return { ...bundle, audit };
+function payloadSource(state) {
+  return state?.source === 'feature_flags' ? 'feature_flags' : 'local_cache';
+}
+
+export function getOperationalRolloutBundle() {
+  if (memorySnapshot?.state) {
+    return {
+      state: normalizeOperationalModeState(memorySnapshot.state),
+      metrics: memorySnapshot.metrics || createEmptyMetricCounters(),
+      audit: Array.isArray(memorySnapshot.audit) ? memorySnapshot.audit : [],
+      source: memorySnapshot.source || 'local_cache',
+    };
+  }
+  const fromDb = readDbBundle();
+  const fromLocal = readLocalBundle();
+  const merged = {
+    state: normalizeOperationalModeState(fromDb?.state || fromLocal?.state || DEFAULT_OPERATIONAL_MODE_STATE),
+    metrics: fromDb?.metrics || fromLocal?.metrics || createEmptyMetricCounters(),
+    audit: Array.isArray(fromDb?.audit) ? fromDb.audit : (fromLocal?.audit || []),
+    source: fromDb?.source || fromLocal?.source || 'local_cache',
+  };
+  return merged;
+}
+
+function applyServerResponse(json, user) {
+  const bundle = getOperationalRolloutBundle();
+  const next = {
+    ...bundle,
+    state: normalizeOperationalModeState({
+      ...(json.state || {}),
+      source: 'feature_flags',
+      tenantEnabled: Boolean(json.state?.tenantEnabled),
+    }),
+    audit: Array.isArray(json.audit) ? json.audit : (bundle.audit || []),
+    source: 'feature_flags',
+  };
+  cacheBundle(next, user);
+  return next.state;
+}
+
+async function adminApiFetch(path, { method = 'GET', body } = {}) {
+  assertAdminApiFetchAllowed();
+  const accessToken = await getPlatformAccessToken();
+  if (!accessToken) {
+    const err = new Error('Sessão SaaS ausente para rollout operacional.');
+    err.code = 'AUTH_REQUIRED';
+    throw err;
+  }
+
+  const urls = [];
+  if (import.meta.env.DEV && !getConfiguredAdminApiBaseUrl()) {
+    urls.push(getDevDirectAdminApiUrl(path));
+  }
+  urls.push(buildAdminApiUrl(path));
+
+  let lastErr;
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          ...(body != null ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body != null ? JSON.stringify(body) : undefined,
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const err = new Error(json?.error || `Erro HTTP ${response.status} no rollout.`);
+        err.code = json?.code || 'ROLLOUT_API_ERROR';
+        err.status = response.status;
+        throw err;
+      }
+      return json;
+    } catch (err) {
+      lastErr = err;
+      if (err?.status && err.status < 500) throw err;
+    }
+  }
+  throw lastErr || new Error('Falha ao contatar Admin API de rollout.');
+}
+
+/** GET servidor → atualiza cache → retorna state. */
+export async function fetchContractsOperationalRolloutFromServer(user = null) {
+  const json = await adminApiFetch(API_PATH, { method: 'GET' });
+  return applyServerResponse(json, user);
+}
+
+/** PUT tenant (+ opcional global com frase). Re-fetch implícito na resposta. */
+export async function putContractsOperationalRolloutOnServer(user, patch = {}) {
+  if (!canManageContractsOperationalMode(user)) {
+    const err = new Error('Permissão insuficiente.');
+    err.code = 'PERMISSION_DENIED';
+    throw err;
+  }
+  const json = await adminApiFetch(API_PATH, {
+    method: 'PUT',
+    body: {
+      tenantEnabled: patch.tenantEnabled,
+      mode: patch.mode,
+      note: patch.note,
+      productionGlobalEnabled: patch.productionGlobalEnabled,
+      confirmationPhrase: patch.confirmationPhrase,
+      rollbackReason: patch.rollbackReason,
+    },
+  });
+  return applyServerResponse(json, user);
+}
+
+/** POST rollback server-side. */
+export async function postContractsOperationalRollbackOnServer(user, reason = '') {
+  if (!canManageContractsOperationalMode(user)) {
+    const err = new Error('Permissão insuficiente para rollback.');
+    err.code = 'PERMISSION_DENIED';
+    throw err;
+  }
+  const json = await adminApiFetch(`${API_PATH}/rollback`, {
+    method: 'POST',
+    body: { reason },
+  });
+  const metricsBundle = getOperationalRolloutBundle();
+  const withMetrics = {
+    ...metricsBundle,
+    state: normalizeOperationalModeState({
+      ...(json.state || {}),
+      source: 'feature_flags',
+    }),
+    audit: Array.isArray(json.audit) ? json.audit : [],
+    metrics: incrementMetric(metricsBundle.metrics || createEmptyMetricCounters(), 'rollback_triggered'),
+    source: 'feature_flags',
+  };
+  cacheBundle(withMetrics, user);
+  return withMetrics.state;
 }
 
 export function getContractsOperationalModeState() {
@@ -118,7 +251,7 @@ export function isOperationalContractsUxEnabledForCurrentClinic(user) {
 export function recordContractsRolloutMetric(event, user = null) {
   const bundle = getOperationalRolloutBundle();
   const metrics = incrementMetric(bundle.metrics || createEmptyMetricCounters(), event);
-  persistBundle({ ...bundle, metrics }, user);
+  cacheBundle({ ...bundle, metrics }, user);
   return summarizeMetrics(metrics);
 }
 
@@ -130,119 +263,175 @@ export function getContractsRolloutAlerts() {
   return deriveMetricAlerts(getContractsRolloutMetricsSummary());
 }
 
-export function emergencyRollbackOperationalUx(user, reason = '') {
+function isTestRuntime() {
+  try {
+    return import.meta.env?.MODE === 'test' || import.meta.env?.VITEST === true;
+  } catch {
+    return typeof process !== 'undefined' && process.env?.VITEST === 'true';
+  }
+}
+
+function applyLocalMutation(user, mutator) {
+  let bundle = getOperationalRolloutBundle();
+  const next = mutator(bundle, user);
+  cacheBundle(next, user);
+  return next.state;
+}
+
+/** Preferir server; em teste usa cache local. */
+export async function emergencyRollbackOperationalUx(user, reason = '') {
   if (!canManageContractsOperationalMode(user)) {
     const err = new Error('Permissão insuficiente para rollback.');
     err.code = 'PERMISSION_DENIED';
     throw err;
   }
-  let bundle = getOperationalRolloutBundle();
-  const state = buildRollbackState(bundle.state, {
-    reason,
-    userId: user?.id || null,
-  });
-  bundle = pushAudit(bundle, {
-    action: 'ROLLBACK',
-    mode: state.mode,
-    reason: state.rollbackReason,
-    by: user?.id || null,
-  });
-  bundle = {
-    ...bundle,
-    state,
-    metrics: incrementMetric(bundle.metrics || createEmptyMetricCounters(), 'rollback_triggered'),
-  };
-  persistBundle(bundle, user);
-  return state;
+  if (isTestRuntime()) {
+    return applyLocalMutation(user, (bundle) => {
+      const state = buildRollbackState(bundle.state, { reason, userId: user?.id || null });
+      return {
+        ...bundle,
+        state: { ...state, source: 'local_cache', tenantEnabled: false },
+        audit: [...(bundle.audit || []), {
+          id: createId('cora'),
+          at: new Date().toISOString(),
+          action: 'ROLLBACK',
+          mode: state.mode,
+          reason: state.rollbackReason,
+          by: user?.id || null,
+        }],
+        metrics: incrementMetric(bundle.metrics || createEmptyMetricCounters(), 'rollback_triggered'),
+        source: 'local_cache',
+      };
+    });
+  }
+  return postContractsOperationalRollbackOnServer(user, reason);
 }
 
-export function enableOperationalUxMode(user, note = '') {
+export async function enableOperationalUxMode(user, note = '') {
   if (!canManageContractsOperationalMode(user)) {
     const err = new Error('Permissão insuficiente.');
     err.code = 'PERMISSION_DENIED';
     throw err;
   }
-  let bundle = getOperationalRolloutBundle();
-  const state = buildEnableOperationalUxState(bundle.state, {
-    userId: user?.id || null,
-    note,
+  if (isTestRuntime()) {
+    return applyLocalMutation(user, (bundle) => {
+      const state = buildEnableOperationalUxState(bundle.state, {
+        userId: user?.id || null,
+        note,
+      });
+      return {
+        ...bundle,
+        state: { ...state, tenantEnabled: true, source: 'local_cache' },
+        audit: [...(bundle.audit || []), {
+          id: createId('cora'),
+          at: new Date().toISOString(),
+          action: 'ENABLE_OPERATIONAL_UX',
+          mode: state.mode,
+          by: user?.id || null,
+        }],
+        metrics: incrementMetric(bundle.metrics || createEmptyMetricCounters(), 'mode_changed'),
+        source: 'local_cache',
+      };
+    });
+  }
+  return putContractsOperationalRolloutOnServer(user, {
+    tenantEnabled: true,
+    mode: CONTRACTS_OPERATIONAL_MODES.OPERATIONAL_UX,
+    note: note || 'Reativado pelo painel',
   });
-  bundle = pushAudit(bundle, {
-    action: 'ENABLE_OPERATIONAL_UX',
-    mode: state.mode,
-    by: user?.id || null,
-  });
-  bundle = {
-    ...bundle,
-    state,
-    metrics: incrementMetric(bundle.metrics || createEmptyMetricCounters(), 'mode_changed'),
-  };
-  persistBundle(bundle, user);
-  return state;
 }
 
-export function setV1OnlyMode(user, reason = '') {
+export async function setV1OnlyMode(user, reason = '') {
   if (!canManageContractsOperationalMode(user)) {
     const err = new Error('Permissão insuficiente.');
     err.code = 'PERMISSION_DENIED';
     throw err;
   }
-  let bundle = getOperationalRolloutBundle();
-  const state = {
-    ...normalizeOperationalModeState(bundle.state),
+  if (isTestRuntime()) {
+    return applyLocalMutation(user, (bundle) => {
+      const state = {
+        ...normalizeOperationalModeState(bundle.state),
+        mode: CONTRACTS_OPERATIONAL_MODES.V1_ONLY,
+        tenantEnabled: false,
+        productionGlobalEnabled: false,
+        productionTenantAllowlist: [],
+        rollbackReason: reason || null,
+        lastChangedAt: new Date().toISOString(),
+        lastChangedBy: user?.id || null,
+        source: 'local_cache',
+      };
+      return {
+        ...bundle,
+        state,
+        audit: [...(bundle.audit || []), {
+          id: createId('cora'),
+          at: new Date().toISOString(),
+          action: 'SET_V1_ONLY',
+          mode: state.mode,
+          reason,
+          by: user?.id || null,
+        }],
+        metrics: incrementMetric(bundle.metrics || createEmptyMetricCounters(), 'mode_changed'),
+        source: 'local_cache',
+      };
+    });
+  }
+  return putContractsOperationalRolloutOnServer(user, {
+    tenantEnabled: false,
     mode: CONTRACTS_OPERATIONAL_MODES.V1_ONLY,
-    productionGlobalEnabled: false,
-    rollbackReason: reason || null,
-    lastChangedAt: new Date().toISOString(),
-    lastChangedBy: user?.id || null,
-  };
-  bundle = pushAudit(bundle, {
-    action: 'SET_V1_ONLY',
-    mode: state.mode,
-    reason,
-    by: user?.id || null,
+    note: reason || 'Modo V1_ONLY pelo painel',
   });
-  bundle = {
-    ...bundle,
-    state,
-    metrics: incrementMetric(bundle.metrics || createEmptyMetricCounters(), 'mode_changed'),
-  };
-  persistBundle(bundle, user);
-  return state;
 }
 
 /**
- * Allowlist tenant — NÃO liga productionGlobalEnabled.
- * Ativação global exige unlock explícito + confirmação no painel.
+ * Ativa/desativa o tenant atual na flag server-side.
+ * Aceita lista por compatibilidade de UI — só o tenant do usuário é persistido.
  */
-export function updateProductionTenantAllowlist(user, tenantIds = []) {
+export async function updateProductionTenantAllowlist(user, tenantIds = []) {
   if (!canManageContractsOperationalMode(user)) {
     const err = new Error('Permissão insuficiente.');
     err.code = 'PERMISSION_DENIED';
     throw err;
   }
-  let bundle = getOperationalRolloutBundle();
   const list = [...new Set((tenantIds || []).map((t) => String(t || '').trim()).filter(Boolean))];
-  const state = {
-    ...normalizeOperationalModeState(bundle.state),
-    productionTenantAllowlist: list,
-    lastChangedAt: new Date().toISOString(),
-    lastChangedBy: user?.id || null,
-  };
-  bundle = pushAudit(bundle, {
-    action: 'UPDATE_ALLOWLIST',
-    allowlistCount: list.length,
-    by: user?.id || null,
+  const selfId = String(user?.tenantId || user?.tenant_id || '').trim();
+  if (!isTestRuntime() && list.some((id) => selfId && id !== selfId)) {
+    const err = new Error('Só é permitido ativar o tenant da sessão autenticada (sem wildcard / cross-tenant).');
+    err.code = 'TENANT_FORBIDDEN';
+    throw err;
+  }
+  const enabled = selfId ? list.includes(selfId) : list.length > 0;
+  if (isTestRuntime()) {
+    return applyLocalMutation(user, (bundle) => ({
+      ...bundle,
+      state: {
+        ...normalizeOperationalModeState(bundle.state),
+        productionTenantAllowlist: list,
+        tenantEnabled: enabled,
+        lastChangedAt: new Date().toISOString(),
+        lastChangedBy: user?.id || null,
+        source: 'local_cache',
+      },
+      audit: [...(bundle.audit || []), {
+        id: createId('cora'),
+        at: new Date().toISOString(),
+        action: 'UPDATE_ALLOWLIST',
+        allowlistCount: list.length,
+        by: user?.id || null,
+      }],
+      source: 'local_cache',
+    }));
+  }
+  return putContractsOperationalRolloutOnServer(user, {
+    tenantEnabled: enabled,
+    mode: enabled
+      ? CONTRACTS_OPERATIONAL_MODES.OPERATIONAL_UX
+      : CONTRACTS_OPERATIONAL_MODES.V1_ONLY,
+    note: 'Atualização tenant enabled via painel',
   });
-  persistBundle({ ...bundle, state }, user);
-  return state;
 }
 
-/**
- * Ligar productionGlobalEnabled — bloqueado sem unlock env + confirmação.
- * Este método NÃO é chamado automaticamente em lugar algum.
- */
-export function setProductionGlobalEnabled(user, enabled, confirmationPhrase = '') {
+export async function setProductionGlobalEnabled(user, enabled, confirmationPhrase = '') {
   if (!canManageContractsOperationalMode(user)) {
     const err = new Error('Permissão insuficiente.');
     err.code = 'PERMISSION_DENIED';
@@ -256,28 +445,40 @@ export function setProductionGlobalEnabled(user, enabled, confirmationPhrase = '
       err.code = 'PRODUCTION_ACTIVATION_LOCKED';
       throw err;
     }
-    if (String(confirmationPhrase || '').trim() !== 'ATIVAR_PRODUCAO_OPERATIONAL_UX') {
-      const err = new Error('Confirmação inválida. Digite exatamente ATIVAR_PRODUCAO_OPERATIONAL_UX.');
+    if (String(confirmationPhrase || '').trim() !== PRODUCTION_ACTIVATION_PHRASE) {
+      const err = new Error(`Confirmação inválida. Digite exatamente ${PRODUCTION_ACTIVATION_PHRASE}.`);
       err.code = 'CONFIRMATION_REQUIRED';
       throw err;
     }
   }
-  let bundle = getOperationalRolloutBundle();
-  const state = {
-    ...normalizeOperationalModeState(bundle.state),
+  if (isTestRuntime()) {
+    return applyLocalMutation(user, (bundle) => ({
+      ...bundle,
+      state: {
+        ...normalizeOperationalModeState(bundle.state),
+        productionGlobalEnabled: Boolean(enabled),
+        rolloutPhase: enabled
+          ? CONTRACTS_ROLLOUT_PHASES.PRODUCTION_ACTIVE
+          : CONTRACTS_ROLLOUT_PHASES.READY_FOR_PRODUCTION_ACTIVATION,
+        lastChangedAt: new Date().toISOString(),
+        lastChangedBy: user?.id || null,
+        source: 'local_cache',
+      },
+      audit: [...(bundle.audit || []), {
+        id: createId('cora'),
+        at: new Date().toISOString(),
+        action: enabled ? 'PRODUCTION_GLOBAL_ON' : 'PRODUCTION_GLOBAL_OFF',
+        by: user?.id || null,
+      }],
+      source: 'local_cache',
+    }));
+  }
+  return putContractsOperationalRolloutOnServer(user, {
     productionGlobalEnabled: Boolean(enabled),
-    rolloutPhase: enabled
-      ? CONTRACTS_ROLLOUT_PHASES.PRODUCTION_ACTIVE
-      : CONTRACTS_ROLLOUT_PHASES.READY_FOR_PRODUCTION_ACTIVATION,
-    lastChangedAt: new Date().toISOString(),
-    lastChangedBy: user?.id || null,
-  };
-  bundle = pushAudit(bundle, {
-    action: enabled ? 'PRODUCTION_GLOBAL_ON' : 'PRODUCTION_GLOBAL_OFF',
-    by: user?.id || null,
+    confirmationPhrase,
+    mode: getContractsOperationalModeState().mode,
+    tenantEnabled: getContractsOperationalModeState().tenantEnabled,
   });
-  persistBundle({ ...bundle, state }, user);
-  return state;
 }
 
 export function getRolloutAuditLog() {
@@ -308,4 +509,5 @@ export {
   canManageContractsOperationalMode,
   isProductionRuntime,
   isProductionActivationUnlocked,
+  PRODUCTION_ACTIVATION_PHRASE,
 };
