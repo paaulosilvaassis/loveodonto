@@ -4,14 +4,14 @@
  */
 
 import {
+  CONTRACTS_OPERATIONAL_MODES,
   CONTRACTS_OPERATIONAL_UX_GLOBAL_FLAG,
   CONTRACTS_OPERATIONAL_UX_TENANT_FLAG,
   PRODUCTION_ACTIVATION_PHRASE,
   buildRolloutActorPayload,
   mapFeatureFlagsToRolloutState,
   normalizeRolloutMode,
-} from '../../src/domain/contracts/rollout/contracts-operational-rollout-flags.ts';
-import { CONTRACTS_OPERATIONAL_MODES } from '../../src/domain/contracts/rollout/contracts-operational-mode.ts';
+} from './contractsOperationalRolloutFlags.js';
 import { isTenantAdminRole, normalizeRoleValue } from '../core/rbac/roles.js';
 import { readExplicitTenantId } from './tenantAdminActor.js';
 
