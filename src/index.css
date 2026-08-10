@@ -11918,6 +11918,255 @@ a.button {
   padding: 0.5rem 0.75rem;
 }
 
+/* Phase 10.16 — assinatura pública compreensível + fila + wizard */
+.ctr-public-sign--v2ux {
+  max-width: 640px;
+  padding: 1.25rem 1rem 2.5rem;
+  gap: 1.25rem;
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+.ctr-public-sign--v2ux h1 {
+  font-size: clamp(1.5rem, 4vw, 1.85rem);
+  font-weight: 800;
+}
+.ctr-public-sign--v2ux h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 750;
+}
+.ctr-public-sign--v2ux h3 {
+  margin: 0.75rem 0 0.4rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.ctr-public-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ctr-public-steps-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  color: #64748b;
+  text-align: center;
+}
+.ctr-public-steps-num {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #e2e8f0;
+  font-weight: 700;
+}
+.ctr-public-steps-item.is-current { color: #0f766e; font-weight: 700; }
+.ctr-public-steps-item.is-current .ctr-public-steps-num { background: #0f766e; color: #fff; }
+.ctr-public-steps-item.is-done .ctr-public-steps-num { background: #99f6e4; color: #115e59; }
+.ctr-public-summary-card {
+  border: 1px solid #dbe3ee;
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+.ctr-public-summary-lead { margin: 0 0 0.75rem; font-size: 1.1rem; font-weight: 650; }
+.ctr-public-summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #eef2f7;
+  font-size: 1.02rem;
+}
+.ctr-public-summary-note { margin: 0.75rem 0 0; color: #64748b; font-size: 0.9rem; }
+.ctr-public-lgpd {
+  margin: 0 0 1rem;
+  padding: 0.85rem;
+  border-radius: 10px;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
+  font-size: 1rem;
+}
+.ctr-public-consent-group { margin-top: 0.75rem; }
+.ctr-public-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin: 0.55rem 0;
+  font-size: 1.02rem;
+}
+.ctr-public-consent input { width: 1.15rem; height: 1.15rem; margin-top: 0.15rem; flex: 0 0 auto; }
+.ctr-public-doc-cta { width: 100%; min-height: 2.75rem; font-size: 1.05rem; }
+.ctr-public-sign-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+.ctr-public-sign-actions .button { min-height: 2.75rem; flex: 1 1 140px; font-size: 1.05rem; }
+
+.bhub-btn--accent {
+  background: #0f766e;
+  color: #fff;
+  border-color: #0f766e;
+}
+.bhub-btn--accent:hover { filter: #115e59; }
+.bhub-contract-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #475569;
+}
+.bhub-contract-status--warning { background: #fff7ed; color: #c2410c; }
+.bhub-contract-status--success { background: #ecfdf5; color: #047857; }
+.bhub-contract-status--danger { background: #fef2f2; color: #b91c1c; }
+.bhub-contract-status--info { background: #ecfeff; color: #0e7490; }
+
+.ctr-fila-header h2 { margin: 0 0 0.25rem; font-size: 1.35rem; }
+.ctr-fila-header p { margin: 0; color: var(--color-text-muted); }
+.ctr-fila-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1rem 0 0.75rem;
+}
+.ctr-fila-chip {
+  border: 1px solid #dbe3ee;
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.ctr-fila-chip.is-active {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+.ctr-fila-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+.ctr-fila-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.ctr-fila-filters input,
+.ctr-fila-filters select {
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  font-weight: 500;
+}
+.ctr-fila-search { grid-column: 1 / -1; }
+.ctr-fila-count { margin: 0 0 0.75rem; color: #64748b; font-size: 0.9rem; }
+.ctr-fila-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.ctr-fila-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  background: #fff;
+}
+.ctr-fila-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.ctr-fila-meta { display: block; color: #64748b; font-size: 0.85rem; }
+.ctr-fila-treatment { margin: 0.55rem 0; font-weight: 600; }
+.ctr-fila-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+.ctr-fila-pendencies {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+.ctr-fila-card footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+.ctr-fila-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: #64748b;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+}
+
+.ocw-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+}
+.ocw-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+.ocw-steps li span {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #e2e8f0;
+  font-weight: 700;
+}
+.ocw-steps li.is-current { background: #ccfbf1; color: #115e59; font-weight: 700; }
+.ocw-steps li.is-done { background: #ecfdf5; color: #047857; }
+.ocw-panel h3 { margin: 0 0 0.5rem; }
+.ocw-error { color: #b91c1c; margin: 0 0 0.75rem; }
+.ocw-hint { color: #64748b; font-size: 0.9rem; }
+.ocw-package ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.ocw-package li {
+  display: flex;
+  gap: 0.55rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+.ocw-package li.is-ready { border-color: #99f6e4; background: #f0fdfa; }
+.ocw-package li.is-missing { border-color: #fecaca; background: #fef2f2; }
+.ocw-package small { display: block; color: #64748b; }
+
+@media (max-width: 640px) {
+  .ctr-public-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ctr-fila-filters { grid-template-columns: 1fr 1fr; }
+}
+
 /* ─── Fluxo do Paciente — Central Operacional ─────────────────────────────── */
 .pf-central-page {
   display: flex;
