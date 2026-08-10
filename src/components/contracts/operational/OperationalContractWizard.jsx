@@ -1,6 +1,6 @@
 /**
- * Wizard operacional — Pacote documental do tratamento (C2/C5).
- * Não usa páginas técnicas *-v2.
+ * Wizard operacional — Pacote documental do tratamento (Phase 10.16/10.17).
+ * Linguagem clínica/operacional — sem enums, IDs ou termos internos.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -18,11 +18,17 @@ import {
   WIZARD_STEPS,
   validateBudgetContractGeneration,
   buildDocumentPackageForBudget,
+  buildWizardViewModel,
   getWizardProgress,
   saveWizardProgress,
   getStepReadiness,
 } from '../../../services/operationalContractWizardService.js';
 import { labelOperationalUxStatus, resolveOperationalUxStatus } from '../../../contracts/operationalContractUi.js';
+import {
+  formatUxMessage,
+  labelDocumentType,
+  labelSignerRole,
+} from '../../../contracts/operationalUxMessages.js';
 
 function PackageChecklist({ documentPackage }) {
   if (!documentPackage) return null;
@@ -36,14 +42,24 @@ function PackageChecklist({ documentPackage }) {
             <div>
               <strong>{item.label}</strong>
               <small>
-                {item.documentType}
-                {item.version ? ` · v${item.version}` : ''}
+                {labelDocumentType(item.documentType)}
+                {item.required ? ' · Obrigatório' : ' · Opcional'}
                 {item.detail ? ` · ${item.detail}` : ''}
               </small>
             </div>
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function InfoRow({ label, value }) {
+  if (value == null || value === '' || value === '—') return null;
+  return (
+    <div className="ocw-info-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }
@@ -59,14 +75,20 @@ export default function OperationalContractWizard({
   const [error, setError] = useState('');
   const [generateOpen, setGenerateOpen] = useState(false);
   const [validation, setValidation] = useState(null);
+  const [packageTick, setPackageTick] = useState(0);
 
   const patientId = row?.patientId;
   const budgetId = row?.id;
   const appointmentId = row?.appointmentId;
 
+  const view = useMemo(
+    () => (open && row ? buildWizardViewModel(row) : null),
+    [open, row, packageTick],
+  );
+
   const documentPackage = useMemo(
     () => (open ? buildDocumentPackageForBudget({ appointmentId, budgetId, patientId }) : null),
-    [open, appointmentId, budgetId, patientId],
+    [open, appointmentId, budgetId, patientId, packageTick],
   );
 
   useEffect(() => {
@@ -94,29 +116,26 @@ export default function OperationalContractWizard({
 
   const step = WIZARD_STEPS[stepIndex] || WIZARD_STEPS[0];
   const uxStatus = resolveOperationalUxStatus({
-    status: row?.contractStatus,
-    hasPendency: documentPackage?.hasPendency && Boolean(row?.contractId),
+    status: view?.contractStatus || row?.contractStatus,
+    hasPendency: documentPackage?.hasPendency && Boolean(view?.contractId || row?.contractId),
   });
 
   const readiness = getStepReadiness(step.id, {
     patientId,
     budget: validation?.budget || {
-      planName: row?.planName,
-      procedures: row?.planName ? [{ name: row.planName }] : [],
+      planName: view?.treatmentName || row?.planName,
+      procedures: view?.procedures?.length
+        ? view.procedures
+        : (row?.planName ? [{ name: row.planName }] : []),
       totalValue: row?.totalValue,
     },
     documentPackage: {
       ...documentPackage,
-      // No wizard de geração, documentos obrigatórios ficam prontos após GenerateContractModal
       items: (documentPackage?.items || []).map((item) => {
-        if (item.id === 'contract_services' && (generateOpen || row?.contractId)) {
+        if (item.id === 'contract_services' && (generateOpen || view?.contractId || row?.contractId)) {
           return { ...item, ready: true };
         }
-        if (item.id === 'tcle') {
-          // TCLE pode estar pendente na clínica; não bloqueia avanço inicial do rascunho
-          return { ...item, ready: true };
-        }
-        if (item.id === 'lgpd') return { ...item, ready: true };
+        if (item.id === 'tcle' || item.id === 'lgpd') return { ...item, ready: true };
         return item;
       }),
     },
@@ -137,10 +156,10 @@ export default function OperationalContractWizard({
   const goNext = () => {
     setError('');
     if (!readiness.ready) {
-      setError(`Complete: ${readiness.missing.join(', ')}`);
+      setError(`${formatUxMessage('WIZARD_STEP_BLOCKED')} Falta: ${readiness.missing.join(', ')}.`);
       return;
     }
-    if (step.id === 'documentos' && !row?.contractId && !validation?.existingContract) {
+    if (step.id === 'documentos' && !(view?.contractId || row?.contractId) && !validation?.existingContract) {
       const check = validateBudgetContractGeneration({
         patientId,
         budgetId,
@@ -148,12 +167,12 @@ export default function OperationalContractWizard({
         allowExisting: false,
       });
       if (check.duplicateBlocked) {
-        setError(check.errors[0] || 'Contrato já existe.');
+        setError(check.errors[0] || formatUxMessage('CONTRACT_ALREADY_EXISTS'));
         setValidation(check);
         return;
       }
       if (!check.ok) {
-        setError(check.errors.join(' '));
+        setError(check.errors[0] || formatUxMessage('BUDGET_INCOMPLETE'));
         return;
       }
       setGenerateOpen(true);
@@ -170,6 +189,8 @@ export default function OperationalContractWizard({
     persist(prev);
   };
 
+  const hasContract = Boolean(view?.contractId || row?.contractId);
+
   return (
     <>
       <ModalRoot open={open} onOpenChange={onOpenChange}>
@@ -177,8 +198,8 @@ export default function OperationalContractWizard({
           <ModalHeader>
             <ModalTitle>Pacote documental do tratamento</ModalTitle>
             <ModalDescription>
-              {row?.patientName || 'Paciente'} · {row?.planName || 'Tratamento'}
-              {row?.contractId ? ` · ${labelOperationalUxStatus(uxStatus)}` : ''}
+              {view?.patientName || 'Paciente'} · {view?.treatmentName || 'Tratamento'}
+              {hasContract ? ` · ${labelOperationalUxStatus(uxStatus)}` : ''}
             </ModalDescription>
           </ModalHeader>
           <ModalBody>
@@ -194,65 +215,114 @@ export default function OperationalContractWizard({
             {error ? <p className="ocw-error" role="alert">{error}</p> : null}
 
             {step.id === 'dados' ? (
-              <section className="ocw-panel">
+              <section className="ocw-panel" data-testid="ocw-step-dados">
                 <h3>Dados</h3>
-                <p><strong>Paciente:</strong> {row?.patientName || '—'}</p>
-                <p><strong>Telefone:</strong> {row?.patientPhone || '—'}</p>
-                <p><strong>Orçamento:</strong> {row?.budgetNumber || budgetId}</p>
-                <p><strong>Profissional:</strong> {row?.professionalName || '—'}</p>
+                <InfoRow label="Paciente" value={view?.patientName} />
+                <InfoRow label="Responsável legal" value={view?.guardianName || 'Não informado (paciente titular)'} />
+                <InfoRow label="Clínica" value={view?.clinicName} />
+                <InfoRow label="Profissional" value={view?.professionalName} />
+                <InfoRow label="Orçamento" value={view?.budgetNumber} />
+                <p className="ocw-hint">Confira se os dados batem com o atendimento antes de avançar.</p>
               </section>
             ) : null}
 
             {step.id === 'tratamento' ? (
-              <section className="ocw-panel">
+              <section className="ocw-panel" data-testid="ocw-step-tratamento">
                 <h3>Tratamento</h3>
-                <p><strong>Nome:</strong> {row?.planName || '—'}</p>
-                <p><strong>Valor de referência:</strong> {row?.totalValue != null ? row.totalValue : '—'}</p>
-                {row?.installmentLabel ? <p><strong>Condição:</strong> {row.installmentLabel}</p> : null}
+                <InfoRow label="Nome do tratamento" value={view?.treatmentName} />
+                {view?.procedures?.length ? (
+                  <div className="ocw-list-block">
+                    <h4>Procedimentos</h4>
+                    <ul>
+                      {view.procedures.map((p, idx) => (
+                        <li key={`${p.name}-${idx}`}>
+                          {p.name}
+                          {p.tooth ? ` · dente/região ${p.tooth}` : ''}
+                          {p.quantity > 1 ? ` · qtd ${p.quantity}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : (
+                  <p className="ocw-hint">Procedimentos serão detalhados no documento gerado.</p>
+                )}
+                {view?.teethRegions?.length ? (
+                  <InfoRow label="Dentes/regiões" value={view.teethRegions.join(', ')} />
+                ) : null}
+                {view?.notes ? <InfoRow label="Observações" value={view.notes} /> : null}
               </section>
             ) : null}
 
             {step.id === 'financeiro' ? (
-              <section className="ocw-panel">
+              <section className="ocw-panel" data-testid="ocw-step-financeiro">
                 <h3>Financeiro</h3>
-                <p>Os valores do contrato serão congelados no snapshot no momento da geração.</p>
-                <p><strong>Total do orçamento:</strong> {row?.totalValue != null ? row.totalValue : '—'}</p>
-                {row?.installmentLabel ? <p>{row.installmentLabel}</p> : null}
+                <InfoRow label="Valor total" value={view?.financial?.totalLabel} />
+                <InfoRow label="Entrada" value={view?.financial?.downPaymentLabel} />
+                <InfoRow label="Saldo" value={view?.financial?.balanceLabel} />
+                {view?.financial?.installmentCount != null ? (
+                  <InfoRow label="Parcelas" value={`${view.financial.installmentCount}x`} />
+                ) : null}
+                <InfoRow label="Valor das parcelas" value={view?.financial?.installmentValueLabel} />
+                <InfoRow label="Forma de pagamento" value={view?.financial?.paymentMethod} />
+                <p className="ocw-hint">
+                  Estes valores vêm do orçamento aprovado e serão registrados no contrato sem alteração nesta tela.
+                </p>
               </section>
             ) : null}
 
             {step.id === 'documentos' ? (
-              <section className="ocw-panel">
+              <section className="ocw-panel" data-testid="ocw-step-documentos">
                 <PackageChecklist documentPackage={documentPackage} />
                 <p className="ocw-hint">
-                  Contrato, TCLE e LGPD permanecem documentos distintos (tipo, versão, hash e aceite próprios),
-                  administrados neste mesmo pacote.
+                  Contrato, TCLE e privacidade ficam no mesmo pacote para a equipe, mas continuam documentos separados
+                  (cada um com seu aceite).
                 </p>
               </section>
             ) : null}
 
             {step.id === 'signatarios' ? (
-              <section className="ocw-panel">
+              <section className="ocw-panel" data-testid="ocw-step-signatarios">
                 <h3>Signatários</h3>
-                <p>Paciente (obrigatório): {row?.patientName}</p>
-                <p className="ocw-hint">Outros signatários podem ser incluídos na etapa de envio de assinatura.</p>
+                <div className="ocw-signer-card">
+                  <strong>{view?.patientName}</strong>
+                  <span>{labelSignerRole('patient')} · Obrigatório</span>
+                  <span>Contato: {view?.patientPhone || 'Atualizar no cadastro'}</span>
+                  <span>Ordem: 1º a assinar</span>
+                </div>
+                {view?.guardianName ? (
+                  <div className="ocw-signer-card">
+                    <strong>{view.guardianName}</strong>
+                    <span>{labelSignerRole('guardian')}</span>
+                  </div>
+                ) : null}
+                <p className="ocw-hint">
+                  Se faltar telefone ou e-mail do paciente, atualize o cadastro antes de enviar o link.
+                </p>
               </section>
             ) : null}
 
             {step.id === 'revisao' ? (
-              <section className="ocw-panel">
+              <section className="ocw-panel" data-testid="ocw-step-revisao">
                 <h3>Revisão</h3>
+                <InfoRow label="Paciente" value={view?.patientName} />
+                <InfoRow label="Tratamento" value={view?.treatmentName} />
+                <InfoRow label="Valor total" value={view?.financial?.totalLabel} />
+                <InfoRow label="Condição" value={view?.financial?.installmentLabel || view?.financial?.paymentMethod} />
+                <InfoRow label="Profissional" value={view?.professionalName} />
                 <PackageChecklist documentPackage={documentPackage} />
-                <p>Confira os dados antes de enviar para assinatura.</p>
+                <p className="ocw-hint">
+                  Eu enviaria isso ao paciente sem precisar voltar nenhuma etapa? Se sim, avance para Assinatura.
+                </p>
               </section>
             ) : null}
 
             {step.id === 'assinatura' ? (
-              <section className="ocw-panel">
+              <section className="ocw-panel" data-testid="ocw-step-assinatura">
                 <h3>Assinatura</h3>
-                <p>
-                  Após gerar o contrato, use “Enviar para assinatura” no atendimento ou na fila de contratos.
-                  O paciente receberá o link público com resumo do tratamento e condições.
+                <InfoRow label="Status" value={hasContract ? labelOperationalUxStatus(uxStatus) : 'Aguardando geração do contrato'} />
+                <InfoRow label="Próxima ação" value={hasContract ? 'Enviar link pela fila ou pelo atendimento' : 'Gere os documentos na etapa Documentos'} />
+                <p className="ocw-hint">
+                  O paciente recebe um link simples no celular: resumo do tratamento, parcelas, documento, privacidade e assinatura — tudo na mesma página.
                 </p>
               </section>
             ) : null}
@@ -266,16 +336,17 @@ export default function OperationalContractWizard({
             </button>
             {stepIndex < WIZARD_STEPS.length - 1 ? (
               <button type="button" className="button primary" onClick={goNext} data-testid="ocw-next">
-                {step.id === 'documentos' && !row?.contractId ? 'Gerar documentos' : 'Avançar'}
+                {step.id === 'documentos' && !hasContract ? 'Gerar documentos' : 'Avançar'}
               </button>
             ) : (
               <button
                 type="button"
                 className="button primary"
+                data-testid="ocw-finish"
                 onClick={() => {
                   persist(stepIndex);
                   onOpenChange(false);
-                  onSuccess?.({ wizardCompleted: true, contractId: row?.contractId });
+                  onSuccess?.({ wizardCompleted: true, contractId: view?.contractId || row?.contractId });
                 }}
               >
                 Concluir
@@ -296,6 +367,7 @@ export default function OperationalContractWizard({
         flow="clinical"
         onSuccess={(contract) => {
           setGenerateOpen(false);
+          setPackageTick((t) => t + 1);
           const next = Math.min(stepIndex + 1, WIZARD_STEPS.length - 1);
           setStepIndex(next);
           persist(next);

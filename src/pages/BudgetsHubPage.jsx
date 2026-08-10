@@ -22,6 +22,7 @@ import {
 import { openExistingBudget } from '../services/budgetNavigationService.js';
 import { buildFinanceNavigationUrl } from '../services/patientFinancialSummaryService.js';
 import { validateBudgetContractGeneration } from '../services/operationalContractWizardService.js';
+import { formatUxMessage } from '../contracts/operationalUxMessages.js';
 
 const DEFAULT_FILTERS = {
   query: '',
@@ -129,11 +130,11 @@ export default function BudgetsHubPage() {
       allowExisting: Boolean(row.contractId),
     });
     if (check.duplicateBlocked && !row.contractId) {
-      showToast(check.errors[0] || 'Já existe contrato para este orçamento.', 'error');
+      showToast(check.errors[0] || formatUxMessage('CONTRACT_ALREADY_EXISTS'), 'error');
       return;
     }
     if (!row.contractId && !check.ok) {
-      showToast(check.errors.join(' '), 'error');
+      showToast(check.errors[0] || formatUxMessage('BUDGET_INCOMPLETE'), 'error');
       return;
     }
     setWizardRow(row);

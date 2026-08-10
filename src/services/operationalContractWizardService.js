@@ -10,6 +10,8 @@ import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
 import { resolveBudgetContractCta, deriveContractPendency } from '../contracts/operationalContractUi.js';
 import { LINKED_DOCUMENTS } from '../components/clinical/contract/professionalContractClauses.js';
 import { resolveAttachedTcleIdsFromClinicalDocuments } from './clinicalTcleAttachmentService.js';
+import { formatUxMessage } from '../contracts/operationalUxMessages.js';
+import { formatCurrencyBRL } from '../utils/currency.js';
 
 export const WIZARD_STEPS = [
   { id: 'dados', label: 'Dados' },
@@ -36,9 +38,9 @@ export function validateBudgetContractGeneration({
   allowExisting = false,
 } = {}) {
   const errors = [];
-  if (!patientId) errors.push('Paciente não identificado.');
-  if (!budgetId) errors.push('Orçamento não identificado.');
-  if (!appointmentId) errors.push('Atendimento/tratamento não identificado.');
+  if (!patientId) errors.push(formatUxMessage('PATIENT_REQUIRED'));
+  if (!budgetId) errors.push(formatUxMessage('BUDGET_INCOMPLETE'));
+  if (!appointmentId) errors.push(formatUxMessage('TREATMENT_REQUIRED'));
 
   const db = loadDb();
   const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === appointmentId) || null;
@@ -49,10 +51,10 @@ export function validateBudgetContractGeneration({
   })();
 
   if (!budget) {
-    errors.push('Orçamento não encontrado no tratamento.');
+    errors.push(formatUxMessage('BUDGET_INCOMPLETE'));
   } else if (![BUDGET_STATUS.APROVADO, BUDGET_STATUS.CONTRATO_GERADO].includes(budget.status)) {
     if (budget.status !== BUDGET_STATUS.APROVADO && !budget.contractId) {
-      errors.push('Orçamento precisa estar aprovado para gerar contrato.');
+      errors.push(formatUxMessage('BUDGET_NOT_APPROVED'));
     }
   }
 
@@ -60,7 +62,7 @@ export function validateBudgetContractGeneration({
   if (existing && !allowExisting) {
     return {
       ok: false,
-      errors: ['Já existe contrato para este orçamento.'],
+      errors: [formatUxMessage('CONTRACT_ALREADY_EXISTS')],
       existingContract: existing,
       duplicateBlocked: true,
     };
@@ -68,7 +70,7 @@ export function validateBudgetContractGeneration({
 
   const financialOk = Number(budget?.totalValue) >= 0 || (budget?.procedures || []).length > 0;
   if (budget && !financialOk) {
-    errors.push('Dados financeiros do orçamento estão incompletos.');
+    errors.push(formatUxMessage('FINANCIAL_INCOMPLETE'));
   }
 
   return {
@@ -240,11 +242,13 @@ export function getStepReadiness(stepId, context = {}) {
   switch (stepId) {
     case 'dados':
       return { ready: Boolean(patientId), missing: patientId ? [] : ['Paciente'] };
-    case 'tratamento':
+    case 'tratamento': {
+      const hasTreatment = Boolean(budget?.planName || (budget?.procedures || []).length);
       return {
-        ready: Boolean(budget?.planName || (budget?.procedures || []).length),
-        missing: (budget?.procedures || []).length ? [] : ['Procedimentos do tratamento'],
+        ready: hasTreatment,
+        missing: hasTreatment ? [] : ['Resumo do tratamento'],
       };
+    }
     case 'financeiro': {
       const total = Number(budget?.totalValue);
       const ok = Number.isFinite(total);
@@ -282,4 +286,96 @@ export function resolveHubContractAction(row) {
     budgetStatus: row.status,
     hasPendency: pendency.hasPendency && Boolean(row.contractId),
   });
+}
+
+/**
+ * Contexto amigável do wizard — sem IDs técnicos na UI.
+ */
+export function buildWizardViewModel(row = {}) {
+  const db = loadDb();
+  const clinic = db.clinicProfile || {};
+  const clinicName = clinic.nomeFantasia || clinic.nomeClinica || clinic.razaoSocial || 'Clínica';
+  const appointmentId = row.appointmentId;
+  const budgetId = row.id;
+  const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === appointmentId) || null;
+  const budget =
+    (clinical?.budget?.id === budgetId ? clinical.budget : null)
+    || (clinical?.budgetHistory || []).find((b) => b.id === budgetId)
+    || null;
+  const contract = getContractStatusForQuote(appointmentId, 'clinical_budget', budgetId, row.patientId);
+  const financial = contract?.financialSnapshotJson || {};
+  const clinicalSnap = contract?.clinicalSnapshotJson || {};
+
+  const procedures = [];
+  const fromBudget = budget?.procedures || [];
+  for (const p of fromBudget) {
+    procedures.push({
+      name: p.name || p.procedureName || p.description || 'Procedimento',
+      tooth: p.tooth || p.teeth || p.region || null,
+      quantity: p.quantity || 1,
+    });
+  }
+  if (!procedures.length && clinicalSnap.procedimentos) {
+    const list = Array.isArray(clinicalSnap.procedimentos)
+      ? clinicalSnap.procedimentos
+      : [clinicalSnap.procedimentos];
+    for (const p of list) {
+      procedures.push({
+        name: typeof p === 'string' ? p : p?.name || 'Procedimento',
+        tooth: typeof p === 'object' ? p?.tooth : null,
+        quantity: 1,
+      });
+    }
+  }
+
+  const teeth = [];
+  if (Array.isArray(clinicalSnap.dentes)) {
+    for (const d of clinicalSnap.dentes) teeth.push(typeof d === 'string' ? d : d?.tooth || String(d));
+  }
+  for (const p of procedures) {
+    if (p.tooth && !teeth.includes(p.tooth)) teeth.push(String(p.tooth));
+  }
+
+  const total = Number(contract?.totalValueSnapshot ?? financial.valorTotal ?? row.totalValue);
+  const entrada = Number(financial.entrada);
+  const parcelas = Array.isArray(financial.parcelas) ? financial.parcelas : [];
+  const installmentCount =
+    Number(financial.financiamentos?.[0]?.installments_count)
+    || Number(parcelas[0]?.total_installments)
+    || (parcelas.length || null);
+  const installmentValue = parcelas[0]?.net_amount ?? parcelas[0]?.original_amount ?? null;
+  const balance = Number.isFinite(total) && Number.isFinite(entrada)
+    ? Math.max(total - entrada, 0)
+    : null;
+
+  const patient = (db.patients || []).find((p) => p.id === row.patientId);
+  const guardianName =
+    patient?.guardian_name
+    || patient?.responsible_name
+    || patient?.responsavel_nome
+    || null;
+
+  return {
+    patientName: row.patientName || patient?.full_name || 'Paciente',
+    patientPhone: row.patientPhone || '—',
+    guardianName,
+    clinicName,
+    professionalName: row.professionalName || contract?.professionalSnapshotJson?.name || '—',
+    budgetNumber: row.budgetNumber || 'Orçamento',
+    treatmentName: row.planName || budget?.planName || 'Tratamento',
+    procedures,
+    teethRegions: teeth,
+    notes: clinicalSnap.observacoes || budget?.notes || null,
+    financial: {
+      totalLabel: Number.isFinite(total) ? formatCurrencyBRL(total) : '—',
+      downPaymentLabel: Number.isFinite(entrada) ? formatCurrencyBRL(entrada) : '—',
+      balanceLabel: balance != null ? formatCurrencyBRL(balance) : '—',
+      installmentCount,
+      installmentValueLabel: installmentValue != null ? formatCurrencyBRL(installmentValue) : null,
+      paymentMethod: financial.formaPagamento || row.installmentLabel || 'Conforme orçamento',
+      installmentLabel: row.installmentLabel || null,
+    },
+    contractId: contract?.id || row.contractId || null,
+    contractStatus: contract?.status || row.contractStatus || null,
+  };
 }

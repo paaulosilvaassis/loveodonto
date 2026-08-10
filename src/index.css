@@ -12161,10 +12161,53 @@ a.button {
 .ocw-package li.is-ready { border-color: #99f6e4; background: #f0fdfa; }
 .ocw-package li.is-missing { border-color: #fecaca; background: #fef2f2; }
 .ocw-package small { display: block; color: #64748b; }
+.ocw-info-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #eef2f7;
+  font-size: 0.95rem;
+}
+.ocw-info-row span { color: #64748b; }
+.ocw-list-block { margin: 0.75rem 0; }
+.ocw-list-block h4 { margin: 0 0 0.35rem; font-size: 0.9rem; }
+.ocw-list-block ul { margin: 0; padding-left: 1.1rem; }
+.ocw-signer-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  margin-bottom: 0.55rem;
+}
+.ctr-fila-signers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: #334155;
+}
+.ctr-fila-grid em {
+  font-style: normal;
+  font-weight: 700;
+  color: #0f172a;
+  margin-right: 0.25rem;
+}
+.ctr-fila-empty strong { display: block; margin-bottom: 0.35rem; }
+.ctr-fila-empty p { margin: 0; }
 
 @media (max-width: 640px) {
   .ctr-public-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ctr-fila-filters { grid-template-columns: 1fr 1fr; }
+  .ctr-public-sign--v2ux .button,
+  .ctr-public-sign--v2ux .ctr-public-doc-cta {
+    min-height: 3rem;
+    font-size: 1.08rem;
+  }
 }
 
 /* ─── Fluxo do Paciente — Central Operacional ─────────────────────────────── */

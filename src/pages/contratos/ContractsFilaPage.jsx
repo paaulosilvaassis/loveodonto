@@ -17,6 +17,7 @@ import {
   sendContractForSignature,
   finalizeGeneratedContract,
 } from '../../services/contractModuleService.js';
+import { UX_MESSAGES, formatUxMessage } from '../../contracts/operationalUxMessages.js';
 
 const DEFAULT_FILTERS = {
   query: '',
@@ -60,9 +61,9 @@ export default function ContractsFilaPage() {
     const key = row.cta?.key;
     try {
       if (key === 'send') {
-        const { signUrl } = sendContractForSignature(user, row.id);
+        sendContractForSignature(user, row.id);
         setRefresh((x) => x + 1);
-        showToast(`Link gerado: ${signUrl}`);
+        showToast('Link de assinatura gerado. Envie ao paciente pelo canal da clínica (simulação em staging).');
         return;
       }
       if (key === 'continue' || key === 'review' || key === 'resolve') {
@@ -85,7 +86,10 @@ export default function ContractsFilaPage() {
       }
       setDetailId(row.id);
     } catch (e) {
-      showToast(e?.message || 'Erro na ação.', 'error');
+      const msg = String(e?.message || '');
+      if (/permiss/i.test(msg)) showToast(formatUxMessage('PERMISSION_DENIED'), 'error');
+      else if (/contato|e-mail|email|telefone/i.test(msg)) showToast(formatUxMessage('SIGNER_WITHOUT_CONTACT'), 'error');
+      else showToast(msg || formatUxMessage('LOAD_FAILED'), 'error');
     }
   };
 
@@ -215,7 +219,10 @@ export default function ContractsFilaPage() {
 
       <div className="ctr-fila-list">
         {rows.length === 0 ? (
-          <div className="ctr-fila-empty">Nenhum contrato encontrado com os filtros atuais.</div>
+          <div className="ctr-fila-empty" data-testid="contracts-queue-empty">
+            <strong>{UX_MESSAGES.QUEUE_EMPTY.title}</strong>
+            <p>{UX_MESSAGES.QUEUE_EMPTY.body}</p>
+          </div>
         ) : (
           rows.map((row) => (
             <article key={row.id} className="ctr-fila-card" data-testid="contracts-queue-row">
@@ -228,14 +235,20 @@ export default function ContractsFilaPage() {
               </header>
               <p className="ctr-fila-treatment">{row.treatmentSummary}</p>
               <div className="ctr-fila-grid">
-                <span>{formatCtrCurrency(row.totalValue)}</span>
-                <span>{row.professionalName}</span>
+                <span><em>Quanto:</em> {formatCtrCurrency(row.totalValue)}</span>
+                <span><em>Profissional:</em> {row.professionalName}</span>
                 <span>
-                  Atualizado:{' '}
+                  <em>Atualizado:</em>{' '}
                   {row.updatedAt ? new Date(row.updatedAt).toLocaleString('pt-BR') : '—'}
                 </span>
-                <span>Próxima ação: {row.nextAction}</span>
+                <span><em>O que fazer agora:</em> {row.nextAction}</span>
               </div>
+              {row.whoSigned || row.whoPending ? (
+                <div className="ctr-fila-signers" data-testid="contracts-queue-signers">
+                  {row.whoSigned ? <span>Já assinou: {row.whoSigned}</span> : null}
+                  {row.whoPending ? <span>Falta assinar: {row.whoPending}</span> : null}
+                </div>
+              ) : null}
               {row.uxStatus === OPERATIONAL_UX_STATUS.WITH_PENDING && row.pendencyReasons?.length ? (
                 <ul className="ctr-fila-pendencies">
                   {row.pendencyReasons.map((r) => <li key={r}>{r}</li>)}

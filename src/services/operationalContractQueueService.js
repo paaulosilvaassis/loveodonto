@@ -42,8 +42,28 @@ export const QUEUE_SHORTCUTS = [
   { id: 'awaiting', label: 'Aguardando assinatura' },
   { id: 'partial', label: 'Parcialmente assinados' },
   { id: 'signed', label: 'Assinados' },
-  { id: 'problems', label: 'Com problema' },
+  { id: 'problems', label: 'Com pendência' },
 ];
+
+function summarizeSigners(signatures = [], signLinks = [], patientName = 'Paciente') {
+  const signedNames = signatures
+    .map((s) => s.signerName || s.name)
+    .filter(Boolean);
+  const pendingLinks = signLinks.filter((l) => l.status === 'pending');
+  const pendingNames = pendingLinks.map((l) => l.signerName || l.role || 'Signatário pendente');
+  const whoSigned = signedNames.length
+    ? signedNames.join(', ')
+    : null;
+  const whoPending = pendingNames.length
+    ? pendingNames.join(', ')
+    : (signatures.length === 0 && pendingLinks.length === 0 ? patientName : null);
+  return {
+    whoSigned,
+    whoPending,
+    signedCount: signedNames.length,
+    pendingCount: pendingNames.length || (whoPending ? 1 : 0),
+  };
+}
 
 /**
  * Lista contratos da clínica enriquecidos para a fila operacional.
@@ -76,6 +96,7 @@ export function listOperationalContractQueue(filters = {}) {
         || contract.title
         || 'Tratamento';
       const cta = resolveOperationalContractCta({ uxStatus, contract });
+      const signerSummary = summarizeSigners(sigs, links, patientName);
 
       return {
         id: contract.id,
@@ -103,6 +124,10 @@ export function listOperationalContractQueue(filters = {}) {
           String(contract.status || '').toLowerCase(),
         ),
         pendencyReasons: pendency.reasons,
+        whoSigned: signerSummary.whoSigned,
+        whoPending: signerSummary.whoPending,
+        signedCount: signerSummary.signedCount,
+        pendingCount: signerSummary.pendingCount,
         nextAction: cta.label,
         cta,
       };
