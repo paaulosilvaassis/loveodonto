@@ -1,5 +1,5 @@
 /**
- * Wizard operacional — Pacote documental do tratamento (Phase 10.16/10.17).
+ * Wizard operacional — Pacote documental do tratamento (Phase 10.16–10.18).
  * Linguagem clínica/operacional — sem enums, IDs ou termos internos.
  */
 
@@ -28,6 +28,7 @@ import {
   formatUxMessage,
   labelDocumentType,
   labelSignerRole,
+  UX_MESSAGES,
 } from '../../../contracts/operationalUxMessages.js';
 
 function PackageChecklist({ documentPackage }) {
@@ -70,6 +71,7 @@ export default function OperationalContractWizard({
   user,
   row,
   onSuccess,
+  onGoToQueue,
 }) {
   const [stepIndex, setStepIndex] = useState(0);
   const [error, setError] = useState('');
@@ -153,6 +155,12 @@ export default function OperationalContractWizard({
     });
   };
 
+  const goToStep = (index) => {
+    if (index < 0 || index > stepIndex) return;
+    setStepIndex(index);
+    persist(index);
+  };
+
   const goNext = () => {
     setError('');
     if (!readiness.ready) {
@@ -189,7 +197,15 @@ export default function OperationalContractWizard({
     persist(prev);
   };
 
+  const finishToQueue = () => {
+    persist(stepIndex);
+    onOpenChange(false);
+    onSuccess?.({ wizardCompleted: true, contractId: view?.contractId || row?.contractId, goToQueue: true });
+    onGoToQueue?.();
+  };
+
   const hasContract = Boolean(view?.contractId || row?.contractId);
+  const contactMissing = !view?.patientPhone || view.patientPhone === '—';
 
   return (
     <>
@@ -204,12 +220,26 @@ export default function OperationalContractWizard({
           </ModalHeader>
           <ModalBody>
             <ol className="ocw-steps" aria-label="Etapas do wizard">
-              {WIZARD_STEPS.map((s, i) => (
-                <li key={s.id} className={i === stepIndex ? 'is-current' : i < stepIndex ? 'is-done' : ''}>
-                  <span>{i + 1}</span>
-                  {s.label}
-                </li>
-              ))}
+              {WIZARD_STEPS.map((s, i) => {
+                const clickable = i < stepIndex;
+                return (
+                  <li
+                    key={s.id}
+                    className={i === stepIndex ? 'is-current' : i < stepIndex ? 'is-done' : ''}
+                  >
+                    <button
+                      type="button"
+                      className="ocw-step-btn"
+                      disabled={!clickable}
+                      onClick={() => goToStep(i)}
+                      title={clickable ? `Voltar para ${s.label}` : undefined}
+                    >
+                      <span>{i + 1}</span>
+                      {s.label}
+                    </button>
+                  </li>
+                );
+              })}
             </ol>
 
             {error ? <p className="ocw-error" role="alert">{error}</p> : null}
@@ -283,7 +313,7 @@ export default function OperationalContractWizard({
             {step.id === 'signatarios' ? (
               <section className="ocw-panel" data-testid="ocw-step-signatarios">
                 <h3>Signatários</h3>
-                <div className="ocw-signer-card">
+                <div className={`ocw-signer-card${contactMissing ? ' is-warning' : ''}`}>
                   <strong>{view?.patientName}</strong>
                   <span>{labelSignerRole('patient')} · Obrigatório</span>
                   <span>Contato: {view?.patientPhone || 'Atualizar no cadastro'}</span>
@@ -295,9 +325,15 @@ export default function OperationalContractWizard({
                     <span>{labelSignerRole('guardian')}</span>
                   </div>
                 ) : null}
-                <p className="ocw-hint">
-                  Se faltar telefone ou e-mail do paciente, atualize o cadastro antes de enviar o link.
-                </p>
+                {contactMissing ? (
+                  <p className="ocw-error" role="status">
+                    {UX_MESSAGES.FIX_CONTACT.title}: {UX_MESSAGES.FIX_CONTACT.body}
+                  </p>
+                ) : (
+                  <p className="ocw-hint">
+                    Se faltar telefone ou e-mail do paciente, atualize o cadastro antes de enviar o link.
+                  </p>
+                )}
               </section>
             ) : null}
 
@@ -311,7 +347,7 @@ export default function OperationalContractWizard({
                 <InfoRow label="Profissional" value={view?.professionalName} />
                 <PackageChecklist documentPackage={documentPackage} />
                 <p className="ocw-hint">
-                  Eu enviaria isso ao paciente sem precisar voltar nenhuma etapa? Se sim, avance para Assinatura.
+                  Confira se o paciente receberia este pacote sem dúvidas. Se algo faltar, use as etapas acima para voltar.
                 </p>
               </section>
             ) : null}
@@ -320,7 +356,10 @@ export default function OperationalContractWizard({
               <section className="ocw-panel" data-testid="ocw-step-assinatura">
                 <h3>Assinatura</h3>
                 <InfoRow label="Status" value={hasContract ? labelOperationalUxStatus(uxStatus) : 'Aguardando geração do contrato'} />
-                <InfoRow label="Próxima ação" value={hasContract ? 'Enviar link pela fila ou pelo atendimento' : 'Gere os documentos na etapa Documentos'} />
+                <InfoRow
+                  label="Próxima ação"
+                  value={hasContract ? UX_MESSAGES.GO_TO_QUEUE.body : 'Gere os documentos na etapa Documentos'}
+                />
                 <p className="ocw-hint">
                   O paciente recebe um link simples no celular: resumo do tratamento, parcelas, documento, privacidade e assinatura — tudo na mesma página.
                 </p>
@@ -343,13 +382,9 @@ export default function OperationalContractWizard({
                 type="button"
                 className="button primary"
                 data-testid="ocw-finish"
-                onClick={() => {
-                  persist(stepIndex);
-                  onOpenChange(false);
-                  onSuccess?.({ wizardCompleted: true, contractId: view?.contractId || row?.contractId });
-                }}
+                onClick={finishToQueue}
               >
-                Concluir
+                {hasContract ? 'Ir para fila de assinaturas' : 'Concluir'}
               </button>
             )}
           </ModalFooter>

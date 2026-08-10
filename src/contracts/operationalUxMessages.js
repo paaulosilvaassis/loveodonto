@@ -72,7 +72,35 @@ export const UX_MESSAGES = {
     title: 'Pronto para assinatura',
     body: 'Revise o resumo. Se estiver tudo certo, envie o link de assinatura ao paciente.',
   },
+  GO_TO_QUEUE: {
+    title: 'Próximo passo',
+    body: 'Abra a Fila de contratos para enviar o link de assinatura ao paciente.',
+  },
+  FIX_CONTACT: {
+    title: 'Como resolver',
+    body: 'Abra o cadastro do paciente, preencha telefone ou e-mail e volte à fila para enviar.',
+  },
+  FIX_DOCUMENT: {
+    title: 'Como resolver',
+    body: 'Continue o pacote documental no wizard ou no atendimento e complete o item obrigatório marcado.',
+  },
+  FIX_FINANCIAL: {
+    title: 'Como resolver',
+    body: 'Revise o orçamento aprovado e as condições de pagamento antes de reenviar.',
+  },
 };
+
+/** Dica objetiva de correção a partir do motivo de pendência. */
+export function resolvePendencyFixHint(reason = '') {
+  const text = String(reason || '').toLowerCase();
+  if (/contato|telefone|e-mail|email/.test(text)) return UX_MESSAGES.FIX_CONTACT;
+  if (/documento|tcle|obrigat|artefato|versão/.test(text)) return UX_MESSAGES.FIX_DOCUMENT;
+  if (/financeir|valor|parcela/.test(text)) return UX_MESSAGES.FIX_FINANCIAL;
+  return {
+    title: 'Como resolver',
+    body: 'Abra Continuar/Resolver pendência, corrija o item indicado e retorne à fila.',
+  };
+}
 
 export function formatUxMessage(key, extra = '') {
   const msg = UX_MESSAGES[key] || UX_MESSAGES.LOAD_FAILED;

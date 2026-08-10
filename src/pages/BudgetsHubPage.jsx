@@ -161,6 +161,7 @@ export default function BudgetsHubPage() {
           </h1>
           <p>
             Visualize negociações, acompanhe conversões e avance tratamentos com clareza comercial.
+            Orçamento aprovado? Use <strong>Gerar contrato</strong> no card — o assistente guia até a assinatura.
           </p>
         </div>
         {canCreate ? (
@@ -232,9 +233,13 @@ export default function BudgetsHubPage() {
         }}
         user={user}
         row={wizardRow}
+        onGoToQueue={() => {
+          setWizardRow(null);
+          navigate('/gestao/contratos/fila');
+        }}
         onSuccess={() => {
           setRefreshKey((k) => k + 1);
-          showToast('Contrato atualizado no pacote documental.');
+          showToast('Pacote documental atualizado. Se estiver pronto, envie pela Fila de contratos.');
         }}
       />
 

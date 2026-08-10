@@ -19,6 +19,8 @@ import { openExistingBudget, openExistingContract } from '../../services/budgetN
 import { getBudgetLockContext } from '../../services/clinicalBudgetLockService.js';
 import { BUDGET_STATUS } from '../../services/clinicalBudgetConstants.js';
 import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
+import ClinicalDocumentPackagePanel from '../contracts/operational/ClinicalDocumentPackagePanel.jsx';
+import { resolveHubContractAction } from '../../services/operationalContractWizardService.js';
 
 function formatDate(value) {
   if (!value) return '—';
@@ -50,6 +52,14 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
     const lock = getBudgetLockContext(row.appointmentId);
     return lock.isLocked && row.id === lock.budget?.id;
   });
+  const treatmentDocRow = overview.history.find(
+    (row) => !row.isHistorical && (
+      row.status === BUDGET_STATUS.APROVADO
+      || row.status === BUDGET_STATUS.CONTRATO_GERADO
+      || row.contractId
+    ),
+  ) || overview.history.find((row) => row.contractId) || null;
+  const treatmentDocAction = treatmentDocRow ? resolveHubContractAction(treatmentDocRow) : null;
 
   const openExistingBudgetRow = (row, section = 'orcamento') => {
     openExistingBudget(navigate, {
@@ -146,6 +156,23 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
           </p>
         )}
       </section>
+
+      {treatmentDocRow ? (
+        <section className="patient-budgets-section" data-testid="patient-treatment-documents">
+          <ClinicalDocumentPackagePanel
+            appointmentId={treatmentDocRow.appointmentId}
+            budgetId={treatmentDocRow.id}
+            patientId={patientId}
+            contractStatus={treatmentDocRow.contractStatus}
+            onOpenContracts={() => openExistingBudgetRow(treatmentDocRow, 'contratos')}
+          />
+          {treatmentDocAction?.label ? (
+            <p className="text-sm text-[var(--color-text-muted)]" style={{ marginTop: '0.5rem' }}>
+              Próxima ação sugerida: <strong>{treatmentDocAction.label}</strong>
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="patient-budgets-section">
         <h4>Histórico de orçamentos</h4>

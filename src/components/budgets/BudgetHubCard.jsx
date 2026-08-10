@@ -120,13 +120,10 @@ export function BudgetHubCard({
       </div>
 
       <footer className="bhub-card-actions">
-        <button type="button" className="bhub-btn bhub-btn--primary" onClick={() => onOpen(row)}>
-          Abrir orçamento
-        </button>
         {showGenerate ? (
           <button
             type="button"
-            className="bhub-btn bhub-btn--accent"
+            className="bhub-btn bhub-btn--primary bhub-btn--accent"
             data-testid="budget-generate-contract"
             onClick={() => onGenerateContract?.(row)}
           >
@@ -136,13 +133,20 @@ export function BudgetHubCard({
         {showContinue ? (
           <button
             type="button"
-            className="bhub-btn bhub-btn--accent"
+            className="bhub-btn bhub-btn--primary bhub-btn--accent"
             data-testid="budget-continue-contract"
             onClick={() => onGenerateContract?.(row)}
           >
             <FileSignature size={14} /> {contractAction.label || 'Continuar contrato'}
           </button>
         ) : null}
+        <button
+          type="button"
+          className={`bhub-btn${showGenerate || showContinue ? '' : ' bhub-btn--primary'}`}
+          onClick={() => onOpen(row)}
+        >
+          Abrir orçamento
+        </button>
         {showView ? (
           <button
             type="button"

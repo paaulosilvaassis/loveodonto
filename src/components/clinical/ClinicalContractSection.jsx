@@ -58,6 +58,7 @@ import { LINKED_DOCUMENTS, LEGAL_CONTRACT_TEXTS } from './contract/professionalC
 import { detectTreatmentType, getTreatmentTypeLabel } from './contract/detectTreatmentType.js';
 import { canAccessContract, getContractAccessBlockReasons } from './contract/contractAccessUtils.js';
 import { resolveAttachedTcleIdsFromClinicalDocuments } from '../../services/clinicalTcleAttachmentService.js';
+import ClinicalDocumentPackagePanel from '../contracts/operational/ClinicalDocumentPackagePanel.jsx';
 
 const CLAUSE_GROUPS = [
   { title: 'Qualificação das partes', items: ['Texto corrido com clínica e paciente'] },
@@ -497,6 +498,15 @@ export function ClinicalContractSection({
           </div>
         ) : (
           <div className="clinical-contract-v2">
+            {budget?.id ? (
+              <ClinicalDocumentPackagePanel
+                appointmentId={appointmentId}
+                budgetId={budget.id}
+                patientId={patientId}
+                contractStatus={linkedContract?.status || null}
+                compact
+              />
+            ) : null}
             {!generateReadiness.ready && !linkedContract ? (
               <div className="clinical-contract-canceled-banner" role="status">
                 <Lock size={18} aria-hidden />

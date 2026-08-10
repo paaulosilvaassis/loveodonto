@@ -17,7 +17,11 @@ import {
   sendContractForSignature,
   finalizeGeneratedContract,
 } from '../../services/contractModuleService.js';
-import { UX_MESSAGES, formatUxMessage } from '../../contracts/operationalUxMessages.js';
+import {
+  UX_MESSAGES,
+  formatUxMessage,
+  resolvePendencyFixHint,
+} from '../../contracts/operationalUxMessages.js';
 
 const DEFAULT_FILTERS = {
   query: '',
@@ -250,9 +254,19 @@ export default function ContractsFilaPage() {
                 </div>
               ) : null}
               {row.uxStatus === OPERATIONAL_UX_STATUS.WITH_PENDING && row.pendencyReasons?.length ? (
-                <ul className="ctr-fila-pendencies">
-                  {row.pendencyReasons.map((r) => <li key={r}>{r}</li>)}
-                </ul>
+                <div className="ctr-fila-pendency-box" data-testid="contracts-queue-pendency">
+                  <ul className="ctr-fila-pendencies">
+                    {row.pendencyReasons.map((r) => <li key={r}>{r}</li>)}
+                  </ul>
+                  {(() => {
+                    const hint = resolvePendencyFixHint(row.pendencyReasons[0]);
+                    return (
+                      <p className="ctr-fila-fix-hint">
+                        <strong>{hint.title}:</strong> {hint.body}
+                      </p>
+                    );
+                  })()}
+                </div>
               ) : null}
               <footer>
                 <button

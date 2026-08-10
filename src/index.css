@@ -12183,6 +12183,87 @@ a.button {
   background: #f8fafc;
   margin-bottom: 0.55rem;
 }
+.ocw-signer-card.is-warning {
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+.ocw-step-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.ocw-step-btn:disabled {
+  cursor: default;
+}
+.ocw-clinical-package {
+  border: 1px solid #dbe3ee;
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+.ocw-clinical-package header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 0.65rem;
+}
+.ocw-clinical-package h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.ocw-clinical-package header p {
+  margin: 0.2rem 0 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+.ocw-clinical-status {
+  display: inline-flex;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #ecfeff;
+  color: #0e7490;
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ocw-clinical-package ul {
+  list-style: none;
+  margin: 0 0 0.65rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.ocw-clinical-package li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.9rem;
+}
+.ocw-clinical-package li.is-ready { color: #047857; }
+.ocw-clinical-package li.is-missing { color: #b91c1c; }
+.ocw-clinical-package small { display: block; color: #64748b; }
+.ocw-clinical-package.is-compact { padding: 0.7rem 0.8rem; }
+.ctr-fila-pendency-box {
+  margin-top: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+}
+.ctr-fila-fix-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.85rem;
+  color: #7c2d12;
+}
 .ctr-fila-signers {
   display: flex;
   flex-direction: column;
