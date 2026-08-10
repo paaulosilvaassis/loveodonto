@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import SignatureCanvas from '../../components/contracts/SignatureCanvas.jsx';
 import {
@@ -20,6 +20,7 @@ import {
   PublicSigningDocumentCta,
 } from '../../components/contracts/public/PublicSigningSummarySections.jsx';
 import { UX_MESSAGES, formatUxMessage } from '../../contracts/operationalUxMessages.js';
+import { recordContractsRolloutMetric } from '../../services/contractsOperationalRolloutService.js';
 
 export default function ContractSignPublicPage() {
   const { token } = useParams();
@@ -28,6 +29,12 @@ export default function ContractSignPublicPage() {
     () => buildPublicSigningSummaryFromV1Contract(resolved?.contract),
     [resolved],
   );
+
+  useEffect(() => {
+    if (token && resolved && !resolved.expired) {
+      recordContractsRolloutMetric('public_sign_opened');
+    }
+  }, [token, resolved]);
 
   const [phase, setPhase] = useState('summary'); // summary | document | privacy | sign
   const [signerName, setSignerName] = useState('');
@@ -99,8 +106,10 @@ export default function ContractSignPublicPage() {
         signatureImageDataUrl: signatureData,
         consentAcceptances: consentMap,
       });
+      recordContractsRolloutMetric('public_sign_completed');
       setDone(true);
     } catch (e) {
+      recordContractsRolloutMetric('public_sign_failed');
       setError(e?.message || formatUxMessage('LOAD_FAILED'));
     }
   };

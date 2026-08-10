@@ -8,6 +8,7 @@ import {
   Settings,
   Layers,
   ListFilter,
+  Shield,
 } from 'lucide-react';
 import { CONTRACTS_V2_SURFACE } from '../domain/contracts/contracts-v2-technical-harness.ts';
 
@@ -117,4 +118,12 @@ export const contractsShellNavItems = [
     ],
   },
   { id: 'config', label: 'Configurações', route: '/gestao/contratos/configuracoes', icon: Settings, rolesAllowed: ['admin', 'gerente'] },
+  {
+    id: 'rollout',
+    label: 'Rollout',
+    route: '/gestao/contratos/rollout',
+    icon: Shield,
+    rolesAllowed: ['admin', 'master'],
+    surface: CONTRACTS_V2_SURFACE.OPERATIONAL_UI,
+  },
 ];

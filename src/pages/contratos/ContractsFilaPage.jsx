@@ -22,6 +22,7 @@ import {
   formatUxMessage,
   resolvePendencyFixHint,
 } from '../../contracts/operationalUxMessages.js';
+import { recordContractsRolloutMetric } from '../../services/contractsOperationalRolloutService.js';
 
 const DEFAULT_FILTERS = {
   query: '',
@@ -66,6 +67,7 @@ export default function ContractsFilaPage() {
     try {
       if (key === 'send') {
         sendContractForSignature(user, row.id);
+        recordContractsRolloutMetric('signature_link_generated', user);
         setRefresh((x) => x + 1);
         showToast('Link de assinatura gerado. Envie ao paciente pelo canal da clínica (simulação em staging).');
         return;

@@ -23,6 +23,10 @@ import { openExistingBudget } from '../services/budgetNavigationService.js';
 import { buildFinanceNavigationUrl } from '../services/patientFinancialSummaryService.js';
 import { validateBudgetContractGeneration } from '../services/operationalContractWizardService.js';
 import { formatUxMessage } from '../contracts/operationalUxMessages.js';
+import {
+  isOperationalContractsUxEnabledForCurrentClinic,
+  recordContractsRolloutMetric,
+} from '../services/contractsOperationalRolloutService.js';
 
 const DEFAULT_FILTERS = {
   query: '',
@@ -50,6 +54,7 @@ export default function BudgetsHubPage() {
 
   const canCreate = can(user, 'comercial:view') || can(user, 'prontuario_contratos:create') || user?.role === 'admin';
   const canViewFinance = can(user, 'financeiro_relatorios:view') || user?.role === 'financeiro';
+  const operationalUxEnabled = isOperationalContractsUxEnabledForCurrentClinic(user);
 
   const allRows = useMemo(
     () => listAllClinicalBudgetRows({}),
@@ -122,6 +127,10 @@ export default function BudgetsHubPage() {
   };
 
   const handleGenerateContract = (row) => {
+    if (!operationalUxEnabled) {
+      openExistingBudgetRow(row, 'contratos');
+      return;
+    }
     const patientId = resolveRowPatientId(row);
     const check = validateBudgetContractGeneration({
       patientId,
@@ -137,6 +146,11 @@ export default function BudgetsHubPage() {
       showToast(check.errors[0] || formatUxMessage('BUDGET_INCOMPLETE'), 'error');
       return;
     }
+    recordContractsRolloutMetric(
+      row.contractId ? 'contract_continue_clicked' : 'contract_generate_clicked',
+      user,
+    );
+    recordContractsRolloutMetric('wizard_opened', user);
     setWizardRow(row);
   };
 
@@ -148,6 +162,7 @@ export default function BudgetsHubPage() {
     onGenerateContract: handleGenerateContract,
     onFinance: handleFinance,
     onCreateNew: handleRowCreateNew,
+    operationalUxEnabled,
   };
 
   return (
@@ -161,7 +176,9 @@ export default function BudgetsHubPage() {
           </h1>
           <p>
             Visualize negociações, acompanhe conversões e avance tratamentos com clareza comercial.
-            Orçamento aprovado? Use <strong>Gerar contrato</strong> no card — o assistente guia até a assinatura.
+            {operationalUxEnabled
+              ? <>Orçamento aprovado? Use <strong>Gerar contrato</strong> no card — o assistente guia até a assinatura.</>
+              : <>Modo clássico (V1). Abra o orçamento e use a seção Contratos. UX operacional desligada neste tenant.</>}
           </p>
         </div>
         {canCreate ? (
@@ -234,10 +251,12 @@ export default function BudgetsHubPage() {
         user={user}
         row={wizardRow}
         onGoToQueue={() => {
+          recordContractsRolloutMetric('wizard_go_to_queue', user);
           setWizardRow(null);
           navigate('/gestao/contratos/fila');
         }}
         onSuccess={() => {
+          recordContractsRolloutMetric('wizard_completed', user);
           setRefreshKey((k) => k + 1);
           showToast('Pacote documental atualizado. Se estiver pronto, envie pela Fila de contratos.');
         }}

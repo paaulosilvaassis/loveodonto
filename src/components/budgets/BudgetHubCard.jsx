@@ -63,16 +63,20 @@ export function BudgetHubCard({
   onGenerateContract,
   onFinance,
   onCreateNew,
+  operationalUxEnabled = true,
 }) {
   const currentPatientId = resolveRowPatientId(row);
   const patientLabel = resolveRowPatientName(row);
   const patientActionsDisabled = !currentPatientId;
   const contractAction = row.contractAction || {};
-  const showGenerate = contractAction.action === 'generate'
+  const showGenerate = operationalUxEnabled
+    && contractAction.action === 'generate'
     && row.status === BUDGET_STATUS.APROVADO
     && !row.contractId;
-  const showContinue = ['continue', 'resolve'].includes(contractAction.action) && row.contractId;
-  const showView = contractAction.action === 'view' && row.contractId;
+  const showContinue = operationalUxEnabled
+    && ['continue', 'resolve'].includes(contractAction.action)
+    && row.contractId;
+  const showView = (contractAction.action === 'view' || (!operationalUxEnabled && row.contractId)) && row.contractId;
 
   return (
     <article className="bhub-card">

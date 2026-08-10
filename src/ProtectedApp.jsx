@@ -105,6 +105,7 @@ import ContractsTermosPage from './pages/contratos/ContractsTermosPage.jsx';
 import ContractsAssinaturasPage from './pages/contratos/ContractsAssinaturasPage.jsx';
 import ContractsConfigPage from './pages/contratos/ContractsConfigPage.jsx';
 import ContractsFilaPage from './pages/contratos/ContractsFilaPage.jsx';
+import ContractsRolloutPage from './pages/contratos/ContractsRolloutPage.jsx';
 import { routeAccessMap } from './navigation/menuConfig.js';
 import { getRequiredFeatureFlagForRoute, getRequiredModuleForRoute } from './tenant/tenantAccess.js';
 
@@ -207,6 +208,7 @@ export default function ProtectedApp() {
             <Route path="entregas-v2" element={withRole('/gestao/contratos', <ContractsEntregasV2Page />)} />
           ) : null}
           <Route path="configuracoes" element={withRole('/gestao/contratos', <ContractsConfigPage />)} />
+          <Route path="rollout" element={withRole('/gestao/contratos', <ContractsRolloutPage />)} />
         </Route>
         <Route path="/gestao-comercial/jornada-do-paciente" element={withRole('/gestao-comercial/jornada-do-paciente', <PatientJourneyPage />)} />
         <Route path="/gestao-comercial/fluxo-do-paciente" element={withRole('/gestao-comercial/fluxo-do-paciente', <PatientFlowPage />)} />

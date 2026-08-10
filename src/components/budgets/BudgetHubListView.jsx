@@ -21,6 +21,7 @@ export function BudgetHubListView({
   onGenerateContract,
   onFinance,
   onCreateNew,
+  operationalUxEnabled = true,
 }) {
   return (
     <div className="bhub-list">
@@ -29,10 +30,13 @@ export function BudgetHubListView({
         const patientLabel = resolveRowPatientName(row);
         const patientActionsDisabled = !currentPatientId;
         const contractAction = row.contractAction || {};
-        const showGenerate = contractAction.action === 'generate'
+        const showGenerate = operationalUxEnabled
+          && contractAction.action === 'generate'
           && row.status === BUDGET_STATUS.APROVADO
           && !row.contractId;
-        const showContinue = ['continue', 'resolve'].includes(contractAction.action) && row.contractId;
+        const showContinue = operationalUxEnabled
+          && ['continue', 'resolve'].includes(contractAction.action)
+          && row.contractId;
         const showView = (contractAction.action === 'view' || row.contractId) && !showGenerate && !showContinue;
 
         return (
