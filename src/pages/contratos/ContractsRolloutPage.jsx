@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Shield, Activity, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../auth/useAuth.js';
+import LocalOperationalUxTestBanner from '../../components/contracts/operational/LocalOperationalUxTestBanner.jsx';
 import {
   canManageContractsOperationalMode,
   emergencyRollbackOperationalUx,
@@ -11,6 +12,8 @@ import {
   getContractsRolloutMetricsSummary,
   getGoLiveCriteriaStatus,
   getRolloutAuditLog,
+  getServerOperationalUxSnapshot,
+  isLocalOperationalUxTestModeActive,
   isProductionActivationUnlocked,
   isProductionRuntime,
   setProductionGlobalEnabled,
@@ -32,12 +35,15 @@ export default function ContractsRolloutPage() {
   const [rollbackReason, setRollbackReason] = useState('');
 
   const state = useMemo(() => getContractsOperationalModeState(), [tick]);
+  const serverSnap = useMemo(() => getServerOperationalUxSnapshot(user), [tick, user]);
+  const localTestMode = useMemo(() => isLocalOperationalUxTestModeActive(), [tick]);
   const metrics = useMemo(() => getContractsRolloutMetricsSummary(), [tick]);
   const alerts = useMemo(() => getContractsRolloutAlerts(), [tick]);
   const audit = useMemo(() => getRolloutAuditLog(), [tick]);
   const goLive = useMemo(() => getGoLiveCriteriaStatus(), [tick]);
   const prodRuntime = isProductionRuntime();
   const unlock = isProductionActivationUnlocked();
+  const blockServerMutations = localTestMode;
 
   const refresh = () => setTick((t) => t + 1);
 
@@ -95,6 +101,11 @@ export default function ContractsRolloutPage() {
   return (
     <div className="ctr-page" data-testid="contracts-rollout-panel">
       {toast ? <div className={`toast ${toast.type}`} role="status">{toast.message}</div> : null}
+      <LocalOperationalUxTestBanner
+        serverGlobalEnabled={serverSnap.productionGlobalEnabled}
+        serverTenantEnabled={serverSnap.tenantEnabled}
+        serverUxEnabled={serverSnap.operationalUxEnabled}
+      />
 
       <section className="ctr-section">
         <h2 className="ctr-section-title">
@@ -106,6 +117,10 @@ export default function ContractsRolloutPage() {
         </p>
         <dl className="ctr-config-row" style={{ display: 'grid', gap: 8 }}>
           <div><strong>Fonte:</strong> {loading ? 'carregando…' : source}</div>
+          <div><strong>Servidor (SSOT):</strong> {serverSnap.operationalUxEnabled ? 'ON' : 'OFF'}</div>
+          <div data-testid="local-test-mode-status">
+            <strong>LOCAL TEST MODE:</strong> {localTestMode ? 'ON' : 'OFF'}
+          </div>
           <div><strong>Modo atual:</strong> {state.mode}</div>
           <div><strong>Tenant enabled:</strong> {state.tenantEnabled ? 'ON' : 'OFF'}</div>
           <div><strong>Fase de rollout:</strong> {state.rolloutPhase}</div>
@@ -117,11 +132,17 @@ export default function ContractsRolloutPage() {
             <div><strong>Último rollback:</strong> {state.rollbackReason}</div>
           ) : null}
         </dl>
+        {blockServerMutations ? (
+          <p className="ctr-alert ctr-alert--warning" role="status">
+            Teste local ativo: alterações de flags no servidor estão bloqueadas nesta tela.
+            Produção permanece OFF.
+          </p>
+        ) : null}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
           <button
             type="button"
             className="button primary"
-            disabled={saving || loading}
+            disabled={saving || loading || blockServerMutations}
             onClick={() => runServerAction(
               () => enableOperationalUxMode(user, 'Reativado pelo painel'),
               'Tenant habilitado no servidor (UX operacional). Global permanece conforme flag.',
@@ -132,7 +153,7 @@ export default function ContractsRolloutPage() {
           <button
             type="button"
             className="button"
-            disabled={saving || loading}
+            disabled={saving || loading || blockServerMutations}
             onClick={() => runServerAction(
               () => setV1OnlyMode(user, 'Modo V1_ONLY pelo painel'),
               'Modo V1_ONLY salvo no servidor.',
@@ -172,7 +193,7 @@ export default function ContractsRolloutPage() {
           type="button"
           className="button"
           style={{ borderColor: '#b45309', color: '#92400e' }}
-          disabled={saving || loading}
+          disabled={saving || loading || blockServerMutations}
           onClick={() => runServerAction(
             () => emergencyRollbackOperationalUx(user, rollbackReason),
             'Rollback emergencial aplicado no servidor.',
@@ -200,7 +221,7 @@ export default function ContractsRolloutPage() {
           type="button"
           className="button"
           style={{ marginTop: 8 }}
-          disabled={saving || loading}
+          disabled={saving || loading || blockServerMutations}
           onClick={() => {
             const ids = (allowlistText || '')
               .split(/[\n,]/)
@@ -238,7 +259,7 @@ export default function ContractsRolloutPage() {
           <button
             type="button"
             className="button"
-            disabled={saving || loading || (prodRuntime && !unlock)}
+            disabled={saving || loading || blockServerMutations || (prodRuntime && !unlock)}
             onClick={() => runServerAction(
               () => setProductionGlobalEnabled(user, true, confirmPhrase),
               'Produção global ON no servidor (após unlock + confirmação).',
@@ -249,7 +270,7 @@ export default function ContractsRolloutPage() {
           <button
             type="button"
             className="button"
-            disabled={saving || loading}
+            disabled={saving || loading || blockServerMutations}
             onClick={() => runServerAction(
               () => setProductionGlobalEnabled(user, false, ''),
               'Produção global OFF no servidor.',

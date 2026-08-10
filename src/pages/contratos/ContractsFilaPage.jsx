@@ -22,7 +22,11 @@ import {
   formatUxMessage,
   resolvePendencyFixHint,
 } from '../../contracts/operationalUxMessages.js';
-import { recordContractsRolloutMetric } from '../../services/contractsOperationalRolloutService.js';
+import LocalOperationalUxTestBanner from '../../components/contracts/operational/LocalOperationalUxTestBanner.jsx';
+import {
+  getServerOperationalUxSnapshot,
+  recordContractsRolloutMetric,
+} from '../../services/contractsOperationalRolloutService.js';
 
 const DEFAULT_FILTERS = {
   query: '',
@@ -99,9 +103,16 @@ export default function ContractsFilaPage() {
     }
   };
 
+  const serverSnap = getServerOperationalUxSnapshot(user);
+
   return (
     <div className="ctr-page ctr-fila" data-testid="contracts-queue-page">
       {toast ? <div className={`toast ${toast.type}`} role="status">{toast.message}</div> : null}
+      <LocalOperationalUxTestBanner
+        serverGlobalEnabled={serverSnap.productionGlobalEnabled}
+        serverTenantEnabled={serverSnap.tenantEnabled}
+        serverUxEnabled={serverSnap.operationalUxEnabled}
+      />
 
       <header className="ctr-fila-header">
         <div>

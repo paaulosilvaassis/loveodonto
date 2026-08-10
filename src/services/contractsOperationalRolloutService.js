@@ -25,6 +25,10 @@ import {
   isProductionActivationUnlocked,
   evaluateGoLiveReadiness,
 } from '../domain/contracts/rollout/contracts-operational-mode.ts';
+import {
+  isContractsOperationalUxLocalTestEnabled,
+  getContractsOperationalUxLocalTestStatus,
+} from '../domain/contracts/rollout/contracts-operational-ux-local-test.ts';
 import { PRODUCTION_ACTIVATION_PHRASE } from '../domain/contracts/rollout/contracts-operational-rollout-flags.ts';
 import {
   createEmptyMetricCounters,
@@ -239,13 +243,51 @@ export function getContractsOperationalModeState() {
   return getOperationalRolloutBundle().state;
 }
 
-export function isOperationalContractsUxEnabledForCurrentClinic(user) {
-  const state = getContractsOperationalModeState();
-  return isContractsOperationalUxEnabled({
+/** Snapshot SSOT do servidor (não inclui bypass local). */
+export function getServerOperationalUxSnapshot(user = null) {
+  const state = normalizeOperationalModeState(getContractsOperationalModeState());
+  const serverUxEnabled = isContractsOperationalUxEnabled({
     tenantId: user?.tenantId || user?.tenant_id,
     clinicId: clinicId(),
     state,
   });
+  return {
+    state,
+    source: state.source || 'local_cache',
+    productionGlobalEnabled: Boolean(state.productionGlobalEnabled),
+    tenantEnabled: Boolean(state.tenantEnabled),
+    operationalUxEnabled: serverUxEnabled,
+  };
+}
+
+/**
+ * UX efetiva no hub/wizard.
+ * Bypass local 10.21K NÃO muta estado do servidor / feature_flags.
+ * Não aplica se o modo explícito for V1_ONLY ou ROLLED_BACK.
+ */
+export function isOperationalContractsUxEnabledForCurrentClinic(user) {
+  const state = normalizeOperationalModeState(getContractsOperationalModeState());
+  const serverOn = isContractsOperationalUxEnabled({
+    tenantId: user?.tenantId || user?.tenant_id,
+    clinicId: clinicId(),
+    state,
+  });
+  if (serverOn) return true;
+  if (
+    state.mode === CONTRACTS_OPERATIONAL_MODES.V1_ONLY
+    || state.mode === CONTRACTS_OPERATIONAL_MODES.ROLLED_BACK
+  ) {
+    return false;
+  }
+  return isContractsOperationalUxLocalTestEnabled();
+}
+
+export function isLocalOperationalUxTestModeActive() {
+  return isContractsOperationalUxLocalTestEnabled();
+}
+
+export function getLocalOperationalUxTestStatus() {
+  return getContractsOperationalUxLocalTestStatus();
 }
 
 export function recordContractsRolloutMetric(event, user = null) {
@@ -510,4 +552,6 @@ export {
   isProductionRuntime,
   isProductionActivationUnlocked,
   PRODUCTION_ACTIVATION_PHRASE,
+  isContractsOperationalUxLocalTestEnabled,
+  getContractsOperationalUxLocalTestStatus,
 };

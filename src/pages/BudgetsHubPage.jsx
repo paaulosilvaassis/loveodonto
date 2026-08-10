@@ -10,6 +10,7 @@ import { BudgetHubFilters } from '../components/budgets/BudgetHubFilters.jsx';
 import { BudgetHubCard } from '../components/budgets/BudgetHubCard.jsx';
 import { BudgetHubListView } from '../components/budgets/BudgetHubListView.jsx';
 import OperationalContractWizard from '../components/contracts/operational/OperationalContractWizard.jsx';
+import LocalOperationalUxTestBanner from '../components/contracts/operational/LocalOperationalUxTestBanner.jsx';
 import {
   listAllClinicalBudgetRows,
   listBudgetHubProfessionals,
@@ -25,6 +26,8 @@ import { validateBudgetContractGeneration } from '../services/operationalContrac
 import { formatUxMessage } from '../contracts/operationalUxMessages.js';
 import {
   fetchContractsOperationalRolloutFromServer,
+  getServerOperationalUxSnapshot,
+  isLocalOperationalUxTestModeActive,
   isOperationalContractsUxEnabledForCurrentClinic,
   recordContractsRolloutMetric,
 } from '../services/contractsOperationalRolloutService.js';
@@ -60,6 +63,8 @@ export default function BudgetsHubPage() {
     () => isOperationalContractsUxEnabledForCurrentClinic(user),
     [user, rolloutTick],
   );
+  const serverSnap = useMemo(() => getServerOperationalUxSnapshot(user), [user, rolloutTick]);
+  const localTestMode = useMemo(() => isLocalOperationalUxTestModeActive(), [rolloutTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,6 +191,11 @@ export default function BudgetsHubPage() {
 
   return (
     <div className="bhub-page">
+      <LocalOperationalUxTestBanner
+        serverGlobalEnabled={serverSnap.productionGlobalEnabled}
+        serverTenantEnabled={serverSnap.tenantEnabled}
+        serverUxEnabled={serverSnap.operationalUxEnabled}
+      />
       <header className="bhub-page-header">
         <div>
           <p className="bhub-page-eyebrow">Comercial · CRM Odontológico</p>
@@ -198,6 +208,9 @@ export default function BudgetsHubPage() {
             {operationalUxEnabled
               ? <>Orçamento aprovado? Use <strong>Gerar contrato</strong> no card — o assistente guia até a assinatura.</>
               : <>Modo clássico (V1). Abra o orçamento e use a seção Contratos. UX operacional desligada neste tenant.</>}
+            {localTestMode ? (
+              <> {' '}Servidor OFF · <strong>Teste local: ON</strong>.</>
+            ) : null}
           </p>
         </div>
         {canCreate ? (

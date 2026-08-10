@@ -1,9 +1,11 @@
 /**
  * Espelha contrato gerado no Supabase (modo SaaS), quando a tabela existir.
+ * Phase 10.21K: bloqueado no LOCAL TEST MODE para não gravar artefato clínico em produção.
  */
 import { supabasePlatformClient } from '../lib/supabaseClients.js';
 import { isSaasModeEnabled } from './saasAuthService.js';
 import { assertAdminApiFetchAllowed, buildAdminApiUrl } from '../config/adminApiBase.js';
+import { isContractsOperationalUxLocalTestEnabled } from '../domain/contracts/rollout/contracts-operational-ux-local-test.ts';
 
 async function getAccessTokenOrThrow() {
   if (!supabasePlatformClient) {
@@ -20,6 +22,9 @@ async function getAccessTokenOrThrow() {
  * @param {object} row — shape alinhado ao IndexedDB (camelCase); servidor normaliza.
  */
 export async function syncGeneratedContractToSaas(row) {
+  if (isContractsOperationalUxLocalTestEnabled()) {
+    return { skipped: true, reason: 'local_operational_ux_test' };
+  }
   if (!isSaasModeEnabled() || !row?.id) return { skipped: true };
   assertAdminApiFetchAllowed();
   const token = await getAccessTokenOrThrow();
