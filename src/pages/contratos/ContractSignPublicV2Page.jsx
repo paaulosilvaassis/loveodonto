@@ -327,48 +327,45 @@ export default function ContractSignPublicV2Page() {
 
   if (!enabled) {
     return (
-      <div className="ctr-public-sign" data-testid="public-sign-v2-unavailable">
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-v2-unavailable">
         <h1>Assinatura indisponível</h1>
-        <p>Este serviço não está habilitado neste ambiente.</p>
+        <p>Este link ainda não está disponível neste ambiente. Peça orientação à clínica.</p>
       </div>
     );
   }
 
   if (uiState === 'invalid' || !sessionToken) {
     return (
-      <div className="ctr-public-sign" data-testid="public-sign-v2-invalid">
-        <h1>Solicitação inválida</h1>
-        <p>{error || 'Não foi possível acessar esta solicitação de assinatura.'}</p>
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-v2-invalid">
+        <h1>Link inválido</h1>
+        <p>{error || 'Não encontramos esta solicitação de assinatura. Peça um novo link à clínica.'}</p>
       </div>
     );
   }
 
   if (uiState === 'expired') {
     return (
-      <div className="ctr-public-sign" data-testid="public-sign-v2-expired">
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-v2-expired">
         <h1>Link expirado</h1>
-        <p>Solicite um novo link de assinatura à clínica.</p>
+        <p>Este link não é mais válido. Peça à clínica um novo link de assinatura.</p>
       </div>
     );
   }
 
   if (uiState === 'completed' || (step === 'done' && confirmation)) {
     return (
-      <div className="ctr-public-sign" data-testid="public-sign-v2-completed">
-        <h1>Assinatura registrada</h1>
-        <p>Obrigado. Sua assinatura foi registrada com evidências técnicas.</p>
-        {confirmation?.evidenceHashAbbrev ? (
-          <p className="ctr-hint">Referência: {confirmation.evidenceHashAbbrev}</p>
-        ) : null}
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-v2-completed">
+        <h1>Assinatura concluída</h1>
+        <p>Obrigado. Sua assinatura foi registrada com sucesso. A clínica já pode acompanhar o documento.</p>
       </div>
     );
   }
 
   if (uiState === 'declined' || (step === 'done' && !confirmation)) {
     return (
-      <div className="ctr-public-sign" data-testid="public-sign-v2-declined">
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-v2-declined">
         <h1>Assinatura recusada</h1>
-        <p>Sua recusa foi registrada.</p>
+        <p>Sua recusa foi registrada. Se mudou de ideia, fale com a clínica para receber um novo link.</p>
       </div>
     );
   }
@@ -420,7 +417,7 @@ export default function ContractSignPublicV2Page() {
 
       {step === 'auth' ? (
         <section className="ctr-section space-y-3" data-testid="public-sign-v2-step-auth">
-          <p>Confirme sua identidade com o código enviado (simulado neste ambiente técnico).</p>
+          <p>Confirme sua identidade com o código enviado para você.</p>
           {!challengeId ? (
             <button type="button" className="ctr-btn" onClick={handleRequestOtp} disabled={loading}>
               Solicitar código
@@ -472,8 +469,7 @@ export default function ContractSignPublicV2Page() {
             />
           ) : null}
           <p className="ctr-hint text-sm">
-            A assinatura gráfica abaixo integra o conjunto de evidências do documento
-            (hash, termos aceitos, autenticação e metadados técnicos).
+            Desenhe sua assinatura no espaço abaixo. Ao confirmar, o documento ficará assinado.
           </p>
           <canvas
             ref={canvasRef}

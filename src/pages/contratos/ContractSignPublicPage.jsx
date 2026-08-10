@@ -19,6 +19,7 @@ import {
   PublicSigningPrivacySection,
   PublicSigningDocumentCta,
 } from '../../components/contracts/public/PublicSigningSummarySections.jsx';
+import { UX_MESSAGES, formatUxMessage } from '../../contracts/operationalUxMessages.js';
 
 export default function ContractSignPublicPage() {
   const { token } = useParams();
@@ -39,17 +40,18 @@ export default function ContractSignPublicPage() {
 
   if (!resolved) {
     return (
-      <div className="ctr-public-sign">
-        <p>Link inválido ou não encontrado.</p>
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-invalid">
+        <h1>{UX_MESSAGES.LINK_INVALID.title}</h1>
+        <p>{UX_MESSAGES.LINK_INVALID.body}</p>
       </div>
     );
   }
 
   if (resolved.expired) {
     return (
-      <div className="ctr-public-sign">
-        <h1>Link expirado</h1>
-        <p>Solicite um novo link de assinatura à clínica.</p>
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-expired">
+        <h1>{UX_MESSAGES.LINK_EXPIRED.title}</h1>
+        <p>{UX_MESSAGES.LINK_EXPIRED.body}</p>
       </div>
     );
   }
@@ -58,9 +60,9 @@ export default function ContractSignPublicPage() {
 
   if (done) {
     return (
-      <div className="ctr-public-sign">
-        <h1>Assinatura registrada</h1>
-        <p>Obrigado. Seu contrato foi assinado com sucesso.</p>
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-done">
+        <h1>{UX_MESSAGES.SIGNATURE_COMPLETED.title}</h1>
+        <p>{UX_MESSAGES.SIGNATURE_COMPLETED.body}</p>
       </div>
     );
   }
@@ -85,7 +87,7 @@ export default function ContractSignPublicPage() {
   const handleSign = () => {
     setError('');
     if (!requiredOk) {
-      setError('Aceite os consentimentos obrigatórios, incluindo o aviso de privacidade (LGPD).');
+      setError('Marque os consentimentos obrigatórios, incluindo o aviso de privacidade, para continuar.');
       setPhase('privacy');
       return;
     }
@@ -99,7 +101,7 @@ export default function ContractSignPublicPage() {
       });
       setDone(true);
     } catch (e) {
-      setError(e?.message || 'Erro ao assinar.');
+      setError(e?.message || formatUxMessage('LOAD_FAILED'));
     }
   };
 
