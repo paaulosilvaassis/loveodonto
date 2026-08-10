@@ -60,7 +60,6 @@ export function BudgetHubListView({
             <span>{row.hasFinance ? '✔ Financeiro' : '✖ Financeiro'}</span>
           </div>
           <div className="bhub-list-actions">
-            <button type="button" className="bhub-btn bhub-btn--sm" onClick={() => onOpen(row)}>Abrir</button>
             {showGenerate ? (
               <button
                 type="button"
@@ -91,6 +90,7 @@ export function BudgetHubListView({
                 Ver contrato
               </button>
             ) : null}
+            <button type="button" className="bhub-btn bhub-btn--sm" onClick={() => onOpen(row)}>Abrir</button>
             <button type="button" className="bhub-btn bhub-btn--sm" onClick={() => onPrint(row)}>PDF</button>
             {canViewFinance && (row.financingId || row.hasFinance) ? (
               <button
