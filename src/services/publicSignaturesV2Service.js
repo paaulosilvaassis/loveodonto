@@ -74,6 +74,9 @@ async function callHarnessPublic(token, path, method, body) {
 
   if (path === '/open' && method === 'POST') {
     const open = await svc.openSigningSession({ token });
+    const version = h.version || {};
+    const treatment = version.treatmentSnapshot || h.treatmentSummary || null;
+    const financial = version.financialSnapshot || h.financialSummary || null;
     return {
       clinicDisplayName: 'Clínica Demo',
       documentTitle: h.contract?.title || 'Documento para assinatura',
@@ -82,6 +85,69 @@ async function callHarnessPublic(token, path, method, body) {
       requiredSteps: ['VIEW', 'AUTHENTICATE', 'ACCEPT', 'SIGN'],
       requiredTerms: open.requiredTerms || [],
       expiresAt: open.expiresAt,
+      // Resumo público — sem ledger/evidence/outros signatários
+      treatmentSummary: treatment
+        ? {
+            name: treatment.summary || h.contract?.title || 'Tratamento odontológico',
+            procedures: (treatment.items || []).map((i) => i.procedureName || i.name).filter(Boolean),
+            teethRegions: (treatment.items || []).map((i) => i.tooth).filter(Boolean),
+            quantity: (treatment.items || []).length || null,
+            notes: treatment.notes || null,
+            professionalName: treatment.professionalName || null,
+          }
+        : {
+            name: h.contract?.title || 'Tratamento odontológico',
+            procedures: [],
+            teethRegions: [],
+            quantity: null,
+            notes: null,
+            professionalName: null,
+          },
+      financialSummary: financial
+        ? {
+            total: financial.contractTotal ?? financial.total,
+            downPayment: financial.downPayment,
+            balance: financial.financedAmount ?? financial.balance,
+            installmentCount: financial.installmentCount,
+            installmentValue: financial.installmentValue,
+            paymentMethod: Array.isArray(financial.paymentMethods)
+              ? financial.paymentMethods.join(', ')
+              : financial.paymentMethod,
+            firstDueDate: Array.isArray(financial.dueDates) ? financial.dueDates[0] : financial.firstDueDate,
+          }
+        : null,
+    };
+  }
+
+  if (path === '/document' && method === 'GET') {
+    if (h.getAuthorizedDocument) {
+      const doc = await h.getAuthorizedDocument({ token });
+      if (!doc || doc.blocked || doc.fileType === 'EVIDENCE_REPORT') {
+        const err = new Error('Documento indisponível.');
+        err.code = 'SIGNATURE_PUBLIC_ACCESS_DENIED';
+        throw err;
+      }
+      return {
+        available: true,
+        mimeType: doc.mimeType || 'application/pdf',
+        // bytes só em harness de teste — nunca evidence
+        bytesBase64: doc.bytesBase64 || null,
+        fileType: doc.fileType || 'GENERATED_PDF',
+      };
+    }
+    const view = await svc.viewDocument({ token });
+    if (view.fileType === 'EVIDENCE_REPORT') {
+      const err = new Error('Documento indisponível.');
+      err.code = 'SIGNATURE_PUBLIC_ACCESS_DENIED';
+      throw err;
+    }
+    return {
+      available: true,
+      documentHashAbbrev: view.documentHash
+        ? `${String(view.documentHash).slice(0, 12)}…`
+        : undefined,
+      html: view.html,
+      fileType: view.fileType || 'GENERATED_PDF',
     };
   }
 
@@ -247,6 +313,39 @@ export async function publicOpen(token) {
 
 export async function publicView(token) {
   return callPublic(token, '/view', 'POST');
+}
+
+/**
+ * Documento autorizado do envelope (PDF). Nunca evidence report / ledger.
+ */
+export async function publicDocument(token) {
+  if (injectedHarness) {
+    return callHarnessPublic(token, '/document', 'GET');
+  }
+  const url = `/public/signatures-v2/${encodeURIComponent(token)}/document`;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/pdf, application/json' },
+    credentials: 'same-origin',
+  });
+  const contentType = response.headers.get('content-type') || '';
+  if (!response.ok) {
+    const data = contentType.includes('json') ? await response.json().catch(() => ({})) : {};
+    const err = new Error(data?.error || data?.message || 'Documento indisponível.');
+    err.code = data?.code || 'SIGNATURE_PUBLIC_ACCESS_DENIED';
+    throw err;
+  }
+  if (contentType.includes('application/pdf') || contentType.includes('octet-stream')) {
+    const blob = await response.blob();
+    return { available: true, blob, mimeType: contentType };
+  }
+  const data = await response.json().catch(() => ({}));
+  if (data?.fileType === 'EVIDENCE_REPORT') {
+    const err = new Error('Documento indisponível.');
+    err.code = 'SIGNATURE_PUBLIC_ACCESS_DENIED';
+    throw err;
+  }
+  return { available: Boolean(data?.available), ...data };
 }
 
 export async function publicStatus(token) {

@@ -11,14 +11,26 @@ import {
   publicAccept,
   publicChallenge,
   publicDecline,
+  publicDocument,
   publicOpen,
   publicSign,
   publicVerify,
   publicView,
   uploadPublicSignatureGraphic,
 } from '../../services/publicSignaturesV2Service.js';
+import {
+  buildPublicSigningSummaryFromV2Session,
+  resetConsentAcceptanceMap,
+} from '../../contracts/publicSigningSummary.js';
+import {
+  PublicSigningStepIndicator,
+  PublicSigningTreatmentSection,
+  PublicSigningFinancialSection,
+  PublicSigningPrivacySection,
+  PublicSigningDocumentCta,
+} from '../../components/contracts/public/PublicSigningSummarySections.jsx';
 
-const STEPS = ['load', 'view', 'auth', 'terms', 'sign', 'done'];
+const STEPS = ['load', 'summary', 'view', 'auth', 'terms', 'sign', 'done'];
 
 function deriveUiState(session, step, errorCode) {
   if (errorCode === 'SIGNATURE_SESSION_EXPIRED') return 'expired';
@@ -79,12 +91,10 @@ export default function ContractSignPublicV2Page() {
       const open = await publicOpen(sessionToken);
       setSession(open);
       setRequiredTerms(open.requiredTerms || []);
-      const initial = {};
-      for (const t of open.requiredTerms || []) {
-        initial[t.id] = Boolean(t.accepted);
-      }
-      setTermAcceptance(initial);
-      setStep('view');
+      // Nenhuma opção pré-marcada (C1)
+      const summary = buildPublicSigningSummaryFromV2Session(open);
+      setTermAcceptance(resetConsentAcceptanceMap(summary.privacy));
+      setStep('summary');
     } catch (err) {
       handleError(err);
     } finally {
@@ -109,19 +119,39 @@ export default function ContractSignPublicV2Page() {
     setLoading(true);
     setError(null);
     try {
+      // PDF autorizado apenas — bloqueia evidence report
+      try {
+        const doc = await publicDocument(sessionToken);
+        if (doc?.blob) {
+          const url = URL.createObjectURL(doc.blob);
+          window.open(url, '_blank', 'noopener,noreferrer');
+        } else if (doc?.html) {
+          setDocumentHtml(doc.html);
+        }
+      } catch {
+        // fallback HTML view
+      }
       const view = await publicView(sessionToken);
-      setDocumentHtml(view.html || '<p>Documento indisponível.</p>');
+      setDocumentHtml(view.html || documentHtml || '<p>Documento indisponível.</p>');
       setSession((prev) => ({
         ...prev,
         signerStatus: view.signerStatus || prev?.signerStatus,
         requiredSteps: prev?.requiredSteps,
       }));
-      advanceAfterView(requiredTerms, session?.requiredSteps);
+      setStep('view');
     } catch (err) {
       handleError(err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const continueFromSummary = () => {
+    setStep('view');
+  };
+
+  const continueAfterDocument = () => {
+    advanceAfterView(requiredTerms, session?.requiredSteps);
   };
 
   const handleRequestOtp = async () => {
@@ -161,24 +191,33 @@ export default function ContractSignPublicV2Page() {
   };
 
   const handleAcceptTerms = async () => {
-    const acceptances = (requiredTerms || []).map((t) => ({
+    const summaryPrivacy = buildPublicSigningSummaryFromV2Session(session || {}).privacy;
+    const source = (requiredTerms || []).length
+      ? requiredTerms
+      : [
+          ...(summaryPrivacy.requiredConsents || []),
+          ...(summaryPrivacy.optionalConsents || []),
+        ];
+    const acceptances = source.map((t) => ({
       id: t.id,
-      code: t.code,
-      required: t.required,
+      code: t.code || t.id,
+      required: Boolean(t.required),
       accepted: Boolean(termAcceptance[t.id]),
     }));
     const missing = acceptances.filter((a) => a.required && !a.accepted);
     if (missing.length) {
-      setError('Aceite todos os termos obrigatórios.');
+      setError('Aceite todos os termos obrigatórios, incluindo o aviso de privacidade (LGPD).');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      await publicAccept(sessionToken, {
-        acceptances,
-        idempotencyKey: `accept_${Date.now()}`,
-      });
+      if ((requiredTerms || []).length) {
+        await publicAccept(sessionToken, {
+          acceptances,
+          idempotencyKey: `accept_${Date.now()}`,
+        });
+      }
       setStep('sign');
     } catch (err) {
       handleError(err);
@@ -334,15 +373,17 @@ export default function ContractSignPublicV2Page() {
     );
   }
 
+  const publicSummary = buildPublicSigningSummaryFromV2Session(session || {});
+  const stepNumber = step === 'summary' ? 1 : step === 'view' ? 2 : step === 'terms' || step === 'auth' ? 3 : 4;
+
   return (
-    <div className="ctr-public-sign" data-testid="public-sign-v2-page">
+    <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-v2-page">
       <header className="ctr-public-sign-header">
         <h1>{session?.documentTitle || 'Assinatura de documento'}</h1>
         <p>{session?.clinicDisplayName || 'Clínica'}</p>
-        {session?.signerRole ? (
-          <p className="ctr-hint">Papel: {session.signerRole}</p>
-        ) : null}
       </header>
+
+      <PublicSigningStepIndicator current={stepNumber} total={4} />
 
       {error ? (
         <div className="ctr-section" role="alert" data-testid="public-sign-v2-error">{error}</div>
@@ -350,11 +391,29 @@ export default function ContractSignPublicV2Page() {
 
       {loading ? <p className="ctr-hint">Carregando…</p> : null}
 
+      {step === 'summary' ? (
+        <section className="ctr-section space-y-3" data-testid="public-sign-v2-step-summary">
+          <PublicSigningTreatmentSection treatment={publicSummary.treatment} />
+          <PublicSigningFinancialSection financial={publicSummary.financial} />
+          <PublicSigningDocumentCta onOpenDocument={handleViewDocument} busy={loading} />
+          <button type="button" className="button primary" onClick={continueFromSummary} disabled={loading}>
+            Continuar
+          </button>
+        </section>
+      ) : null}
+
       {step === 'view' ? (
         <section className="ctr-section space-y-3" data-testid="public-sign-v2-step-view">
-          <p>Revise o documento antes de continuar.</p>
-          <button type="button" className="ctr-btn" onClick={handleViewDocument} disabled={loading}>
-            Visualizar documento
+          <p>Revise o documento completo autorizado antes de continuar.</p>
+          <PublicSigningDocumentCta onOpenDocument={handleViewDocument} busy={loading} />
+          {documentHtml ? (
+            <div
+              className="ctr-doc-preview border border-slate-200 rounded p-3 text-sm max-h-64 overflow-auto"
+              dangerouslySetInnerHTML={{ __html: documentHtml }}
+            />
+          ) : null}
+          <button type="button" className="button primary" onClick={continueAfterDocument} disabled={loading}>
+            Entendi, continuar
           </button>
         </section>
       ) : null}
@@ -390,25 +449,15 @@ export default function ContractSignPublicV2Page() {
 
       {step === 'terms' ? (
         <section className="ctr-section space-y-3" data-testid="public-sign-v2-step-terms">
-          <p>Leia e aceite os termos obrigatórios.</p>
-          <ul className="space-y-2">
-            {(requiredTerms || []).map((t) => (
-              <li key={t.id}>
-                <label className="flex items-start gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(termAcceptance[t.id])}
-                    onChange={(e) => setTermAcceptance((prev) => ({
-                      ...prev,
-                      [t.id]: e.target.checked,
-                    }))}
-                  />
-                  <span>{t.label}{t.required ? ' *' : ''}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-          <button type="button" className="ctr-btn" onClick={handleAcceptTerms} disabled={loading}>
+          <PublicSigningPrivacySection
+            privacy={publicSummary.privacy}
+            acceptance={termAcceptance}
+            onChange={(id, checked) => setTermAcceptance((prev) => ({
+              ...prev,
+              [id]: checked,
+            }))}
+          />
+          <button type="button" className="button primary" onClick={handleAcceptTerms} disabled={loading}>
             Continuar
           </button>
         </section>

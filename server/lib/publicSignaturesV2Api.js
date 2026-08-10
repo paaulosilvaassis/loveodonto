@@ -250,13 +250,17 @@ export function createPublicSignaturesV2Handlers(deps = {}) {
     publicOpen: (req, res) => withPublicGuard(req, res, 'OPEN_SESSION', async ({ token, signerService }) => {
       const result = await signerService.openSigningSession({ token });
       metrics.increment('signature_public_open_total');
+      // Resumo público opcional (snapshot congelado). Sem ledger/evidence/outros signatários.
       return res.json({
         clinicDisplayName: result.clinicDisplayName || 'Clínica (fixture)',
         documentTitle: result.documentTitle || result.envelopeTitle || 'Documento para assinatura',
         signerRole: result.signer?.signerRole || result.signerRole,
         status: result.signer?.status || result.status,
         requiredSteps: result.requiredSteps || ['VIEW', 'AUTHENTICATE', 'ACCEPT', 'SIGN'],
+        requiredTerms: result.requiredTerms || [],
         expiresAt: result.expiresAt,
+        treatmentSummary: result.treatmentSummary || null,
+        financialSummary: result.financialSummary || null,
       });
     }),
 
@@ -277,7 +281,7 @@ export function createPublicSignaturesV2Handlers(deps = {}) {
     publicDocument: (req, res) => withPublicGuard(req, res, 'OPEN_SESSION', async ({ token, signerService }) => {
       if (getDocumentAccess) {
         const doc = await getDocumentAccess().getAuthorizedDocument({ token });
-        if (!doc || doc.blocked) {
+        if (!doc || doc.blocked || doc.fileType === 'EVIDENCE_REPORT') {
           return publicDenied(res, metrics, 'DOCUMENT', 'UNAVAILABLE');
         }
         applyPublicSignatureSecurityHeaders(res);
@@ -286,11 +290,15 @@ export function createPublicSignaturesV2Handlers(deps = {}) {
         return res.status(200).send(Buffer.from(doc.bytes));
       }
       const result = await signerService.viewDocument({ token });
+      if (result.fileType === 'EVIDENCE_REPORT') {
+        return publicDenied(res, metrics, 'DOCUMENT', 'EVIDENCE_BLOCKED');
+      }
       return res.json({
         documentHashAbbrev: result.documentHash
           ? `${String(result.documentHash).slice(0, 12)}…`
           : undefined,
         available: true,
+        fileType: result.fileType || 'GENERATED_PDF',
       });
     }),
 
