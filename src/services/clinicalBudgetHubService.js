@@ -14,6 +14,7 @@ import { listPatientContracts } from './contractModuleService.js';
 import { calcPlannedValue, getAcceptedOption, formatPaymentOptionLabel } from '../components/clinical/budget/budgetUtils.js';
 import { formatFriendlyBudgetNumber, formatFriendlyContractNumber } from '../utils/friendlyNumbers.js';
 import { createId } from './helpers.js';
+import { resolveHubContractAction } from './operationalContractWizardService.js';
 
 export class InactiveClinicalSessionError extends Error {
   constructor(message = 'Paciente sem atendimento clínico ativo.') {
@@ -119,6 +120,11 @@ function enrichBudgetRow(baseRow, budget, db) {
         budget.id,
         baseRow.financingId,
       ),
+    }),
+    contractAction: resolveHubContractAction({
+      ...baseRow,
+      planName: baseRow.planName,
+      totalValue: baseRow.totalValue,
     }),
     displayDate: baseRow.archivedAt || baseRow.createdAt,
   };

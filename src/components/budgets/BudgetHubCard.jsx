@@ -1,9 +1,9 @@
+import React from 'react';
 import {
   User,
   Stethoscope,
   Calendar,
   FileSignature,
-  Wallet,
   Clock,
   ArrowRight,
   Printer,
@@ -15,6 +15,11 @@ import { Link } from 'react-router-dom';
 import { formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
 import { BudgetHubStatusBadge } from './BudgetHubStatusBadge.jsx';
 import { resolveRowPatientId, resolveRowPatientName } from '../../services/clinicalBudgetHubService.js';
+import {
+  labelOperationalUxStatus,
+  OPERATIONAL_UX_STATUS_VARIANT,
+} from '../../contracts/operationalContractUi.js';
+import { BUDGET_STATUS } from '../../services/clinicalBudgetConstants.js';
 
 function getInitials(name = '') {
   return name.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('') || 'P';
@@ -33,6 +38,20 @@ function formatDate(value) {
   return new Date(value).toLocaleDateString('pt-BR');
 }
 
+function ContractStatusChip({ contractAction, contractStatus }) {
+  if (!contractAction?.uxStatus && !contractStatus) {
+    return <span className="bhub-contract-status bhub-contract-status--none">Sem contrato</span>;
+  }
+  const ux = contractAction?.uxStatus;
+  const label = ux ? labelOperationalUxStatus(ux) : 'Com contrato';
+  const variant = ux ? (OPERATIONAL_UX_STATUS_VARIANT[ux] || 'muted') : 'info';
+  return (
+    <span className={`bhub-contract-status bhub-contract-status--${variant}`} data-testid="budget-contract-status">
+      {label}
+    </span>
+  );
+}
+
 export function BudgetHubCard({
   row,
   canCreate,
@@ -41,12 +60,19 @@ export function BudgetHubCard({
   onPrint,
   onHistory,
   onContract,
+  onGenerateContract,
   onFinance,
   onCreateNew,
 }) {
   const currentPatientId = resolveRowPatientId(row);
   const patientLabel = resolveRowPatientName(row);
   const patientActionsDisabled = !currentPatientId;
+  const contractAction = row.contractAction || {};
+  const showGenerate = contractAction.action === 'generate'
+    && row.status === BUDGET_STATUS.APROVADO
+    && !row.contractId;
+  const showContinue = ['continue', 'resolve'].includes(contractAction.action) && row.contractId;
+  const showView = contractAction.action === 'view' && row.contractId;
 
   return (
     <article className="bhub-card">
@@ -85,10 +111,11 @@ export function BudgetHubCard({
         <div className="bhub-card-flags">
           <BoolFlag ok={row.hasContract} yesLabel="Contrato gerado" noLabel="Sem contrato" />
           <BoolFlag ok={row.hasFinance} yesLabel="Financeiro gerado" noLabel="Financeiro pendente" />
+          <ContractStatusChip contractAction={contractAction} contractStatus={row.contractStatus} />
         </div>
         <p className="bhub-card-next">
           <ArrowRight size={14} />
-          {row.nextAction}
+          {contractAction.nextAction || row.nextAction}
         </p>
       </div>
 
@@ -96,14 +123,44 @@ export function BudgetHubCard({
         <button type="button" className="bhub-btn bhub-btn--primary" onClick={() => onOpen(row)}>
           Abrir orçamento
         </button>
-        <button type="button" className="bhub-btn" onClick={() => onPrint(row)}>
-          <Printer size={14} /> Imprimir PDF
-        </button>
-        {row.contractId ? (
+        {showGenerate ? (
+          <button
+            type="button"
+            className="bhub-btn bhub-btn--accent"
+            data-testid="budget-generate-contract"
+            onClick={() => onGenerateContract?.(row)}
+          >
+            <FileSignature size={14} /> Gerar contrato
+          </button>
+        ) : null}
+        {showContinue ? (
+          <button
+            type="button"
+            className="bhub-btn bhub-btn--accent"
+            data-testid="budget-continue-contract"
+            onClick={() => onGenerateContract?.(row)}
+          >
+            <FileSignature size={14} /> {contractAction.label || 'Continuar contrato'}
+          </button>
+        ) : null}
+        {showView ? (
+          <button
+            type="button"
+            className="bhub-btn"
+            data-testid="budget-view-contract"
+            onClick={() => onContract(row)}
+          >
+            <FileSignature size={14} /> Ver contrato
+          </button>
+        ) : null}
+        {!showGenerate && !showContinue && !showView && row.contractId ? (
           <button type="button" className="bhub-btn" onClick={() => onContract(row)}>
             <FileSignature size={14} /> Ver contrato
           </button>
         ) : null}
+        <button type="button" className="bhub-btn" onClick={() => onPrint(row)}>
+          <Printer size={14} /> Imprimir PDF
+        </button>
         {canViewFinance && (row.financingId || row.hasFinance) ? (
           <button
             type="button"

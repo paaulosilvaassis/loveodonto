@@ -9,6 +9,7 @@ import { BudgetHubKpis } from '../components/budgets/BudgetHubKpis.jsx';
 import { BudgetHubFilters } from '../components/budgets/BudgetHubFilters.jsx';
 import { BudgetHubCard } from '../components/budgets/BudgetHubCard.jsx';
 import { BudgetHubListView } from '../components/budgets/BudgetHubListView.jsx';
+import OperationalContractWizard from '../components/contracts/operational/OperationalContractWizard.jsx';
 import {
   listAllClinicalBudgetRows,
   listBudgetHubProfessionals,
@@ -20,6 +21,7 @@ import {
 } from '../services/clinicalBudgetHubService.js';
 import { openExistingBudget } from '../services/budgetNavigationService.js';
 import { buildFinanceNavigationUrl } from '../services/patientFinancialSummaryService.js';
+import { validateBudgetContractGeneration } from '../services/operationalContractWizardService.js';
 
 const DEFAULT_FILTERS = {
   query: '',
@@ -43,6 +45,7 @@ export default function BudgetsHubPage() {
   const [prefillPatient, setPrefillPatient] = useState(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
+  const [wizardRow, setWizardRow] = useState(null);
 
   const canCreate = can(user, 'comercial:view') || can(user, 'prontuario_contratos:create') || user?.role === 'admin';
   const canViewFinance = can(user, 'financeiro_relatorios:view') || user?.role === 'financeiro';
@@ -117,11 +120,31 @@ export default function BudgetsHubPage() {
     navigate(buildFinanceNavigationUrl(currentPatientId));
   };
 
+  const handleGenerateContract = (row) => {
+    const patientId = resolveRowPatientId(row);
+    const check = validateBudgetContractGeneration({
+      patientId,
+      budgetId: row.id,
+      appointmentId: row.appointmentId,
+      allowExisting: Boolean(row.contractId),
+    });
+    if (check.duplicateBlocked && !row.contractId) {
+      showToast(check.errors[0] || 'Já existe contrato para este orçamento.', 'error');
+      return;
+    }
+    if (!row.contractId && !check.ok) {
+      showToast(check.errors.join(' '), 'error');
+      return;
+    }
+    setWizardRow(row);
+  };
+
   const cardHandlers = {
     onOpen: (row) => openExistingBudgetRow(row, 'orcamento'),
     onPrint: (row) => openExistingBudgetRow(row, 'orcamento'),
     onHistory: (row) => openExistingBudgetRow(row, 'planejamento'),
     onContract: (row) => openExistingBudgetRow(row, 'contratos'),
+    onGenerateContract: handleGenerateContract,
     onFinance: handleFinance,
     onCreateNew: handleRowCreateNew,
   };
@@ -199,6 +222,19 @@ export default function BudgetsHubPage() {
         patientId={prefillPatient?.id}
         patientName={prefillPatient?.name}
         onConfirm={handleCreateConfirm}
+      />
+
+      <OperationalContractWizard
+        open={Boolean(wizardRow)}
+        onOpenChange={(open) => {
+          if (!open) setWizardRow(null);
+        }}
+        user={user}
+        row={wizardRow}
+        onSuccess={() => {
+          setRefreshKey((k) => k + 1);
+          showToast('Contrato atualizado no pacote documental.');
+        }}
       />
 
       {toast ? (
