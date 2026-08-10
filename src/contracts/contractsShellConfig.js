@@ -7,10 +7,20 @@ import {
   PenLine,
   Settings,
   Layers,
+  ListFilter,
 } from 'lucide-react';
+import { CONTRACTS_V2_SURFACE } from '../domain/contracts/contracts-v2-technical-harness.ts';
 
 export const contractsShellNavItems = [
   { id: 'dashboard', label: 'Dashboard', route: '/gestao/contratos', icon: LayoutDashboard, rolesAllowed: ['admin', 'gerente', 'recepcao'] },
+  {
+    id: 'fila',
+    label: 'Fila',
+    route: '/gestao/contratos/fila',
+    icon: ListFilter,
+    rolesAllowed: ['admin', 'gerente', 'recepcao'],
+    surface: CONTRACTS_V2_SURFACE.OPERATIONAL_UI,
+  },
   { id: 'pendentes', label: 'Pendentes', route: '/gestao/contratos/pendentes', icon: Clock, rolesAllowed: ['admin', 'gerente', 'recepcao'] },
   { id: 'assinados', label: 'Assinados', route: '/gestao/contratos/assinados', icon: CheckCircle2, rolesAllowed: ['admin', 'gerente', 'recepcao'] },
   { id: 'modelos', label: 'Modelos', route: '/gestao/contratos/modelos', icon: FileText, rolesAllowed: ['admin', 'gerente'] },
@@ -19,8 +29,9 @@ export const contractsShellNavItems = [
     label: 'Modelos v2',
     route: '/gestao/contratos/modelos-v2',
     icon: Layers,
-    rolesAllowed: ['admin', 'gerente'],
-    /** Alinhado ao mount: domain + templates (default false; piloto staging por tenant). */
+    rolesAllowed: ['admin', 'master'],
+    surface: CONTRACTS_V2_SURFACE.TECHNICAL_HARNESS,
+    /** Flags operacionais NÃO bastam — ver isContractsV2TechnicalHarnessEnabled. */
     featureFlagsAll: [
       'contracts_domain_v2_enabled',
       'contract_templates_v2_enabled',
@@ -31,8 +42,8 @@ export const contractsShellNavItems = [
     label: 'Instâncias v2',
     route: '/gestao/contratos/instancias-v2',
     icon: FileText,
-    rolesAllowed: ['admin', 'gerente'],
-    /** Exige domain + module + versioning (todas false por padrão). */
+    rolesAllowed: ['admin', 'master'],
+    surface: CONTRACTS_V2_SURFACE.TECHNICAL_HARNESS,
     featureFlagsAll: [
       'contracts_domain_v2_enabled',
       'contracts_module_v2_enabled',
@@ -46,8 +57,8 @@ export const contractsShellNavItems = [
     label: 'Assinaturas v2',
     route: '/gestao/contratos/assinaturas-v2',
     icon: PenLine,
-    rolesAllowed: ['admin', 'gerente'],
-    /** Exige domain + module + versioning + internal signature (todas false por padrão). */
+    rolesAllowed: ['admin', 'master'],
+    surface: CONTRACTS_V2_SURFACE.TECHNICAL_HARNESS,
     featureFlagsAll: [
       'contracts_domain_v2_enabled',
       'contracts_module_v2_enabled',
@@ -60,8 +71,8 @@ export const contractsShellNavItems = [
     label: 'Documentos v2',
     route: '/gestao/contratos/documentos-v2',
     icon: FileText,
-    rolesAllowed: ['admin', 'gerente'],
-    /** Exige domain + module + versioning + pdf + storage (todas false por padrão). */
+    rolesAllowed: ['admin', 'master'],
+    surface: CONTRACTS_V2_SURFACE.TECHNICAL_HARNESS,
     featureFlagsAll: [
       'contracts_domain_v2_enabled',
       'contracts_module_v2_enabled',
@@ -75,8 +86,8 @@ export const contractsShellNavItems = [
     label: 'Conclusão v2',
     route: '/gestao/contratos/conclusao-v2',
     icon: CheckCircle2,
-    rolesAllowed: ['admin', 'gerente'],
-    /** Exige domain + module + versioning + signature + pdf + storage + ledger (todas false). */
+    rolesAllowed: ['admin', 'master'],
+    surface: CONTRACTS_V2_SURFACE.TECHNICAL_HARNESS,
     featureFlagsAll: [
       'contracts_domain_v2_enabled',
       'contracts_module_v2_enabled',
@@ -92,8 +103,8 @@ export const contractsShellNavItems = [
     label: 'Entregas v2',
     route: '/gestao/contratos/entregas-v2',
     icon: PenLine,
-    rolesAllowed: ['admin', 'gerente'],
-    /** Exige flags de assinatura pública v2 (§18 — todas false por padrão). */
+    rolesAllowed: ['admin', 'master'],
+    surface: CONTRACTS_V2_SURFACE.TECHNICAL_HARNESS,
     featureFlagsAll: [
       'contracts_domain_v2_enabled',
       'contracts_module_v2_enabled',

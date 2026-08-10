@@ -239,3 +239,6 @@ export * from './runtime/index.js';
 
 /** Staging feature-flag pilot — Phase 10.14 */
 export * from './staging/contracts-v2-staging-pilot.js';
+
+/** Technical harness isolation — Phase 10.16 */
+export * from './contracts-v2-technical-harness.js';

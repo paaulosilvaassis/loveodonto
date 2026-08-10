@@ -8,7 +8,6 @@ import RequireModule from './auth/RequireModule.jsx';
 import RequireFeatureFlag from './auth/RequireFeatureFlag.jsx';
 import { useAuth } from './auth/useAuth.js';
 import { useTenant } from './tenant/useTenant.js';
-import { buildContractFeatureFlagContext } from './domain/contracts/contract-feature-flags.ts';
 import Layout from './components/Layout.jsx';
 import AgendaPage from './pages/AgendaPage.jsx';
 import AutomationPage from './pages/AutomationPage.jsx';
@@ -101,15 +100,11 @@ import ContractsAssinaturasV2Page from './pages/contratos/ContractsAssinaturasV2
 import ContractsDocumentosV2Page from './pages/contratos/ContractsDocumentosV2Page.jsx';
 import ContractsConclusaoV2Page from './pages/contratos/ContractsConclusaoV2Page.jsx';
 import ContractsEntregasV2Page from './pages/contratos/ContractsEntregasV2Page.jsx';
-import { isContractTemplatesV2UiEnabled } from './services/contractTemplatesV2Service.js';
-import { isContractsV2UiEnabled } from './services/contractsV2Service.js';
-import { isSignaturesV2UiEnabled } from './services/signaturesV2Service.js';
-import { isContractDocumentsV2UiEnabled } from './services/contractDocumentsV2Service.js';
-import { isContractSigningCompletionV2UiEnabled } from './services/contractSigningCompletionV2Service.js';
-import { isPublicSignaturesV2UiEnabled } from './services/publicSignaturesV2Service.js';
+import { isContractsV2TechnicalHarnessEnabled } from './domain/contracts/contracts-v2-technical-harness.ts';
 import ContractsTermosPage from './pages/contratos/ContractsTermosPage.jsx';
 import ContractsAssinaturasPage from './pages/contratos/ContractsAssinaturasPage.jsx';
 import ContractsConfigPage from './pages/contratos/ContractsConfigPage.jsx';
+import ContractsFilaPage from './pages/contratos/ContractsFilaPage.jsx';
 import { routeAccessMap } from './navigation/menuConfig.js';
 import { getRequiredFeatureFlagForRoute, getRequiredModuleForRoute } from './tenant/tenantAccess.js';
 
@@ -128,9 +123,9 @@ const withAdminGate = (element) => <RequireAdminGate>{element}</RequireAdminGate
 export default function ProtectedApp() {
   const { user } = useAuth();
   const tenant = useTenant();
-  const contractsV2FlagContext = buildContractFeatureFlagContext({
-    tenantId: user?.tenantId || tenant?.tenantId,
-    tenantFlags: tenant?.flags,
+  const contractsV2TechnicalHarnessEnabled = isContractsV2TechnicalHarnessEnabled({
+    user,
+    projectRef: tenant?.projectRef,
   });
 
   return (
@@ -187,27 +182,28 @@ export default function ProtectedApp() {
         </Route>
         <Route path="/gestao/contratos" element={withRole('/gestao/contratos', <ContractsShellLayout />)}>
           <Route index element={withRole('/gestao/contratos', <ContractsDashboardPage />)} />
+          <Route path="fila" element={withRole('/gestao/contratos', <ContractsFilaPage />)} />
           <Route path="pendentes" element={withRole('/gestao/contratos', <ContractsPendentesPage />)} />
           <Route path="assinados" element={withRole('/gestao/contratos', <ContractsAssinadosPage />)} />
           <Route path="modelos" element={withRole('/gestao/contratos', <ContractsModelosPage />)} />
-          {isContractTemplatesV2UiEnabled(contractsV2FlagContext) ? (
+          {contractsV2TechnicalHarnessEnabled ? (
             <Route path="modelos-v2" element={withRole('/gestao/contratos', <ContractsModelosV2Page />)} />
           ) : null}
-          {isContractsV2UiEnabled(contractsV2FlagContext) ? (
+          {contractsV2TechnicalHarnessEnabled ? (
             <Route path="instancias-v2" element={withRole('/gestao/contratos', <ContractsInstanciasV2Page />)} />
           ) : null}
           <Route path="termos" element={withRole('/gestao/contratos', <ContractsTermosPage />)} />
           <Route path="assinaturas" element={withRole('/gestao/contratos', <ContractsAssinaturasPage />)} />
-          {isSignaturesV2UiEnabled(contractsV2FlagContext) ? (
+          {contractsV2TechnicalHarnessEnabled ? (
             <Route path="assinaturas-v2" element={withRole('/gestao/contratos', <ContractsAssinaturasV2Page />)} />
           ) : null}
-          {isContractDocumentsV2UiEnabled(contractsV2FlagContext) ? (
+          {contractsV2TechnicalHarnessEnabled ? (
             <Route path="documentos-v2" element={withRole('/gestao/contratos', <ContractsDocumentosV2Page />)} />
           ) : null}
-          {isContractSigningCompletionV2UiEnabled(contractsV2FlagContext) ? (
+          {contractsV2TechnicalHarnessEnabled ? (
             <Route path="conclusao-v2" element={withRole('/gestao/contratos', <ContractsConclusaoV2Page />)} />
           ) : null}
-          {isPublicSignaturesV2UiEnabled(contractsV2FlagContext) ? (
+          {contractsV2TechnicalHarnessEnabled ? (
             <Route path="entregas-v2" element={withRole('/gestao/contratos', <ContractsEntregasV2Page />)} />
           ) : null}
           <Route path="configuracoes" element={withRole('/gestao/contratos', <ContractsConfigPage />)} />

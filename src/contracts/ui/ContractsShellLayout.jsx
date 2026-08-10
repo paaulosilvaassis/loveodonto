@@ -5,6 +5,10 @@ import {
   buildContractFeatureFlagContext,
   isContractFeatureEnabled,
 } from '../../domain/contracts/contract-feature-flags.ts';
+import {
+  isContractsV2TechnicalHarnessEnabled,
+  isContractsV2TechnicalHarnessNavItem,
+} from '../../domain/contracts/contracts-v2-technical-harness.ts';
 import { contractsShellNavItems } from '../contractsShellConfig.js';
 
 const isAllowed = (user, allowedRoles) => {
@@ -15,6 +19,14 @@ const isAllowed = (user, allowedRoles) => {
 };
 
 const isFeatureAllowed = (item, flagContext) => {
+  if (isContractsV2TechnicalHarnessNavItem(item)) {
+    // Harness técnico: flag operacional sozinha NÃO libera a superfície.
+    return isContractsV2TechnicalHarnessEnabled({
+      user: flagContext.user,
+      projectRef: flagContext.projectRef,
+      environmentMarker: flagContext.environmentMarker,
+    });
+  }
   if (Array.isArray(item?.featureFlagsAll) && item.featureFlagsAll.length) {
     return item.featureFlagsAll.every((flag) => isContractFeatureEnabled(flag, flagContext));
   }
@@ -26,10 +38,13 @@ export default function ContractsShellLayout() {
   const { user } = useAuth();
   const tenant = useTenant();
   const location = useLocation();
-  const flagContext = buildContractFeatureFlagContext({
-    tenantId: user?.tenantId || tenant?.tenantId,
-    tenantFlags: tenant?.flags,
-  });
+  const flagContext = {
+    ...buildContractFeatureFlagContext({
+      tenantId: user?.tenantId || tenant?.tenantId,
+      tenantFlags: tenant?.flags,
+    }),
+    user,
+  };
   const visibleItems = contractsShellNavItems.filter(
     (item) => isAllowed(user, item.rolesAllowed) && isFeatureAllowed(item, flagContext),
   );
