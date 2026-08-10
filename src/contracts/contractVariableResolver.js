@@ -229,7 +229,13 @@ export function resolveContractVariables(params) {
   );
   const accepted = clinicalBudget ? getAcceptedOption(clinicalBudget) : null;
   const finalValue = accepted ? calcOptionFinalValue(accepted, originalValue || calcPlannedValue(procedures)) : originalValue;
-  const entryAmount = Number(accepted?.downPayment || clinicalMeta?.entryAmount || crmBudget?.downPayment || 0);
+  const entryAmount = Number(
+    accepted?.entry
+    ?? accepted?.downPayment
+    ?? clinicalMeta?.entryAmount
+    ?? crmBudget?.downPayment
+    ?? 0,
+  );
   const balance = Math.max(0, finalValue - entryAmount);
 
   const schedule = clinicalBudget && accepted

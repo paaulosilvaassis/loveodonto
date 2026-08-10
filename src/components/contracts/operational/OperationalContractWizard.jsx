@@ -22,48 +22,20 @@ import {
   getWizardProgress,
   saveWizardProgress,
   getStepReadiness,
+  listWizardFinalizePrerequisites,
 } from '../../../services/operationalContractWizardService.js';
 import { labelOperationalUxStatus, resolveOperationalUxStatus } from '../../../contracts/operationalContractUi.js';
 import {
   formatUxMessage,
-  labelDocumentType,
   labelSignerRole,
   UX_MESSAGES,
 } from '../../../contracts/operationalUxMessages.js';
-
-function PackageChecklist({ documentPackage }) {
-  if (!documentPackage) return null;
-  return (
-    <div className="ocw-package" data-testid="document-package">
-      <h3>Pacote documental</h3>
-      <ul>
-        {documentPackage.items.map((item) => (
-          <li key={item.id} className={item.ready ? 'is-ready' : item.required ? 'is-missing' : 'is-optional'}>
-            <span aria-hidden>{item.ready ? '✓' : item.required ? '!' : '○'}</span>
-            <div>
-              <strong>{item.label}</strong>
-              <small>
-                {labelDocumentType(item.documentType)}
-                {item.required ? ' · Obrigatório' : ' · Opcional'}
-                {item.detail ? ` · ${item.detail}` : ''}
-              </small>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function InfoRow({ label, value }) {
-  if (value == null || value === '' || value === '—') return null;
-  return (
-    <div className="ocw-info-row">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
+import {
+  PackageChecklist,
+  InfoRow,
+  FinancialSummary,
+  FinalizePrerequisitesPanel,
+} from './OperationalContractWizardPanels.jsx';
 
 export default function OperationalContractWizard({
   open,
@@ -91,6 +63,18 @@ export default function OperationalContractWizard({
   const documentPackage = useMemo(
     () => (open ? buildDocumentPackageForBudget({ appointmentId, budgetId, patientId }) : null),
     [open, appointmentId, budgetId, patientId, packageTick],
+  );
+
+  const finalizePrerequisites = useMemo(
+    () => (open
+      ? listWizardFinalizePrerequisites({
+        patientId,
+        appointmentId,
+        currentUser: user,
+        contractId: view?.contractId || row?.contractId || null,
+      })
+      : null),
+    [open, patientId, appointmentId, user, view?.contractId, row?.contractId, packageTick],
   );
 
   useEffect(() => {
@@ -137,11 +121,16 @@ export default function OperationalContractWizard({
         if (item.id === 'contract_services' && (generateOpen || view?.contractId || row?.contractId)) {
           return { ...item, ready: true };
         }
-        if (item.id === 'tcle' || item.id === 'lgpd') return { ...item, ready: true };
+        if (item.id === 'lgpd') return { ...item, ready: true };
+        if (item.id === 'tcle') {
+          const tcleMissing = (finalizePrerequisites?.items || []).some((p) => p.group === 'tcle');
+          return { ...item, ready: !tcleMissing };
+        }
         return item;
       }),
     },
     signers: patientId ? [{ role: 'patient' }] : [],
+    finalizePrerequisites,
   });
 
   const persist = (nextIndex) => {
@@ -156,18 +145,44 @@ export default function OperationalContractWizard({
   };
 
   const goToStep = (index) => {
-    if (index < 0 || index > stepIndex) return;
+    if (index < 0 || index > WIZARD_STEPS.length - 1) return;
+    // Permite voltar sempre; avançar só até a etapa atual (exceto CTAs de pendência).
+    if (index > stepIndex) return;
     setStepIndex(index);
     persist(index);
   };
 
+  const jumpToStepId = (stepId) => {
+    const idx = WIZARD_STEPS.findIndex((s) => s.id === stepId);
+    if (idx < 0) return;
+    setError('');
+    setStepIndex(idx);
+    persist(idx);
+  };
+
+  const handlePrereqAction = (item) => {
+    if (item?.targetStepId) jumpToStepId(item.targetStepId);
+  };
+
   const goNext = () => {
     setError('');
-    if (!readiness.ready) {
+    const openingGenerate = step.id === 'documentos'
+      && !(view?.contractId || row?.contractId)
+      && !validation?.existingContract;
+
+    // Gerar documentos abre o modal mesmo sem contrato pronto; demais etapas usam readiness.
+    if (!openingGenerate && !readiness.ready) {
       setError(`${formatUxMessage('WIZARD_STEP_BLOCKED')} Falta: ${readiness.missing.join(', ')}.`);
       return;
     }
-    if (step.id === 'documentos' && !(view?.contractId || row?.contractId) && !validation?.existingContract) {
+
+    if (openingGenerate) {
+      if (finalizePrerequisites && !finalizePrerequisites.ok) {
+        setError(
+          `${formatUxMessage('FINALIZE_PREREQUISITES')} ${finalizePrerequisites.items.map((i) => i.label).join('; ')}.`,
+        );
+        return;
+      }
       const check = validateBudgetContractGeneration({
         patientId,
         budgetId,
@@ -186,6 +201,7 @@ export default function OperationalContractWizard({
       setGenerateOpen(true);
       return;
     }
+
     const next = Math.min(stepIndex + 1, WIZARD_STEPS.length - 1);
     setStepIndex(next);
     persist(next);
@@ -286,14 +302,7 @@ export default function OperationalContractWizard({
             {step.id === 'financeiro' ? (
               <section className="ocw-panel" data-testid="ocw-step-financeiro">
                 <h3>Financeiro</h3>
-                <InfoRow label="Valor total" value={view?.financial?.totalLabel} />
-                <InfoRow label="Entrada" value={view?.financial?.downPaymentLabel} />
-                <InfoRow label="Saldo" value={view?.financial?.balanceLabel} />
-                {view?.financial?.installmentCount != null ? (
-                  <InfoRow label="Parcelas" value={`${view.financial.installmentCount}x`} />
-                ) : null}
-                <InfoRow label="Valor das parcelas" value={view?.financial?.installmentValueLabel} />
-                <InfoRow label="Forma de pagamento" value={view?.financial?.paymentMethod} />
+                <FinancialSummary financial={view?.financial} testId="ocw-financial-step" />
                 <p className="ocw-hint">
                   Estes valores vêm do orçamento aprovado e serão registrados no contrato sem alteração nesta tela.
                 </p>
@@ -302,6 +311,10 @@ export default function OperationalContractWizard({
 
             {step.id === 'documentos' ? (
               <section className="ocw-panel" data-testid="ocw-step-documentos">
+                <FinalizePrerequisitesPanel
+                  prerequisites={finalizePrerequisites}
+                  onAction={handlePrereqAction}
+                />
                 <PackageChecklist documentPackage={documentPackage} />
                 <p className="ocw-hint">
                   Contrato, TCLE e privacidade ficam no mesmo pacote para a equipe, mas continuam documentos separados
@@ -340,12 +353,20 @@ export default function OperationalContractWizard({
             {step.id === 'revisao' ? (
               <section className="ocw-panel" data-testid="ocw-step-revisao">
                 <h3>Revisão</h3>
+                <FinalizePrerequisitesPanel
+                  prerequisites={finalizePrerequisites}
+                  onAction={handlePrereqAction}
+                />
                 <InfoRow label="Paciente" value={view?.patientName} />
-                <InfoRow label="Tratamento" value={view?.treatmentName} />
-                <InfoRow label="Valor total" value={view?.financial?.totalLabel} />
-                <InfoRow label="Condição" value={view?.financial?.installmentLabel || view?.financial?.paymentMethod} />
+                <InfoRow label="Clínica" value={view?.clinicName} />
                 <InfoRow label="Profissional" value={view?.professionalName} />
+                <InfoRow label="Tratamento" value={view?.treatmentName} />
+                {view?.teethRegions?.length ? (
+                  <InfoRow label="Dentes/regiões" value={view.teethRegions.join(', ')} />
+                ) : null}
+                <FinancialSummary financial={view?.financial} testId="ocw-financial-review" />
                 <PackageChecklist documentPackage={documentPackage} />
+                <InfoRow label="Signatário" value={view?.patientName} />
                 <p className="ocw-hint">
                   Confira se o paciente receberia este pacote sem dúvidas. Se algo faltar, use as etapas acima para voltar.
                 </p>

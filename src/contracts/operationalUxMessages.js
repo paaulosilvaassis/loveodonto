@@ -68,6 +68,10 @@ export const UX_MESSAGES = {
     title: 'Etapa incompleta',
     body: 'Complete as informações obrigatórias desta etapa para avançar.',
   },
+  FINALIZE_PREREQUISITES: {
+    title: 'Antes de finalizar, complete',
+    body: 'Há pendências obrigatórias que impedem a finalização do contrato.',
+  },
   READY_TO_SEND: {
     title: 'Pronto para assinatura',
     body: 'Revise o resumo. Se estiver tudo certo, envie o link de assinatura ao paciente.',

@@ -17,7 +17,7 @@ export function enrichClinicalBudgetContext(clinicalBudget, quoteId) {
     accepted,
     total,
     paymentLabel: accepted ? formatPaymentOptionLabel(accepted) : '—',
-    entryAmount: Number(accepted?.downPayment || 0),
+    entryAmount: Number(accepted?.entry ?? accepted?.downPayment ?? 0),
     planName: clinicalBudget.planName || clinicalBudget.title || '',
     budgetId: clinicalBudget.id || null,
     receivableOriginIds: [quoteId, clinicalBudget.id].filter(Boolean),

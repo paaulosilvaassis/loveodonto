@@ -57,6 +57,19 @@ export function formatPaymentOptionLabel(opt) {
     const parcel = inst > 0 ? val / inst : val;
     return `Parcelado clínica · ${inst}x de ${formatCurrencyBRL(parcel)}`;
   }
+  if (opt.type === 'installments' || opt.type === 'parcelado') {
+    const inst = Number(opt.installments || 0);
+    const entry = Number(opt.entry ?? opt.downPayment ?? 0);
+    const parcel = Number(opt.installmentValue);
+    const parcelLabel = Number.isFinite(parcel) && parcel > 0
+      ? formatCurrencyBRL(parcel)
+      : null;
+    const entryPart = entry > 0 ? `Entrada ${formatCurrencyBRL(entry)}` : null;
+    const installPart = inst > 0
+      ? `${inst}x${parcelLabel ? ` de ${parcelLabel}` : ''}`
+      : null;
+    return [entryPart, installPart].filter(Boolean).join(' · ') || 'Parcelado';
+  }
   if (opt.type === 'cartao') {
     const brand = CARD_BRANDS.find((b) => b.value === opt.cardBrand)?.label || opt.cardBrand || 'Cartão';
     return `${brand} · ${opt.installments || 1}x · ${formatCurrencyBRL(calcOptionFinalValue(opt))}`;

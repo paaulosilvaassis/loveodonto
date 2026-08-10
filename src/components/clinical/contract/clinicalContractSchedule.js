@@ -81,6 +81,10 @@ function resolvePaymentMethodLabel(accepted) {
     );
   }
 
+  if (accepted.type === 'installments' || accepted.type === 'parcelado') {
+    return accepted.label || getPaymentOptionTitle(accepted) || 'Parcelado';
+  }
+
   return getPaymentOptionTitle(accepted);
 }
 
@@ -151,7 +155,7 @@ export function buildInstallmentSchedule(accepted, originalValue, patientId, ori
     return rows;
   }
 
-  const down = Number(accepted.downPayment || 0);
+  const down = Number(accepted.entry ?? accepted.downPayment ?? 0);
   const installments = accepted.type === 'financiamento'
     ? (getFinancingSummaryForOption(accepted, originalValue)?.installmentsCount || 0)
     : Math.max(1, Number(accepted.installments || 1));
@@ -230,7 +234,7 @@ function buildFinancialSummaryLines(accepted, originalValue) {
   lines.push({ label: 'Valor final do contrato', value: formatCurrencyBRL(finalVal) });
   lines.push({ label: 'Forma de pagamento', value: resolvePaymentMethodLabel(accepted) });
 
-  const down = Number(snapshot?.downPayment ?? accepted.downPayment ?? 0);
+  const down = Number(snapshot?.downPayment ?? accepted.entry ?? accepted.downPayment ?? 0);
   if (down > 0) {
     const entryPct = snapshot?.downPaymentPercent ?? (
       finalVal > 0 ? calcEntryPercentFromAmount(finalVal, down) : 0

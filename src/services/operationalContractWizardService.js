@@ -12,6 +12,12 @@ import { LINKED_DOCUMENTS } from '../components/clinical/contract/professionalCo
 import { resolveAttachedTcleIdsFromClinicalDocuments } from './clinicalTcleAttachmentService.js';
 import { formatUxMessage } from '../contracts/operationalUxMessages.js';
 import { formatCurrencyBRL } from '../utils/currency.js';
+import { resolveWizardFinancialDisplay } from './operationalContractWizardSupport.js';
+
+export {
+  listWizardFinalizePrerequisites,
+  resolveWizardFinancialDisplay,
+} from './operationalContractWizardSupport.js';
 
 export const WIZARD_STEPS = [
   { id: 'dados', label: 'Dados' },
@@ -265,8 +271,13 @@ export function getStepReadiness(stepId, context = {}) {
         ready: signers.length > 0 || Boolean(patientId),
         missing: signers.length || patientId ? [] : ['Signatário paciente'],
       };
-    case 'revisao':
-      return { ready: true, missing: [] };
+    case 'revisao': {
+      const finalizeMissing = (context.finalizePrerequisites?.items || []).map((i) => i.label);
+      return {
+        ready: finalizeMissing.length === 0,
+        missing: finalizeMissing,
+      };
+    }
     case 'assinatura':
       return { ready: true, missing: [] };
     default:
@@ -303,7 +314,6 @@ export function buildWizardViewModel(row = {}) {
     || (clinical?.budgetHistory || []).find((b) => b.id === budgetId)
     || null;
   const contract = getContractStatusForQuote(appointmentId, 'clinical_budget', budgetId, row.patientId);
-  const financial = contract?.financialSnapshotJson || {};
   const clinicalSnap = contract?.clinicalSnapshotJson || {};
 
   const procedures = [];
@@ -336,17 +346,7 @@ export function buildWizardViewModel(row = {}) {
     if (p.tooth && !teeth.includes(p.tooth)) teeth.push(String(p.tooth));
   }
 
-  const total = Number(contract?.totalValueSnapshot ?? financial.valorTotal ?? row.totalValue);
-  const entrada = Number(financial.entrada);
-  const parcelas = Array.isArray(financial.parcelas) ? financial.parcelas : [];
-  const installmentCount =
-    Number(financial.financiamentos?.[0]?.installments_count)
-    || Number(parcelas[0]?.total_installments)
-    || (parcelas.length || null);
-  const installmentValue = parcelas[0]?.net_amount ?? parcelas[0]?.original_amount ?? null;
-  const balance = Number.isFinite(total) && Number.isFinite(entrada)
-    ? Math.max(total - entrada, 0)
-    : null;
+  const resolvedFinancial = resolveWizardFinancialDisplay({ budget, contract, row });
 
   const patient = (db.patients || []).find((p) => p.id === row.patientId);
   const guardianName =
@@ -367,13 +367,21 @@ export function buildWizardViewModel(row = {}) {
     teethRegions: teeth,
     notes: clinicalSnap.observacoes || budget?.notes || null,
     financial: {
-      totalLabel: Number.isFinite(total) ? formatCurrencyBRL(total) : '—',
-      downPaymentLabel: Number.isFinite(entrada) ? formatCurrencyBRL(entrada) : '—',
-      balanceLabel: balance != null ? formatCurrencyBRL(balance) : '—',
-      installmentCount,
-      installmentValueLabel: installmentValue != null ? formatCurrencyBRL(installmentValue) : null,
-      paymentMethod: financial.formaPagamento || row.installmentLabel || 'Conforme orçamento',
-      installmentLabel: row.installmentLabel || null,
+      totalLabel: Number.isFinite(resolvedFinancial.total)
+        ? formatCurrencyBRL(resolvedFinancial.total)
+        : '—',
+      downPaymentLabel: Number.isFinite(resolvedFinancial.entrada)
+        ? formatCurrencyBRL(resolvedFinancial.entrada)
+        : '—',
+      balanceLabel: Number.isFinite(resolvedFinancial.balance)
+        ? formatCurrencyBRL(resolvedFinancial.balance)
+        : '—',
+      installmentCount: resolvedFinancial.installmentCount,
+      installmentValueLabel: resolvedFinancial.installmentValue != null
+        ? formatCurrencyBRL(resolvedFinancial.installmentValue)
+        : null,
+      paymentMethod: resolvedFinancial.paymentMethod,
+      installmentLabel: resolvedFinancial.installmentLabel,
     },
     contractId: contract?.id || row.contractId || null,
     contractStatus: contract?.status || row.contractStatus || null,
