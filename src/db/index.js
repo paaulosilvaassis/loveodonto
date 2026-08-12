@@ -97,15 +97,90 @@ function validateTenantIntegrityOnWrite(previousDb, nextDb) {
   }
 }
 
-let cachedDb = null;
-let initDbPromise = null;
-let loadDbWorker = null;
-const getLoadDbWorker = () => {
-  if (!loadDbWorker) {
-    loadDbWorker = new Worker(new URL('./loadDb.worker.js', import.meta.url), { type: 'module' });
+/**
+ * Runtime singleton em globalThis.
+ * HMR/Vite pode remountar este módulo enquanto services antigos ainda importam outra
+ * instância — sem singleton, generatedContracts "some" entre imports.
+ */
+const DB_RUNTIME_KEY = '__LOVE_ODONTO_DB_RUNTIME_V1__';
+function getDbRuntime() {
+  const root = typeof globalThis !== 'undefined' ? globalThis : {};
+  if (!root[DB_RUNTIME_KEY]) {
+    root[DB_RUNTIME_KEY] = {
+      cachedDb: null,
+      initDbPromise: null,
+      loadDbWorker: null,
+      saveEpoch: 0,
+      persistenceGeneration: 0,
+      latestPersistPayload: null,
+      flushChain: Promise.resolve(),
+      flushInFlight: null,
+      withDbDepth: 0,
+      activeWriteDb: null,
+    };
   }
-  return loadDbWorker;
+  return root[DB_RUNTIME_KEY];
+}
+const rt = () => getDbRuntime();
+
+const getLoadDbWorker = () => {
+  const r = rt();
+  if (!r.loadDbWorker) {
+    r.loadDbWorker = new Worker(new URL('./loadDb.worker.js', import.meta.url), { type: 'module' });
+  }
+  return r.loadDbWorker;
 };
+
+/**
+ * Agenda persistência IDB serializada e coalescida.
+ * Várias saveDb rápidas → um ou poucos writes do snapshot mais recente (nunca write antigo após novo).
+ */
+function scheduleIdbFlush() {
+  if (rt().flushInFlight) return rt().flushInFlight;
+  const genAtSchedule = rt().persistenceGeneration;
+  rt().flushInFlight = rt().flushChain = rt().flushChain.then(async () => {
+    try {
+      while (rt().latestPersistPayload && genAtSchedule === rt().persistenceGeneration) {
+        const payload = rt().latestPersistPayload;
+        const epochAtStart = rt().saveEpoch;
+        rt().latestPersistPayload = null;
+        const defaultState = defaultDbState();
+        if (typeof window !== 'undefined' && import.meta?.env?.DEV) {
+          try {
+            const n = Array.isArray(payload?.generatedContracts) ? payload.generatedContracts.length : 0;
+            window.__STAGING_DB_TRACE__ = window.__STAGING_DB_TRACE__ || [];
+            window.__STAGING_DB_TRACE__.push({
+              t: Date.now(),
+              op: 'idb_flush',
+              epoch: epochAtStart,
+              generatedContracts: n,
+            });
+            if (window.__STAGING_DB_TRACE__.length > 80) window.__STAGING_DB_TRACE__.shift();
+          } catch (_) { /* ignore */ }
+        }
+        await idb.saveFullDb(payload, defaultState);
+        if (genAtSchedule !== rt().persistenceGeneration) return;
+        // Novo save durante o await: loop e grava o latest novamente.
+        if (rt().saveEpoch === epochAtStart && !rt().latestPersistPayload) break;
+      }
+    } catch (err) {
+      console.error('Erro ao persistir no IndexedDB:', err);
+    } finally {
+      rt().flushInFlight = null;
+      if (rt().latestPersistPayload && genAtSchedule === rt().persistenceGeneration) {
+        scheduleIdbFlush();
+      }
+    }
+  });
+  return rt().flushInFlight;
+}
+
+/** Aguarda drenar a fila de persistência (testes / init / HMR). */
+export function flushDbPersistence() {
+  if (rt().latestPersistPayload) scheduleIdbFlush();
+  return rt().flushChain.then(() => undefined);
+}
+
 
 function applyPostMigrationFixes(migrated) {
   if (!migrated.clinicalAppointments) migrated.clinicalAppointments = [];
@@ -184,14 +259,42 @@ function applyPostMigrationFixes(migrated) {
 }
 
 /**
+ * Aplica estado hidratado somente se o cache vivo ainda estiver vazio.
+ * Nunca sobrescreve generatedContracts / dados clínicos já escritos durante o await.
+ */
+function adoptHydratedDbIfCacheEmpty(hydrated) {
+  if (rt().cachedDb !== null) {
+    // Cache vivo venceu a corrida (save durante init). Garante flush do vivo.
+    scheduleIdbFlush();
+    return rt().cachedDb;
+  }
+  rt().cachedDb = applyPostMigrationFixes(hydrated);
+  return rt().cachedDb;
+}
+
+/**
  * Inicializa o banco: migra do localStorage (se existir) para IndexedDB e carrega em cache.
  * Deve ser await antes de qualquer loadDb() no app.
+ * Idempotente: não sobrescreve cache vivo; aguarda flush pendente antes de ler IDB.
  */
 export async function initDb() {
-  if (initDbPromise) return initDbPromise;
+  if (rt().cachedDb !== null) return rt().cachedDb;
+  if (rt().initDbPromise) {
+    await rt().initDbPromise;
+    // HMR pode restaurar promise já resolvida sem rt().cachedDb — re-hidrata se necessário.
+    if (rt().cachedDb !== null) return rt().cachedDb;
+    rt().initDbPromise = null;
+  }
+  if (rt().cachedDb !== null) return rt().cachedDb;
+  if (rt().initDbPromise) return rt().initDbPromise;
+
   const defaultState = defaultDbState();
 
-  initDbPromise = (async () => {
+  rt().initDbPromise = (async () => {
+    // Drena writes pendentes (ex.: HMR) antes de hidratar do IDB.
+    await flushDbPersistence();
+    if (rt().cachedDb !== null) return rt().cachedDb;
+
     if (typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEY)) {
       const raw = localStorage.getItem(STORAGE_KEY);
       return new Promise((resolve, reject) => {
@@ -203,8 +306,8 @@ export async function initDb() {
           if (ok && dbFromWorker) {
             idb.saveFullDb(dbFromWorker, defaultState).then(() => {
               try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
-              cachedDb = applyPostMigrationFixes(dbFromWorker);
-              resolve();
+              adoptHydratedDbIfCacheEmpty(dbFromWorker);
+              resolve(rt().cachedDb);
             }).catch(reject);
           } else {
             try {
@@ -212,8 +315,8 @@ export async function initDb() {
               const migrated = migrateDb(parsed);
               idb.saveFullDb(migrated, defaultState).then(() => {
                 try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
-                cachedDb = applyPostMigrationFixes(migrated);
-                resolve();
+                adoptHydratedDbIfCacheEmpty(migrated);
+                resolve(rt().cachedDb);
               }).catch(reject);
             } catch (err) {
               reject(err);
@@ -228,8 +331,8 @@ export async function initDb() {
             const migrated = migrateDb(parsed);
             idb.saveFullDb(migrated, defaultState).then(() => {
               try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
-              cachedDb = applyPostMigrationFixes(migrated);
-              resolve();
+              adoptHydratedDbIfCacheEmpty(migrated);
+              resolve(rt().cachedDb);
             }).catch(reject);
           } catch (err) {
             reject(err);
@@ -239,26 +342,36 @@ export async function initDb() {
         worker.addEventListener('error', onError);
         worker.postMessage({ raw });
       });
-    } else {
-      const db = await idb.getFullDb(defaultState);
-      const hadEmptyCategories = !Array.isArray(db.expenseCategories) || db.expenseCategories.length === 0;
-      cachedDb = applyPostMigrationFixes(db);
-      if (hadEmptyCategories) saveDb(cachedDb);
     }
+
+    const db = await idb.getFullDb(defaultState);
+    if (rt().cachedDb !== null) {
+      scheduleIdbFlush();
+      return rt().cachedDb;
+    }
+    const hadEmptyCategories = !Array.isArray(db.expenseCategories) || db.expenseCategories.length === 0;
+    adoptHydratedDbIfCacheEmpty(db);
+    if (hadEmptyCategories && rt().cachedDb) saveDb(rt().cachedDb);
+    return rt().cachedDb;
   })();
 
-  return initDbPromise;
+  try {
+    return await rt().initDbPromise;
+  } catch (err) {
+    rt().initDbPromise = null;
+    throw err;
+  }
 }
 
 /**
  * Carrega o DB de forma assíncrona (garante init e retorna clone do cache).
  */
 export function loadDbAsync() {
-  return initDb().then(() => clone(cachedDb));
+  return initDb().then(() => clone(rt().cachedDb));
 }
 
 export const loadDb = () => {
-  if (cachedDb !== null) return clone(cachedDb);
+  if (rt().cachedDb !== null) return clone(rt().cachedDb);
   const defaultState = defaultDbState();
   if (!defaultState.crmTags || defaultState.crmTags.length === 0) {
     defaultState.crmTags = getSeedCrmTags(createId, defaultState.clinicProfile?.id || 'clinic-1', new Date().toISOString());
@@ -301,11 +414,11 @@ export const saveDb = (db) => {
   if (!db || typeof db !== 'object') {
     throw new Error('Tentativa de salvar banco de dados inválido');
   }
-  const defaultState = defaultDbState();
-  idb.saveFullDb(db, defaultState).catch((err) => {
-    console.error('Erro ao persistir no IndexedDB:', err);
-  });
-  cachedDb = db;
+  // Cache síncrono primeiro — leitores imediatos veem o contrato.
+  rt().cachedDb = db;
+  rt().latestPersistPayload = db;
+  rt().saveEpoch += 1;
+  scheduleIdbFlush();
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('db:updated'));
   }
@@ -313,12 +426,17 @@ export const saveDb = (db) => {
 };
 
 export const resetDb = () => {
+  // Invalida flushes in-flight para não regravar snapshot velho após clear.
+  rt().persistenceGeneration += 1;
+  rt().latestPersistPayload = null;
+  rt().flushInFlight = null;
+  rt().flushChain = Promise.resolve();
   idb.clearIdb().catch(() => {});
   if (typeof localStorage !== 'undefined') {
     try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
   }
-  cachedDb = null;
-  initDbPromise = null;
+  rt().cachedDb = null;
+  rt().initDbPromise = null;
 };
 
 const ADMIN_SEED_EMAIL = 'admin@loveodonto.com';
@@ -504,11 +622,31 @@ export const seedDevDb = () => {
 };
 
 export const withDb = (mutator) => {
-  const db = loadDb();
-  const cloned = clone(db);
-  const result = mutator(cloned);
-  const next = result && typeof result === 'object' && !Array.isArray(result) && 'patients' in result ? result : cloned;
-  validateTenantIntegrityOnWrite(db, next);
-  saveDb(next);
-  return result;
+  // Reentrância: nested withDb (ex.: registerEvent dentro de createContractDraft)
+  // deve mutar o mesmo draft e NÃO gravar snapshot intermediário/stale.
+  if (rt().withDbDepth > 0 && rt().activeWriteDb) {
+    return mutator(rt().activeWriteDb);
+  }
+
+  // Sempre partir do cache vivo quando existir (evita snapshot ephemeral de defaults
+  // sobrescrever coleções após HMR/null cache parcial).
+  const base = rt().cachedDb !== null ? clone(rt().cachedDb) : loadDb();
+  const cloned = clone(base);
+  rt().withDbDepth += 1;
+  rt().activeWriteDb = cloned;
+  try {
+    const result = mutator(cloned);
+    const next = result && typeof result === 'object' && !Array.isArray(result) && 'patients' in result
+      ? result
+      : cloned;
+    validateTenantIntegrityOnWrite(base, next);
+    saveDb(next);
+    return result;
+  } finally {
+    rt().withDbDepth -= 1;
+    if (rt().withDbDepth <= 0) {
+      rt().withDbDepth = 0;
+      rt().activeWriteDb = null;
+    }
+  }
 };

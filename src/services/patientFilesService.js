@@ -19,6 +19,7 @@ const normalizeFile = (payload, patientId, userId, isConfidential) => ({
   uploaded_by: normalizeText(userId || ''),
   uploaded_at: new Date().toISOString(),
   validity: normalizeText(payload.validity || ''),
+  metadata: payload.metadata && typeof payload.metadata === 'object' ? { ...payload.metadata } : undefined,
 });
 
 export const listFiles = (patientId, { confidential = false } = {}) => {

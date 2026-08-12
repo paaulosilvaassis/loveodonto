@@ -353,6 +353,14 @@ export const defaultDbState = () => ({
   contractSignLinks: [],
   contractSignatureRequests: [],
   contractSignatureAudits: [],
+  /** PHASE_10.21AB — staging OPTION_C bridge (STAGING_TEST_MODE only) */
+  stagingPackageManifestBridge: {
+    byToken: {},
+    manifests: {},
+    snapshots: {},
+    acceptances: {},
+  },
+  stagingLastEvidenceReport: null,
   /** Guias clínicos educativos para apresentação ao paciente */
   clinicalGuides: [],
   clinicalGuideImages: [],
