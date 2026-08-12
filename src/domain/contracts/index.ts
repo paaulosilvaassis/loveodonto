@@ -126,6 +126,17 @@ export * from './fixtures/signature-v2.fixtures.js';
 export * from './packages/contract-package.types.js';
 export * from './packages/contract-package.validators.js';
 export * from './packages/contract-package.repository.js';
+export * from './packages/package-manifest.types.js';
+export * from './packages/package-manifest-hash.js';
+export * from './packages/package-manifest-document-map.js';
+export * from './packages/package-manifest-freeze.design.js';
+export * from './packages/package-manifest-lgpd.js';
+export * from './packages/package-manifest.repository.js';
+export {
+  createPackageManifestFreezeService,
+  evaluatePackageManifestSignGate,
+} from './packages/package-manifest-freeze.service.js';
+export { createPackageManifestAcceptanceService } from './packages/package-manifest-acceptance.service.js';
 
 export * from './files/contract-file.types.js';
 export * from './files/contract-file.repository.js';

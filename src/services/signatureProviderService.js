@@ -48,7 +48,7 @@ const internalProvider = {
     const token = createId('csgn');
     const documentHash = simpleHash(contract.renderedHtml || contract.finalContent);
 
-    return withDb((db) => {
+    const created = withDb((db) => {
       const request = {
         id: createId('csreq'),
         tenant_id: tenantIdFromUser(user),
@@ -115,6 +115,25 @@ const internalProvider = {
 
       return { request, link, signUrl: `/assinatura/${token}`, documentHash };
     });
+
+    // OPTION_C freeze — somente STAGING_TEST_MODE (bridge oficial, sem segundo motor).
+    try {
+      const { isStagingTestModeEnabled } = await import('../domain/contracts/staging/staging-browser-test-mode.ts');
+      if (isStagingTestModeEnabled()) {
+        const { freezeStagingClinicalPackageOnSend } = await import(
+          '../domain/contracts/staging/stagingClinicalPackageManifestBridge.js'
+        );
+        created.packageFreeze = await freezeStagingClinicalPackageOnSend({
+          user,
+          contract,
+          request: created.request,
+          link: created.link,
+        });
+      }
+    } catch (err) {
+      created.packageFreeze = { ok: false, error: String(err?.message || err).slice(0, 200) };
+    }
+    return created;
   },
 
   async sendSignatureEmail({ user, request, signUrl, emailContent }) {

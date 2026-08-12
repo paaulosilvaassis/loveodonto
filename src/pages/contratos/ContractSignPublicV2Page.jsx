@@ -29,6 +29,7 @@ import {
   PublicSigningPrivacySection,
   PublicSigningDocumentCta,
 } from '../../components/contracts/public/PublicSigningSummarySections.jsx';
+import { PublicPackageManifestDocuments } from '../../components/contracts/public/PublicPackageManifestDocuments.jsx';
 
 const STEPS = ['load', 'summary', 'view', 'auth', 'terms', 'sign', 'done'];
 
@@ -392,7 +393,15 @@ export default function ContractSignPublicV2Page() {
         <section className="ctr-section space-y-3" data-testid="public-sign-v2-step-summary">
           <PublicSigningTreatmentSection treatment={publicSummary.treatment} />
           <PublicSigningFinancialSection financial={publicSummary.financial} />
-          <PublicSigningDocumentCta onOpenDocument={handleViewDocument} busy={loading} />
+          {Array.isArray(session?.packageManifestDocuments) && session.packageManifestDocuments.length > 0 ? (
+            <PublicPackageManifestDocuments
+              documents={session.packageManifestDocuments}
+              onReadyToSign={() => setStep('view')}
+              disabled={loading}
+            />
+          ) : (
+            <PublicSigningDocumentCta onOpenDocument={handleViewDocument} busy={loading} />
+          )}
           <button type="button" className="button primary" onClick={continueFromSummary} disabled={loading}>
             Continuar
           </button>

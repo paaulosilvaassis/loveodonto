@@ -65,6 +65,21 @@ export interface SignatureEvidenceReport {
   reportGeneratedAt: string;
   reportHash: string;
   technicalDemo: true;
+  /** OPTION_C — bloco “PACOTE ASSINADO” (omitido em legacy). */
+  packageSigned?: {
+    packageManifestId: string;
+    packageManifestHash: string;
+    documents: Array<{
+      documentKey: string;
+      documentType: string;
+      title?: string;
+      documentVersion: string;
+      contentHash: string;
+      required: boolean;
+      acceptedAt?: string;
+      viewedAt?: string;
+    }>;
+  };
 }
 
 function maskIp(ip?: string): string | undefined {
@@ -182,7 +197,12 @@ export async function buildSignatureEvidenceReport(input: {
     technicalDemo: true as const,
   };
 
-  const canonical = JSON.stringify(canonicalizeJsonValue(base));
+  const packageSigned = buildPackageSignedBlock(input.envelope, input.evidences);
+  const baseWithPackage = packageSigned
+    ? { ...base, packageSigned }
+    : base;
+
+  const canonical = JSON.stringify(canonicalizeJsonValue(baseWithPackage));
   // Bloquear apenas vazamentos reais (não nomes de método como OTP_EMAIL)
   if (/data:image|data:application|["']token["']\s*:|plainCode|testOnlyPlainCode/i.test(canonical)) {
     throw Object.assign(new Error('Relatório contém segredos.'), {
@@ -193,7 +213,40 @@ export async function buildSignatureEvidenceReport(input: {
     });
   }
   const reportHash = await sha256Utf8(canonical);
-  return { ...base, reportHash };
+  return { ...baseWithPackage, reportHash };
+}
+
+function buildPackageSignedBlock(
+  envelope: SignatureEnvelope,
+  evidences: SignatureEvidenceSnapshot[],
+): SignatureEvidenceReport['packageSigned'] | undefined {
+  const manifestId = envelope.packageManifestId
+    || evidences.find((e) => e.packageManifestId)?.packageManifestId;
+  const manifestHash = envelope.packageManifestHash
+    || evidences.find((e) => e.packageManifestHash)?.packageManifestHash;
+  if (!manifestId || !manifestHash) return undefined;
+
+  const docs = evidences
+    .flatMap((e) => e.documentAcceptances || [])
+    .reduce<NonNullable<SignatureEvidenceReport['packageSigned']>['documents']>((acc, d) => {
+      if (acc.some((x) => x.documentKey === d.documentKey)) return acc;
+      acc.push({
+        documentKey: d.documentKey,
+        documentType: d.documentType,
+        documentVersion: d.documentVersion,
+        contentHash: d.contentHash,
+        required: d.required,
+        acceptedAt: d.acceptedAt,
+        viewedAt: d.viewedAt,
+      });
+      return acc;
+    }, []);
+
+  return {
+    packageManifestId: String(manifestId),
+    packageManifestHash: String(manifestHash),
+    documents: docs,
+  };
 }
 
 export async function evidenceReportToJsonBytes(
@@ -217,12 +270,22 @@ export function evidenceReportToPrintableHtml(report: SignatureEvidenceReport): 
       <td>${s.signedAt || '—'}</td>
       <td>${s.evidenceHash.slice(0, 12)}…</td>
     </tr>`).join('');
+  const packageBlock = report.packageSigned
+    ? `<h2>PACOTE ASSINADO</h2>
+<p>Manifest Hash: <code>${report.packageSigned.packageManifestHash}</code></p>
+<ul>${report.packageSigned.documents.map((d) => `
+  <li><strong>${d.documentType}</strong> · versão ${d.documentVersion}
+  · hash <code>${d.contentHash.slice(0, 12)}…</code>
+  ${d.acceptedAt ? ` · aceito em ${d.acceptedAt}` : ''}</li>`).join('')}
+</ul>`
+    : '';
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"/><title>Evidências ${report.contractNumber}</title>
 <style>body{font-family:Georgia,serif;margin:24px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:6px}.demo{background:#fff3cd;padding:8px;font-weight:bold}</style>
 </head><body>
 <p class="demo">RELATÓRIO TÉCNICO DE EVIDÊNCIAS — DEMONSTRAÇÃO — SEM VALOR JURÍDICO</p>
 <h1>Evidências — ${report.contractNumber}</h1>
 <p>Envelope ${report.envelopeId} · Hash doc ${report.documentHash.slice(0, 12)}… · Relatório ${report.reportHash.slice(0, 12)}…</p>
+${packageBlock}
 <table><thead><tr><th>Nome</th><th>Papel</th><th>Método</th><th>Assinado em</th><th>Evidence</th></tr></thead>
 <tbody>${rows}</tbody></table>
 </body></html>`;

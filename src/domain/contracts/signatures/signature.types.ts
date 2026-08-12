@@ -200,6 +200,18 @@ export interface SignatureEvidenceSnapshot {
   evidenceHash?: string;
   providerEvidenceRef?: string;
   notes?: string;
+  /** OPTION_C — manifesto do package (legacy: omitido). */
+  packageManifestId?: string;
+  packageManifestHash?: string;
+  documentAcceptances?: Array<{
+    documentKey: string;
+    documentType: string;
+    documentVersion: string;
+    contentHash: string;
+    required: boolean;
+    viewedAt?: string;
+    acceptedAt?: string;
+  }>;
 }
 
 export interface SignatureSigner {
@@ -252,6 +264,9 @@ export interface SignatureEnvelope {
   documentHashBeforeSigning?: string;
   documentHashAfterSigning?: string;
   evidenceFileId?: ContractFileId;
+  /** Package cryptographic manifest (OPTION_C) — nullable = legacy. */
+  packageManifestId?: string;
+  packageManifestHash?: string;
   createdBy: string;
   createdAt: string;
   updatedAt?: string;
