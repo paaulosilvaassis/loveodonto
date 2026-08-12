@@ -14,6 +14,7 @@ import {
   canAccessContract,
   isBudgetApprovedStatus,
 } from './contract/contractAccessUtils.js';
+import { getContractStatusForQuote } from '../../services/contractModuleService.js';
 
 /** Etapas do fluxo clínico comercial (header). */
 export const CLINICAL_WORKFLOW_STEPS = [
@@ -158,7 +159,13 @@ export function getClinicalWorkflowState(appointmentId, viewBudgetId = null) {
     : getBudgetLockContext(appointmentId);
   const hasBudget = Boolean(budget?.id || plannedFromBudget.length);
   const budgetApproved = isBudgetApprovedStatus(budget?.status);
-  const contractAccessible = canAccessContract(budget, lockCtx);
+  const linkedContract = lockCtx?.contract
+    || getContractStatusForQuote(appointmentId, 'clinical_budget', budget?.id || null);
+  const hasPersistedContract = Boolean(
+    linkedContract
+    && !['canceled', 'replaced', 'refused'].includes(String(linkedContract.status || '').toLowerCase()),
+  );
+  const contractAccessible = canAccessContract(budget, lockCtx) || hasPersistedContract;
   const contractUnlocked = contractAccessible;
 
   let phase = 'planejamento';
@@ -172,6 +179,7 @@ export function getClinicalWorkflowState(appointmentId, viewBudgetId = null) {
     budgetApproved,
     contractAccessible,
     contractUnlocked,
+    hasPersistedContract,
     budgetStatus: budget?.status || null,
     phase,
     plannedCount: isHistoricalView ? plannedFromBudget.length : plannedFromClinical.length,

@@ -14,7 +14,7 @@ import { ClinicalBtn } from '../clinical/ClinicalStageShell.jsx';
 import { BudgetStatusBadge } from '../clinical/budget/BudgetStatusBadge.jsx';
 import { ContractTable, ContractStatusBadge, formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
 import { StartPatientBudgetModal } from './StartPatientBudgetModal.jsx';
-import { InactiveClinicalSessionError, getPatientBudgetOverview, createNewBudget } from '../../services/clinicalBudgetHubService.js';
+import { getPatientBudgetOverview, createNewBudget } from '../../services/clinicalBudgetHubService.js';
 import { openExistingBudget, openExistingContract } from '../../services/budgetNavigationService.js';
 import { getBudgetLockContext } from '../../services/clinicalBudgetLockService.js';
 import { BUDGET_STATUS } from '../../services/clinicalBudgetConstants.js';
@@ -79,12 +79,9 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
       setCreateOpen(false);
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      if (err instanceof InactiveClinicalSessionError || err.code === 'INACTIVE_SESSION') {
-        setError(err.message);
-        navigate('/gestao-comercial/jornada-do-paciente');
-        return;
-      }
-      setError(err.message || 'Erro ao criar orçamento.');
+      // Feedback profissional no próprio modal/aba — sem navegação forçada.
+      const message = err?.message || 'Erro ao criar orçamento.';
+      setError(message);
       throw err;
     } finally {
       setBusy(false);

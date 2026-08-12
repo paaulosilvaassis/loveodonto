@@ -243,7 +243,11 @@ export function createContractDraft(user, payload) {
   return withDb((db) => {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === row.id);
-    if (idx < 0) return row;
+    if (idx < 0) {
+      throw new Error(
+        `CONTRACT_PERSISTENCE: draft ${row.id} ausente após createGeneratedContractDraft (cache inconsistente).`,
+      );
+    }
     arr[idx] = {
       ...arr[idx],
       tenant_id: tenantIdFromUser(user),
@@ -610,6 +614,12 @@ export function getContractStatusForQuote(
       contracts.filter((c) => matchesPatient(c) && c.budgetId === budgetId),
     );
     if (exactIncludingReplaced.length) return normalizeContract(exactIncludingReplaced[0]);
+
+    // Reload-safe: não descartar contrato do mesmo atendimento/quote por budgetId órfão.
+    const quoteActive = sortByRecent(
+      contracts.filter((c) => matchesPatient(c) && c.status !== CONTRACT_STATUS.REPLACED),
+    );
+    if (quoteActive.length) return normalizeContract(quoteActive[0]);
 
     return null;
   }

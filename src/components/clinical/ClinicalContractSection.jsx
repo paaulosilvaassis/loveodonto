@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileSignature,
@@ -33,7 +33,7 @@ import {
   getContractDetails,
 } from '../../services/contractModuleService.js';
 import SendContractSignatureModal from '../contracts/SendContractSignatureModal.jsx';
-import { canSendContractForSignature } from '../../services/contractSignatureFlowService.js';
+import { canSendContractForSignature, resolveBudgetForContractSend } from '../../services/contractSignatureFlowService.js';
 import { CancelContractSecureModal } from './contract/CancelContractSecureModal.jsx';
 import {
   CONTRACT_STATUS,
@@ -51,6 +51,10 @@ import { getClinicForumCityFromDb } from './contract/buildProfessionalContractCo
 import { CLINIC_FORUM_VALIDATION_MESSAGE } from './contract/professionalContractClauses.js';
 import { ContractReadinessChecklist } from '../contracts/ContractReadinessChecklist.jsx';
 import { getContractReadinessChecklist } from '../../services/contractValidationService.js';
+import {
+  buildPrerequisiteDestination,
+  isSafeClinicalReturnUrl,
+} from '../../contracts/contractPrerequisitesResolution.js';
 import { getBudgetLockContext, getBudgetLockContextForBudget } from '../../services/clinicalBudgetLockService.js';
 import { generateProfessionalContractPdf } from './contract/generateProfessionalContractPdf.js';
 import { buildFinancialSection } from './contract/clinicalContractSchedule.js';
@@ -208,6 +212,14 @@ export function ClinicalContractSection({
   const [toast, setToast] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);
 
+  // Após reload/HMR, writes no IndexedDB disparam db:updated — reavalia CTA sem state efêmero.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onDbUpdated = () => setHistoryKey((k) => k + 1);
+    window.addEventListener('db:updated', onDbUpdated);
+    return () => window.removeEventListener('db:updated', onDbUpdated);
+  }, []);
+
   const linkedContract = useMemo(() => {
     if (viewContractId) {
       const details = getContractDetails(viewContractId);
@@ -216,17 +228,22 @@ export function ClinicalContractSection({
     return getContractStatusForQuote(
       appointmentId,
       'clinical_budget',
-      budget?.id || null,
+      budget?.id || viewBudgetId || null,
       patientId,
     );
-  }, [appointmentId, budget?.id, patientId, viewContractId, historyKey]);
+  }, [appointmentId, budget?.id, viewBudgetId, patientId, viewContractId, historyKey]);
+
+  const effectiveBudget = useMemo(
+    () => resolveBudgetForContractSend(linkedContract, budget) || budget || null,
+    [linkedContract, budget, historyKey],
+  );
 
   const contractDetails = useMemo(
     () => (linkedContract?.id ? getContractDetails(linkedContract.id) : null),
     [linkedContract?.id, historyKey],
   );
 
-  const financials = useMemo(() => resolveBudgetFinancials(budget || { procedures: [] }), [budget]);
+  const financials = useMemo(() => resolveBudgetFinancials(effectiveBudget || { procedures: [] }), [effectiveBudget]);
   const accepted = financials.accepted;
 
   const paymentPreview = useMemo(() => {
@@ -235,17 +252,17 @@ export function ClinicalContractSection({
       accepted,
       financials.originalValue,
       patientId,
-      [appointmentId, budget?.id].filter(Boolean),
+      [appointmentId, effectiveBudget?.id || budget?.id].filter(Boolean),
     );
-  }, [accepted, financials.originalValue, patientId, appointmentId, budget?.id]);
+  }, [accepted, financials.originalValue, patientId, appointmentId, effectiveBudget?.id, budget?.id]);
 
   const treatmentTypeLabel = useMemo(() => {
     const type = detectTreatmentType({
-      planName: budget?.planName || '',
-      procedures: budget?.procedures || [],
+      planName: effectiveBudget?.planName || budget?.planName || '',
+      procedures: effectiveBudget?.procedures || budget?.procedures || [],
     });
     return getTreatmentTypeLabel(type);
-  }, [budget?.planName, budget?.procedures]);
+  }, [effectiveBudget?.planName, effectiveBudget?.procedures, budget?.planName, budget?.procedures]);
 
   const clinicForumCity = useMemo(
     () => getClinicForumCityFromDb(db).clinicForumCity,
@@ -253,20 +270,20 @@ export function ClinicalContractSection({
   );
 
   const lockCtx = useMemo(
-    () => (budget
-      ? getBudgetLockContextForBudget(appointmentId, budget)
+    () => (effectiveBudget
+      ? getBudgetLockContextForBudget(appointmentId, effectiveBudget)
       : getBudgetLockContext(appointmentId)),
-    [appointmentId, budget, historyKey],
+    [appointmentId, effectiveBudget, historyKey],
   );
 
   const contractAccessible = useMemo(
-    () => contractAccessibleProp ?? (canAccessContract(budget, lockCtx) || Boolean(linkedContract)),
-    [contractAccessibleProp, budget, lockCtx, linkedContract],
+    () => contractAccessibleProp ?? (canAccessContract(effectiveBudget, lockCtx) || Boolean(linkedContract)),
+    [contractAccessibleProp, effectiveBudget, lockCtx, linkedContract],
   );
 
   const accessBlockReasons = useMemo(
-    () => getContractAccessBlockReasons(budget, lockCtx),
-    [budget, lockCtx],
+    () => getContractAccessBlockReasons(effectiveBudget, lockCtx),
+    [effectiveBudget, lockCtx],
   );
 
   const generateReadiness = useMemo(
@@ -285,7 +302,7 @@ export function ClinicalContractSection({
   );
 
   const contractReadiness = useMemo(
-    () => (patientId && appointmentId && budget
+    () => (patientId && appointmentId && (effectiveBudget || budget)
       ? getContractReadinessChecklist({
         quoteSource: 'clinical_budget',
         quoteId: appointmentId,
@@ -295,7 +312,7 @@ export function ClinicalContractSection({
         attachedTcleIds,
       })
       : null),
-    [patientId, appointmentId, budget, user, linkedContract?.contractNumber, attachedTcleIds, historyKey],
+    [patientId, appointmentId, effectiveBudget, budget, user, linkedContract?.contractNumber, attachedTcleIds, historyKey],
   );
 
   const uiStatus = resolveUiStatus({
@@ -325,6 +342,50 @@ export function ClinicalContractSection({
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  const resolutionContext = useMemo(() => ({
+    patientId: patientId || null,
+    appointmentId: appointmentId || null,
+    budgetId: effectiveBudget?.id || budget?.id || viewBudgetId || null,
+    contractId: linkedContract?.id || viewContractId || null,
+  }), [patientId, appointmentId, effectiveBudget?.id, budget?.id, viewBudgetId, linkedContract?.id, viewContractId]);
+
+  const handleResolvePrerequisite = useCallback((card) => {
+    const destination = card?.destination;
+    if (!destination?.href) {
+      showToast('Não foi possível abrir o destino de correção.', 'error');
+      return;
+    }
+    if (destination.mode === 'blocked') {
+      showToast(destination.reason || 'Contexto incompleto para correção.', 'error');
+      return;
+    }
+    // Garante que o CTA do paciente nunca perde o patientId do atendimento.
+    if (
+      (card.group === 'paciente' || card.group === 'responsavel' || card.group === 'dependente')
+      && destination.patientId
+      && patientId
+      && destination.patientId !== patientId
+    ) {
+      showToast('Contexto do paciente inconsistente. Recarregue o atendimento.', 'error');
+      return;
+    }
+    if (destination.returnUrl && !isSafeClinicalReturnUrl(destination.returnUrl)) {
+      showToast('URL de retorno inválida.', 'error');
+      return;
+    }
+    navigate(destination.href, {
+      state: {
+        returnTo: destination.returnUrl || undefined,
+        fromContractPrerequisites: true,
+        patientId: destination.patientId || patientId || undefined,
+        appointmentId: destination.appointmentId || appointmentId || undefined,
+        budgetId: destination.budgetId || budget?.id || undefined,
+        docCategory: destination.focus === 'consentimentos' ? 'consentimentos' : undefined,
+        docTemplate: destination.templateKey || undefined,
+      },
+    });
+  }, [navigate, patientId, appointmentId, budget?.id]);
 
   const openContractFlow = () => {
     if (!contractAccessible) {
@@ -436,7 +497,7 @@ export function ClinicalContractSection({
   const canEdit = linkedContract?.status === CONTRACT_STATUS.DRAFT;
   const canView = Boolean(linkedContract?.renderedHtml || linkedContract?.editedHtml || contractAccessible);
   const canPreview = contractAccessible && (generateReadiness.ready || linkedContract);
-  const canSend = canSendContractForSignature({ contract: linkedContract, budget });
+  const canSend = canSendContractForSignature({ contract: linkedContract, budget: effectiveBudget });
   const canCancel = canCancelAsAdmin
     && linkedContract
     && ![CONTRACT_STATUS.SIGNED, CONTRACT_STATUS.CANCELED].includes(linkedContract.status);
@@ -521,7 +582,12 @@ export function ClinicalContractSection({
               </div>
             ) : null}
             {contractReadiness && !linkedContract ? (
-              <ContractReadinessChecklist checklist={contractReadiness} className="clinical-contract-readiness" />
+              <ContractReadinessChecklist
+                checklist={contractReadiness}
+                className="clinical-contract-readiness"
+                resolutionContext={resolutionContext}
+                onResolve={handleResolvePrerequisite}
+              />
             ) : null}
             {isCanceled ? (
               <div className="clinical-contract-canceled-banner" role="status">
@@ -730,7 +796,17 @@ export function ClinicalContractSection({
         fieldsMap={PENDING_FIELDS_MAP}
         onFillPatient={() => {
           setBlockModalOpen(false);
-          if (patientId) navigate(`/pacientes/cadastro/${patientId}?highlight=pending`);
+          if (!patientId) return;
+          handleResolvePrerequisite({
+            group: 'paciente',
+            destination: buildPrerequisiteDestination('paciente', {
+              patientId,
+              appointmentId,
+              budgetId: budget?.id || viewBudgetId || null,
+              contractId: linkedContract?.id || viewContractId || null,
+              items: [{ label: 'Cadastro pendente' }],
+            }),
+          });
         }}
       />
 

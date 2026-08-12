@@ -25,6 +25,7 @@ import PlatformPlansPage from './pages/platform/PlatformPlansPage.jsx';
 import PlatformBillingPage from './pages/platform/PlatformBillingPage.jsx';
 import PlatformProvidersPage from './pages/platform/PlatformProvidersPage.jsx';
 import PlatformTeamPage from './pages/platform/PlatformTeamPage.jsx';
+import StagingTestModeBanner from './components/StagingTestModeBanner.jsx';
 
 function PlatformAuthShell({ children }) {
   return (
@@ -45,6 +46,7 @@ export default function App() {
     <AuthProvider>
       <TenantProvider>
         <BrowserRouter>
+          <StagingTestModeBanner />
           <FirstAccessRedirectGuard />
             <Routes>
             {import.meta.env?.DEV ? (

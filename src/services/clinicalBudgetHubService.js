@@ -1,6 +1,5 @@
 import { loadDb, withDb } from '../db/index.js';
 import { APPOINTMENT_STATUS } from './appointmentService.js';
-import { getClinicalData } from './clinicalService.js';
 import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
 import {
   createNewBudgetForAppointment,
@@ -15,6 +14,38 @@ import { calcPlannedValue, getAcceptedOption, formatPaymentOptionLabel } from '.
 import { formatFriendlyBudgetNumber, formatFriendlyContractNumber } from '../utils/friendlyNumbers.js';
 import { createId } from './helpers.js';
 import { resolveHubContractAction } from './operationalContractWizardService.js';
+import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
+import { upsertJourneyEntryForAppointment } from './journeyEntryService.js';
+import { isStagingTestModeEnabled } from '../domain/contracts/staging/staging-browser-test-mode.ts';
+
+const ACTIVE_CLINICAL_STATUSES = new Set([
+  APPOINTMENT_STATUS.EM_ATENDIMENTO,
+  APPOINTMENT_STATUS.CHAMADO,
+]);
+
+const PROMOTABLE_TO_CLINICAL_STATUSES = new Set([
+  APPOINTMENT_STATUS.AGENDADO,
+  APPOINTMENT_STATUS.CONFIRMADO,
+  APPOINTMENT_STATUS.EM_CONFIRMACAO,
+  APPOINTMENT_STATUS.CHEGOU,
+  APPOINTMENT_STATUS.EM_ESPERA,
+  APPOINTMENT_STATUS.CHAMADO,
+]);
+
+function traceBudgetCta(event, payload = {}) {
+  if (!isStagingTestModeEnabled()) return;
+  try {
+    if (typeof window === 'undefined') return;
+    if (!Array.isArray(window.__STAGING_CTA_TRACE__)) window.__STAGING_CTA_TRACE__ = [];
+    window.__STAGING_CTA_TRACE__.push({
+      ts: new Date().toISOString(),
+      event,
+      ...payload,
+    });
+  } catch {
+    /* instrumentation never blocks product path */
+  }
+}
 
 export class InactiveClinicalSessionError extends Error {
   constructor(message = 'Paciente sem atendimento clínico ativo.') {
@@ -180,9 +211,158 @@ export function findActiveClinicalAppointmentId(patientId) {
   if (!patientId) return null;
   const db = loadDb();
   const active = (db.appointments || []).find(
-    (apt) => apt.patientId === patientId && apt.status === APPOINTMENT_STATUS.EM_ATENDIMENTO,
+    (apt) => apt.patientId === patientId && ACTIVE_CLINICAL_STATUSES.has(apt.status),
   );
   return active?.id || null;
+}
+
+function resolveDefaultProfessionalId(db, user) {
+  if (user?.collaboratorId) return user.collaboratorId;
+  const userId = user?.id || user?.userId || null;
+  if (userId) {
+    const saasId = `col-saas-${userId}`;
+    const bySaas = (db.collaborators || []).find((c) => c.id === saasId);
+    if (bySaas) return bySaas.id;
+    const byUser = (db.collaborators || []).find(
+      (c) => c.userId === userId || c.authUserId === userId || c.user_id === userId,
+    );
+    if (byUser) return byUser.id;
+  }
+  const first = (db.collaborators || []).find((c) => c.active !== false);
+  return first?.id || null;
+}
+
+function resolveDefaultRoomId(db) {
+  const rooms = Array.isArray(db.rooms) ? db.rooms : [];
+  const active = rooms.find((r) => r.active !== false);
+  return active?.id || rooms[0]?.id || 'room-1';
+}
+
+function padTimePart(n) {
+  return String(n).padStart(2, '0');
+}
+
+function nowTimeParts() {
+  const now = new Date();
+  const start = `${padTimePart(now.getHours())}:${padTimePart(now.getMinutes())}`;
+  const endDate = new Date(now.getTime() + 30 * 60 * 1000);
+  const end = `${padTimePart(endDate.getHours())}:${padTimePart(endDate.getMinutes())}`;
+  return { start, end, iso: now.toISOString(), date: now.toISOString().slice(0, 10) };
+}
+
+/**
+ * Garante appointmentId clínico ativo para criar orçamento.
+ * Reutiliza sessão em andamento, promove agendamento do dia, ou cria encaixe EM_ATENDIMENTO.
+ * Não navega — só resolve o appointmentId (causa raiz do CTA "Criar novo orçamento").
+ */
+export function ensureActiveClinicalAppointmentId(user, patientId) {
+  if (!patientId) {
+    throw new InactiveClinicalSessionError('Paciente não informado para iniciar o orçamento.');
+  }
+
+  const existing = findActiveClinicalAppointmentId(patientId);
+  if (existing) {
+    traceBudgetCta('ensure_active_reuse', { patientId, appointmentId: existing });
+    return existing;
+  }
+
+  const { start, end, iso, date } = nowTimeParts();
+
+  const promotedId = withDb((db) => {
+    const appointments = Array.isArray(db.appointments) ? db.appointments : [];
+    const idx = appointments.findIndex(
+      (apt) => apt.patientId === patientId
+        && apt.date === date
+        && PROMOTABLE_TO_CLINICAL_STATUSES.has(apt.status),
+    );
+    if (idx < 0) return null;
+
+    const prev = appointments[idx];
+    const next = {
+      ...prev,
+      status: APPOINTMENT_STATUS.EM_ATENDIMENTO,
+      checkInAt: prev.checkInAt || iso,
+      calledAt: prev.calledAt || iso,
+      startedAt: prev.startedAt || iso,
+      consultorioId: prev.consultorioId || prev.roomId || null,
+      updatedAt: iso,
+    };
+    db.appointments[idx] = next;
+    ensureClinicalRecord(db, next.id, patientId);
+    upsertJourneyEntryForAppointment(db, next, {
+      checkedInAt: next.checkInAt,
+      calledAt: next.calledAt,
+      startedAt: next.startedAt,
+    });
+    return next.id;
+  });
+
+  if (promotedId) {
+    traceBudgetCta('ensure_active_promoted', { patientId, appointmentId: promotedId });
+    return promotedId;
+  }
+
+  const createdId = withDb((db) => {
+    const professionalId = resolveDefaultProfessionalId(db, user);
+    const roomId = resolveDefaultRoomId(db);
+    if (!professionalId) {
+      throw new InactiveClinicalSessionError(
+        'Não há profissional disponível para iniciar o atendimento do orçamento. Cadastre um colaborador ativo e tente novamente.',
+      );
+    }
+    if (!roomId) {
+      throw new InactiveClinicalSessionError(
+        'Não há consultório/sala disponível para iniciar o atendimento do orçamento.',
+      );
+    }
+
+    let tenantId = '';
+    try {
+      tenantId = resolveTenantIdForWrite(user, null);
+    } catch {
+      tenantId = user?.tenant_id || user?.tenantId || '';
+    }
+    if (!tenantId) {
+      throw new InactiveClinicalSessionError(
+        'Contexto de tenant ausente. Faça login novamente antes de criar o orçamento.',
+      );
+    }
+
+    const appointment = {
+      id: createId('appt'),
+      patientId,
+      professionalId,
+      roomId,
+      date,
+      startTime: start,
+      endTime: end,
+      status: APPOINTMENT_STATUS.EM_ATENDIMENTO,
+      notes: 'Atendimento iniciado automaticamente para criação de orçamento',
+      channel: 'budget_create',
+      checkInAt: iso,
+      calledAt: iso,
+      startedAt: iso,
+      finishedAt: null,
+      consultorioId: roomId,
+      dentistId: professionalId,
+      createdAt: iso,
+      updatedAt: iso,
+      tenant_id: tenantId,
+    };
+
+    if (!Array.isArray(db.appointments)) db.appointments = [];
+    db.appointments.push(appointment);
+    ensureClinicalRecord(db, appointment.id, patientId);
+    upsertJourneyEntryForAppointment(db, appointment, {
+      checkedInAt: appointment.checkInAt,
+      calledAt: appointment.calledAt,
+      startedAt: appointment.startedAt,
+    });
+    return appointment.id;
+  });
+
+  traceBudgetCta('ensure_active_created', { patientId, appointmentId: createdId });
+  return createdId;
 }
 
 function ensureClinicalRecord(db, appointmentId, patientId) {
@@ -398,24 +578,14 @@ function applyBudgetHubFilters(rows, filters = {}) {
 }
 
 export function startNewBudgetForPatient(user, patientId, { importProcedures = false } = {}) {
-  const appointmentId = findActiveClinicalAppointmentId(patientId);
-  if (!appointmentId) {
-    throw new InactiveClinicalSessionError(
-      'Inicie o atendimento clínico do paciente na Jornada do Paciente antes de criar um novo orçamento.',
-    );
-  }
+  const appointmentId = ensureActiveClinicalAppointmentId(user, patientId);
 
   withDb((db) => {
     ensureClinicalRecord(db, appointmentId, patientId);
     return db;
   });
 
-  const clinical = getClinicalData(appointmentId);
-  if (clinical?.budget) {
-    createNewBudgetForAppointment(user, appointmentId);
-  } else {
-    createNewBudgetForAppointment(user, appointmentId);
-  }
+  createNewBudgetForAppointment(user, appointmentId);
 
   if (importProcedures) {
     const ctx = getPreviousBudgetImportContext(appointmentId);
@@ -434,9 +604,33 @@ export function createNewBudget(navigate, user, patientId, { importProcedures = 
   if (!patientId) throw new Error('Paciente não informado.');
   if (!user) throw new Error('Usuário não autenticado.');
 
-  const result = startNewBudgetForPatient(user, patientId, { importProcedures });
-  navigate(`/atendimento-clinico/${result.appointmentId}`, { state: { section: result.section } });
-  return result;
+  traceBudgetCta('create_new_budget_start', {
+    cta: 'Criar novo orçamento',
+    patientId,
+    tenantId: user?.tenant_id || user?.tenantId || null,
+    route: typeof window !== 'undefined' ? window.location?.pathname : null,
+  });
+
+  try {
+    const result = startNewBudgetForPatient(user, patientId, { importProcedures });
+    const target = `/atendimento-clinico/${result.appointmentId}`;
+    traceBudgetCta('create_new_budget_ok', {
+      cta: 'Criar novo orçamento',
+      patientId,
+      appointmentId: result.appointmentId,
+      expectedRoute: target,
+    });
+    navigate(target, { state: { section: result.section } });
+    return result;
+  } catch (error) {
+    traceBudgetCta('create_new_budget_error', {
+      cta: 'Criar novo orçamento',
+      patientId,
+      code: error?.code || null,
+      message: String(error?.message || error).slice(0, 200),
+    });
+    throw error;
+  }
 }
 
 export const BUDGET_HUB_STATUS_FILTERS = [

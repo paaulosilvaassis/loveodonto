@@ -71,8 +71,10 @@ function getFinancingValidationErrors(budget) {
 export function canAccessContract(budget, lockCtx = {}, options = {}) {
   const { requireFinance = false } = options;
 
-  if (lockCtx.contractApplies && (lockCtx.hasActiveContract || lockCtx.contractSigned)) {
-    return Boolean(budget);
+  // Contrato já gerado/enviado/assinado: aba permanece acessível após reload/route change,
+  // mesmo se o prop de orçamento ainda não reidratou.
+  if (lockCtx.hasActiveContract || lockCtx.contractSigned) {
+    return true;
   }
 
   if (!budget) return false;

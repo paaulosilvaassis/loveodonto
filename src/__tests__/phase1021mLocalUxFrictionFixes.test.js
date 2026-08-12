@@ -255,7 +255,7 @@ describe('PHASE_10.21M — local UX friction fixes', () => {
     });
     expect(prereq.ok).toBe(false);
     expect(prereq.items.some((i) => /Endereço do paciente/i.test(i.label))).toBe(true);
-    expect(prereq.items.find((i) => /Endereço do paciente/i.test(i.label))?.ctaLabel).toBe('Corrigir dados');
+    expect(prereq.items.find((i) => /Endereço do paciente/i.test(i.label))?.ctaLabel).toBe('Completar cadastro do paciente');
     const readiness = getStepReadiness('revisao', { finalizePrerequisites: prereq });
     expect(readiness.ready).toBe(false);
     expect(readiness.missing.some((m) => /Endereço/i.test(m))).toBe(true);
@@ -270,8 +270,8 @@ describe('PHASE_10.21M — local UX friction fixes', () => {
     });
     expect(prereq.ok).toBe(false);
     expect(prereq.items.some((i) => /TCLE obrigatório:.*Implantes/i.test(i.label))).toBe(true);
-    expect(prereq.items.find((i) => /Implantes/i.test(i.label))?.ctaLabel).toBe('Adicionar documento');
-    expect(prereq.items.find((i) => /Implantes/i.test(i.label))?.action).toBe('add_document');
+    expect(prereq.items.find((i) => /Implantes/i.test(i.label))?.ctaLabel).toBe('Resolver TCLE');
+    expect(prereq.items.find((i) => /Implantes/i.test(i.label))?.action).toBe('resolve_tcle');
   });
 
   it('7 finalização passa quando requisitos estão presentes', () => {

@@ -17,7 +17,6 @@ import {
   computeBudgetHubKpis,
   resolveRowPatientId,
   resolveRowPatientName,
-  InactiveClinicalSessionError,
   createNewBudget,
 } from '../services/clinicalBudgetHubService.js';
 import { openExistingBudget } from '../services/budgetNavigationService.js';
@@ -116,11 +115,7 @@ export default function BudgetsHubPage() {
       setPrefillPatient(null);
       setRefreshKey((k) => k + 1);
     } catch (error) {
-      if (error instanceof InactiveClinicalSessionError || error.code === 'INACTIVE_SESSION') {
-        showToast(error.message, 'error');
-        navigate('/gestao-comercial/jornada-do-paciente');
-        return;
-      }
+      // Mantém o usuário no hub com feedback claro (sem redirect forçado).
       showToast(error.message || 'Erro ao criar orçamento.', 'error');
     } finally {
       setBusy(false);

@@ -62,13 +62,49 @@ const BLOCKED_SEND_STATUSES = new Set([
   CONTRACT_STATUS.REPLACED,
 ]);
 
+/**
+ * Resolve orçamento vinculado ao contrato gerado (reload/route-change safe).
+ */
+export function resolveBudgetForContractSend(contract, budgetHint = null) {
+  if (budgetHint?.id) return budgetHint;
+  if (!contract) return null;
+  const db = loadDb();
+  const quoteId = contract.quoteId || null;
+  if (quoteId) {
+    const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === quoteId);
+    if (clinical?.budget) return clinical.budget;
+  }
+  if (contract.budgetId) {
+    for (const ca of db.clinicalAppointments || []) {
+      if (ca?.budget?.id === contract.budgetId) return ca.budget;
+      const hist = (ca?.budgetHistory || []).find((b) => b?.id === contract.budgetId);
+      if (hist) return hist;
+    }
+  }
+  return budgetHint || null;
+}
+
 export function canSendContractForSignature({ contract, budget }) {
   if (!contract) return false;
   if (BLOCKED_SEND_STATUSES.has(contract.status)) return false;
   if (contract.status !== CONTRACT_STATUS.GENERATED) return false;
-  if (!budget) return false;
-  if (!isBudgetApprovedStatus(budget.status)) return false;
-  if (!isPaymentConditionChosen(budget)) return false;
+
+  const resolvedBudget = resolveBudgetForContractSend(contract, budget);
+  if (!resolvedBudget) {
+    // Contrato GENERATED já passou pelos pré-requisitos na finalização.
+    // Após reload, ausência temporária do orçamento na UI não deve esconder o CTA.
+    return Boolean(contract.quoteId || contract.budgetId || contract.id);
+  }
+  if (!isBudgetApprovedStatus(resolvedBudget.status)) {
+    const hist = String(resolvedBudget.status || '').trim().toUpperCase() === 'HISTORICO';
+    if (!hist) return false;
+  }
+  if (!isPaymentConditionChosen(resolvedBudget)) {
+    // Status CONTRATO_GERADO / contrato GENERATED: pagamento já foi escolhido no fluxo.
+    const st = String(resolvedBudget.status || '').trim().toUpperCase();
+    if (st === 'CONTRATO_GERADO' || st === 'HISTORICO') return true;
+    return false;
+  }
   return true;
 }
 
@@ -165,9 +201,9 @@ export async function sendContractForDigitalSignature(user, contractId, formData
     const labels = readiness.missing.map((m) => m.label).slice(0, 6).join('; ');
     throw new Error(`Envio bloqueado. Corrija antes de assinar: ${labels}`);
   }
-  if (readiness.warnings.length) {
-    throw new Error(readiness.warnings[0]);
-  }
+  // Warnings (ex.: valueMismatch) são informativos — alinhado a evaluateContractSignatureReadiness.ok.
+  // Bloqueio jurídico/operacional fica só em readiness.missing / readiness.ok.
+  // Staging não ignora missing críticos.
 
   const settings = getContractSettings(user);
   if (!formData.patientEmail?.trim()) {
@@ -195,7 +231,9 @@ export async function sendContractForDigitalSignature(user, contractId, formData
     patientName: formData.patientName,
     treatmentName: formData.treatmentName || contract.title || 'Tratamento odontológico',
     clinicName,
-    signUrl: typeof window !== 'undefined' ? `${window.location.origin}${signUrl}` : signUrl,
+    signUrl: (typeof window !== 'undefined' && window.location?.origin)
+      ? `${window.location.origin}${signUrl}`
+      : signUrl,
     expiresAt: request.expiresAt,
   });
 

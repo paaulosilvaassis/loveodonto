@@ -62,6 +62,7 @@ import {
   getClinicalWorkflowState,
 } from '../components/clinical/clinicalAppointmentConfig.js';
 import { findBudgetRecord, buildClinicalAppointmentUrl, resolveEffectiveViewBudgetId } from '../services/budgetNavigationService.js';
+import { isSafeClinicalReturnUrl } from '../contracts/contractPrerequisitesResolution.js';
 import { getGeneratedContract } from '../services/contractService.js';
 import { createReceivablesFromApprovedBudget } from '../services/clinicalBudgetFinance.js';
 import { getLeadById } from '../services/crmService.js';
@@ -79,6 +80,10 @@ function ClinicalAppointmentPageContent() {
   const forceHistoricalView = location.state?.viewMode === true;
   const viewContractId = searchParams.get('contractId') || location.state?.contractId || null;
   const sectionParam = searchParams.get('section') || location.state?.section || null;
+  const docCategoryParam = searchParams.get('docCategory') || location.state?.docCategory || null;
+  const docTemplateParam = searchParams.get('docTemplate') || location.state?.docTemplate || null;
+  const returnToParam = searchParams.get('returnTo') || location.state?.returnTo || null;
+  const revalidateParam = searchParams.get('revalidate') === '1';
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState('planejamento');
   const [appointment, setAppointment] = useState(null);
@@ -143,6 +148,12 @@ function ClinicalAppointmentPageContent() {
     const normalized = sectionParam === 'contrato' ? 'contratos' : sectionParam;
     setActiveSection(normalized);
   }, [sectionParam]);
+
+  useEffect(() => {
+    if (!revalidateParam || activeSection !== 'contratos') return;
+    bumpWorkflow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revalidateParam, activeSection, appointmentId, viewBudgetId]);
 
   useEffect(() => {
     try {
@@ -474,10 +485,31 @@ function ClinicalAppointmentPageContent() {
           {activeSection === 'documentos' && patient && (
             canAccessClinicalSection('documentos', workflow) ? (
               <DocumentsSection
+                key={`docs-${docCategoryParam || 'default'}-${docTemplateParam || 'none'}`}
                 appointmentId={appointmentId}
                 patient={patient}
                 appointment={appointment}
                 professional={professional}
+                budgetId={viewBudgetId}
+                initialCategory={docCategoryParam}
+                initialTemplateKey={docTemplateParam}
+                returnToContractHref={returnToParam || (viewBudgetId
+                  ? buildClinicalAppointmentUrl({
+                    appointmentId,
+                    budgetId: viewBudgetId,
+                    section: 'contratos',
+                  })
+                  : null)}
+                onReturnToContract={() => {
+                  const href = isSafeClinicalReturnUrl(returnToParam)
+                    ? returnToParam
+                    : buildClinicalAppointmentUrl({
+                      appointmentId,
+                      budgetId: viewBudgetId,
+                      section: 'contratos',
+                    });
+                  navigate(`${href}${href.includes('?') ? '&' : '?'}revalidate=1`);
+                }}
               />
             ) : (
               <ClinicalSectionLocked message={sectionLockMessage('documentos', workflow)} onGo={() => setActiveSection('orcamento')} />

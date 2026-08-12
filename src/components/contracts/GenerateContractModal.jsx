@@ -42,7 +42,12 @@ function canGenerateContract(user, flow) {
 }
 
 function canFinalizeContract(user) {
-  return can(user, 'admin_contratos:generate');
+  // Clinical finalize must match who can generate clinical drafts (not only admin_contratos:generate).
+  return can(user, 'admin_contratos:generate')
+    || can(user, 'prontuario_contratos:create')
+    || user?.isMaster === true
+    || user?.role === 'master'
+    || user?.role === 'admin';
 }
 
 function canPrintContract(user) {
@@ -212,6 +217,7 @@ export default function GenerateContractModal({
       setDraftContract(row);
       setStep('draft');
       setToast({ type: 'success', message: `Rascunho ${formatFriendlyContractNumber(row.contractNumber, 1)} criado.` });
+      window.setTimeout(() => setToast(null), 3000);
       onSuccess?.(row);
     } catch (e) {
       setError(e?.message || 'Erro ao gerar rascunho.');
@@ -228,11 +234,16 @@ export default function GenerateContractModal({
     setBusy(true);
     setError('');
     try {
-      updateDraftGeneratedContract(user, draftContract.id, { finalContent: htmlBody });
+      // Clinical HTML is professional prose + CSS (may contain #000/#fff); skip hashtag gate like draft create.
+      updateDraftGeneratedContract(user, draftContract.id, {
+        finalContent: htmlBody,
+        skipHashtagValidation: flow === 'clinical',
+      });
       const finalized = finalizeGeneratedContract(user, draftContract.id);
       await syncGeneratedContractToSaas(getGeneratedContract(finalized.id) || finalized);
       setDraftContract(finalized);
       setToast({ type: 'success', message: 'Contrato finalizado. Impressão e PDF disponíveis.' });
+      window.setTimeout(() => setToast(null), 3000);
       onSuccess?.(finalized);
     } catch (e) {
       setError(e?.message || 'Erro ao finalizar.');
@@ -285,7 +296,11 @@ export default function GenerateContractModal({
         </ModalHeader>
         <ModalBody className="space-y-4 max-h-[min(85vh,900px)] overflow-y-auto">
           {toast && (
-            <div className={`toast ${toast.type}`} role="status">
+            <div
+              className={`toast ${toast.type}`}
+              role="status"
+              style={{ pointerEvents: 'none' }}
+            >
               {toast.message}
             </div>
           )}

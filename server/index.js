@@ -130,13 +130,45 @@ const repoRoot = path.join(__dirname, '..');
  * VariÃ¡veis de ambiente do sistema continuam a ser sobrescritas pelo Ãºltimo ficheiro carregado.
  */
 dotenv.config({ path: path.join(__dirname, '.env') });
-// Fallback dev: mesmas chaves VITE_CONSOLE_* que o Vite usa (console/.env) â€” raiz prevalece depois.
+// Fallback dev: mesmas chaves VITE_CONSOLE_* que o Vite usa (console/.env) — raiz prevalece depois.
 dotenv.config({ path: path.join(repoRoot, 'console', '.env'), override: false });
 dotenv.config({ path: path.join(repoRoot, 'console', '.env.local'), override: false });
 dotenv.config({ path: path.join(repoRoot, '.env'), override: true });
 dotenv.config({ path: path.join(repoRoot, '.env.local'), override: true });
+/** PHASE_10.21X — staging browser isolation: `.env.staging.local` prevalece e fail-closed em production. */
+dotenv.config({ path: path.join(repoRoot, '.env.staging.local'), override: true });
+
+function stagingTestModeActive() {
+  const v = (k) => String(process.env[k] || '').trim().toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(v('LOVE_ODONTO_STAGING_TEST_MODE'))
+    || ['1', 'true', 'yes', 'on'].includes(v('STAGING_TEST_MODE'))
+    || ['1', 'true', 'yes', 'on'].includes(v('VITE_STAGING_TEST_MODE'));
+}
+
+if (stagingTestModeActive()) {
+  const STAGING_REF = 'tckdjyunwmdpqmewrwvt';
+  const PRODUCTION_REF = 'uoepkwhqztmsjnzirpev';
+  const url = String(process.env.SUPABASE_URL || '').trim();
+  let ref = '';
+  try {
+    ref = new URL(url).hostname.split('.')[0] || '';
+  } catch {
+    ref = '';
+  }
+  if (!url || url.includes(PRODUCTION_REF) || ref === PRODUCTION_REF) {
+    console.error('[SaaS Admin API] HARD STOP STAGING_TEST_MODE: SUPABASE_URL aponta para PRODUCTION ou está vazio.');
+    process.exit(2);
+  }
+  if (ref !== STAGING_REF) {
+    console.error(`[SaaS Admin API] HARD STOP STAGING_TEST_MODE: esperado ${STAGING_REF}, obtido "${ref}".`);
+    process.exit(2);
+  }
+  process.env.CONTRACTS_V2_DELIVERY_MODE = 'disabled';
+  console.log('[SaaS Admin API] STAGING_TEST_MODE ativo — project', STAGING_REF, '— delivery disabled');
+}
+
 console.log(
-  '[SaaS Admin API] env: server/.env â†’ console/.env â†’ raiz .env/.env.local (a raiz prevalece â€” veja .env.example na raiz).',
+  '[SaaS Admin API] env: server/.env → console/.env → raiz .env/.env.local → .env.staging.local (se presente).',
 );
 
 const app = express();
