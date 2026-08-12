@@ -1,0 +1,121 @@
+{
+  "CONTRACT_GENERATE_RETEST": "PASS",
+  "readinessBefore": {
+    "canGenerate": false,
+    "missing": [
+      {
+        "tag": "tcle:tcle_implante",
+        "label": "TCLE obrigatório: Termo de Consentimento — Implantes",
+        "group": "tcle"
+      }
+    ],
+    "requiredTcles": [
+      {
+        "id": "tcle_implante",
+        "title": "Termo de Consentimento — Implantes",
+        "required": true
+      }
+    ],
+    "attachedTcleIds": [],
+    "clinicForumCity": "São Paulo - SP",
+    "budgetStatus": "APROVADO",
+    "hasAcceptedPayment": true,
+    "pendingCritical": [],
+    "professionalId": "col-saas-da6bb8f6-adbf-4d0f-b696-f1f343e21c8a"
+  },
+  "readinessAfterPrereqs": {
+    "canGenerate": true,
+    "missing": [],
+    "requiredTcles": [
+      {
+        "id": "tcle_implante",
+        "title": "Termo de Consentimento — Implantes",
+        "required": true
+      }
+    ],
+    "attachedTcleIds": [
+      "tcle_implante"
+    ],
+    "clinicForumCity": "São Paulo - SP",
+    "budgetStatus": "APROVADO",
+    "hasAcceptedPayment": true,
+    "pendingCritical": [],
+    "professionalId": "col-saas-da6bb8f6-adbf-4d0f-b696-f1f343e21c8a"
+  },
+  "readinessAfterClick": {
+    "canGenerate": true,
+    "missing": [],
+    "requiredTcles": [
+      {
+        "id": "tcle_implante",
+        "title": "Termo de Consentimento — Implantes",
+        "required": true
+      }
+    ],
+    "attachedTcleIds": [
+      "tcle_implante"
+    ],
+    "clinicForumCity": "São Paulo - SP",
+    "budgetStatus": "APROVADO",
+    "hasAcceptedPayment": true,
+    "pendingCritical": [],
+    "professionalId": "col-saas-da6bb8f6-adbf-4d0f-b696-f1f343e21c8a"
+  },
+  "steps": [
+    {
+      "step": "staging_bootstrap",
+      "ok": true,
+      "detail": "{\"seeded\":true,\"price\":{\"seeded\":true,\"reason\":\"seeded\",\"tables\":1,\"procedures\":1,\"seedId\":\"stg-seed-1a68dd25-bc44-4dfd-822f-30f42c8e3c67\"},\"clinic\":{\"seeded\":true,\"reason\":\"ok\",\"changes\":{\"clinicAddress\":true,\"technicalResponsible\":true,\"collaboratorCro\":4},\"clinicAddresses\":1},\"seedId\":\"stg-boot-ff4bef55-a7d7-45ce-9a82-ae8ca60fb353\"}"
+    },
+    {
+      "step": "patient",
+      "ok": true,
+      "detail": "patient-b31b5312-d9cb-47bf-8f34-1c4e9068c3ef"
+    },
+    {
+      "step": "patient_address_phone",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "budget_open",
+      "ok": true,
+      "detail": "appt-b4582849-8492-4047-bafd-e66550634f8d"
+    },
+    {
+      "step": "budget_approved",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "readiness_before_tcle",
+      "ok": true,
+      "detail": "[{\"tag\":\"tcle:tcle_implante\",\"label\":\"TCLE obrigatório: Termo de Consentimento — Implantes\",\"group\":\"tcle\"}]"
+    },
+    {
+      "step": "docs_access",
+      "ok": true,
+      "detail": "lockedHint=false"
+    },
+    {
+      "step": "tcle_saved",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "readiness_after",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "step": "gerar_click",
+      "ok": true,
+      "detail": "http://127.0.0.1:5188/atendimento-clinico/appt-b4582849-8492-4047-bafd-e66550634f8d?budgetId=budget-7eb48394-86c2-4c50-aefc-40934443d48d"
+    }
+  ],
+  "circularDependencyFound": false,
+  "patientId": "patient-b31b5312-d9cb-47bf-8f34-1c4e9068c3ef",
+  "appointmentId": "appt-b4582849-8492-4047-bafd-e66550634f8d",
+  "gerarVisible": true,
+  "gerarDisabled": false
+}

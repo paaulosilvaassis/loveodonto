@@ -1,0 +1,80 @@
+{
+  "FIRST_CTA_RETEST": "PASS",
+  "secondBlocker": {
+    "cta": "Gerar contrato",
+    "class": "N",
+    "detail": "disabled"
+  },
+  "reached": {
+    "priceSeed": false,
+    "budgetOpen": true,
+    "procedureAdded": true,
+    "budgetGenerated": true,
+    "budgetApproved": true,
+    "contractSection": true
+  },
+  "steps": [
+    {
+      "step": "price_seed",
+      "ok": false,
+      "detail": "{\"tables\":0,\"procs\":0}",
+      "url": "http://127.0.0.1:5188/gestao/dashboard"
+    },
+    {
+      "step": "patient",
+      "ok": true,
+      "detail": "patient-3477b2a8-d638-4570-ba41-6e7f2d08a7d2",
+      "url": "http://127.0.0.1:5188/pacientes/cadastro/patient-3477b2a8-d638-4570-ba41-6e7f2d08a7d2"
+    },
+    {
+      "step": "first_cta",
+      "ok": true,
+      "detail": "appt-40fab91c-bc71-4f18-8104-10bb92c5f44a",
+      "url": "http://127.0.0.1:5188/atendimento-clinico/appt-40fab91c-bc71-4f18-8104-10bb92c5f44a"
+    },
+    {
+      "step": "add_procedure",
+      "ok": true,
+      "detail": "",
+      "url": "http://127.0.0.1:5188/atendimento-clinico/appt-40fab91c-bc71-4f18-8104-10bb92c5f44a"
+    },
+    {
+      "step": "gerar_orcamento",
+      "ok": true,
+      "detail": "http://127.0.0.1:5188/atendimento-clinico/appt-40fab91c-bc71-4f18-8104-10bb92c5f44a",
+      "url": "http://127.0.0.1:5188/atendimento-clinico/appt-40fab91c-bc71-4f18-8104-10bb92c5f44a"
+    },
+    {
+      "step": "choose_payment",
+      "ok": true,
+      "detail": "",
+      "url": "http://127.0.0.1:5188/atendimento-clinico/appt-40fab91c-bc71-4f18-8104-10bb92c5f44a"
+    },
+    {
+      "step": "aprovar_visible",
+      "ok": true,
+      "detail": "disabled=false",
+      "url": "http://127.0.0.1:5188/atendimento-clinico/appt-40fab91c-bc71-4f18-8104-10bb92c5f44a"
+    },
+    {
+      "step": "aprovar",
+      "ok": true,
+      "detail": "",
+      "url": "http://127.0.0.1:5188/atendimento-clinico/appt-40fab91c-bc71-4f18-8104-10bb92c5f44a?budgetId=budget-577b3a30-1afb-4a08-a2e6-9812e8fc8bdd"
+    },
+    {
+      "step": "nav_contrato",
+      "ok": true,
+      "detail": "",
+      "url": "http://127.0.0.1:5188/atendimento-clinico/appt-40fab91c-bc71-4f18-8104-10bb92c5f44a?budgetId=budget-577b3a30-1afb-4a08-a2e6-9812e8fc8bdd"
+    },
+    {
+      "step": "gerar_contrato",
+      "ok": false,
+      "detail": "disabled=true",
+      "url": "http://127.0.0.1:5188/atendimento-clinico/appt-40fab91c-bc71-4f18-8104-10bb92c5f44a?budgetId=budget-577b3a30-1afb-4a08-a2e6-9812e8fc8bdd"
+    }
+  ],
+  "patientId": "patient-3477b2a8-d638-4570-ba41-6e7f2d08a7d2",
+  "appointmentId": "appt-40fab91c-bc71-4f18-8104-10bb92c5f44a"
+}

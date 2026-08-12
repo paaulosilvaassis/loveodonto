@@ -1,0 +1,51 @@
+{
+  "DRAFT_GENERATION": "FAIL",
+  "CONTRACT_FINALIZE": "FAIL",
+  "steps": [
+    {
+      "step": "modal_open",
+      "ok": true,
+      "detail": "http://127.0.0.1:5188/atendimento-clinico/appt-d3cec63e-3931-4283-a2a3-eb5855ebe033?budgetId=budget-6827a959-77af-44bc-91db-d51756366a33"
+    },
+    {
+      "step": "draft_btn",
+      "ok": true,
+      "detail": "visible=true disabled=false"
+    },
+    {
+      "step": "draft_result",
+      "ok": false,
+      "detail": "null"
+    },
+    {
+      "step": "fatal",
+      "ok": false,
+      "detail": "DRAFT_GENERATION failed"
+    }
+  ],
+  "draft": {
+    "contractCount": 0,
+    "last": null,
+    "budgetId": "budget-6827a959-77af-44bc-91db-d51756366a33",
+    "budgetStatus": "CONTRATO_GERADO",
+    "modalTextHint": "STAGING — DADOS FICTÍCIOS — NÃO É PRODUÇÃO\nProject: tckd… · Environment: STAGING\nImplanprime Odontologia (Staging)\nDashboard\nDashboard\nSuporte\nSair\nTESTE PACKAGE MANIFEST BROWSER 1021AB msqm7tog\nDr(a). SMOKE 1021Y STAGING\n12 de ago. de 2026 Â· 18:42\nConsultório 1\nEm atendimento\n1\nPlanejamento\nConclu",
+    "errorUi": [
+      "Contrato de prestação de serviços odontológicos — documento jurídico formal gerado a partir do orçamento aprovado.",
+      "Pronto para gerar contrato",
+      "Modelo: Paciente sem responsável",
+      "Número: CTR-2026-00001 · Status: draft",
+      "Implanprime Odontologia (Staging) — Contrato nº CTR-855033"
+    ]
+  },
+  "finalize": null,
+  "userPerms": {
+    "role": null,
+    "isMaster": false,
+    "id": null,
+    "tenant_id": "7aba7127-409c-4ea4-8dbc-807efc5e189c"
+  },
+  "nextSurface": null,
+  "patientId": "patient-9261f9f7-a187-4ad3-834e-9039b25027d0",
+  "appointmentId": "appt-d3cec63e-3931-4283-a2a3-eb5855ebe033",
+  "error": "DRAFT_GENERATION failed"
+}

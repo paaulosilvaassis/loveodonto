@@ -1,0 +1,22 @@
+{
+  "patientsAfterSeed": [
+    "patient-diag-ac"
+  ],
+  "patientsAfterSeed2": [
+    "patient-diag-ac"
+  ],
+  "patientCheck": true,
+  "createError": null,
+  "before": 0,
+  "rowId": "gctr-5ef48d86-d327-4948-8917-7671c53cf7c7",
+  "rowStatus": "draft",
+  "midTotal": 1,
+  "foundMid": true,
+  "afterFlushTotal": 1,
+  "foundFlush": true,
+  "afterInitTotal": 1,
+  "foundInit": true,
+  "nestedOk": true,
+  "eventsHas": true,
+  "trace": []
+}

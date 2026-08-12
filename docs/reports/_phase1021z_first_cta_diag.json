@@ -1,0 +1,99 @@
+{
+  "firstFailingCta": "Criar novo orçamento",
+  "rootCauseClass": "I",
+  "observations": [
+    {
+      "step": "open_patient",
+      "url": "http://127.0.0.1:5188/pacientes/cadastro/patient-f07a81f4-8438-4e1e-85a5-375df41d43e7",
+      "hasPatientName": false,
+      "snippet": "STAGING — DADOS FICTÍCIOS — NÃO É PRODUÇÃO\nProject: tckd… · Environment: STAGING\nImplanprime Odontologia (Staging)\nGestão de Atendimento\nGestão de Atendimento\nOrçamentos\nCadastro de Paciente\nAgenda da Clínica\nFluxo do Paciente\nConvênios\nSair\nVoltar\nPaciente +\nCadastro de Paciente\nCadastro de Paciente\nPacientes\n/\nCadastro\n● Ativo\nAcessar Prontuário\nEditar\nPaciente não encontrado.\nNome Completo *\nAp"
+    },
+    {
+      "step": "tab_visible",
+      "tabVisible": true
+    },
+    {
+      "step": "after_tab",
+      "url": "http://127.0.0.1:5188/pacientes/cadastro/patient-f07a81f4-8438-4e1e-85a5-375df41d43e7",
+      "hasCreateBtn": true,
+      "hasInactiveMsg": false,
+      "snippet": "STAGING — DADOS FICTÍCIOS — NÃO É PRODUÇÃO\nProject: tckd… · Environment: STAGING\nImplanprime Odontologia (Staging)\nGestão de Atendimento\nGestão de Atendimento\nOrçamentos\nCadastro de Paciente\nAgenda da Clínica\nFluxo do Paciente\nConvênios\nSair\nVoltar\nPaciente +\nCadastro de Paciente\nCadastro de Paciente\nPacientes\n/\nCadastro\n● Ativo\nAcessar Prontuário\nEditar\nPaciente não encontrado.\nNome Completo *\nApelido / Nome Social\nSexo *\nSelecione\nMasculino\nFeminino\nOutro\nData de Nascimento *\nIdade\nCPF *\nDados Principais\nDocumentação\nDados Pessoais\nFormação / Profissão\nTelefones\nEndereços\nRelacionamentos\nCon"
+    },
+    {
+      "step": "create_btn",
+      "createVisible": true,
+      "createDisabled": false
+    },
+    {
+      "step": "modal_buttons",
+      "texts": [
+        "Confirmar e abrir planejamento"
+      ]
+    },
+    {
+      "step": "after_create_click",
+      "url": "http://127.0.0.1:5188/gestao-comercial/jornada-do-paciente",
+      "error": "",
+      "navigatedToClinical": false,
+      "navigatedToJourney": true,
+      "snippet": "STAGING — DADOS FICTÍCIOS — NÃO É PRODUÇÃO\nProject: tckd… · Environment: STAGING\nImplanprime Odontologia (Staging)\nGestão Comercial\nCaptação de Leads\nPipeline de Atendimento\nLeads (lista)\nComunicação (WhatsApp)\nFollow-up\nRelatórios & Métricas\nConfigurações\nJornada do Paciente\nSair\nVoltar\nPaciente +\nJornada do Paciente\n\nGestão em tempo real da sala de espera e atendimentos\n\n0\nEm espera\n0\nEm atendimento\n00:00\nMaior espera\n0 min\nAtraso médio hoje\n0/1\nConsultórios ocupados\nTodos os consultórios\nCons"
+    }
+  ],
+  "http": [
+    {
+      "url": "https://tckdjyunwmdpqmewrwvt.supabase.co/auth/v1/token?grant_type=password",
+      "status": 200,
+      "method": "POST"
+    },
+    {
+      "url": "https://tckdjyunwmdpqmewrwvt.supabase.co/auth/v1/user",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:3011/internal/app/tenant-context",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:3011/internal/app/tenant-context",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:3011/internal/app/tenant-context",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "url": "https://tckdjyunwmdpqmewrwvt.supabase.co/rest/v1/collaborators?select=*&tenant_id=eq.7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:3011/internal/app/tenant-context",
+      "status": 200,
+      "method": "GET"
+    },
+    {
+      "url": "http://127.0.0.1:3011/internal/app/invitations/reconcile",
+      "status": 200,
+      "method": "POST"
+    }
+  ],
+  "logs": [
+    {
+      "t": "warning",
+      "text": "Module \"crypto\" has been externalized for browser compatibility. Cannot access \"crypto.randomBytes\" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details."
+    },
+    {
+      "t": "warning",
+      "text": "Module \"crypto\" has been externalized for browser compatibility. Cannot access \"crypto.randomBytes\" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details."
+    },
+    {
+      "t": "error",
+      "text": "⚠️ NAVEGAÇÃO: Itens do menu antigo não encontrados no novo: [Pacientes > Cadastro (/pacientes/cadastro), CRM (Kanban) (/gestao/crm), Usuários (/admin/usuarios), Identidades (/admin/identidades), Guia Clínico do Dentista (/admin/guia-clinico), Biblioteca de Imagens Clínicas (/admin/biblioteca-imagens"
+    }
+  ],
+  "rootCauseDetail": "InactiveClinicalSessionError: requer atendimento clínico ativo (appointmentId) antes de criar orçamento"
+}

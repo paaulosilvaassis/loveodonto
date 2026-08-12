@@ -1,0 +1,49 @@
+{
+  "DRAFT_GENERATION": "PASS",
+  "CONTRACT_FINALIZE": "FAIL",
+  "LGPD_PACKAGE_DOCUMENT": "FAIL",
+  "PACKAGE_3_DOCUMENTS": "FAIL",
+  "PACKAGE_FREEZE": "FAIL",
+  "ENVELOPE_MANIFEST_LINK": "FAIL",
+  "PUBLIC_PACKAGE_UI": "FAIL",
+  "CONTRACT_VIEW": "FAIL",
+  "TCLE_VIEW": "FAIL",
+  "LGPD_VIEW": "FAIL",
+  "SIGN_GATE": "FAIL",
+  "DOCUMENT_ACCEPTANCES": "FAIL",
+  "ACCEPTANCE_IDEMPOTENCY": "FAIL",
+  "PACKAGE_SIGNATURE": "FAIL",
+  "EXACT_TCLE_PROOF": "FAIL",
+  "EXACT_LGPD_PROOF": "FAIL",
+  "EVIDENCE": "FAIL",
+  "SIGNED_PACKAGE_REPORT": "FAIL",
+  "SIGNED_DOCUMENTS_IN_RECORD": "FAIL",
+  "MOBILE_SIGNATURE_UX": "FAIL",
+  "productionWrites": "ZERO",
+  "productionMigrations": "ZERO",
+  "rolloutChanges": "ZERO",
+  "externalCommunication": "ZERO",
+  "bugs": [],
+  "steps": [
+    {
+      "step": "draft",
+      "ok": true,
+      "detail": "{\"st\":{\"id\":\"gctr-24a59db8-b300-41f4-96d8-d532cda13317\",\"status\":\"draft\",\"total\":0,\"recovered\":true},\"finalizeVisible\":true,\"modalErr\":[]}"
+    },
+    {
+      "step": "finalize",
+      "ok": false,
+      "detail": "{\"id\":\"gctr-24a59db8-b300-41f4-96d8-d532cda13317\",\"status\":null,\"error\":\"missing_before_finalize\",\"total\":0}"
+    },
+    {
+      "step": "fatal",
+      "ok": false,
+      "detail": "finalize_failed:{\"id\":\"gctr-24a59db8-b300-41f4-96d8-d532cda13317\",\"status\":null,\"error\":\"missing_before_finalize\",\"total\":0}"
+    }
+  ],
+  "patientId": "patient-f5e626a6-438a-400e-aef8-5accbaece05c",
+  "appointmentId": "appt-7819ab46-9bdf-4680-a96d-e5910b2d3199",
+  "error": "finalize_failed:{\"id\":\"gctr-24a59db8-b300-41f4-96d8-d532cda13317\",\"status\":null,\"error\":\"missing_before_finalize\",\"total\":0}",
+  "allPass": false,
+  "gate": "BLOCKED"
+}

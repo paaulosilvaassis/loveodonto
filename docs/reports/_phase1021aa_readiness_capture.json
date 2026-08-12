@@ -1,0 +1,258 @@
+{
+  "ok": true,
+  "steps": [
+    {
+      "step": "clinic_snap",
+      "ok": true,
+      "detail": "{\"hasClinicName\":true,\"hasCnpj\":true,\"hasCro\":false,\"clinicAddresses\":0,\"priceTables\":0,\"procs\":0,\"clinicKeys\":[\"id\",\"pessoa\",\"nomeMarca\",\"nomeFantasia\",\"razaoSocial\",\"nomeClinica\",\"emailPrincipal\",\"logoUrl\",\"status\",\"createdAt\",\"updatedAt\",\"tenant_id\"],\"docKeys\":[\"clinicId\",\"cnpj\",\"ie\",\"cnes\",\"nire\",\"conselhoRegionalNumero\",\"responsavelTecnico\",\"croResponsavelTecnico\",\"alvaraPrefeituraNumero\",\"al"
+    }
+  ],
+  "clinicSnap": {
+    "hasClinicName": true,
+    "hasCnpj": true,
+    "hasCro": false,
+    "clinicAddresses": 0,
+    "priceTables": 0,
+    "procs": 0,
+    "clinicKeys": [
+      "id",
+      "pessoa",
+      "nomeMarca",
+      "nomeFantasia",
+      "razaoSocial",
+      "nomeClinica",
+      "emailPrincipal",
+      "logoUrl",
+      "status",
+      "createdAt",
+      "updatedAt",
+      "tenant_id"
+    ],
+    "docKeys": [
+      "clinicId",
+      "cnpj",
+      "ie",
+      "cnes",
+      "nire",
+      "conselhoRegionalNumero",
+      "responsavelTecnico",
+      "croResponsavelTecnico",
+      "alvaraPrefeituraNumero",
+      "alvaraAutorizacao",
+      "alvaraValidade",
+      "vigilanciaSanitariaNumero",
+      "vigilanciaSanitariaValidade",
+      "observacoes"
+    ]
+  },
+  "patientId": "patient-f32f4809-4a55-45ce-a3b7-9b352b08ca13",
+  "appointmentId": "appt-cb182a57-7b3a-4c03-9a7f-1c53d249b011",
+  "gerarVisible": false,
+  "gerarDisabled": null,
+  "uiSnippet": "STAGING — DADOS FICTÍCIOS — NÃO É PRODUÇÃO\nProject: tckd… · Environment: STAGING\nImplanprime Odontologia (Staging)\nDashboard\nDashboard\nSuporte\nSair\nTESTE PACKAGE MANIFEST BROWSER 1021AA msqkr88a\nDr(a). SMOKE 1021Y STAGING\n12 de ago. de 2026 Â· 18:01\nConsultório 1\nEm atendimento\n1\nPlanejamento\nConcluído\n2\nOrçamento\nEm andamento\n3\nContrato\nBloqueado\n4\nDocumentos\nBloqueado\n5\nDados Clínicos\nPendente\n6\nObservações\nPendente\nOrçamento do Tratamento\n\nConfigure as condições de pagamento, apresente ao paciente e registre a escolha final.\n\nGuia Clínico\nFinalizar atendimento\nSalvar\nGerar PDF\nEnviar ao paciente\nReprovar\nAprovar orçamento\nGuias clínicos sugeridos para este orçamento\nVer guia de Implante Unitário\n\nOrçamento em negociação. Você pode apresentar condições, marcar a condição escolhida e aprovar quando o paciente aceitar.\n\nAtendimento em andamento\n\nO orçamento permanece salvo. Finalize o atendimento agora e retome depois pela Central do Paciente para concluir a aprovação.\n\nFinalizar atendimento\nTratamento definido\nCONCLUÍDO\nCondições apresentadas\nCONCLUÍDO\n3\nCondição escolhida\nEM ANDAMENTO\n4\nOrçamento aprovado\nPENDENTE\nFinanceiro gerado\nBLOQUEADO\nContrato liberado\nBLOQUEADO\nCondições de pagamento\n\nConfigure, apresente e registre a escolha do paciente.\n\nCONDIÇÕES APRESENTADAS AO PACIENTE\nÀ vista\n12/08/2026, 18:02\nValor original: R$ 3.500,00\nDesconto: 0%\nValor final: R$ 3.500,00\nFormas aceitas: Pix\nMarcar como escolhida\nÀ vista\nAPRESENTADA\nR$ 3.500,00\nVALOR ORIGINAL\nR$ 3.500,00\nDESCONTO\n0%\nVALOR FINAL\nR$ 3.500,00\nFORMAS ACEITAS\nPix\nConfigurar\nApresentar ao paciente\nMarcar como escolhida\nParcelado pela clínica\nNÃO APRESENTADA\nR$ 3.500,00\n24x de R$ 145,83\nENTRADA\nR$ 0,00\nPARCELAS\n24x\nVALOR DA PARCELA\nR$ 145,83\nTOTAL\nR$ 3.500,00\nConfigurar\nApresentar ao paciente\nMarcar como escolhida\nCartão\nNÃO APRESENTADA\nR$ 3.500,00\n12x de R$ 291,67\nBANDEIRA\nVisa\nPARCELAS\n12x\nVALOR DA PARCELA\nR$ 291,67\nTOTAL\nR$ 3.500,00\nConfigurar\nApresentar ao paciente\nMarcar como escolhida\nFinanciamento\nNÃO APRESENTADA\nR$ 3.500,00\n36x de R$ 97,23\nVALOR DO TRATAMENTO\nR$ 3.500,00\nENTRADA\nR$ 0,00\nVALOR FINANCIADO\nR$ 3.500,00\nTAXA APLICADA\n0%\nPARCELAMENTO\n36x de R$ 97,23\nTOTAL FINANCIADO COM JUROS\nR$ 3.500,00\nTOTAL FINAL DO CONTRATO\nR$ 3.500,00\nParceiro financeiro\nSelecione…\nFinanciamento próprio\nOutro parceiro\nValor do tratamento\nR$ 3.500,00\nEntrada %\n10%\n20%\n30%\n40%\n50%\nPersonalizado\nNome do parceiro\nEntrada R$\nParcelas\n1º vencimento\nTipo de juros\nSem juros\nJuros simples\nJuros compostos\nPercentu",
+  "pendingUiItems": [],
+  "readiness": {
+    "canGenerate": false,
+    "ok": false,
+    "missing": [
+      {
+        "tag": "#clinicaEndereco",
+        "label": "Endereço da clínica",
+        "group": "clinica"
+      },
+      {
+        "tag": "#clinicaCidade",
+        "label": "Cidade da clínica",
+        "group": "clinica"
+      },
+      {
+        "tag": "#clinicaEstado",
+        "label": "UF da clínica",
+        "group": "clinica"
+      },
+      {
+        "tag": "#clinicaCidadeEstado",
+        "label": "Cidade/UF do foro",
+        "group": "clinica"
+      },
+      {
+        "tag": "#pacienteEndereco",
+        "label": "Endereço do paciente",
+        "group": "paciente"
+      },
+      {
+        "tag": "#responsavelTecnicoNome",
+        "label": "Nome do responsável técnico (CRO)",
+        "group": "clinica"
+      },
+      {
+        "tag": "#responsavelTecnicoCRO",
+        "label": "CRO do responsável técnico",
+        "group": "clinica"
+      },
+      {
+        "tag": "#formaPagamento",
+        "label": "Forma de pagamento",
+        "group": "contrato"
+      },
+      {
+        "tag": "tcle:tcle_implante",
+        "label": "TCLE obrigatório: Termo de Consentimento — Implantes",
+        "hint": "Aba Documentos → Consentimentos → modelo \"Implante\" → Salvar documento.",
+        "group": "tcle",
+        "critical": true
+      }
+    ],
+    "groups": {
+      "clinica": [
+        {
+          "tag": "#clinicaEndereco",
+          "label": "Endereço da clínica"
+        },
+        {
+          "tag": "#clinicaCidade",
+          "label": "Cidade da clínica"
+        },
+        {
+          "tag": "#clinicaEstado",
+          "label": "UF da clínica"
+        },
+        {
+          "tag": "#clinicaCidadeEstado",
+          "label": "Cidade/UF do foro"
+        },
+        {
+          "tag": "#responsavelTecnicoNome",
+          "label": "Nome do responsável técnico (CRO)"
+        },
+        {
+          "tag": "#responsavelTecnicoCRO",
+          "label": "CRO do responsável técnico"
+        }
+      ],
+      "paciente": [
+        {
+          "tag": "#pacienteEndereco",
+          "label": "Endereço do paciente"
+        }
+      ],
+      "dependente": [],
+      "responsavel": [],
+      "contrato": [
+        {
+          "tag": "#formaPagamento",
+          "label": "Forma de pagamento"
+        }
+      ],
+      "tcle": [
+        {
+          "tag": "tcle:tcle_implante",
+          "label": "TCLE obrigatório: Termo de Consentimento — Implantes"
+        }
+      ],
+      "template": []
+    },
+    "requiredTcles": [
+      {
+        "id": "tcle_implante",
+        "title": "Termo de Consentimento — Implantes",
+        "required": true
+      }
+    ],
+    "attachedTcleIds": [],
+    "partyLabel": "Paciente sem responsável",
+    "warnings": [],
+    "treatmentTypes": [
+      "implante_unitario"
+    ],
+    "generateReadinessReasons": [
+      "Cadastro do paciente incompleto.",
+      "Forum/cidade clínica ausente"
+    ],
+    "pendingCritical": [
+      "phone",
+      "address_min"
+    ],
+    "professionalId": "col-saas-da6bb8f6-adbf-4d0f-b696-f1f343e21c8a",
+    "clinicForumCity": null,
+    "budgetId": "budget-a9b10a1c-af7d-4592-8f67-53ba59452b94",
+    "budgetStatus": "RASCUNHO",
+    "hasAcceptedPayment": false,
+    "mapPresence": {
+      "#emissorNomeRazaoSocial": "PRESENT",
+      "#emissorCNPJCPF": "PRESENT",
+      "#clinicaRazaoSocial": "PRESENT",
+      "#clinicaCNPJCPF": "PRESENT",
+      "#clinicaEndereco": "EMPTY",
+      "#clinicaCidade": "EMPTY",
+      "#clinicaEstado": "EMPTY",
+      "#clinicaCidadeEstado": "EMPTY",
+      "#clinicaTelefone": "EMPTY",
+      "#clinicaEmail": "EMPTY",
+      "#responsavelTecnicoNome": "EMPTY",
+      "#responsavelTecnicoCRO": "EMPTY",
+      "#pacienteNomeCompleto": "PRESENT",
+      "#pacienteCPF": "PRESENT",
+      "#pacienteRG": "EMPTY",
+      "#pacienteDataNascimento": "PRESENT",
+      "#pacienteEndereco": "EMPTY",
+      "#pacienteTelefone": "EMPTY",
+      "#pacienteEmail": "EMPTY",
+      "#dependenteNomeCompleto": "PRESENT",
+      "#dependenteCPF": "PRESENT",
+      "#dependenteDataNascimento": "PRESENT",
+      "#responsavelNomeCompleto": "EMPTY",
+      "#responsavelCPF": "PRESENT",
+      "#responsavelEndereco": "EMPTY",
+      "#responsavelTelefone": "EMPTY",
+      "#responsavelEmail": "EMPTY",
+      "#responsavelParentesco": "EMPTY",
+      "#numeroContrato": "PRESENT",
+      "#dataContrato": "PRESENT",
+      "#procedimentos": "PRESENT",
+      "#totalContrato": "PRESENT",
+      "#totalContratoExtenso": "PRESENT",
+      "#totalManutencoes": "PRESENT",
+      "#totalManutencoesExtenso": "PRESENT",
+      "#totalGeralContrato": "PRESENT",
+      "#totalGeralContratoExtenso": "PRESENT",
+      "#parcelas": "EMPTY",
+      "#formaPagamento": "PRESENT",
+      "#forma_pagamento": "PRESENT",
+      "#entrada": "PRESENT",
+      "#saldo": "PRESENT",
+      "#quantidadeParcelas": "PRESENT",
+      "#valorParcela": "PRESENT",
+      "#dataPrimeiroVencimento": "EMPTY",
+      "#manutencaoMeses": "PRESENT",
+      "#clausula": "EMPTY",
+      "#testemunha1Nome": "EMPTY",
+      "#testemunha1CPF": "EMPTY",
+      "#testemunha2Nome": "EMPTY",
+      "#testemunha2CPF": "EMPTY",
+      "#orcamento_numero": "PRESENT",
+      "#orcamento_data": "PRESENT",
+      "#tratamento_nome": "EMPTY",
+      "#data_assinatura": "PRESENT",
+      "#responsavel_legal": "EMPTY",
+      "#responsavel_cpf": "PRESENT",
+      "#pessoaCPF": "PRESENT",
+      "#pessoaRG": "EMPTY",
+      "#dentistaNomeCompleto": "EMPTY",
+      "#dentistaConselhoNumero": "EMPTY",
+      "#orcamentoObservacoes": "EMPTY",
+      "#clinica_nome": "PRESENT",
+      "#clinica_cnpj": "PRESENT",
+      "#clinica_endereco": "EMPTY",
+      "#responsavel_tecnico": "EMPTY",
+      "#cro_responsavel": "EMPTY",
+      "#paciente_nome": "PRESENT",
+      "#paciente_cpf": "PRESENT",
+      "#paciente_endereco": "EMPTY",
+      "#paciente_telefone": "EMPTY",
+      "#profissional_nome": "EMPTY",
+      "#profissional_cro": "EMPTY",
+      "#valor_total": "PRESENT"
+    }
+  }
+}

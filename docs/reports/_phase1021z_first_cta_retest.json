@@ -1,0 +1,32 @@
+{
+  "firstFailingCta": "Criar novo orçamento",
+  "FIRST_CTA_RETEST": "PASS",
+  "patientId": "patient-1532624a-5093-402f-ada8-79d5f24895c8",
+  "appointmentId": "appt-f247eb0a-7c1b-4246-b16b-82b27988dcad",
+  "urlAfter": "http://127.0.0.1:5188/atendimento-clinico/appt-f247eb0a-7c1b-4246-b16b-82b27988dcad",
+  "trace": [
+    {
+      "ts": "2026-08-12T20:53:13.732Z",
+      "event": "create_new_budget_start",
+      "cta": "Criar novo orçamento",
+      "patientId": "patient-1532624a-5093-402f-ada8-79d5f24895c8",
+      "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+      "route": "/pacientes/cadastro/patient-1532624a-5093-402f-ada8-79d5f24895c8"
+    },
+    {
+      "ts": "2026-08-12T20:53:13.733Z",
+      "event": "ensure_active_created",
+      "patientId": "patient-1532624a-5093-402f-ada8-79d5f24895c8",
+      "appointmentId": "appt-f247eb0a-7c1b-4246-b16b-82b27988dcad"
+    },
+    {
+      "ts": "2026-08-12T20:53:13.733Z",
+      "event": "create_new_budget_ok",
+      "cta": "Criar novo orçamento",
+      "patientId": "patient-1532624a-5093-402f-ada8-79d5f24895c8",
+      "appointmentId": "appt-f247eb0a-7c1b-4246-b16b-82b27988dcad",
+      "expectedRoute": "/atendimento-clinico/appt-f247eb0a-7c1b-4246-b16b-82b27988dcad"
+    }
+  ],
+  "error": null
+}

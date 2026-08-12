@@ -1,0 +1,102 @@
+A_10_21TUVX: 36
+B_SECURITY: 17
+C_UX_TCLE_LOGO: 23
+D_TEMP: 2
+E_WHITESPACE_OLD: 3
+F_UNKNOWN: 14
+
+ M .gitignore
+ M docs/reports/PHASE_10_14_STAGING_FEATURE_FLAG_PILOT.md
+ M package.json
+ M scripts/supabase/runStagingContractsV2Pilot.mjs
+ M server/index.js
+ M src/App.jsx
+ M src/__tests__/phase1014StagingFeatureFlagPilot.test.js
+ M src/__tests__/phase1021mLocalUxFrictionFixes.test.js
+ M src/components/clinical/ClinicalContractSection.jsx
+ M src/components/clinical/DocumentsSection.jsx
+ M src/components/collaborators/CollaboratorTeamDirectory.jsx
+ M src/components/contracts/ContractReadinessChecklist.jsx
+ M src/components/contracts/operational/ClinicalDocumentPackagePanel.jsx
+ M src/domain/contracts/artifacts/signature-evidence-report.ts
+ M src/domain/contracts/index.ts
+ M src/domain/contracts/signatures/signature.types.ts
+ M src/domain/contracts/staging/contracts-v2-staging-pilot.ts
+ M src/hooks/useClinicLogo.js
+ M src/hooks/useClinicSummary.js
+ M src/index.css
+ M src/main.jsx
+ M src/pages/ClinicSettingsPage.jsx
+ M src/pages/ClinicalAppointmentPage.jsx
+ M src/pages/CollaboratorsPage.jsx
+ M src/pages/PatientCadastroPage.jsx
+ M src/pages/contratos/ContractSignPublicV2Page.jsx
+ M src/services/clinicService.js
+ M src/services/operationalContractWizardSupport.js
+ M src/services/platformAccessService.js
+ M src/services/tenantClinicProfileSync.js
+ M src/services/tenantContextService.js
+ M src/tenant/TenantContext.jsx
+ M src/utils/avatarUtils.js
+ M src/utils/clinicLogo.js
+ M src/utils/documentTemplates.js
+ M vite.config.js
+?? .DS_Store
+?? .env.staging.local.example
+?? console/supabase/migrations/017_platform_billing_rls_security_fix.sql
+?? docs/reports/PHASE_10_21O_STEP_A_TENANT_UNLOCK.md
+?? docs/reports/PHASE_10_21O_STEP_B_GLOBAL_PILOT_UNLOCK.md
+?? docs/reports/PHASE_10_21P_PRODUCTION_UNLOCK_ENV_PREPARATION.md
+?? docs/reports/PHASE_10_21Q_PRODUCTION_UNLOCK_ENV_VALIDATION.md
+?? docs/reports/PHASE_10_21R_TCLE_SIGNATURE_INTEGRATION_AND_DOCUMENT_IDENTITY_FIX.md
+?? docs/reports/PHASE_10_21S_MULTI_DOCUMENT_SIGNATURE_ARCHITECTURE_AUDIT.md
+?? docs/reports/PHASE_10_21T_PACKAGE_CRYPTOGRAPHIC_MANIFEST_IMPLEMENTATION_DESIGN.md
+?? docs/reports/PHASE_10_21U_PACKAGE_CRYPTOGRAPHIC_MANIFEST_IMPLEMENTATION.md
+?? docs/reports/PHASE_10_21V_STAGING_E2E_PACKAGE_MANIFEST_VALIDATION.md
+?? docs/reports/PHASE_10_21W_PRODUCTION_MIGRATION_AND_BROWSER_STAGING_READINESS_AUDIT.md
+?? docs/reports/PHASE_CONTRACT_PREREQUISITES_ACTIONABLE_RESOLUTION_UX.md
+?? docs/reports/PHASE_FIX_COLLABORATOR_NULL_CRASH_AND_CLINIC_LOGO.md
+?? docs/reports/PHASE_SECURITY_01C_CRITICAL_BILLING_RLS_REMEDIATION_PRE_APPLY.md
+?? docs/reports/PHASE_SECURITY_01D_CRITICAL_BILLING_RLS_APPLY_AND_VERIFICATION.md
+?? docs/reports/PHASE_SECURITY_01_CRITICAL_SUPABASE_RLS_AUDIT.md
+?? docs/reports/PHASE_SECURITY_02A_CLINIC_LOGOS_STORAGE_SECURITY_AUDIT.md
+?? docs/reports/PHASE_SECURITY_02B_CLINIC_LOGOS_ENUMERATION_REMEDIATION_PRE_APPLY.md
+?? docs/reports/PHASE_SECURITY_02C_CLINIC_LOGOS_ENUMERATION_APPLY_AND_VERIFICATION.md
+?? docs/reports/_phase1021v_domain_e2e_result.json
+?? docs/reports/_phase1021v_staging_e2e_result.json
+?? docs/reports/_phase1021v_staging_sql_immutability.json
+?? docs/reports/_security01d_apply_result.json
+?? docs/reports/_security02a_audit_result.json
+?? docs/reports/_security02b_pre_apply_result.json
+?? docs/reports/_security02c_apply_result.json
+?? docs/reports/_security02c_http_probes.json
+?? scripts/security/
+?? scripts/staging/
+?? src/__tests__/clinicLogoDisplayFix.test.js
+?? src/__tests__/collaboratorNullCrashFix.test.js
+?? src/__tests__/contractPrerequisitesActionableResolutionUx.test.js
+?? src/__tests__/phase1021rTcleSignatureAndIdentityFix.test.js
+?? src/__tests__/phase1021tPackageCryptographicManifestDesign.test.js
+?? src/__tests__/phase1021uPackageCryptographicManifestImplementation.test.js
+?? src/__tests__/phase1021vStagingE2ePackageManifestValidation.test.js
+?? src/__tests__/phase1021xIsolatedStagingBrowserSmoke.test.js
+?? src/__tests__/phaseSecurity01cBillingRlsRemediation.test.js
+?? src/__tests__/phaseSecurity02bClinicLogosEnumerationRemediation.test.js
+?? src/components/StagingTestModeBanner.jsx
+?? src/components/contracts/public/PublicPackageManifestDocuments.jsx
+?? src/contracts/contractPrerequisitesResolution.js
+?? src/domain/contracts/packages/package-manifest-acceptance.service.ts
+?? src/domain/contracts/packages/package-manifest-document-map.ts
+?? src/domain/contracts/packages/package-manifest-freeze.design.ts
+?? src/domain/contracts/packages/package-manifest-freeze.service.ts
+?? src/domain/contracts/packages/package-manifest-hash.ts
+?? src/domain/contracts/packages/package-manifest-lgpd.ts
+?? src/domain/contracts/packages/package-manifest.repository.ts
+?? src/domain/contracts/packages/package-manifest.types.ts
+?? src/domain/contracts/staging/staging-browser-test-mode.ts
+?? src/services/tclePackageAttachmentService.js
+?? src/utils/collaboratorDisplay.js
+?? src/utils/patientIdentity.js
+?? supabase/migrations/036_app_package_manifest_foundation.sql
+?? supabase/migrations/037_platform_billing_rls_security_fix.sql
+?? supabase/migrations/038_clinic_logos_storage_enumeration_security_fix.sql

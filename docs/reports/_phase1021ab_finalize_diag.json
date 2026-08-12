@@ -1,0 +1,54 @@
+{
+  "ok": true,
+  "ids": {
+    "patientId": "patient-14022eda-1628-4228-bec7-94d8b659cb38",
+    "appointmentId": "appt-e606e419-a839-4ae5-b98a-d26301be6d6d"
+  },
+  "pre": {
+    "contractId": "gctr-5f4dd535-c9a5-47b8-9e0d-3ab56dab7ddd",
+    "status": "draft",
+    "htmlLen": 17689,
+    "unknownTags": [
+      "#000",
+      "#fff"
+    ],
+    "unknownCount": 2,
+    "readinessOk": true,
+    "readinessMissing": [],
+    "user": {
+      "role": "admin",
+      "isMaster": true,
+      "id": "da6bb8f6-adbf-4d0f-b696-f1f343e21c8a"
+    },
+    "modalError": null
+  },
+  "serviceProbe": {
+    "update": {
+      "ok": false,
+      "error": "Hashtags desconhecidas: #000, #fff"
+    },
+    "finalize": {
+      "ok": true,
+      "status": "generated"
+    },
+    "afterStatus": "generated"
+  },
+  "consoleLogs": [
+    {
+      "type": "warning",
+      "text": "Module \"crypto\" has been externalized for browser compatibility. Cannot access \"crypto.randomBytes\" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details."
+    },
+    {
+      "type": "warning",
+      "text": "Module \"crypto\" has been externalized for browser compatibility. Cannot access \"crypto.randomBytes\" in client code. See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details."
+    },
+    {
+      "type": "error",
+      "text": "⚠️ NAVEGAÇÃO: Itens do menu antigo não encontrados no novo: [Pacientes > Cadastro (/pacientes/cadastro), CRM (Kanban) (/gestao/crm), Usuários (/admin/usuarios), Identidades (/admin/identidades), Guia Clínico do Dentista (/admin/guia-clinico), Biblioteca de Imagens Clínicas (/admin/biblioteca-imagens-clinicas), Follow-up (/crm/followup), Orçamentos & Conversão (/crm/orcamentos), Automações (/crm/au"
+    },
+    {
+      "type": "error",
+      "text": "⚠️ NAVEGAÇÃO: Itens do menu antigo não encontrados no novo: [Pacientes > Cadastro (/pacientes/cadastro), CRM (Kanban) (/gestao/crm), Usuários (/admin/usuarios), Identidades (/admin/identidades), Guia Clínico do Dentista (/admin/guia-clinico), Biblioteca de Imagens Clínicas (/admin/biblioteca-imagens-clinicas), Follow-up (/crm/followup), Orçamentos & Conversão (/crm/orcamentos), Automações (/crm/au"
+    }
+  ]
+}

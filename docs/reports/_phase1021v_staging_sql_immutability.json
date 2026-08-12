@@ -1,0 +1,16 @@
+{
+  "environment": "STAGING",
+  "supabaseProject": "tckdjyunwmdpqmewrwvt",
+  "marker": "phase-10-21v-package-manifest-e2e",
+  "tenantLabel": "Implanprime Odontologia (Staging)",
+  "tenantId": "7aba7127-409c-4ea4-8dbc-807efc5e189c",
+  "manifestId": "a1021102-cccc-4ccc-8ccc-ccccccccccc1",
+  "status": "FROZEN",
+  "manifestHashPrefix": "5df19b12811feed4",
+  "canonicalizationVersion": "pkg_manifest_v1",
+  "docCount": 3,
+  "frozenManifestMutation": "DENIED",
+  "frozenDocumentMutation": "DENIED",
+  "cleanup": "PRESERVED_FOR_AUDIT",
+  "productionTouched": false
+}

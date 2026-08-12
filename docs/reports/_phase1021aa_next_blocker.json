@@ -1,0 +1,60 @@
+{
+  "nextBlocker": {
+    "cta": "post-generate wizard",
+    "class": "P",
+    "detail": "Gerar contrato\n\nContrato de prestação de serviços odontológicos — documento jurídico formal gerado a partir do orçamento aprovado.\n\nPronto para gerar contrato\n\nModelo: Paciente sem responsável\n\nModelo: Contrato de Prestação de Serviços Odontológicos (formato jurídico formal)\n\nDocumento jurídico\n\nO c"
+  },
+  "reached": {
+    "generate": true,
+    "wizard": false,
+    "tcle": false,
+    "lgpd": false,
+    "package": false,
+    "freeze": false,
+    "public": false,
+    "sign": false
+  },
+  "steps": [
+    {
+      "step": "generate",
+      "ok": true,
+      "detail": "http://127.0.0.1:5188/atendimento-clinico/appt-aa48cac4-68bd-4b9f-a9db-9a2c16e46c80?budgetId=budget-f2e593cd-7428-46de-ab57-1fbda6303628"
+    },
+    {
+      "step": "probe_wizard",
+      "ok": false,
+      "detail": "visible=false disabled=null"
+    },
+    {
+      "step": "probe_tcle",
+      "ok": false,
+      "detail": "visible=false disabled=null"
+    },
+    {
+      "step": "probe_lgpd",
+      "ok": false,
+      "detail": "visible=false disabled=null"
+    },
+    {
+      "step": "probe_package",
+      "ok": false,
+      "detail": "visible=false disabled=null"
+    },
+    {
+      "step": "probe_freeze",
+      "ok": false,
+      "detail": "visible=false disabled=null"
+    },
+    {
+      "step": "probe_public",
+      "ok": false,
+      "detail": "visible=false disabled=null"
+    },
+    {
+      "step": "probe_sign",
+      "ok": false,
+      "detail": "visible=false disabled=null"
+    }
+  ],
+  "bodySnippet": "STAGING — DADOS FICTÍCIOS — NÃO É PRODUÇÃO\nProject: tckd… · Environment: STAGING\nImplanprime Odontologia (Staging)\nDashboard\nDashboard\nSuporte\nSair\nTESTE PACKAGE MANIFEST BROWSER 1021AA msql1rbg\nDr(a). SMOKE 1021Y STAGING\n12 de ago. de 2026 Â· 18:10\nConsultório 1\nEm atendimento\n1\nPlanejamento\nConcluído\n2\nOrçamento\nConcluído\n3\nContrato\nEm andamento\n4\nDocumentos\nPendente\n5\nDados Clínicos\nPendente\n6\nObservações\nPendente\nContrato\n\nFormalização jurídica do tratamento aprovado e da condição de pagamento escolhida.\n\nGerar contrato\nPré-visualizar\nBaixar PDF\nVisualizar PDF\nDocumentos do tratamento\n\nTratamento\n\nRascunho\n!\nContrato de prestação de serviços\nContrato · Obrigatório · Rascunho\n✓\nTCLE\nTCLE · Obrigatório · Pronto · 1 anexo(s)\n✓\nLGPD / Privacidade\nPrivacidade (LGPD) · Obrigatório · Pronto\n○\nTermo de imagem (opcional)\nUso de imagem · Opcional · Rascunho\n\nPronto para gerar contrato\n\nModelo: Paciente sem responsável\n\nSTATUS DO CONTRATO\nLiberado para geração\nDados do paciente\nNOME\nTESTE PACKAGE MANIFEST BROWSER 1021AA msql1rbg\nCPF\n390.533.447-05\nTELEFONE\n(11) 988880000\nRESPONSÁVEL LEGAL\n—\nDados da clínica\nProfissional responsável\nOrçamento aprovado\nPLANO / TRATAMENTO\n—\nTIPO DETECTADO\nImplante unitário\nPROCEDIMENTOS APROVADOS\n1 procedimento(s)\nVALOR TOTAL\nR$ 3.500,00\nDESCONTO\nR$ 0,00\nVALOR FINAL\nR$ 3.500,00\nFORMA DE PAGAMENTO ESCOLHIDA\nÀ vista\nForma\nPix\nValor original\nR$ 3.500,00\nDesconto\n0%\nValor final\nR$ 3.500,00\nPARCELA\tVENCIMENTO\tVALOR\nParcela 1/1 — Orçamento budget-f2e593cd-7428-46de-ab57-1fbda6303628\t12/08/2026\tR$ 3.500,00\nCláusulas do contrato\nTermos obrigatórios vinculados\nAssinaturas\nGerar contrato\n\nContrato de prestação de serviços odontológicos — documento jurídico formal gerado a partir do orçamento aprovado.\n\nPronto para gerar contrato\n\nModelo: Paciente sem responsável\n\nModelo: Contrato de Prestação de Serviços Odontológicos (formato jurídico formal)\n\nDocumento jurídico\n\nO contrato é gerado automaticamente a partir do orçamento aprovado e da condição de pagam"
+}

@@ -1,0 +1,73 @@
+{
+  "environment": "STAGING_DOMAIN_E2E_HARNESS",
+  "supabaseProjectExpected": "tckdjyunwmdpqmewrwvt",
+  "productionForbidden": "uoepkwhqztmsjnzirpev",
+  "patient": "TESTE PACKAGE MANIFEST 1021V",
+  "realPii": false,
+  "fictionalContact": {
+    "email": "teste.package.manifest.1021v@example.invalid",
+    "phone": "+5500000000000",
+    "cpf": "000.000.000-00"
+  },
+  "externalCommunication": false,
+  "hashes": {
+    "lgpd": "fb13c7db359dbf063f5a3c26c9bbe3aff0b4e6969f63983abac9237846c0a560",
+    "tcle": "6aac7834d54d1d8bc1073648be3f753518d88b2db762e43c09aec72aa2c77735",
+    "contract": "d3acb74b84b2aa74d60210d92a767f124fdb0ec008ce51b7759995d461437a40"
+  },
+  "exactTcleProof": "SIM",
+  "exactLgpdProof": "SIM",
+  "checks": {
+    "precheckFictional": true,
+    "freeze": true,
+    "packageDocuments": true,
+    "lgpdRealHash": true,
+    "tcleFormal": true,
+    "contract": true,
+    "frozenMutationDenied": true,
+    "newManifestOnChange": true,
+    "publicPage": true,
+    "individualVisualization": true,
+    "signGate": true,
+    "acceptances": true,
+    "idempotency": true,
+    "signature": true,
+    "evidence": true,
+    "exactTcleProof": true,
+    "exactLgpdProof": true,
+    "evidenceReport": true,
+    "signedPackageImmutability": true,
+    "prontuario": true,
+    "tenantIsolation": true,
+    "legacy": true,
+    "hashIntegrity": true,
+    "tests": true
+  },
+  "manifestId": "pkgm_5df8e3cd-daf1-445a-94e2-5cbfd1668358",
+  "manifestHash": "5df19b12811feed4bae002fe73450e2000c9bb67eeb33d9374ba3d2d2b2ea7d6",
+  "canonicalization": "pkg_manifest_v1",
+  "documents": [
+    {
+      "type": "SERVICE_CONTRACT",
+      "key": "contract",
+      "version": "1",
+      "required": true,
+      "contentHash": "d3acb74b84b2aa74d60210d92a767f124fdb0ec008ce51b7759995d461437a40"
+    },
+    {
+      "type": "IMPLANT_CONSENT",
+      "key": "tcle:tcle_implante",
+      "version": "tcle_implante_v1",
+      "required": true,
+      "contentHash": "6aac7834d54d1d8bc1073648be3f753518d88b2db762e43c09aec72aa2c77735"
+    },
+    {
+      "type": "LGPD_TERM",
+      "key": "lgpd",
+      "version": "lgpd_clinic_policy_v1",
+      "required": true,
+      "contentHash": "fb13c7db359dbf063f5a3c26c9bbe3aff0b4e6969f63983abac9237846c0a560"
+    }
+  ],
+  "gateCandidate": "READY_FOR_PACKAGE_MANIFEST_PRODUCTION_PREPARATION"
+}

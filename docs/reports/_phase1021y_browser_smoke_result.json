@@ -1,0 +1,130 @@
+{
+  "ok": false,
+  "environment": "STAGING",
+  "browserBase": "http://127.0.0.1:5188",
+  "apiBase": "http://127.0.0.1:3011",
+  "browserProject": "tckdjyunwmdpqmewrwvt",
+  "productionDetected": false,
+  "login": true,
+  "banner": true,
+  "patient": true,
+  "budget": false,
+  "contract": false,
+  "tcle": false,
+  "lgpd": false,
+  "package": false,
+  "freeze": false,
+  "publicPage": false,
+  "signGate": false,
+  "mobile": true,
+  "signature": false,
+  "evidence": false,
+  "prontuario": false,
+  "externalCommunication": "disabled",
+  "bugs": [],
+  "steps": [
+    {
+      "step": "banner",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "api_base_3011",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "env_probe",
+      "ok": true,
+      "detail": "null"
+    },
+    {
+      "step": "login",
+      "ok": true,
+      "detail": "http://127.0.0.1:5188/gestao/dashboard"
+    },
+    {
+      "step": "patient",
+      "ok": false,
+      "detail": "http://127.0.0.1:5188/pacientes/cadastro"
+    },
+    {
+      "step": "route:/pacientes/busca",
+      "ok": false,
+      "detail": "http://127.0.0.1:5188/pacientes/busca"
+    },
+    {
+      "step": "route:/gestao/dashboard",
+      "ok": false,
+      "detail": "http://127.0.0.1:5188/gestao/dashboard"
+    },
+    {
+      "step": "route:/comercial/orcamentos",
+      "ok": false,
+      "detail": "http://127.0.0.1:5188/comercial/orcamentos"
+    },
+    {
+      "step": "route:/clinico/atendimentos",
+      "ok": false,
+      "detail": "http://127.0.0.1:5188/clinico/atendimentos"
+    },
+    {
+      "step": "mobile_no_hscroll",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "banner_recheck",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "step": "login",
+      "ok": true,
+      "detail": "http://127.0.0.1:5188/gestao/dashboard"
+    },
+    {
+      "step": "patient_save",
+      "ok": true,
+      "detail": "{\"filled\":{\"name\":true,\"sex\":true,\"birth\":true,\"cpf\":true},\"err\":\"\",\"url\":\"http://127.0.0.1:5188/pacientes/cadastro/patient-f07a81f4-8438-4e1e-85a5-375df41d43e7\"}"
+    },
+    {
+      "step": "patient_search",
+      "ok": false,
+      "detail": ""
+    },
+    {
+      "step": "orcamentos_tab",
+      "ok": false,
+      "detail": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /Orçamentos e Contratos/i"
+    },
+    {
+      "step": "novo_orcamento",
+      "ok": false,
+      "detail": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /novo orçamento|criar orç"
+    },
+    {
+      "step": "contrato_cta",
+      "ok": false,
+      "detail": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /contrato|gerar contrato/"
+    },
+    {
+      "step": "tcle_cta",
+      "ok": false,
+      "detail": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: /tcle|consentimento/i })."
+    },
+    {
+      "step": "keywords",
+      "ok": true,
+      "detail": "{\"contract\":false,\"tcle\":false,\"lgpd\":false,\"package\":false}"
+    },
+    {
+      "step": "mobile",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "gate": "BLOCKED",
+  "reason": "Paciente/login/staging OK; fluxo completo contrato→TCLE→LGPD→freeze→assinatura não fechou automaticamente (UI clínica IndexedDB/multi-step).",
+  "at": "2026-08-12T20:22:15.637Z"
+}

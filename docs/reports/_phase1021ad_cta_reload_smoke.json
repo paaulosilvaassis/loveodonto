@@ -1,0 +1,28 @@
+{
+  "SEND_SIGNATURE_CTA_RELOAD": "PASS",
+  "PACKAGE_3_DOCS_AFTER_SEND": "PASS",
+  "SIGN_GATE_AFTER_SEND": "PASS",
+  "steps": [
+    {
+      "step": "cta_after_reload",
+      "ok": true,
+      "detail": "STAGING — DADOS FICTÍCIOS — NÃO É PRODUÇÃO\nProject: tckd… · Environment: STAGING\nImplanprime Odontologia (Staging)\nDashboard\nDashboard\nSuporte\nSair\nPaciente AD Smoke CTA\nDr(a). Profissional\nâ€” Â· â€”\nEm atendimento\n1\nPlanejamento\nConcluído\n2\nOrçamento\nConcluído\n3\nContrato\nEm andamento\n4\nDocumentos\n"
+    },
+    {
+      "step": "package",
+      "ok": true,
+      "detail": "docs=3"
+    },
+    {
+      "step": "sign_gate",
+      "ok": true,
+      "detail": "{\"blockedA\":true,\"blockedB\":true,\"enabled\":true}"
+    }
+  ],
+  "seeded": {
+    "apptId": "appt-ad-smoke-msqnbnsr",
+    "contractId": "gctr-ad-smoke-msqnbnsr"
+  },
+  "allPass": true,
+  "gate": "SEND_SIGNATURE_CTA_RELOAD_PASS"
+}

@@ -1,0 +1,142 @@
+{
+  "CONTRACT_PERSISTENCE_STABLE": "PASS",
+  "DRAFT_GENERATION": "PASS",
+  "CONTRACT_FINALIZE": "PASS",
+  "DRAFT_PERSISTENCE_BROWSER": "PASS",
+  "READINESS_SEND_GATE": "PASS_WITHOUT_BYPASS",
+  "LGPD_PACKAGE_DOCUMENT": "PASS",
+  "PACKAGE_3_DOCUMENTS": "PASS",
+  "PACKAGE_FREEZE": "PASS",
+  "ENVELOPE_MANIFEST_LINK": "PASS",
+  "PUBLIC_PACKAGE_UI": "PASS",
+  "CONTRACT_VIEW": "PASS",
+  "TCLE_VIEW": "PASS",
+  "LGPD_VIEW": "PASS",
+  "SIGN_GATE": "PASS",
+  "DOCUMENT_ACCEPTANCES": "PASS",
+  "ACCEPTANCE_IDEMPOTENCY": "PASS",
+  "PACKAGE_SIGNATURE": "PASS",
+  "EXACT_TCLE_PROOF": "PASS",
+  "EXACT_LGPD_PROOF": "PASS",
+  "EVIDENCE": "PASS",
+  "SIGNED_PACKAGE_REPORT": "PASS",
+  "SIGNED_DOCUMENTS_IN_RECORD": "PASS",
+  "MOBILE_SIGNATURE_UX": "PASS",
+  "productionWrites": "ZERO",
+  "productionMigrations": "ZERO",
+  "rolloutChanges": "ZERO",
+  "externalCommunication": "ZERO",
+  "bugs": [],
+  "steps": [
+    {
+      "step": "draft",
+      "ok": true,
+      "detail": "{\"st\":{\"id\":\"gctr-86f6f581-97a1-4ca1-8f5c-771f341f227b\",\"status\":\"draft\",\"total\":1,\"sample\":[{\"id\":\"gctr-86f6f581-97a1-4ca1-8f5c-771f341f227b\",\"status\":\"draft\",\"patientId\":\"patient-989c4fc1-e955-4274-a3c4-f9ff259c9cb7\"}]},\"finalizeVisible\":true,\"modalErr\":[]}"
+    },
+    {
+      "step": "finalize",
+      "ok": true,
+      "detail": "{\"id\":\"gctr-86f6f581-97a1-4ca1-8f5c-771f341f227b\",\"status\":\"generated\",\"total\":1}"
+    },
+    {
+      "step": "draft_persistence",
+      "ok": true,
+      "detail": "{\"beforeReload\":{\"id\":\"gctr-86f6f581-97a1-4ca1-8f5c-771f341f227b\",\"status\":\"generated\",\"packageRefs\":null,\"contentLen\":17734},\"afterReload\":{\"id\":\"gctr-86f6f581-97a1-4ca1-8f5c-771f341f227b\",\"status\":\"generated\",\"packageRefs\":null,\"contentLen\":17734,\"total\":1,\"trace\":[]}}"
+    },
+    {
+      "step": "freeze",
+      "ok": true,
+      "detail": "{\"contractStatus\":\"sent\",\"tokenPresent\":true,\"packageManifestId\":\"pkgm_dd59388…\",\"packageManifestHashPresent\":true,\"canonicalizationVersion\":\"pkg_manifest_v1\",\"docMeta\":[{\"documentType\":\"SERVICE_CONTRACT\",\"version\":\"1\",\"required\":true,\"hashPresent\":true},{\"documentType\":\"IMPLANT_CONSENT\",\"version\":\"tcle_implante_v1\",\"required\":true,\"hashPresent\":true},{\"documentType\":\"LGPD_TERM\",\"version\":\"lgpd_clinic_policy_v1\",\"required\":true,\"hashPresent\":true}],\"lgpdVersion\":\"lgpd_clinic_policy_v1\"}"
+    },
+    {
+      "step": "public_ui",
+      "ok": true,
+      "detail": "STAGING — DADOS FICTÍCIOS — NÃO É PRODUÇÃO\nProject: tckd… · Environment: STAGING\nAssinatura de contrato\n\nCTR-2026-00001\n\n1\nResumo\n2\nDocumento\n3\nPrivacidade\n4\nAssinar\nDocumentos do seu tratamento\nContrato de Prestação de Serviços\nVisualizar\n Li e aceito este documento\nTCLE — Implantes\nVisualizar\n Li e aceito este documento\nLGPD / Privacidade\nVisualizar\n Li e aceito este documento\nAssinar documentos"
+    },
+    {
+      "step": "sign_gate_A",
+      "ok": true,
+      "detail": "contract only"
+    },
+    {
+      "step": "sign_gate_B",
+      "ok": true,
+      "detail": "contract+tcle"
+    },
+    {
+      "step": "sign_gate_C",
+      "ok": true,
+      "detail": "all"
+    },
+    {
+      "step": "acceptances",
+      "ok": true,
+      "detail": "{\"counts\":{\"pkgm_60f6735f-af50-4ae0-93ae-9ef7343fa22c\":1,\"pkgm_a80f5b20-5058-42fd-905f-5a231753ac74\":1,\"pkgm_bfbfd2a1-df34-4a9b-a3dc-f447bbb19619\":1},\"total\":3}"
+    },
+    {
+      "step": "signature",
+      "ok": true,
+      "detail": "{\"contractStatus\":\"signed\",\"envelopeStatus\":\"SIGNED\",\"signedAt\":\"2026-08-12T22:06:45.447Z\",\"manifestHashPresent\":true,\"files\":[\"Comprovante pacote assinado.html\",\"LGPD / Privacidade (pacote assinado).html\",\"TCLE — Implantes (pacote assinado).html\",\"Contrato de Prestação de Serviços (pacote assinado).html\"]}"
+    },
+    {
+      "step": "mobile",
+      "ok": true,
+      "detail": "{\"overflowX\":false,\"doneVisible\":true,\"bodyWidth\":342,\"vw\":390}"
+    }
+  ],
+  "patientId": "patient-989c4fc1-e955-4274-a3c4-f9ff259c9cb7",
+  "appointmentId": "appt-7ccabf53-675f-4df4-ae3f-b9c2dd2a1e7b",
+  "contractId": "gctr-86f6f581-97a1-4ca1-8f5c-771f341f227b",
+  "sendInfo": {
+    "contractStatus": "sent",
+    "tokenPresent": true,
+    "packageManifestId": "pkgm_dd59388…",
+    "packageManifestHashPresent": true,
+    "canonicalizationVersion": "pkg_manifest_v1",
+    "docMeta": [
+      {
+        "documentType": "SERVICE_CONTRACT",
+        "version": "1",
+        "required": true,
+        "hashPresent": true
+      },
+      {
+        "documentType": "IMPLANT_CONSENT",
+        "version": "tcle_implante_v1",
+        "required": true,
+        "hashPresent": true
+      },
+      {
+        "documentType": "LGPD_TERM",
+        "version": "lgpd_clinic_policy_v1",
+        "required": true,
+        "hashPresent": true
+      }
+    ],
+    "lgpdVersion": "lgpd_clinic_policy_v1"
+  },
+  "docKeys": [
+    "contract",
+    "tcle:tcle_implante",
+    "lgpd"
+  ],
+  "resolvedDocKeys": {
+    "contractKey": "contract",
+    "tcleKey": "tcle:tcle_implante",
+    "lgpdKey": "lgpd"
+  },
+  "signed": {
+    "contractStatus": "signed",
+    "envelopeStatus": "SIGNED",
+    "signedAt": "2026-08-12T22:06:45.447Z",
+    "manifestHashPresent": true,
+    "files": [
+      "Comprovante pacote assinado.html",
+      "LGPD / Privacidade (pacote assinado).html",
+      "TCLE — Implantes (pacote assinado).html",
+      "Contrato de Prestação de Serviços (pacote assinado).html"
+    ]
+  },
+  "allPass": true,
+  "gate": "STAGING_BROWSER_E2E_PASS"
+}
