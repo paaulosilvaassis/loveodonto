@@ -92,6 +92,7 @@ PASS — nenhum secret staged; `.env*`, smoke creds gitignored
 | `be26876` | fix(contracts): integrate tcle lgpd and signing prerequisites |
 | `7049732` | fix(contracts): finalize staging e2e ux and send-cta reload |
 | `b1c4323` | docs(contracts): add staging and security validation reports |
+| `e411542` | docs(contracts): record AD commit hashes in freeze report |
 
 ## Tests / Build
 
@@ -101,7 +102,31 @@ PASS — nenhum secret staged; `.env*`, smoke creds gitignored
 
 ## Push / Deploy
 
-*(atualizado após push)*
+| Check | Result |
+|-------|--------|
+| Push | **PASS** — `git push origin main` (`30bb9d7..e411542`), sem force |
+| Secrets staged | **PASS** — nenhum |
+| Auto-migrate no deploy | **PASS / HARD STOP avoided** — sem `db push` em Vercel/Railway; guards locais em `scripts/supabase/*` |
+| Vercel – loveodonto | **PASS** (commit status success) |
+| Vercel – love-odonto-console | **PASS** |
+| Vercel – paaulosilvaassis-loveodonto{,1,26} | **PASS** |
+| Railway `kind-victory / production` | **PASS** |
+| Site `https://loveodonto.com.br/` | **HTTP 200** |
+| API `https://appgestaoodonto-production.up.railway.app/health` | **HTTP 200** `saas-admin-api` |
+| Rollout GET sem token | **HTTP 401** `Token do app ausente.` (rota viva, não mutada) |
+| `api.loveodonto.com.br` | 404 Vercel `DEPLOYMENT_NOT_FOUND` — DNS legado; API canônica = Railway host acima |
+
+## Production off-schema validation (post-deploy)
+
+| Check | Result |
+|-------|--------|
+| V1 | **INTACT** — site online; sem tables contract/package/signature em production |
+| Package manifest infra | **UNAVAILABLE** (esperado) — `list_tables` sem tables package; SQL `%package%`/`%contract%`/`%signature%` = `[]` |
+| 036 production | **NOT applied** |
+| 028–032, 034 production | **NOT applied** |
+| Production rollout | **UNCHANGED** — sem PUT; GET autenticado não alterado nesta fase |
+| External communication | **ZERO** |
+| Production writes / migrations nesta fase | **ZERO** |
 
 ## Working tree after
 
@@ -109,15 +134,36 @@ Untracked only: `.DS_Store`, smoke PNG screenshots (excluídos de propósito).
 
 ## Risks
 
-- Foundation Contracts V2 (028–036) **ainda ausente** em production — package manifest off-schema.
-- 037 aplicada via Management API (pode não aparecer em `list_migrations` com o nome do arquivo).
+- Foundation Contracts V2 (028–036) **ainda ausente** em production — package manifest off-schema por design até AE.
+- 037 aplicada via Management API (comentários RLS nas tables billing; pode não aparecer em `list_migrations` com o nome do arquivo local).
+- `api.loveodonto.com.br` não aponta para Railway — usar host Railway canônico até DNS ser corrigido (fora do escopo AD).
 
 ## Blockers
 
-Nenhum para AE controlled foundation — **exceto autorização humana**.
+Nenhum técnico para AE controlled foundation — **exceto autorização humana (Paulo)**.
 
 ## Decision / Gate
 
 **READY_FOR_CONTROLLED_PRODUCTION_FOUNDATION_MIGRATION**
 
 HARD STOP: sem apply 028–036 production; sem paciente real; sem alterar rollout. Aguardar Paulo.
+
+---
+
+## PHASE_10.21AE — plano EXATO (NÃO executar nesta fase)
+
+**CONTROLLED PRODUCTION CONTRACTS V2 FOUNDATION MIGRATION**
+
+Sequência obrigatória (verify após cada passo):
+
+1. `028` → verify  
+2. `029` → verify  
+3. `030` → verify  
+4. `031` → verify  
+5. `032` → verify  
+6. `034` → verify  
+7. `036` → verify  
+
+**Nunca:** `033` (local-only) · `035` (staging-only) · `db push` cego · paciente real · alteração de rollout sem autorização.
+
+Pré-condição: gate AD = PASS + autorização explícita de Paulo.
