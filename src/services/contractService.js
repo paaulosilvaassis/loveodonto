@@ -417,7 +417,7 @@ export function createGeneratedContractDraft(user, payload) {
   });
 }
 
-export function updateDraftGeneratedContract(user, contractId, { finalContent }) {
+export function updateDraftGeneratedContract(user, contractId, { finalContent, skipHashtagValidation = false }) {
   return withDb((db) => {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === contractId);
@@ -426,9 +426,11 @@ export function updateDraftGeneratedContract(user, contractId, { finalContent })
     assertContractMutationAllowed(c, { allowDraft: true });
     if (c.status !== 'draft') throw new Error('Apenas rascunhos podem ser editados.');
     const merged = String(finalContent ?? '');
-    const unknown = findUnknownHashtags(merged);
-    if (unknown.length) {
-      throw new Error(`Hashtags desconhecidas: ${unknown.join(', ')}`);
+    if (!skipHashtagValidation) {
+      const unknown = findUnknownHashtags(merged);
+      if (unknown.length) {
+        throw new Error(`Hashtags desconhecidas: ${unknown.join(', ')}`);
+      }
     }
     const rendered = applyHashtags(merged, buildContractContext({
       quoteSource: c.quoteSource,

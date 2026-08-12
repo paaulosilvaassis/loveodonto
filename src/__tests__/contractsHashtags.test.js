@@ -13,6 +13,12 @@ describe('hashtagRegistry', () => {
     expect(findUnknownHashtags('#totalContrato #tagInventada')).toEqual(['#tagInventada']);
     expect(findUnknownHashtags('#clinicaRazaoSocial')).toEqual([]);
   });
+
+  it('PHASE_10.21AB — cores CSS hex (#000/#fff) não são hashtags de contrato', () => {
+    const html = '<style>body{color:#000;background:#fff} .x{color:#ffffff}</style><p>#totalContrato</p>';
+    expect(extractHashtags(html)).toEqual(['#totalContrato']);
+    expect(findUnknownHashtags(html)).toEqual([]);
+  });
 });
 
 describe('filterBlocksForRender', () => {

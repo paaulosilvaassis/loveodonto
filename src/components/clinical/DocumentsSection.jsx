@@ -8,6 +8,8 @@ import {
   listDocumentRecords,
 } from '../../services/documentService.js';
 import { mapDocumentTemplateToTcleId } from '../../services/clinicalTcleAttachmentService.js';
+import { attachTcleDocumentToTreatmentPackage } from '../../services/tclePackageAttachmentService.js';
+import { getPatient } from '../../services/patientService.js';
 import {
   DOCUMENT_CATEGORIES,
   getTemplatesByCategory,
@@ -21,16 +23,40 @@ import {
 } from './documents/atestadoPrintTemplate.js';
 import { formatCpf } from '../../utils/validators.js';
 import { formatBrazilianPhoneDisplay } from '../../utils/phoneUtils.js';
+import {
+  resolvePatientFullName,
+  resolvePatientCpf,
+  resolvePatientBirthDate,
+  resolveProfessionalCro,
+  resolveProfessionalFullName,
+} from '../../utils/patientIdentity.js';
+import { getClinicLogo } from '../../utils/clinicLogo.js';
 
-export default function DocumentsSection({ appointmentId, patient, appointment, professional }) {
+export default function DocumentsSection({
+  appointmentId,
+  patient,
+  appointment,
+  professional,
+  initialCategory = null,
+  initialTemplateKey = null,
+  returnToContractHref = null,
+  onReturnToContract = null,
+  budgetId = null,
+}) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('atestados');
+  const resolvedInitialCategory = initialCategory && Object.values(DOCUMENT_CATEGORIES).includes(initialCategory)
+    ? initialCategory
+    : null;
+  const [activeTab, setActiveTab] = useState(() => resolvedInitialCategory || 'atestados');
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [templateVariables, setTemplateVariables] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
   const [editingContent, setEditingContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [lastSavedDoc, setLastSavedDoc] = useState(null);
+  const [packageAttachState, setPackageAttachState] = useState(null);
+  const [docsRefreshKey, setDocsRefreshKey] = useState(0);
 
   const db = loadDb();
   
@@ -42,13 +68,37 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
   const mainAddress = clinicAddresses.find((a) => a.principal) || clinicAddresses[0] || {};
   const mainPhone = clinicPhones.find((p) => p.principal) || clinicPhones[0];
 
+  // SSOT: preferir getPatient(profile.full_name) — evita nickname truncado.
+  const patientIdentity = useMemo(() => {
+    const fromDb = patient?.id ? getPatient(patient.id) : null;
+    const source = fromDb || patient;
+    return {
+      id: patient?.id || fromDb?.profile?.id || null,
+      fullName: resolvePatientFullName(source),
+      cpf: resolvePatientCpf(source),
+      birthDate: resolvePatientBirthDate(source),
+      bundle: source,
+    };
+  }, [patient, docsRefreshKey]);
+
+  const professionalIdentity = useMemo(() => {
+    const cro = resolveProfessionalCro(professional);
+    return {
+      fullName: resolveProfessionalFullName(professional),
+      cro: cro.cro,
+      croDisplay: cro.display,
+      croUf: cro.uf,
+      missingCro: !cro.cro,
+    };
+  }, [professional]);
+
   // Carregar documentos existentes
   const documents = useMemo(() => {
     return listDocumentRecords({
       appointmentId,
       patientId: patient?.id,
     });
-  }, [appointmentId, patient?.id]);
+  }, [appointmentId, patient?.id, docsRefreshKey]);
 
   // Endereço e telefone formatados (mesmo padrão do orçamento/PDF)
   const enderecoClinica = useMemo(() => {
@@ -83,25 +133,27 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
     return city || uf || '';
   }, [mainAddress]);
 
-  // Preparar variáveis padrão do sistema (seguindo padrão do orçamento)
+  // Preparar variáveis padrão do sistema (SSOT identidade paciente/profissional/clínica)
   const defaultVariables = useMemo(() => {
     const now = new Date();
     const appointmentDate = appointment?.date ? new Date(appointment.date + 'T00:00:00') : now;
-    
-    const professionalName = professional?.nomeCompleto || professional?.name || 'Profissional';
-    const professionalCro = professional?.cro || professional?.croNumber || professional?.registroCRO || professional?.conselhoNumero || professional?.councilNumber || '';
-    
-    const pacienteNome = patient?.full_name || patient?.nickname || patient?.social_name || 'Paciente';
-    const pacienteCpf = patient?.cpf
-      ? (String(patient.cpf).replace(/\D/g, '').length === 11
-        ? formatCpf(String(patient.cpf).replace(/\D/g, ''))
-        : patient.cpf)
+
+    const professionalName = professionalIdentity.fullName;
+    const professionalCro = professionalIdentity.croDisplay || professionalIdentity.cro || '';
+
+    const pacienteNome = patientIdentity.fullName;
+    const cpfDigits = String(patientIdentity.cpf || '').replace(/\D/g, '');
+    const pacienteCpf = cpfDigits.length === 11 ? formatCpf(cpfDigits) : (patientIdentity.cpf || '');
+    const birthRaw = patientIdentity.birthDate;
+    const pacienteNascimento = birthRaw
+      ? (birthRaw.includes('-')
+        ? new Date(`${birthRaw}T12:00:00`).toLocaleDateString('pt-BR')
+        : birthRaw)
       : '';
-    const pacienteNascimento = patient?.birth_date ? new Date(patient.birth_date).toLocaleDateString('pt-BR') : '';
-    const clinicaNome = clinic?.nomeClinica || clinic?.nomeFantasia || 'Clínica';
+    const clinicaNome = clinic?.nomeClinica || clinic?.nomeFantasia || clinic?.razaoSocial || 'Clínica';
     const clinicaCnpj = clinicDocs?.cnpj || '';
     const respTecnico = clinicDocs?.responsavelTecnico || clinicDocs?.responsavel_tecnico || clinic?.responsavelTecnico || '';
-    const respTecnicoCro = clinicDocs?.croResponsavelTecnico || clinicDocs?.cro_responsavel || '';
+    const respTecnicoCro = clinicDocs?.croResponsavelTecnico || clinicDocs?.cro_responsavel || clinicDocs?.conselhoRegionalNumero || '';
     const profSpecialty = professional?.especialidade
       || professional?.profile?.especialidade
       || (Array.isArray(professional?.especialidades) ? professional.especialidades.join(', ') : '')
@@ -109,7 +161,6 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
       || '';
 
     return {
-      // Padrão antigo (outros templates)
       PACIENTE_NOME: pacienteNome,
       PACIENTE_CPF: pacienteCpf,
       PACIENTE_NASCIMENTO: pacienteNascimento,
@@ -126,7 +177,6 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
       CRO_RESPONSAVEL_TECNICO: respTecnicoCro,
       WHATSAPP_CLINICA: whatsappClinica,
       DIAS_AFASTAMENTO: '1',
-      // Placeholders do consentimento Implante (premium)
       NOME_DA_CLINICA: clinicaNome,
       CNPJ_DA_CLINICA: clinicaCnpj,
       ENDERECO_DA_CLINICA: enderecoClinica,
@@ -139,7 +189,18 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
       DATA_ATUAL: now.toLocaleDateString('pt-BR'),
       HORA_ATUAL: now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     };
-  }, [patient, appointment, professional, clinic, clinicDocs, mainAddress, enderecoClinica, telefoneClinica, whatsappClinica, cidadeAssinatura]);
+  }, [
+    patientIdentity,
+    professionalIdentity,
+    appointment,
+    professional,
+    clinic,
+    clinicDocs,
+    enderecoClinica,
+    telefoneClinica,
+    whatsappClinica,
+    cidadeAssinatura,
+  ]);
 
   const buildDocumentPreview = (template, vars) => {
     if (template?.printTemplate === 'atestado') {
@@ -168,6 +229,21 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
       }
     }
   }, [selectedTemplate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (resolvedInitialCategory) {
+      setActiveTab(resolvedInitialCategory);
+    }
+  }, [resolvedInitialCategory]);
+
+  useEffect(() => {
+    if (!initialTemplateKey) return;
+    const template = getTemplateByKey(initialTemplateKey);
+    if (template) {
+      setActiveTab(template.category || DOCUMENT_CATEGORIES.CONSENTIMENTOS);
+      setSelectedTemplate(initialTemplateKey);
+    }
+  }, [initialTemplateKey]);
 
   // Filtrar templates por categoria e busca
   const filteredTemplates = useMemo(() => {
@@ -201,32 +277,76 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
     });
   };
 
-  const handleSaveDocument = async () => {
+  const isConsentTab = activeTab === DOCUMENT_CATEGORIES.CONSENTIMENTOS;
+  const mappedTcleId = selectedTemplate ? mapDocumentTemplateToTcleId(selectedTemplate) : null;
+
+  const handleSaveDocument = async ({ attachToPackage = false } = {}) => {
     if (!selectedTemplate) return;
+
+    if (isConsentTab && mappedTcleId && professionalIdentity.missingCro) {
+      setToast({
+        message: 'CRO do profissional não informado. Corrija o cadastro do colaborador antes de finalizar o TCLE.',
+        type: 'error',
+      });
+      setTimeout(() => setToast(null), 5000);
+      return;
+    }
+
+    if (isConsentTab && !String(defaultVariables.NOME_PACIENTE || '').trim()) {
+      setToast({ message: 'Nome do paciente ausente. Recarregue o atendimento.', type: 'error' });
+      setTimeout(() => setToast(null), 4000);
+      return;
+    }
 
     setSaving(true);
     try {
       const template = getTemplateByKey(selectedTemplate);
+      // Sempre regenera variáveis SSOT no save (não confiar em estado stale).
+      const vars = { ...defaultVariables, ...templateVariables, NOME_PACIENTE: defaultVariables.NOME_PACIENTE, PACIENTE_NOME: defaultVariables.PACIENTE_NOME };
       const finalContent = template?.printTemplate === 'atestado'
-        ? buildAtestadoPreviewText(templateVariables)
-        : replaceTemplateVariables(template.body, templateVariables);
+        ? buildAtestadoPreviewText(vars)
+        : replaceTemplateVariables(template.body, vars);
 
-      await createDocumentRecord(user, {
+      const created = await createDocumentRecord(user, {
         patientId: patient.id,
         appointmentId,
         category: activeTab,
         templateKey: selectedTemplate,
         title: template.title,
         content: finalContent,
-        metadata: mapDocumentTemplateToTcleId(selectedTemplate)
-          ? { tcleId: mapDocumentTemplateToTcleId(selectedTemplate) }
+        metadata: mappedTcleId
+          ? { tcleId: mappedTcleId }
           : {},
       });
 
-      setToast({ message: 'Documento salvo com sucesso', type: 'success' });
-      setSelectedTemplate(null);
-      setEditingContent('');
-      setTimeout(() => setToast(null), 3000);
+      setLastSavedDoc(created || null);
+      setDocsRefreshKey((k) => k + 1);
+
+      let attachResult = null;
+      if (attachToPackage && mappedTcleId) {
+        attachResult = attachTcleDocumentToTreatmentPackage({
+          user,
+          patientId: patient.id,
+          appointmentId,
+          budgetId,
+          documentId: created?.id || null,
+          templateKey: selectedTemplate,
+          tcleId: mappedTcleId,
+        });
+        setPackageAttachState(attachResult);
+      }
+
+      if (attachResult?.ok) {
+        setToast({
+          message: attachResult.duplicate
+            ? 'TCLE já estava no pacote. Documento salvo.'
+            : 'TCLE salvo e adicionado ao pacote de assinatura.',
+          type: 'success',
+        });
+      } else {
+        setToast({ message: 'Documento salvo com sucesso', type: 'success' });
+      }
+      setTimeout(() => setToast(null), 4000);
     } catch (error) {
       console.error('Erro ao salvar documento:', error);
       setToast({ message: error.message || 'Erro ao salvar documento', type: 'error' });
@@ -234,6 +354,27 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAttachLastSavedToPackage = () => {
+    if (!lastSavedDoc && !selectedTemplate) return;
+    const templateKey = lastSavedDoc?.templateKey || selectedTemplate;
+    const result = attachTcleDocumentToTreatmentPackage({
+      user,
+      patientId: patient.id,
+      appointmentId,
+      budgetId,
+      documentId: lastSavedDoc?.id || null,
+      templateKey,
+    });
+    setPackageAttachState(result);
+    setToast({
+      message: result.ok
+        ? (result.duplicate ? 'TCLE já estava no pacote.' : 'TCLE adicionado ao pacote de assinatura.')
+        : (result.error || 'Não foi possível adicionar ao pacote.'),
+      type: result.ok ? 'success' : 'error',
+    });
+    setTimeout(() => setToast(null), 4000);
   };
 
   const handleGeneratePDF = () => {
@@ -260,7 +401,7 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
       return;
     }
 
-    const clinicLogo = clinic?.logoUrl || '';
+    const clinicLogo = getClinicLogo(clinic, { includeDefault: false }) || clinic?.logoUrl || '';
     const clinicName = clinic?.nomeClinica || clinic?.nomeFantasia || 'Clínica';
     const clinicCnpj = clinicDocs?.cnpj || '';
     const clinicEmail = clinic?.emailPrincipal || '';
@@ -398,6 +539,23 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
 
   return (
     <SectionCard>
+      {returnToContractHref || onReturnToContract ? (
+        <div className="contract-return-banner" role="status" data-testid="docs-return-to-contract">
+          <div>
+            <strong>Resolver TCLE do contrato</strong>
+            <p className="muted">Selecione e salve o modelo de consentimento correspondente. Depois volte ao contrato para revalidar.</p>
+          </div>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => {
+              if (onReturnToContract) onReturnToContract();
+            }}
+          >
+            Voltar ao contrato
+          </button>
+        </div>
+      ) : null}
       {toast && (
         <div className={`alert ${toast.type === 'error' ? 'error' : 'success'}`} style={{ marginBottom: 'var(--spacing-md)' }}>
           {toast.message}
@@ -450,18 +608,28 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
                     Nenhum template encontrado
                   </div>
                 ) : (
-                  filteredTemplates.map((template) => (
-                    <button
-                      key={template.key}
-                      type="button"
-                      className={`button ${selectedTemplate === template.key ? 'primary' : 'secondary'}`}
-                      onClick={() => handleSelectTemplate(template.key)}
-                      style={{ justifyContent: 'flex-start', textAlign: 'left' }}
-                    >
-                      <FileText size={14} />
-                      {template.title}
-                    </button>
-                  ))
+                  filteredTemplates.map((template) => {
+                    const recommended = initialTemplateKey && template.key === initialTemplateKey;
+                    const selected = selectedTemplate === template.key;
+                    return (
+                      <button
+                        key={template.key}
+                        type="button"
+                        className={`button ${selected ? 'primary' : 'secondary'}${recommended ? ' is-recommended-template' : ''}`}
+                        data-testid={recommended ? 'recommended-tcle-template' : `template-${template.key}`}
+                        onClick={() => handleSelectTemplate(template.key)}
+                        style={{
+                          justifyContent: 'flex-start',
+                          textAlign: 'left',
+                          outline: recommended && !selected ? '2px solid #2563eb' : undefined,
+                        }}
+                      >
+                        <FileText size={14} />
+                        {template.title}
+                        {recommended ? ' · Recomendado' : ''}
+                      </button>
+                    );
+                  })
                 )}
               </div>
 
@@ -531,6 +699,19 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
                     </div>
                   )}
 
+                  {/* Identidade resolvida (SSOT) */}
+                  <div className="clinical-doc-identity" data-testid="clinical-doc-identity">
+                    <p><strong>Paciente:</strong> {defaultVariables.NOME_PACIENTE || '—'}</p>
+                    <p><strong>Profissional:</strong> {defaultVariables.NOME_PROFISSIONAL || '—'}
+                      {defaultVariables.CRO_PROFISSIONAL ? ` · ${defaultVariables.CRO_PROFISSIONAL}` : ' · CRO não informado'}
+                    </p>
+                    {isConsentTab && professionalIdentity.missingCro ? (
+                      <p className="clinical-doc-identity__warn" data-testid="clinical-doc-cro-missing">
+                        CRO obrigatório ausente — finalize o cadastro do colaborador antes de adicionar o TCLE ao pacote.
+                      </p>
+                    ) : null}
+                  </div>
+
                   {/* Editor do documento */}
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--spacing-sm)' }}>
@@ -549,7 +730,9 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
                         onClick={() => {
                           const template = getTemplateByKey(selectedTemplate);
                           if (template) {
-                            setEditingContent(buildDocumentPreview(template, templateVariables));
+                            const vars = { ...defaultVariables, ...templateVariables };
+                            setTemplateVariables(vars);
+                            setEditingContent(buildDocumentPreview(template, vars));
                           }
                         }}
                       >
@@ -584,12 +767,45 @@ export default function DocumentsSection({ appointmentId, patient, appointment, 
                     <button
                       type="button"
                       className="button primary"
-                      onClick={handleSaveDocument}
+                      onClick={() => handleSaveDocument()}
                       disabled={saving || !editingContent}
                     >
                       <Save size={16} />
                       Salvar no Prontuário
                     </button>
+                    {isConsentTab && mappedTcleId ? (
+                      <button
+                        type="button"
+                        className="button primary"
+                        data-testid="tcle-attach-package-cta"
+                        onClick={() => handleSaveDocument({ attachToPackage: true })}
+                        disabled={saving || !editingContent || professionalIdentity.missingCro}
+                        title={professionalIdentity.missingCro ? 'Informe o CRO do profissional' : 'Salva e vincula ao pacote do tratamento'}
+                      >
+                        <FileCheck size={16} />
+                        Adicionar ao pacote de assinatura
+                      </button>
+                    ) : null}
+                    {isConsentTab && lastSavedDoc && mappedTcleId ? (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        data-testid="tcle-attach-existing-cta"
+                        onClick={handleAttachLastSavedToPackage}
+                      >
+                        Vincular último TCLE ao pacote
+                      </button>
+                    ) : null}
+                    {packageAttachState?.ok && onReturnToContract ? (
+                      <button
+                        type="button"
+                        className="button secondary"
+                        data-testid="tcle-return-after-attach"
+                        onClick={() => onReturnToContract()}
+                      >
+                        Voltar ao contrato para enviar
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="button secondary"

@@ -77,11 +77,22 @@ export const CONTRACT_HASHTAG_DEFS = [
 
 const KNOWN = new Set(CONTRACT_HASHTAG_DEFS.map((d) => d.tag));
 
-/** Extrai hashtags #Palavra do texto */
+/**
+ * Extrai hashtags de contrato (#Palavra…).
+ * Ignora tokens que são cores CSS hex (#000, #fff, #ffffff, #rrggbbaa).
+ */
 export function extractHashtags(text) {
   const s = String(text || '');
-  const re = /#[a-zA-Z0-9_]+/g;
-  return s.match(re) || [];
+  const re = /#[A-Za-z0-9_]+/g;
+  const matches = s.match(re) || [];
+  return matches.filter((tag) => !isCssHexColorToken(tag));
+}
+
+/** #rgb / #rgba / #rrggbb / #rrggbbaa — não são hashtags de contrato. */
+function isCssHexColorToken(tag) {
+  const body = String(tag || '').slice(1);
+  if (![3, 4, 6, 8].includes(body.length)) return false;
+  return /^[0-9A-Fa-f]+$/.test(body);
 }
 
 /** Retorna tags desconhecidas (não no registry) */

@@ -29,6 +29,7 @@ import {
 import { getPatientRecord, updatePatientRecord } from '../services/patientRecordService.js';
 import { formatCep, formatCpf, formatPhone, onlyDigits } from '../utils/validators.js';
 import PatientBudgetsContractsTab from '../components/budgets/PatientBudgetsContractsTab.jsx';
+import { isSafeClinicalReturnUrl } from '../contracts/contractPrerequisitesResolution.js';
 
 /** Campos que não são obrigatórios; removidos da lista de pendências ao exibir (compatível com dados antigos). */
 const PENDING_OPTIONAL_KEYS = ['preferred_dentist', 'insurance_name'];
@@ -281,8 +282,10 @@ export default function PatientCadastroPage() {
   const [showPendingHighlight, setShowPendingHighlight] = useState(false);
   const [showPendingModal, setShowPendingModal] = useState(false);
 
-  // Ler query params para retorno à agenda
-  const returnToAgenda = searchParams.get('returnTo') === 'agenda';
+  // Ler query params para retorno à agenda / atendimento clínico
+  const returnToRaw = searchParams.get('returnTo') || location.state?.returnTo || '';
+  const returnToAgenda = returnToRaw === 'agenda';
+  const returnToClinical = isSafeClinicalReturnUrl(returnToRaw);
   const prefillName = searchParams.get('prefillName') || '';
   const slotDate = searchParams.get('slotDate') || '';
   const startTime = searchParams.get('startTime') || '';
@@ -292,6 +295,12 @@ export default function PatientCadastroPage() {
     const tab = searchParams.get('tab');
     if (tab && TAB_CONFIG.some((item) => item.id === tab)) {
       setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (searchParams.get('highlight') === 'pending' && searchParams.get('tab') === 'enderecos') {
+      setEditMode(true);
     }
   }, [searchParams]);
 
@@ -677,8 +686,11 @@ export default function PatientCadastroPage() {
         error: '',
         success: createdFromScratch ? 'Cadastro criado com sucesso.' : 'Cadastro atualizado com sucesso.',
       });
+      if (returnToClinical) {
+        navigate(returnToRaw);
+        return;
+      }
       if (createdFromScratch) {
-        
         // Se veio da agenda, voltar para agenda e reabrir o fluxo
         if (returnToAgenda && slotDate && startTime) {
           const params = new URLSearchParams({
@@ -699,6 +711,21 @@ export default function PatientCadastroPage() {
 
   return (
     <div className="stack cadastro-page">
+      {returnToClinical ? (
+        <div className="contract-return-banner" role="status" data-testid="patient-return-to-contract">
+          <div>
+            <strong>Correção a partir do contrato</strong>
+            <p className="muted">Após salvar, você voltará ao atendimento clínico na etapa Contrato.</p>
+          </div>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => navigate(returnToRaw)}
+          >
+            Voltar ao contrato
+          </button>
+        </div>
+      ) : null}
       <Section title="Cadastro de Paciente">
         <SectionCard>
           <div className="cadastro-header">

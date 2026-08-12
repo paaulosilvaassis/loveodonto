@@ -563,13 +563,21 @@ export const getTemplateByKey = (key) => {
 };
 
 /**
- * Substitui placeholders no texto do template
+ * Substitui placeholders no texto do template.
+ * - Chaves mais longas primeiro (evita colisão parcial).
+ * - split/join (sem RegExp) para não corromper nomes com caracteres especiais.
  */
-export const replaceTemplateVariables = (templateBody, variables) => {
-  let result = templateBody;
-  Object.entries(variables).forEach(([key, value]) => {
+export const replaceTemplateVariables = (templateBody, variables = {}) => {
+  let result = String(templateBody ?? '');
+  const entries = Object.entries(variables || {})
+    .filter(([key]) => key)
+    .sort((a, b) => b[0].length - a[0].length);
+
+  for (const [key, value] of entries) {
     const placeholder = `{{${key}}}`;
-    result = result.replace(new RegExp(placeholder, 'g'), value || '');
-  });
+    if (!result.includes(placeholder)) continue;
+    const safe = value == null ? '' : String(value);
+    result = result.split(placeholder).join(safe);
+  }
   return result;
 };

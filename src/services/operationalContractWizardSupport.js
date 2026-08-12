@@ -73,19 +73,30 @@ export function listWizardFinalizePrerequisites({
           label: m.label,
           hint: m.hint || null,
           group: 'tcle',
-          action: 'add_document',
-          ctaLabel: 'Adicionar documento',
+          action: 'resolve_tcle',
+          ctaLabel: 'Resolver TCLE',
           targetStepId: 'documentos',
         };
       }
-      if (isAddress || m.group === 'paciente') {
+      if (m.group === 'clinica') {
+        return {
+          id: m.tag || m.label,
+          label: m.label,
+          hint: m.hint || null,
+          group: 'clinica',
+          action: 'fix_clinic_data',
+          ctaLabel: 'Corrigir dados da clínica',
+          targetStepId: 'dados',
+        };
+      }
+      if (isAddress || m.group === 'paciente' || m.group === 'responsavel' || m.group === 'dependente') {
         return {
           id: m.tag || m.label,
           label: m.label,
           hint: m.hint || null,
           group: m.group || 'paciente',
           action: 'fix_patient_data',
-          ctaLabel: 'Corrigir dados',
+          ctaLabel: 'Completar cadastro do paciente',
           targetStepId: 'dados',
         };
       }
@@ -94,8 +105,8 @@ export function listWizardFinalizePrerequisites({
         label: m.label,
         hint: m.hint || null,
         group: m.group || 'contrato',
-        action: 'fix_patient_data',
-        ctaLabel: 'Corrigir dados',
+        action: 'fix_contract_data',
+        ctaLabel: 'Revisar orçamento',
         targetStepId: 'dados',
       };
     });
