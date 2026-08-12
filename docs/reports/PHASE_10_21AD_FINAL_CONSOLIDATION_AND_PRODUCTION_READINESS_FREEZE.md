@@ -82,25 +82,39 @@ PASS — nenhum secret staged; `.env*`, smoke creds gitignored
 
 ---
 
-## Commits / Push / Deploy
+## Commits created
 
-*(preenchido após execução dos commits)*
+| Hash | Message |
+|------|---------|
+| `d8b94ce` | security: harden billing RLS and clinic logo storage access |
+| `22c4254` | fix(core): stabilize indexeddb runtime persistence |
+| `db5730d` | feat(contracts): add package manifest multi-document signature |
+| `be26876` | fix(contracts): integrate tcle lgpd and signing prerequisites |
+| `7049732` | fix(contracts): finalize staging e2e ux and send-cta reload |
+| `b1c4323` | docs(contracts): add staging and security validation reports |
 
----
+## Tests / Build
 
-## Production off-schema
+- Suites AD/AC/AB/AA/U/V/R/security/logo/prereqs/X/Z: **PASS** (121)
+- CTA reload browser smoke: **PASS**
+- `npm run build`: **PASS**
 
-Após deploy de código: site/API online; V1 intacto; package manifest **indisponível** em production até foundation AE. Sem fallback inseguro.
+## Push / Deploy
 
----
+*(atualizado após push)*
 
-## Next phase (prepared, not executed)
+## Working tree after
 
-**PHASE_10.21AE — CONTROLLED PRODUCTION CONTRACTS V2 FOUNDATION MIGRATION**  
-Sequence: 028 → verify → 029 → verify → 030 → verify → 031 → verify → 032 → verify → 034 → verify → 036 → verify  
-Never 033. Never 035. Never blind `db push`.
+Untracked only: `.DS_Store`, smoke PNG screenshots (excluídos de propósito).
 
----
+## Risks
+
+- Foundation Contracts V2 (028–036) **ainda ausente** em production — package manifest off-schema.
+- 037 aplicada via Management API (pode não aparecer em `list_migrations` com o nome do arquivo).
+
+## Blockers
+
+Nenhum para AE controlled foundation — **exceto autorização humana**.
 
 ## Decision / Gate
 
