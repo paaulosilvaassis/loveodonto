@@ -1,0 +1,427 @@
+{
+  "projectRef": "uoepkwhqztmsjnzirpev",
+  "method": "management_api_database_query_single_sql_037",
+  "migrationFile": "supabase/migrations/037_platform_billing_rls_security_fix.sql",
+  "applied036": false,
+  "before": [
+    {
+      "table": "platform_subscriptions",
+      "role": "anon",
+      "status": 206,
+      "readable": true,
+      "count": "1",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_subscriptions",
+      "role": "service",
+      "status": 206,
+      "readable": true,
+      "count": "1",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_invoices",
+      "role": "anon",
+      "status": 206,
+      "readable": true,
+      "count": "1",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_invoices",
+      "role": "service",
+      "status": 206,
+      "readable": true,
+      "count": "1",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_billing_events",
+      "role": "anon",
+      "status": 206,
+      "readable": true,
+      "count": "1",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_billing_events",
+      "role": "service",
+      "status": 206,
+      "readable": true,
+      "count": "1",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_billing_alerts",
+      "role": "anon",
+      "status": 200,
+      "readable": true,
+      "count": "0",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_billing_alerts",
+      "role": "service",
+      "status": 200,
+      "readable": true,
+      "count": "0",
+      "code": null,
+      "message": null
+    }
+  ],
+  "apply": {
+    "ok": true,
+    "status": 201,
+    "bodySummary": {
+      "success": true
+    }
+  },
+  "rls": {
+    "ok": true,
+    "status": 201,
+    "rows": [
+      {
+        "table_name": "platform_billing_alerts",
+        "rls_enabled": true,
+        "rls_forced": true
+      },
+      {
+        "table_name": "platform_billing_events",
+        "rls_enabled": true,
+        "rls_forced": true
+      },
+      {
+        "table_name": "platform_invoices",
+        "rls_enabled": true,
+        "rls_forced": true
+      },
+      {
+        "table_name": "platform_subscriptions",
+        "rls_enabled": true,
+        "rls_forced": true
+      }
+    ]
+  },
+  "policies": {
+    "ok": true,
+    "status": 201,
+    "rows": [
+      {
+        "schemaname": "public",
+        "tablename": "platform_billing_alerts",
+        "policyname": "platform billing alerts read",
+        "permissive": "PERMISSIVE",
+        "roles": "{authenticated}",
+        "cmd": "SELECT",
+        "qual": "has_platform_permission('billing.read'::text)",
+        "with_check": null
+      },
+      {
+        "schemaname": "public",
+        "tablename": "platform_billing_events",
+        "policyname": "platform billing events read",
+        "permissive": "PERMISSIVE",
+        "roles": "{authenticated}",
+        "cmd": "SELECT",
+        "qual": "has_platform_permission('billing.read'::text)",
+        "with_check": null
+      },
+      {
+        "schemaname": "public",
+        "tablename": "platform_invoices",
+        "policyname": "platform billing invoices read",
+        "permissive": "PERMISSIVE",
+        "roles": "{authenticated}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = app_current_tenant_id()) OR has_platform_permission('billing.read'::text))",
+        "with_check": null
+      },
+      {
+        "schemaname": "public",
+        "tablename": "platform_subscriptions",
+        "policyname": "platform billing subscriptions read",
+        "permissive": "PERMISSIVE",
+        "roles": "{authenticated}",
+        "cmd": "SELECT",
+        "qual": "((tenant_id = app_current_tenant_id()) OR has_platform_permission('billing.read'::text))",
+        "with_check": null
+      }
+    ]
+  },
+  "afterAnon": [
+    {
+      "table": "platform_subscriptions",
+      "role": "anon",
+      "status": 401,
+      "readable": false,
+      "count": null,
+      "code": "42501",
+      "message": "permission denied for table platform_subscriptions"
+    },
+    {
+      "table": "platform_invoices",
+      "role": "anon",
+      "status": 401,
+      "readable": false,
+      "count": null,
+      "code": "42501",
+      "message": "permission denied for table platform_invoices"
+    },
+    {
+      "table": "platform_billing_events",
+      "role": "anon",
+      "status": 401,
+      "readable": false,
+      "count": null,
+      "code": "42501",
+      "message": "permission denied for table platform_billing_events"
+    },
+    {
+      "table": "platform_billing_alerts",
+      "role": "anon",
+      "status": 401,
+      "readable": false,
+      "count": null,
+      "code": "42501",
+      "message": "permission denied for table platform_billing_alerts"
+    }
+  ],
+  "afterService": [
+    {
+      "table": "platform_subscriptions",
+      "role": "service",
+      "status": 206,
+      "readable": true,
+      "count": "1",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_invoices",
+      "role": "service",
+      "status": 206,
+      "readable": true,
+      "count": "1",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_billing_events",
+      "role": "service",
+      "status": 206,
+      "readable": true,
+      "count": "1",
+      "code": null,
+      "message": null
+    },
+    {
+      "table": "platform_billing_alerts",
+      "role": "service",
+      "status": 200,
+      "readable": true,
+      "count": "0",
+      "code": null,
+      "message": null
+    }
+  ],
+  "grants": {
+    "ok": true,
+    "status": 201,
+    "rows": [
+      {
+        "table_name": "platform_billing_alerts",
+        "grantee": "authenticated",
+        "privilege_type": "SELECT"
+      },
+      {
+        "table_name": "platform_billing_alerts",
+        "grantee": "service_role",
+        "privilege_type": "DELETE"
+      },
+      {
+        "table_name": "platform_billing_alerts",
+        "grantee": "service_role",
+        "privilege_type": "INSERT"
+      },
+      {
+        "table_name": "platform_billing_alerts",
+        "grantee": "service_role",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "table_name": "platform_billing_alerts",
+        "grantee": "service_role",
+        "privilege_type": "SELECT"
+      },
+      {
+        "table_name": "platform_billing_alerts",
+        "grantee": "service_role",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "table_name": "platform_billing_alerts",
+        "grantee": "service_role",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "table_name": "platform_billing_alerts",
+        "grantee": "service_role",
+        "privilege_type": "UPDATE"
+      },
+      {
+        "table_name": "platform_billing_events",
+        "grantee": "authenticated",
+        "privilege_type": "SELECT"
+      },
+      {
+        "table_name": "platform_billing_events",
+        "grantee": "service_role",
+        "privilege_type": "DELETE"
+      },
+      {
+        "table_name": "platform_billing_events",
+        "grantee": "service_role",
+        "privilege_type": "INSERT"
+      },
+      {
+        "table_name": "platform_billing_events",
+        "grantee": "service_role",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "table_name": "platform_billing_events",
+        "grantee": "service_role",
+        "privilege_type": "SELECT"
+      },
+      {
+        "table_name": "platform_billing_events",
+        "grantee": "service_role",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "table_name": "platform_billing_events",
+        "grantee": "service_role",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "table_name": "platform_billing_events",
+        "grantee": "service_role",
+        "privilege_type": "UPDATE"
+      },
+      {
+        "table_name": "platform_invoices",
+        "grantee": "authenticated",
+        "privilege_type": "SELECT"
+      },
+      {
+        "table_name": "platform_invoices",
+        "grantee": "service_role",
+        "privilege_type": "DELETE"
+      },
+      {
+        "table_name": "platform_invoices",
+        "grantee": "service_role",
+        "privilege_type": "INSERT"
+      },
+      {
+        "table_name": "platform_invoices",
+        "grantee": "service_role",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "table_name": "platform_invoices",
+        "grantee": "service_role",
+        "privilege_type": "SELECT"
+      },
+      {
+        "table_name": "platform_invoices",
+        "grantee": "service_role",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "table_name": "platform_invoices",
+        "grantee": "service_role",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "table_name": "platform_invoices",
+        "grantee": "service_role",
+        "privilege_type": "UPDATE"
+      },
+      {
+        "table_name": "platform_subscriptions",
+        "grantee": "authenticated",
+        "privilege_type": "SELECT"
+      },
+      {
+        "table_name": "platform_subscriptions",
+        "grantee": "service_role",
+        "privilege_type": "DELETE"
+      },
+      {
+        "table_name": "platform_subscriptions",
+        "grantee": "service_role",
+        "privilege_type": "INSERT"
+      },
+      {
+        "table_name": "platform_subscriptions",
+        "grantee": "service_role",
+        "privilege_type": "REFERENCES"
+      },
+      {
+        "table_name": "platform_subscriptions",
+        "grantee": "service_role",
+        "privilege_type": "SELECT"
+      },
+      {
+        "table_name": "platform_subscriptions",
+        "grantee": "service_role",
+        "privilege_type": "TRIGGER"
+      },
+      {
+        "table_name": "platform_subscriptions",
+        "grantee": "service_role",
+        "privilege_type": "TRUNCATE"
+      },
+      {
+        "table_name": "platform_subscriptions",
+        "grantee": "service_role",
+        "privilege_type": "UPDATE"
+      }
+    ]
+  },
+  "rollout": {
+    "status": 200,
+    "rows": [
+      {
+        "flag_key": "contracts_operational_ux_global_enabled",
+        "scope_type": "global",
+        "scope_ref": "*",
+        "enabled": true
+      },
+      {
+        "flag_key": "contracts_operational_ux_enabled",
+        "scope_type": "tenant",
+        "scope_ref": "b721c2c9-d924-41ee-8911-dc00c8208326",
+        "enabled": true
+      }
+    ],
+    "pilot": "b721c2c9-d924-41ee-8911-dc00c8208326"
+  },
+  "at": "2026-08-12T14:45:45.829Z",
+  "packageManifest036Tables": [
+    {
+      "manifests": null,
+      "docs": null,
+      "acceptances": null
+    }
+  ]
+}

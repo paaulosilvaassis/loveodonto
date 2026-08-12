@@ -199,7 +199,7 @@ export default function CollaboratorTeamDirectory({
                 </tr>
               </thead>
               <tbody>
-                {filteredCollaborators.map((item) => {
+                {filteredCollaborators.filter((item) => item?.id).map((item) => {
                   const { primary: namePrimary } = getCollaboratorNameDisplay(item);
                   const tenantAccess = resolveTenantAccess(item);
                   const accessStatus = resolveAccessStatus(tenantAccess);

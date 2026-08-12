@@ -1,0 +1,51 @@
+{
+  "at": "2026-08-12T16:13:47.905Z",
+  "projectRef": "uoepkwhqztmsjnzirpev",
+  "after": {
+    "listRootAnon": {
+      "operation": "list:root",
+      "role": "anon",
+      "status": 200,
+      "allowed": true,
+      "count": 0,
+      "message": null
+    },
+    "listPilotAnon": {
+      "operation": "list:b721c2c9-d924-41ee-8911-dc00c8208326/",
+      "role": "anon",
+      "status": 200,
+      "allowed": true,
+      "count": 0,
+      "message": null
+    },
+    "listOtherAnon": {
+      "operation": "list:f2615848-d67d-4a87-96f1-508049953b84/",
+      "role": "anon",
+      "status": 200,
+      "allowed": true,
+      "count": 0,
+      "message": null
+    },
+    "listPilotService": {
+      "operation": "list:b721c2c9-d924-41ee-8911-dc00c8208326/",
+      "role": "service",
+      "status": 200,
+      "allowed": true,
+      "count": 1,
+      "message": null
+    },
+    "publicHead": {
+      "operation": "public_GET_HEAD",
+      "status": 200,
+      "allowed": true,
+      "contentType": "image/webp",
+      "contentLength": "24610"
+    }
+  },
+  "checks": {
+    "ANON_LIST_HTTP": "200_EMPTY_OR_ERROR",
+    "ANON_ENUMERATION": "DENIED",
+    "KNOWN_OBJECT_PUBLIC_GET": "PASS"
+  },
+  "ok": true
+}

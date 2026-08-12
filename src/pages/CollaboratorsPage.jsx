@@ -47,6 +47,12 @@ import {
   reactivateIdentity,
 } from '../services/identityService.js';
 import { isSaasModeEnabled } from '../services/saasAuthService.js';
+import {
+  getCollaboratorInitials as resolveCollaboratorInitials,
+  getCollaboratorNameDisplay as resolveCollaboratorNameDisplay,
+  getCollaboratorSpecialty as resolveCollaboratorSpecialty,
+  resolveCollaboratorForDisplay,
+} from '../utils/collaboratorDisplay.js';
 
 const CADASTRO_TABS = new Set(['pessoais', 'documentos', 'profissional', 'endereco', 'contatos']);
 const EDITABLE_TABS = new Set([...CADASTRO_TABS, 'horarios', 'financeiro']);
@@ -175,7 +181,7 @@ export default function CollaboratorsPage() {
     setListError('');
     try {
       const bundle = await listTenantCollaborators(tenantId, { bundle: true, reconcileLinks });
-      const rows = bundle.collaborators || [];
+      const rows = (bundle.collaborators || []).filter((row) => row && row.id);
       setCollaborators(rows);
       const byCollaboratorId = {};
       const byEmail = {};
@@ -459,6 +465,7 @@ export default function CollaboratorsPage() {
   const filteredCollaborators = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return collaborators.filter((item) => {
+      if (!item?.id) return false;
       const matchesSearch =
         !normalizedSearch ||
         item.nomeCompleto?.toLowerCase().includes(normalizedSearch) ||
@@ -514,12 +521,15 @@ export default function CollaboratorsPage() {
 
   const handleCollaboratorCreated = async (newId, meta = {}) => {
     setOpenNewCollaborator(false);
-    setSelectedId(newId);
     setActiveTab('geral');
     setEditingSection('');
     setEditingTab('');
     setError('');
-    await refreshCollaboratorDraft(newId, { refreshList: true, reconcileLinks: true });
+    // Lista primeiro: evita selectedId com selectedCollaboratorRow=null (crash nomeCompleto).
+    await refreshCollaboratorsListOnly({ reconcileLinks: true });
+    applyDraftFromLocal(newId);
+    setSelectedId(newId);
+    await refreshCollaboratorDraft(newId, { refreshList: false, reconcileLinks: false });
     await refreshTenantAccess({ reconcileLinks: true });
     if (meta.successMessage) {
       setSuccess(meta.successMessage);
@@ -571,17 +581,12 @@ export default function CollaboratorsPage() {
     [selectCollaborator],
   );
 
-  const getCollaboratorInitials = (collaborator) => {
-    const name = collaborator?.nomeCompleto || collaborator?.apelido || '';
-    return name
-      .split(' ')
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0]?.toUpperCase() || '')
-      .join('') || 'CL';
-  };
+  const getCollaboratorInitials = resolveCollaboratorInitials;
+  const getCollaboratorNameDisplay = resolveCollaboratorNameDisplay;
+  const getCollaboratorSpecialty = resolveCollaboratorSpecialty;
 
   const getCollaboratorContact = (collaborator) => {
+    if (!collaborator?.id) return collaborator?.email || '—';
     const phones = collaboratorPhonesById[collaborator.id] || [];
     const primaryPhone = phones.find((item) => item.principal) || phones[0];
     if (primaryPhone?.ddd && primaryPhone?.numero) {
@@ -590,30 +595,10 @@ export default function CollaboratorsPage() {
     return collaborator.email || '—';
   };
 
-  const getCollaboratorSpecialty = (collaborator) => {
-    if (Array.isArray(collaborator.especialidades) && collaborator.especialidades.length > 0) {
-      return collaborator.especialidades.filter(Boolean).join(', ');
-    }
-    return '—';
-  };
-
-  /** Nome principal + subtítulo (nome social ou apelido), sem duplicar o texto principal. */
-  const getCollaboratorNameDisplay = (collaborator) => {
-    const primaryRaw =
-      (collaborator.nomeCompleto || collaborator.apelido || 'Colaborador').trim() || 'Colaborador';
-    const social = (collaborator.nomeSocial || '').trim();
-    const nick = (collaborator.apelido || '').trim();
-    const full = (collaborator.nomeCompleto || '').trim();
-
-    let subtitle = '';
-    if (social && social !== primaryRaw) {
-      subtitle = social;
-    } else if (full && nick && nick !== full) {
-      subtitle = nick;
-    }
-
-    return { primary: primaryRaw, subtitle };
-  };
+  const displayCollaborator = useMemo(
+    () => resolveCollaboratorForDisplay(selectedCollaboratorRow, draft.profile, selectedId),
+    [selectedCollaboratorRow, draft.profile, selectedId],
+  );
 
   const getStatusLabel = (status) => (String(status || '').toLowerCase() === 'ativo' ? 'Ativo' : 'Inativo');
 
@@ -1189,7 +1174,7 @@ export default function CollaboratorsPage() {
       return (
         <CollaboratorOverviewSection
           draft={draft}
-          collaborator={selectedCollaboratorRow}
+          collaborator={displayCollaborator}
           accessStatus={resolveCollaboratorAccessDisplayStatus(selectedTenantAccess)}
           accessProfile={ROLE_LABELS[selectedTenantAccess?.role || draft.access?.role || ''] || '—'}
           lastInvite={selectedTenantAccess?.invitation?.sent_at ? formatDatePtBr(String(selectedTenantAccess.invitation.sent_at).slice(0, 10)) : '—'}
@@ -1275,7 +1260,7 @@ export default function CollaboratorsPage() {
         <div ref={editFormRef} className="scroll-mt-24 team-detail-panel collaborator-record-v2">
           <CollaboratorRecordView
             loading={recordLoading}
-            displayName={getCollaboratorNameDisplay(selectedCollaboratorRow).primary}
+            displayName={getCollaboratorNameDisplay(displayCollaborator).primary}
             onBack={() => {
               if ((hasUnsavedChanges || accessDirty) && !window.confirm('Existem alterações não salvas. Deseja sair?')) return;
               setSelectedId('');
@@ -1294,15 +1279,15 @@ export default function CollaboratorsPage() {
             errorMessage={error}
             menuItems={recordMenuItems}
             headerProps={{
-              fotoUrl: getUserAvatarUrl(draft.profile) || getUserAvatarUrl(selectedCollaboratorRow),
-              collaborator: selectedCollaboratorRow || draft.profile,
-              initials: getCollaboratorInitials(selectedCollaboratorRow),
-              displayName: getCollaboratorNameDisplay(selectedCollaboratorRow).primary,
-              cargo: selectedCollaboratorRow?.cargo || draft.profile?.cargo,
-              categoria: selectedCollaboratorRow?.rhCategoria || draft.profile?.rhCategoria,
-              especialidade: getCollaboratorSpecialty(selectedCollaboratorRow),
-              rhStatusLabel: getStatusLabel(selectedCollaboratorRow?.status),
-              rhActive: isCollaboratorActive(selectedCollaboratorRow),
+              fotoUrl: getUserAvatarUrl(draft.profile) || getUserAvatarUrl(displayCollaborator),
+              collaborator: displayCollaborator || draft.profile,
+              initials: getCollaboratorInitials(displayCollaborator),
+              displayName: getCollaboratorNameDisplay(displayCollaborator).primary,
+              cargo: displayCollaborator?.cargo || draft.profile?.cargo,
+              categoria: displayCollaborator?.rhCategoria || draft.profile?.rhCategoria,
+              especialidade: getCollaboratorSpecialty(displayCollaborator),
+              rhStatusLabel: getStatusLabel(displayCollaborator?.status),
+              rhActive: isCollaboratorActive(displayCollaborator),
               accessStatus: resolveCollaboratorAccessDisplayStatus(selectedTenantAccess),
               accessProfile: ROLE_LABELS[selectedTenantAccess?.role || draft.access?.role || ''] || '—',
               ultimoAcesso: selectedTenantAccess?.last_sign_in_at ? formatDatePtBr(String(selectedTenantAccess.last_sign_in_at).slice(0, 10)) : '—',

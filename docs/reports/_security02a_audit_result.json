@@ -1,0 +1,31 @@
+{
+  "phase": "SECURITY_02A",
+  "at": "2026-08-12T15:35:00.000Z",
+  "projectRef": "uoepkwhqztmsjnzirpev",
+  "productionMutations": "NONE",
+  "liveReprobeThisSession": {
+    "attempted": true,
+    "ok": false,
+    "reason": "Agent runtime network blocked (fetch failed / curl 000); AppleScript Terminal channel unavailable",
+    "script": "scripts/security/auditClinicLogosStorageReadonly.mjs"
+  },
+  "evidenceBasis": {
+    "migration013": "supabase/migrations/013_clinic_logos_storage.sql",
+    "priorLiveProbes": "docs/reports/PHASE_SECURITY_01_CRITICAL_SUPABASE_RLS_AUDIT.md §8 Storage",
+    "priorLiveDate": "SECURITY_01B (same prod ref uoepkwhqztmsjnzirpev)",
+    "priorFindings": {
+      "bucketPublic": true,
+      "anonListRoot": { "status": 200, "allowed": true, "exposure": "tenant_id UUID folder(s)" },
+      "emailAssetsAlsoPublic": true
+    }
+  },
+  "security01": "CLOSED",
+  "migration036Applied": false,
+  "contractsRollout": {
+    "unchangedByThisPhase": true,
+    "expectedFromSecurity01D": {
+      "contracts_operational_ux_global_enabled": true,
+      "contracts_operational_ux_enabled_pilot_only": true
+    }
+  }
+}

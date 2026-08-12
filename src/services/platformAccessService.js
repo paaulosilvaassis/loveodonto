@@ -12,6 +12,7 @@ export async function readTenantAccessSnapshot(tenantId) {
   const billingStatus = normalizeStatus(context?.tenant?.billing_status || context?.subscription?.status);
   return {
     tenant: context?.tenant || null,
+    clinicProfile: context?.clinicProfile || null,
     modules: context?.modules || {},
     flags: context?.flags || {},
     subscription: context?.subscription || null,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
 import { Field } from '../components/Field.jsx';
 import { can } from '../permissions/permissions.js';
@@ -28,6 +29,7 @@ import {
 } from '../services/clinicService.js';
 import { ClinicPhonesSection } from '../components/clinic/ClinicPhonesSection.jsx';
 import { formatCep, formatCnpj, validateFileMeta } from '../utils/validators.js';
+import { isSafeClinicalReturnUrl } from '../contracts/contractPrerequisitesResolution.js';
 
 const EDITABLE_SECTIONS = new Set([
   'cadastro', 'documentacao', 'tributacao', 'horarios', 'correspondencias', 'adicionais',
@@ -48,8 +50,19 @@ const dayLabels = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 export default function ClinicSettingsPage() {
   const { user } = useAuth();
-  const [activeSection, setActiveSection] = useState('geral');
-  const [editingSection, setEditingSection] = useState('');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnToRaw = searchParams.get('returnTo') || '';
+  const returnToClinical = isSafeClinicalReturnUrl(returnToRaw);
+  const sectionFromQuery = searchParams.get('section') || '';
+  const highlightFromQuery = searchParams.get('highlight') || '';
+
+  const [activeSection, setActiveSection] = useState(() => (
+    sectionFromQuery === 'documentacao' ? 'documentacao' : 'geral'
+  ));
+  const [editingSection, setEditingSection] = useState(() => (
+    sectionFromQuery === 'documentacao' ? 'documentacao' : ''
+  ));
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [clinic, setClinic] = useState(() => getClinic());
@@ -61,6 +74,22 @@ export default function ClinicSettingsPage() {
     newMailServer: { provider: '', smtpHost: '', smtpPort: '', smtpUser: '', smtpPassword: '', fromName: '', fromEmail: '' },
   }));
   const isAdmin = can(user, 'team:write');
+
+  useEffect(() => {
+    if (sectionFromQuery === 'documentacao') {
+      setActiveSection('documentacao');
+      setEditingSection('documentacao');
+    }
+  }, [sectionFromQuery]);
+
+  useEffect(() => {
+    if (highlightFromQuery !== 'responsavel-tecnico' || activeSection !== 'documentacao') return;
+    const timer = setTimeout(() => {
+      document.getElementById('clinic-responsavel-tecnico')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('clinic-responsavel-tecnico')?.focus?.();
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [highlightFromQuery, activeSection]);
   const updateNewAddress = (updater) =>
     setDraft((prev) => ({
       ...prev,
@@ -144,7 +173,7 @@ export default function ClinicSettingsPage() {
     setSuccess('');
     try {
       const section = editingSection || activeSection;
-      if (section === 'cadastro') updateClinicProfile(user, draft.profile);
+      if (section === 'cadastro') await updateClinicProfile(user, draft.profile);
       else if (section === 'documentacao') updateClinicDocumentation(user, draft.documentation);
       else if (section === 'tributacao') updateClinicTax(user, draft.tax);
       else if (section === 'horarios') updateBusinessHours(user, draft.businessHours);
@@ -161,6 +190,9 @@ export default function ClinicSettingsPage() {
       setEditingSection('');
       refresh();
       setSuccess('Dados salvos com sucesso.');
+      if (returnToClinical && (section === 'documentacao' || section === 'cadastro')) {
+        navigate(returnToRaw);
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -426,6 +458,7 @@ export default function ClinicSettingsPage() {
             <div className="form-grid clinic-form-grid">
                 <Field label="Responsável técnico (nome)">
                   <input
+                    id="clinic-responsavel-tecnico"
                     value={draft.documentation.responsavelTecnico || ''}
                     onChange={(event) => setDraft((prev) => ({ ...prev, documentation: { ...prev.documentation, responsavelTecnico: event.target.value } }))}
                     disabled={editingSection !== 'documentacao'}
@@ -434,6 +467,7 @@ export default function ClinicSettingsPage() {
                 </Field>
                 <Field label="CRO do responsável técnico">
                   <input
+                    id="clinic-cro-responsavel-tecnico"
                     value={draft.documentation.croResponsavelTecnico || draft.documentation.conselhoRegionalNumero || ''}
                     onChange={(event) => setDraft((prev) => ({
                       ...prev,
@@ -1167,17 +1201,30 @@ export default function ClinicSettingsPage() {
   };
 
   return (
-    <ClinicRecordShell
-      headerProps={headerProps}
-      activeSection={activeSection}
-      onSectionChange={handleSectionChange}
-      hasUnsavedChanges={hasUnsavedChanges}
-      successMessage={success}
-      errorMessage={error}
-      onDiscard={cancelEdit}
-      onSave={saveActiveSection}
-    >
-      {sectionContent}
-    </ClinicRecordShell>
+    <>
+      {returnToClinical ? (
+        <div className="contract-return-banner" role="status" data-testid="clinic-return-to-contract">
+          <div>
+            <strong>Correção a partir do contrato</strong>
+            <p className="muted">Após salvar a documentação, você voltará à etapa Contrato do atendimento.</p>
+          </div>
+          <button type="button" className="button secondary" onClick={() => navigate(returnToRaw)}>
+            Voltar ao contrato
+          </button>
+        </div>
+      ) : null}
+      <ClinicRecordShell
+        headerProps={headerProps}
+        activeSection={activeSection}
+        onSectionChange={handleSectionChange}
+        hasUnsavedChanges={hasUnsavedChanges}
+        successMessage={success}
+        errorMessage={error}
+        onDiscard={cancelEdit}
+        onSave={saveActiveSection}
+      >
+        {sectionContent}
+      </ClinicRecordShell>
+    </>
   );
 }

@@ -76,11 +76,9 @@ export function syncTenantClinicProfileToLocalDb(serverProfile, expectedTenantId
       tenant_id: expected,
       updatedAt: now,
       createdAt: prev.createdAt || now,
+      // Não apagar logo local se o servidor ainda não trouxe logo_url.
+      logoUrl: localProfile.logoUrl || prev.logoUrl || '',
     };
-
-    if (localProfile.logoUrl) {
-      db.clinicProfile.logoUrl = localProfile.logoUrl;
-    }
 
     db.clinicDocumentation = {
       ...(db.clinicDocumentation || {}),

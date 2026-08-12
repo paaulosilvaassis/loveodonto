@@ -1,0 +1,27 @@
+{
+  "phase": "SECURITY_02B",
+  "at": "2026-08-12T15:46:00.000Z",
+  "projectRef": "uoepkwhqztmsjnzirpev",
+  "productionMutations": "NONE",
+  "architecture": "OPTION_B",
+  "migrationProposed": "supabase/migrations/038_clinic_logos_storage_enumeration_security_fix.sql",
+  "migrationApplied": false,
+  "before": {
+    "source": "SECURITY_01B live + migration 013 (agent network blocked for re-probe)",
+    "anonListRoot": { "status": 200, "allowed": true },
+    "anonKnownObjectGet": { "allowed": true, "note": "public bucket" },
+    "anonWrite": { "allowed": false, "note": "policy analysis" },
+    "authCrossTenantList": { "allowed": true, "note": "open SELECT — risk" }
+  },
+  "tests": {
+    "phaseSecurity02b": "15/15",
+    "logoRelated": "32/32",
+    "build": "PASS"
+  },
+  "gate": "READY_FOR_SECURITY_02_APPLY_APPROVAL",
+  "security01": "CLOSED",
+  "security02": "OPEN",
+  "migration036Applied": false,
+  "packageManifestClearance": "BLOCKED",
+  "contractsRollout": "UNCHANGED"
+}

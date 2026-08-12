@@ -9,6 +9,8 @@ import { isTransientAuthError } from '../auth/saasSessionResolver.js';
 import { emitStabilityLog } from '../services/stabilityLogService.js';
 import { getTenantSnapshotTimeoutMessage } from '../config/adminApiBase.js';
 import { raceWithTimeout } from '../utils/async.js';
+import { syncTenantClinicProfileToLocalDb } from '../services/tenantClinicProfileSync.js';
+import { normalizeClinicProfileForClient } from '../utils/clinicLogo.js';
 
 /** Curto o suficiente para não travar a tela; o erro oferece retry e volta ao login. */
 const TENANT_SNAPSHOT_TIMEOUT_MS = 20000;
@@ -17,6 +19,7 @@ const TENANT_SNAPSHOT_TIMEOUT_MSG = getTenantSnapshotTimeoutMessage();
 const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 const EMPTY_CONTEXT = {
   tenant: null,
+  clinicProfile: null,
   modules: {},
   flags: {},
   limits: {},
@@ -64,9 +67,20 @@ export function TenantProvider({ children }) {
         TENANT_SNAPSHOT_TIMEOUT_MS,
         TENANT_SNAPSHOT_TIMEOUT_MSG,
       );
-      setTenantContext(context);
+      const clinicProfile = normalizeClinicProfileForClient(context?.clinicProfile)
+        || context?.clinicProfile
+        || null;
+      const nextContext = { ...context, clinicProfile };
+      setTenantContext(nextContext);
       hasLoadedOnce.current = true;
       if (!silent) setError('');
+      if (clinicProfile?.tenant_id || clinicProfile?.tenantId) {
+        try {
+          syncTenantClinicProfileToLocalDb(clinicProfile, user.tenantId);
+        } catch {
+          /* sync local é best-effort — não bloqueia o contexto */
+        }
+      }
       emitStabilityLog('TENANT_CONTEXT_OK', { tenantId: user.tenantId, source: silent ? 'background' : 'foreground' });
       try {
         auditTenantAccess(user, {

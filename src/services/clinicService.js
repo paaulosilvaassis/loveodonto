@@ -99,6 +99,19 @@ export const updateClinicProfile = async (user, payload, options = {}) => {
     return db.clinicProfile;
   });
 
+  const notifyClinicProfileSynced = () => {
+    try {
+      sessionStorage.removeItem('clinic.summary.cache');
+    } catch {
+      /* ignore */
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('saas:clinic-profile-synced', {
+        detail: { tenantId: tenantId || null },
+      }));
+    }
+  };
+
   if (isSaasModeEnabled() && tenantId) {
     const resolvedLogo = await resolveClinicLogoUrlForSave(
       tenantId,
@@ -132,16 +145,20 @@ export const updateClinicProfile = async (user, payload, options = {}) => {
 
     if (shouldUseClinicProfileRepositoryWrite()) {
       scheduleClinicProfileDualWriteUpdate(user, updated, tenantId, safeLogoUrl);
+      notifyClinicProfileSynced();
       return { profile: updated, clinicProfile: null };
     }
 
     const res = await saveClinicProfileRemote(remotePayload);
     if (res?.clinicProfile) {
       syncTenantClinicProfileToLocalDb(res.clinicProfile, tenantId);
+    } else {
+      notifyClinicProfileSynced();
     }
     return { profile: updated, clinicProfile: res?.clinicProfile || null };
   }
 
+  notifyClinicProfileSynced();
   return updated;
 };
 

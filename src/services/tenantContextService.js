@@ -269,6 +269,13 @@ export async function getTenantContext(tenantId) {
     }
     return {
       tenant: tenant || null,
+      clinicProfile: tenant
+        ? {
+          tenant_id: tenantId,
+          name: tenant.name || tenant.trade_name || null,
+          logo_url: tenant.logo_url || tenant.logoUrl || null,
+        }
+        : null,
       modules: createDefaultModuleMap(),
       flags: {},
       limits: {},
@@ -297,6 +304,7 @@ export async function getTenantContext(tenantId) {
     });
     return {
       tenant: apiContext.tenant || null,
+      clinicProfile: apiContext.clinicProfile || null,
       modules: apiContext.modules || createDefaultModuleMap(),
       flags: apiContext.flags || {},
       limits: apiContext.limits || {},
@@ -355,6 +363,11 @@ export async function getTenantContext(tenantId) {
   }
   return {
     tenant,
+    clinicProfile: {
+      tenant_id: tenantId,
+      name: tenant.name || tenant.trade_name || null,
+      logo_url: tenant.logo_url || tenant.logoUrl || null,
+    },
     modules,
     flags,
     limits,

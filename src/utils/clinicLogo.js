@@ -28,6 +28,25 @@ export function hasClinicLogo(clinicProfile) {
   );
 }
 
+/**
+ * Cache-bust para URLs http(s) do Storage (mesmo path após upsert).
+ * Não altera data URLs nem assets locais importados.
+ */
+export function withClinicLogoCacheBust(url, version) {
+  const raw = String(url || '').trim();
+  if (!raw) return raw;
+  if (raw.startsWith('data:') || raw.startsWith('blob:') || !/^https?:\/\//i.test(raw)) {
+    return raw;
+  }
+  const token = String(version || '').trim();
+  if (!token) return raw;
+  const safe = encodeURIComponent(token.slice(0, 64));
+  if (/[?&]v=/.test(raw)) {
+    return raw.replace(/([?&]v=)[^&]*/, `$1${safe}`);
+  }
+  return `${raw}${raw.includes('?') ? '&' : '?'}v=${safe}`;
+}
+
 export function normalizeClinicProfileForClient(profile) {
   if (!profile || typeof profile !== 'object') return null;
   const tenant_id = String(profile.tenant_id || profile.tenantId || '').trim() || null;

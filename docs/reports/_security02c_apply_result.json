@@ -1,0 +1,52 @@
+{
+  "phase": "SECURITY_02C",
+  "at": "2026-08-12T16:13:00.000Z",
+  "projectRef": "uoepkwhqztmsjnzirpev",
+  "projectName": "love-odonto-prod",
+  "method": "mcp_apply_migration_single_sql_038",
+  "migrationFile": "038_clinic_logos_storage_enumeration_security_fix.sql",
+  "applied036": false,
+  "productionDataModified": false,
+  "firstApplyAttempt": {
+    "ok": false,
+    "error": "42883 function public.app_user_can_access_tenant(text) does not exist",
+    "note": "Prod helper is uuid-only; SELECT left unchanged (BEFORE intact)"
+  },
+  "secondApplyAttempt": {
+    "ok": true,
+    "adaptation": "((storage.foldername(name))[1])::uuid aligned to live INSERT/UPDATE/DELETE"
+  },
+  "before": {
+    "bucketPublic": true,
+    "selectRoles": "{public}",
+    "selectQual": "(bucket_id = 'clinic-logos'::text)",
+    "anonEnumeration": "ALLOWED"
+  },
+  "after": {
+    "bucketPublic": true,
+    "selectRoles": "{authenticated}",
+    "selectQual": "tenant-scoped app_user_can_access_tenant(...::uuid)",
+    "anonEnumeration": "DENIED",
+    "http": {
+      "anonListRoot": { "status": 200, "count": 0 },
+      "anonListPilot": { "status": 200, "count": 0 },
+      "publicHead": { "status": 200, "contentType": "image/webp" },
+      "serviceListPilot": { "status": 200, "count": 1 }
+    },
+    "writesUnchanged": true,
+    "logoUrlUnchangedPublic": true
+  },
+  "rollout": {
+    "global": true,
+    "pilot": true,
+    "otherTenantsEnabled": false,
+    "unchanged": true
+  },
+  "package036": { "app_package_manifests": null },
+  "tests": "32/32 PASS",
+  "build": "PASS",
+  "SECURITY_01_STATUS": "CLOSED",
+  "SECURITY_02_STATUS": "CLOSED",
+  "PACKAGE_MANIFEST_SECURITY_CLEARANCE": "CLEARED",
+  "gate": "SECURITY_02_CLOSED_AWAITING_PACKAGE_MANIFEST_AUTHORIZATION"
+}

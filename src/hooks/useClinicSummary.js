@@ -30,14 +30,16 @@ export const useClinicSummary = () => {
       });
     };
     load();
-    const onBootstrap = () => {
+    const onRefresh = () => {
       try { sessionStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
       load();
     };
-    window.addEventListener('saas:tenant-bootstrapped', onBootstrap);
+    window.addEventListener('saas:tenant-bootstrapped', onRefresh);
+    window.addEventListener('saas:clinic-profile-synced', onRefresh);
     return () => {
       cancelled = true;
-      window.removeEventListener('saas:tenant-bootstrapped', onBootstrap);
+      window.removeEventListener('saas:tenant-bootstrapped', onRefresh);
+      window.removeEventListener('saas:clinic-profile-synced', onRefresh);
     };
   }, []);
 

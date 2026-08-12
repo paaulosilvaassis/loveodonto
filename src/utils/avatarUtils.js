@@ -133,6 +133,16 @@ export function getInitialsFromName(name, email = '') {
 }
 
 export function mapCollaboratorToProfessionalOption(collaborator) {
+  if (!collaborator || typeof collaborator !== 'object') {
+    return {
+      id: '',
+      name: 'Profissional',
+      specialty: '',
+      avatarUrl: '',
+      photoUrl: '',
+      collaborator: null,
+    };
+  }
   const avatarUrl = getUserAvatarUrl(collaborator);
   return {
     id: collaborator.id,
