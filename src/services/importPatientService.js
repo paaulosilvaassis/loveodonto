@@ -5,6 +5,7 @@ import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { isCpfValid, onlyDigits } from '../utils/validators.js';
 import { parseCsvText, parseXlsxFile, parseDate, getCanonicalHeaderMap, normalizeParsedRows } from './csvXlsxUtils.js';
+import { isPatientMetadataName } from '../utils/patientIdentity.js';
 import { createPatientFromImport, createPatientQuick, createPatientsFromImportBatch, CRITICAL_FIELDS, getPatient, updatePatientProfile, updatePatientDocuments, updatePatientBirth, updatePatientEducation, addPatientPhone, addPatientAddress, addPatientInsurance, updatePatientPendingData, recalcAndPersistPendingData } from './patientService.js';
 import { updatePatientRecord } from './patientRecordService.js';
 import { logImportExport } from './importExportLogService.js';
@@ -56,10 +57,16 @@ function getRowKey(row, key) {
   }
 }
 
+function civilNameFromRow(row) {
+  const nome = getRowKey(row, 'nome_completo');
+  if (nome && !isPatientMetadataName(nome)) return nome;
+  return '';
+}
+
 /** Linha é válida para importar se tiver pelo menos: nome completo OU CPF (11 dígitos) OU telefone/celular (10+ dígitos). Evita criar paciente 100% vazio. */
 export function isRowValidForImport(row) {
   if (row == null || typeof row !== 'object') return false;
-  const nome = getRowKey(row, 'nome_completo');
+  const nome = civilNameFromRow(row);
   const cpf = onlyDigits(getRowKey(row, 'cpf'));
   const tel = onlyDigits(getRowKey(row, 'telefone'));
   const cel = onlyDigits(getRowKey(row, 'celular'));
@@ -80,7 +87,7 @@ export function validateRow(row, index) {
     warnings.push('Linha sem dados');
     return { warnings, realErrors };
   }
-  const nome = getRowKey(row, 'nome_completo');
+  const nome = civilNameFromRow(row);
   const cpf = normCpf(getRowKey(row, 'cpf'));
   const birth = parseDate(getRowKey(row, 'data_nascimento')) || getRowKey(row, 'data_nascimento');
   const sex = getRowKey(row, 'sexo');
@@ -114,8 +121,7 @@ function getPendingFieldsFromRow(row) {
   if (row == null || typeof row !== 'object') {
     return { pendingFields: [], pendingCriticalFields: [] };
   }
-  const pending = [];
-  const nome = getRowKey(row, 'nome_completo');
+  const nome = civilNameFromRow(row);
   const cpf = normCpf(getRowKey(row, 'cpf'));
   const rg = getRowKey(row, 'rg');
   const sex = getRowKey(row, 'sexo');
@@ -172,7 +178,7 @@ function rowToPayload(row, conflictMode) {
   if (row == null || typeof row !== 'object') {
     row = {};
   }
-  const nome = getRowKey(row, 'nome_completo') || 'Paciente';
+  const nome = civilNameFromRow(row) || 'Paciente';
   const cpfRaw = getRowKey(row, 'cpf');
   let cpf = normCpf(cpfRaw);
   if (!cpf) cpf = String(Date.now()).slice(-11).padStart(11, '0');
@@ -429,6 +435,7 @@ export async function importFromCsvOrXlsx(file, user, conflictMode = 'create', o
   const importErrors = [];
   const reportRows = [];
   const createBatch = [];
+  const queuedCpfs = new Set();
 
   for (let chunkStart = 0; chunkStart < toProcessTotal; chunkStart += CHUNK_SIZE) {
     if (getCancelRequested()) break;
@@ -470,7 +477,7 @@ export async function importFromCsvOrXlsx(file, user, conflictMode = 'create', o
       const item = validatedChunk[i];
       const { row, index, pendingFields = [], pendingCriticalFields = [] } = item;
       const lineNum = index;
-      const rowName = (getRowKey(row, 'nome_completo') || '').trim() || '';
+      const rowName = civilNameFromRow(row) || '';
       const rowCpf = normCpf(getRowKey(row, 'cpf')) || '';
 
       try {
@@ -540,7 +547,15 @@ export async function importFromCsvOrXlsx(file, user, conflictMode = 'create', o
           continue;
         }
 
+        if (rowCpf && queuedCpfs.has(rowCpf)) {
+          duplicateSkipped++;
+          reportRows.push({ linha: lineNum, nome: rowName, cpf: rowCpf, status: IMPORT_ROW_STATUS.DUPLICATE_SKIPPED, motivo: 'CPF repetido no mesmo arquivo' });
+          onProgress({ phase: 'saving', current: chunkStart + i + 1, total: toProcessTotal, message: `Processando ${chunkStart + i + 1} / ${toProcessTotal}…`, liveItem: { type: 'duplicate_skipped', line: lineNum, name: rowName || 'Sem nome', message: 'CPF repetido no arquivo' } });
+          continue;
+        }
+
         const payload = rowToPayload(row, conflictMode);
+        if (rowCpf) queuedCpfs.add(rowCpf);
         createBatch.push({ payload, pendingFields, index: lineNum, rowName, rowCpf });
         if (createBatch.length >= BATCH_CREATE_SIZE) {
           const batchCopy = [...createBatch];

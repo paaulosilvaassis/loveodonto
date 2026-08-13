@@ -1,6 +1,12 @@
 import { loadDb, withDb } from '../db/index.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
+import {
+  foldPatientSearchText,
+  isPatientMetadataName,
+  patientSearchNameCandidates,
+  resolvePatientFullName,
+} from '../utils/patientIdentity.js';
 import { logAction } from './logService.js';
 import { isCpfValid, isPhoneValid, onlyDigits, validateFileMeta } from '../utils/validators.js';
 import { resolveTenantIdForWrite, resolveUserTenantId } from './tenantWriteGuard.js';
@@ -25,7 +31,7 @@ const maskCpf = (value) => {
   return `${digits.slice(0, 3)}.***.***-${digits.slice(-2)}`;
 };
 
-const normalizeMatch = (value) => normalizeText(value).toLowerCase();
+const foldMatch = (value) => foldPatientSearchText(value);
 const normalizePhoneParts = (payload) => {
   const rawDdd = onlyDigits(payload.ddd);
   const rawNumber = onlyDigits(payload.number);
@@ -126,11 +132,9 @@ export const searchPatients = (type, query, tenantId = null) => {
     return { results, exactMatch: exact };
   }
 
-  const lower = q.toLowerCase();
+  const term = foldMatch(q);
   const results = patients.filter((item) => (
-    item.full_name?.toLowerCase().includes(lower)
-    || item.nickname?.toLowerCase().includes(lower)
-    || item.social_name?.toLowerCase().includes(lower)
+    patientSearchNameCandidates(item).some((name) => foldMatch(name).includes(term))
   ));
   return { results, exactMatch: null };
 };
@@ -138,7 +142,7 @@ export const searchPatients = (type, query, tenantId = null) => {
 export const suggestPatients = (type, query, limit = 10, tenantId = null) => {
   const q = normalizeText(query);
   if (!q) return { results: [] };
-  const cacheKey = `${type}:${q}:${limit}:${tenantId || ''}`;
+  const cacheKey = `v2:${type}:${q}:${limit}:${tenantId || ''}`;
   const cached = suggestCache.get(cacheKey);
   if (cached && Date.now() - cached.at < SUGGEST_TTL_MS) {
     return cached.data;
@@ -165,21 +169,22 @@ export const suggestPatients = (type, query, limit = 10, tenantId = null) => {
       results = patients.filter((item) => patientIds.includes(item.id));
     }
   } else {
-    const term = normalizeMatch(q);
+    const term = foldMatch(q);
     results = patients
       .map((item) => {
-        const name = normalizeMatch(item.full_name);
-        const nickname = normalizeMatch(item.nickname);
-        const social = normalizeMatch(item.social_name);
-        const starts =
-          name.startsWith(term) || nickname.startsWith(term) || social.startsWith(term);
-        const includes =
-          name.includes(term) || nickname.includes(term) || social.includes(term);
+        const names = patientSearchNameCandidates(item).map((name) => foldMatch(name));
+        const starts = names.some((name) => name.startsWith(term));
+        const includes = names.some((name) => name.includes(term));
         const score = starts ? 2 : includes ? 1 : 0;
         return { item, score };
       })
       .filter((entry) => entry.score > 0)
-      .sort((a, b) => b.score - a.score || (a.item.full_name || '').localeCompare(b.item.full_name || ''))
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const nameA = resolvePatientFullName(a.item, '');
+        const nameB = resolvePatientFullName(b.item, '');
+        return nameA.localeCompare(nameB, 'pt-BR');
+      })
       .map((entry) => entry.item);
   }
 
@@ -188,10 +193,11 @@ export const suggestPatients = (type, query, limit = 10, tenantId = null) => {
       const phones = patientPhones.filter((item) => item.patient_id === patient.id);
       const primaryPhone = phones.find((item) => item.is_primary) || phones[0];
       const phoneLabel = primaryPhone ? `(${primaryPhone.ddd}) ${primaryPhone.number}` : '';
+      const civilName = resolvePatientFullName(patient, 'Paciente');
       return {
         id: patient.id,
-        name: patient.full_name || patient.nickname || patient.social_name || 'Paciente',
-        full_name: patient.full_name,
+        name: civilName,
+        full_name: isPatientMetadataName(patient.full_name) ? civilName : (patient.full_name || civilName),
         cpfMasked: maskCpf(patient.cpf),
         phoneLabel,
         birthDate: patient.birth_date || '',

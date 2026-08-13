@@ -38,6 +38,7 @@ import {
 } from '../services/patientService.js';
 import { useCepAutofill } from '../hooks/useCepAutofill.js';
 import { formatCep, formatCpf, formatPhone, onlyDigits, validateFileMeta } from '../utils/validators.js';
+import { resolvePatientFullName } from '../utils/patientIdentity.js';
 
 const normalizeText = (value) => (value || '').trim();
 const isDev = typeof import.meta !== 'undefined' && import.meta.env?.DEV;
@@ -178,7 +179,7 @@ export default function PatientsPage() {
       const phoneLabel = primaryPhone ? `(${primaryPhone.ddd}) ${primaryPhone.number}` : 'Sem telefone';
       return {
         id: patient.id,
-        name: patient.full_name,
+        name: resolvePatientFullName(patient, 'Paciente'),
         cpf: patient.cpf,
         status: patient.status,
         phoneLabel,

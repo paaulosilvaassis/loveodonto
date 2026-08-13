@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, UserPlus, User, Phone, CreditCard, Loader2 } from 'lucide-react';
 import { searchPatients } from '../services/patientService.js';
+import { resolvePatientFullName } from '../utils/patientIdentity.js';
 import { loadDb } from '../db/index.js';
 import Button from './Button.jsx';
 import {
@@ -330,7 +331,7 @@ export default function PatientQuickCreateModal({ isOpen, onClose }) {
                         >
                           <div className="patient-quick-create-result-info">
                             <div className="patient-quick-create-result-name">
-                              {patient.full_name || patient.nickname || 'Sem nome'}
+                              {resolvePatientFullName(patient, 'Sem nome')}
                             </div>
                             <div className="patient-quick-create-result-details">
                               {phone && (

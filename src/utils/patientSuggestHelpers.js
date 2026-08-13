@@ -1,13 +1,8 @@
+import { resolvePatientFullName } from './patientIdentity.js';
+
 /** Rótulo seguro para item de sugestão de paciente (agenda, CRM, etc.). */
 export function getPatientSuggestLabel(patient) {
-  if (!patient || typeof patient !== 'object') return 'Paciente';
-  return (
-    patient.name
-    || patient.full_name
-    || patient.nickname
-    || patient.social_name
-    || 'Paciente'
-  );
+  return resolvePatientFullName(patient, 'Paciente');
 }
 
 /** ID válido do paciente na sugestão, ou string vazia. */

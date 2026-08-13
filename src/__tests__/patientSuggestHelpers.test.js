@@ -11,6 +11,16 @@ describe('patientSuggestHelpers', () => {
     expect(getPatientSuggestLabel({ name: 'João' })).toBe('João');
   });
 
+  it('getPatientSuggestLabel nunca usa texto de escopo como nome', () => {
+    expect(getPatientSuggestLabel({
+      name: 'Escopo: Todos os pacientes (sem filtro)',
+      full_name: 'Maria Silva',
+    })).toBe('Maria Silva');
+    expect(getPatientSuggestLabel({
+      name: 'Escopo: Todos os pacientes (sem filtro)',
+    })).toBe('Paciente');
+  });
+
   it('getPatientSuggestId retorna vazio sem id', () => {
     expect(getPatientSuggestId(null)).toBe('');
     expect(getPatientSuggestId({})).toBe('');
