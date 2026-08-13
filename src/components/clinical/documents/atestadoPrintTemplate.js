@@ -1,4 +1,5 @@
-import { formatCpf, formatCnpj } from '../../../utils/validators.js';
+import { formatCnpj } from '../../../utils/validators.js';
+import { formatCivilCpf } from '../../../utils/patientCpfIdentity.js';
 import { formatBrazilianPhoneDisplay } from '../../../utils/phoneUtils.js';
 
 const ATESTADO_PRINT_CSS = `
@@ -233,10 +234,7 @@ function resolveProfessional(professional) {
 }
 
 function resolvePatientCpf(patient) {
-  const raw = patient?.cpf || patient?.document || '';
-  if (!hasText(raw)) return '';
-  const digits = String(raw).replace(/\D/g, '');
-  return digits.length === 11 ? formatCpf(digits) : String(raw).trim();
+  return formatCivilCpf(patient?.cpf || patient?.document || '');
 }
 
 function resolveCityLabel(city, uf) {

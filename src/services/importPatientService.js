@@ -4,6 +4,7 @@
 import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { isCpfValid, onlyDigits } from '../utils/validators.js';
+import { isRealPatientCpf } from '../utils/patientCpfIdentity.js';
 import { parseCsvText, parseXlsxFile, parseDate, getCanonicalHeaderMap, normalizeParsedRows } from './csvXlsxUtils.js';
 import { isPatientMetadataName } from '../utils/patientIdentity.js';
 import { createPatientFromImport, createPatientQuick, createPatientsFromImportBatch, CRITICAL_FIELDS, getPatient, updatePatientProfile, updatePatientDocuments, updatePatientBirth, updatePatientEducation, addPatientPhone, addPatientAddress, addPatientInsurance, updatePatientPendingData, recalcAndPersistPendingData } from './patientService.js';
@@ -23,9 +24,11 @@ const colMap = {
   apelido: 'apelido',
   sexo: 'sexo',
   cpf: 'cpf',
+  cpf_responsavel: 'cpf_responsavel',
   rg: 'rg',
   email: 'email',
   telefone: 'telefone',
+  telefone_responsavel: 'telefone_responsavel',
   celular: 'celular',
   endereco: 'endereco',
   bairro: 'bairro',
@@ -121,6 +124,7 @@ function getPendingFieldsFromRow(row) {
   if (row == null || typeof row !== 'object') {
     return { pendingFields: [], pendingCriticalFields: [] };
   }
+  const pending = [];
   const nome = civilNameFromRow(row);
   const cpf = normCpf(getRowKey(row, 'cpf'));
   const rg = getRowKey(row, 'rg');
@@ -136,9 +140,10 @@ function getPendingFieldsFromRow(row) {
   const estado = getRowKey(row, 'estado');
   const record = getRowKey(row, 'numero_prontuario');
   const nomeResp = getRowKey(row, 'nome_responsavel');
+  const cpfResp = normCpf(getRowKey(row, 'cpf_responsavel'));
 
   if (!nome) pending.push('full_name');
-  const hasCpf = cpf && isCpfValid(cpf);
+  const hasCpf = isRealPatientCpf(cpf);
   const hasRg = Boolean(rg && String(rg).trim());
   if (!hasCpf && !hasRg) pending.push('cpf_or_rg');
   if (!hasCpf) pending.push('cpf');
@@ -166,7 +171,7 @@ function getPendingFieldsFromRow(row) {
   const minor = isMinor(birth);
   if (minor) {
     if (!nomeResp) pending.push('responsible_name');
-    pending.push('responsible_cpf'); // CSV normalmente não tem CPF responsável; marcar como pendente
+    if (!cpfResp || !isCpfValid(cpfResp)) pending.push('responsible_cpf');
   }
 
   const pendingCriticalFields = CRITICAL_FIELDS.filter((f) => pending.includes(f));
@@ -179,9 +184,8 @@ function rowToPayload(row, conflictMode) {
     row = {};
   }
   const nome = civilNameFromRow(row) || 'Paciente';
-  const cpfRaw = getRowKey(row, 'cpf');
-  let cpf = normCpf(cpfRaw);
-  if (!cpf) cpf = String(Date.now()).slice(-11).padStart(11, '0');
+  const cpfRaw = normCpf(getRowKey(row, 'cpf'));
+  const cpf = isRealPatientCpf(cpfRaw) ? cpfRaw : '';
   const birth = parseDate(getRowKey(row, 'data_nascimento')) || '1990-01-01';
   const sex = getRowKey(row, 'sexo') || 'N';
 
@@ -201,6 +205,8 @@ function rowToPayload(row, conflictMode) {
       mother_name: getRowKey(row, 'mother_name'),
       father_name: getRowKey(row, 'father_name'),
       responsible_name: getRowKey(row, 'nome_responsavel'),
+      responsible_cpf: getRowKey(row, 'cpf_responsavel'),
+      responsible_phone: getRowKey(row, 'telefone_responsavel'),
     },
     birth: {
       nationality: getRowKey(row, 'nacionalidade') || 'Brasil',
@@ -236,16 +242,16 @@ function findExistingPatient(db, row, conflictMode) {
   const cpf = normCpf(getRowKey(row, 'cpf'));
   const recordNum = getRowKey(row, 'numero_prontuario');
 
-  if (conflictMode === 'update_cpf' && cpf) {
-    return db.patients.find((p) => normCpf(p.cpf) === cpf) || null;
+  if (conflictMode === 'update_cpf' && isRealPatientCpf(cpf)) {
+    return db.patients.find((p) => isRealPatientCpf(p.cpf) && normCpf(p.cpf) === cpf) || null;
   }
   if (conflictMode === 'update_record' && recordNum) {
     const rec = (db.patientRecords || []).find((r) => String(r.record_number || '') === String(recordNum));
     return rec ? db.patients.find((p) => p.id === rec.patient_id) : null;
   }
   if (conflictMode === 'merge') {
-    if (cpf) {
-      const byCpf = db.patients.find((p) => normCpf(p.cpf) === cpf);
+    if (isRealPatientCpf(cpf)) {
+      const byCpf = db.patients.find((p) => isRealPatientCpf(p.cpf) && normCpf(p.cpf) === cpf);
       if (byCpf) return byCpf;
     }
     if (recordNum) {
@@ -273,7 +279,7 @@ function mergePatientFromRow(user, patientId, payload, row) {
     social_name: mergeStr(p.social_name, payload.social_name),
     sex: mergeStr(p.sex, payload.sex) || p.sex,
     birth_date: mergeStr(p.birth_date, payload.birth_date) || p.birth_date,
-    cpf: normCpf(payload.cpf) || p.cpf,
+    cpf: isRealPatientCpf(normCpf(payload.cpf)) ? normCpf(payload.cpf) : (isRealPatientCpf(p.cpf) ? p.cpf : ''),
     lead_source: mergeStr(p.lead_source, payload.lead_source),
     tags: Array.isArray(payload.tags) && payload.tags.length > 0 ? payload.tags : (p.tags || []),
   };
@@ -478,7 +484,8 @@ export async function importFromCsvOrXlsx(file, user, conflictMode = 'create', o
       const { row, index, pendingFields = [], pendingCriticalFields = [] } = item;
       const lineNum = index;
       const rowName = civilNameFromRow(row) || '';
-      const rowCpf = normCpf(getRowKey(row, 'cpf')) || '';
+      const rowCpfRaw = normCpf(getRowKey(row, 'cpf')) || '';
+      const rowCpf = isRealPatientCpf(rowCpfRaw) ? rowCpfRaw : '';
 
       try {
         if (!isRowValidForImport(row)) {

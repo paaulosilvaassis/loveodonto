@@ -58,6 +58,8 @@ export const formatCep = (value) => {
 };
 
 export const formatCpf = (value) => {
+  const raw = String(value ?? '').trim();
+  if (raw.startsWith('__NO_CPF__:') || raw.startsWith('INTERNAL_NO_CPF:')) return '';
   const digits = onlyDigits(value).slice(0, 11);
   return digits
     .replace(/^(\d{3})(\d)/, '$1.$2')

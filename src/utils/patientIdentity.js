@@ -4,6 +4,8 @@
  * Aceita tanto o shape flat (db.patients) quanto getPatient() ({ profile }).
  */
 
+import { isRealPatientCpf } from './patientCpfIdentity.js';
+
 function pickNonEmpty(...candidates) {
   for (const value of candidates) {
     const text = String(value ?? '').trim();
@@ -102,11 +104,11 @@ export function resolvePatientCpf(patientOrBundle) {
   const profile = patientOrBundle.profile && typeof patientOrBundle.profile === 'object'
     ? patientOrBundle.profile
     : patientOrBundle;
-  return pickNonEmpty(
-    profile.cpf,
-    patientOrBundle.cpf,
-    patientOrBundle.documents?.cpf,
-  );
+  const candidates = [profile.cpf, patientOrBundle.cpf, patientOrBundle.documents?.cpf];
+  for (const value of candidates) {
+    if (isRealPatientCpf(value)) return String(value).trim();
+  }
+  return '';
 }
 
 export function resolvePatientBirthDate(patientOrBundle) {

@@ -40,7 +40,8 @@ import {
   CONTRACT_STATUS_LABELS,
 } from '../../contracts/contractConstants.js';
 import { formatCurrencyBRL } from '../../utils/currency.js';
-import { formatCpf, formatCnpj } from '../../utils/validators.js';
+import { formatCnpj } from '../../utils/validators.js';
+import { formatCivilCpf } from '../../utils/patientCpfIdentity.js';
 import {
   resolveBudgetFinancials,
 } from './budget/budgetUtils.js';
@@ -619,9 +620,7 @@ export function ClinicalContractSection({
                 { label: 'Nome', value: fullPatient?.profile?.full_name || fullPatient?.full_name || '—' },
                 {
                   label: 'CPF',
-                  value: fullPatient?.profile?.cpf
-                    ? formatCpf(String(fullPatient.profile.cpf).replace(/\D/g, ''))
-                    : '—',
+                  value: formatCivilCpf(fullPatient?.profile?.cpf) || '—',
                 },
                 { label: 'Telefone', value: formatPhone(fullPatient?.phones) || '—' },
                 { label: 'Responsável legal', value: guardianName || '—' },

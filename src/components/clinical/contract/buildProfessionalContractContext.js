@@ -1,5 +1,6 @@
 import { formatCurrencyBRL } from '../../../utils/currency.js';
-import { formatCpf, formatCnpj } from '../../../utils/validators.js';
+import { formatCnpj } from '../../../utils/validators.js';
+import { formatCivilCpf } from '../../../utils/patientCpfIdentity.js';
 import { currencyToWordsPt } from '../../../utils/numberToWordsPt.js';
 import { calcProcedureTotal } from '../budget/budgetUtils.js';
 import { detectTreatmentType, detectAllTreatmentTypes, getTreatmentTypeLabel } from './detectTreatmentType.js';
@@ -279,7 +280,7 @@ export function buildProfessionalContractContext({
     },
     patient: {
       name: profile.full_name || patientBundle?.full_name || '',
-      cpf: profile.cpf ? formatCpf(String(profile.cpf).replace(/\D/g, '')) : '',
+      cpf: formatCivilCpf(profile.cpf),
       rg: pdocs.rg || profile.rg || '',
       birthDate: formatDateBR(profile.birth_date || profile.birthDate),
       maritalStatus: profile.marital_status || profile.estadoCivil || '',

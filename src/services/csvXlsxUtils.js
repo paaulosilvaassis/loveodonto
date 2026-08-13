@@ -9,6 +9,25 @@ import { isPatientMetadataName } from '../utils/patientIdentity.js';
 /** Aliases curtos demais para match por substring (ex.: "paciente" dentro de "Escopo: Todos os pacientes"). */
 const SUBSTRING_FORBIDDEN_ALIASES = new Set(['nome', 'paciente']);
 
+/**
+ * Campos de identidade do paciente: somente igualdade após normalizeHeader.
+ * Substring aqui promove "CPF Responsável" → cpf, "Telefone Responsável" → telefone, etc.
+ */
+const EXACT_MATCH_CANONICALS = new Set([
+  'cpf',
+  'rg',
+  'email',
+  'telefone',
+  'celular',
+  'data_nascimento',
+  'endereco',
+  'cep',
+  'nome_completo',
+]);
+
+const RELATED_PARTY_TOKENS = new Set(['responsavel', 'pai', 'mae', 'conjuge']);
+const TITULAR_BLOCKS_CANONICALS = new Set(['cpf', 'rg', 'email', 'telefone', 'celular']);
+
 /** Normaliza string de cabeçalho para comparação: minúsculo, sem acentos, espaços simples */
 export function normalizeHeader(str) {
   if (str == null) return '';
@@ -28,10 +47,12 @@ export const HEADER_ALIASES = {
   nome_social: ['nome social'],
   apelido: ['apelido', 'nickname'],
   sexo: ['sexo', 'genero', 'gênero', 'sex'],
-  cpf: ['cpf', 'documento cpf', 'cpf do titular', 'doc cpf'],
+  cpf: ['cpf', 'documento cpf', 'doc cpf', 'cpf paciente', 'cpf do paciente'],
+  cpf_responsavel: ['cpf responsavel', 'cpf do responsavel'],
   rg: ['rg', 'identidade'],
   email: ['email', 'e-mail', 'e mail', 'mail'],
   telefone: ['telefone', 'fone', 'tel', 'telefone fixo', 'phone'],
+  telefone_responsavel: ['telefone responsavel', 'telefone do responsavel', 'celular responsavel'],
   celular: ['celular', 'whatsapp', 'cel', 'mobile', 'telefone celular'],
   data_nascimento: ['data de nascimento', 'nascimento', 'dt nascimento', 'birth date', 'data nascimento', 'dtnasc', 'dt_nascimento'],
   numero_prontuario: ['n prontuario', 'numero prontuario', 'prontuario', 'nº prontuário', 'nr prontuario', 'num prontuario'],
@@ -64,11 +85,29 @@ export function isMetadataSpreadsheetHeader(raw) {
   return false;
 }
 
-function headerMatchesAlias(normalizedHeader, alias) {
+function headerTokens(normalizedHeader) {
+  return String(normalizedHeader || '').split(' ').filter(Boolean);
+}
+
+/** Cabeçalho de terceiro (responsável/parente) não pode preencher identidade do paciente. */
+export function isRelatedPartyIdentityHeader(rawOrNormalized, canonical) {
+  const n = normalizeHeader(rawOrNormalized);
+  const tokens = headerTokens(n);
+  if (tokens.some((t) => RELATED_PARTY_TOKENS.has(t))) {
+    return EXACT_MATCH_CANONICALS.has(canonical);
+  }
+  if (tokens.includes('titular') && TITULAR_BLOCKS_CANONICALS.has(canonical)) {
+    return true;
+  }
+  return false;
+}
+
+function headerMatchesAlias(normalizedHeader, alias, canonical) {
   const n = String(normalizedHeader || '');
   const a = String(alias || '');
   if (!n || !a) return false;
   if (n === a) return true;
+  if (EXACT_MATCH_CANONICALS.has(canonical)) return false;
   if (SUBSTRING_FORBIDDEN_ALIASES.has(a)) return false;
   return n.includes(a) || (n.length >= 8 && a.includes(n));
 }
@@ -88,7 +127,8 @@ export function getCanonicalHeaderMap(rawHeaders) {
     }
     let found = false;
     for (const [canonical, aliases] of Object.entries(HEADER_ALIASES)) {
-      if (aliases.some((a) => headerMatchesAlias(n, a))) {
+      if (isRelatedPartyIdentityHeader(n, canonical)) continue;
+      if (aliases.some((a) => headerMatchesAlias(n, a, canonical))) {
         map[raw] = canonical;
         found = true;
         break;

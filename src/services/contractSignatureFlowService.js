@@ -4,6 +4,7 @@
 import { withDb, loadDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { getPatient } from './patientService.js';
+import { formatCivilCpf } from '../utils/patientCpfIdentity.js';
 import { getGeneratedContract } from './contractService.js';
 import {
   getContractSettings,
@@ -133,7 +134,7 @@ export function buildSignatureSendFormDefaults({
 
   return {
     patientName: profile.full_name || '',
-    patientCpf: profile.cpf || '',
+    patientCpf: formatCivilCpf(profile.cpf),
     patientEmail: profile.email || bundle?.patient?.email || '',
     patientPhone: mainPhone ? `(${mainPhone.ddd || ''}) ${mainPhone.number || ''}`.trim() : '',
     guardianEmail: isMinor

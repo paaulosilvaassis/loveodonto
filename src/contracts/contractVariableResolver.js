@@ -8,7 +8,8 @@ import { getCrmBudgetById } from '../services/crmBudgetService.js';
 import { enrichClinicalBudgetContext } from '../services/clinicalBudgetContractBridge.js';
 import { currencyToWordsPt } from '../utils/numberToWordsPt.js';
 import { formatFriendlyBudgetNumber, formatFriendlyContractNumber, isTechnicalId } from '../utils/friendlyNumbers.js';
-import { formatCpf, formatCnpj } from '../utils/validators.js';
+import { formatCnpj } from '../utils/validators.js';
+import { formatCivilCpf, isRealPatientCpf } from '../utils/patientCpfIdentity.js';
 import { PARTY_MODEL } from './contractQualificationTemplates.js';
 import { detectTreatmentType, detectAllTreatmentTypes } from '../components/clinical/contract/detectTreatmentType.js';
 import { buildInstallmentSchedule } from '../components/clinical/contract/clinicalContractSchedule.js';
@@ -267,7 +268,7 @@ export function resolveContractVariables(params) {
     : '';
 
   const pacNome = String(profile.full_name || '').trim();
-  const pacCpf = formatCpf(profile.cpf || '');
+  const pacCpf = formatCivilCpf(profile.cpf || '');
   const pacRg = String(pdocs.rg || profile.rg || '').trim();
   const pacEnd = formatAddress(paddr);
   const pacEmail = String(profile.email || patientBundle?.patient?.email || '').trim();
@@ -279,7 +280,9 @@ export function resolveContractVariables(params) {
     || profile.financial_responsible_name
     || (party.hasFinancialResponsible ? pacNome : ''),
   ).trim();
-  const respCpf = formatCpf(profile.guardian_cpf || profile.financial_responsible_cpf || profile.cpf || '');
+  const respCpfSource = profile.guardian_cpf || profile.financial_responsible_cpf
+    || (isRealPatientCpf(profile.cpf) ? profile.cpf : '');
+  const respCpf = formatCivilCpf(respCpfSource);
   const respEnd = formatAddress(
     (patientBundle?.addresses || []).find((a) => a.type === 'guardian') || paddr,
   ) || pacEnd;

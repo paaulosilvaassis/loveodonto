@@ -21,7 +21,7 @@ import {
   buildAtestadoPreviewText,
   openAtestadoPrintWindow,
 } from './documents/atestadoPrintTemplate.js';
-import { formatCpf } from '../../utils/validators.js';
+import { formatCivilCpf } from '../../utils/patientCpfIdentity.js';
 import { formatBrazilianPhoneDisplay } from '../../utils/phoneUtils.js';
 import {
   resolvePatientFullName,
@@ -142,8 +142,7 @@ export default function DocumentsSection({
     const professionalCro = professionalIdentity.croDisplay || professionalIdentity.cro || '';
 
     const pacienteNome = patientIdentity.fullName;
-    const cpfDigits = String(patientIdentity.cpf || '').replace(/\D/g, '');
-    const pacienteCpf = cpfDigits.length === 11 ? formatCpf(cpfDigits) : (patientIdentity.cpf || '');
+    const pacienteCpf = formatCivilCpf(patientIdentity.cpf);
     const birthRaw = patientIdentity.birthDate;
     const pacienteNascimento = birthRaw
       ? (birthRaw.includes('-')

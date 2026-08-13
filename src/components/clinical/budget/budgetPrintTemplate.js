@@ -1,5 +1,6 @@
 import { formatCurrencyBRL } from '../../../utils/currency.js';
-import { formatCpf, formatCnpj } from '../../../utils/validators.js';
+import { formatCnpj } from '../../../utils/validators.js';
+import { formatCivilCpf } from '../../../utils/patientCpfIdentity.js';
 import {
   calcProcedureTotal,
 } from './budgetUtils.js';
@@ -129,10 +130,7 @@ function resolveProfessional(professional) {
 }
 
 function resolvePatientDocument(patient) {
-  const raw = patient?.cpf || patient?.document || patient?.profile?.cpf || '';
-  if (!hasText(raw)) return '';
-  const digits = String(raw).replace(/\D/g, '');
-  return digits.length === 11 ? formatCpf(digits) : String(raw).trim();
+  return formatCivilCpf(patient?.cpf || patient?.document || patient?.profile?.cpf || '');
 }
 
 function renderChipGrid(items) {

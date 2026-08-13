@@ -9,6 +9,10 @@ import {
 } from '../utils/patientIdentity.js';
 import { logAction } from './logService.js';
 import { isCpfValid, isPhoneValid, onlyDigits, validateFileMeta } from '../utils/validators.js';
+import {
+  allocateMissingPatientCpf,
+  isRealPatientCpf,
+} from '../utils/patientCpfIdentity.js';
 import { resolveTenantIdForWrite, resolveUserTenantId } from './tenantWriteGuard.js';
 
 const LEGACY_LOCAL_TENANT_ID = 'tenant-1';
@@ -26,8 +30,9 @@ const SUGGEST_TTL_MS = 45000;
 const suggestCache = new Map();
 
 const maskCpf = (value) => {
+  if (!isRealPatientCpf(value)) return '';
   const digits = normalizeCpf(value);
-  if (digits.length !== 11) return value || '';
+  if (digits.length !== 11) return '';
   return `${digits.slice(0, 3)}.***.***-${digits.slice(-2)}`;
 };
 
@@ -77,9 +82,12 @@ export function recalcAndPersistPendingData(patientId) {
 }
 
 const ensureCpfUnique = (db, cpf, ignorePatientId) => {
+  if (!isRealPatientCpf(cpf)) return;
   const normalized = normalizeCpf(cpf);
   if (!normalized) return;
-  const exists = db.patients.some((item) => normalizeCpf(item.cpf) === normalized && item.id !== ignorePatientId);
+  const exists = db.patients.some(
+    (item) => isRealPatientCpf(item.cpf) && normalizeCpf(item.cpf) === normalized && item.id !== ignorePatientId,
+  );
   if (exists) throw new Error('CPF já cadastrado.');
 };
 
@@ -116,7 +124,8 @@ export const searchPatients = (type, query, tenantId = null) => {
 
   if (type === 'cpf') {
     const cpf = normalizeCpf(q);
-    const exact = patients.find((item) => normalizeCpf(item.cpf) === cpf);
+    if (cpf.length !== 11) return { results: [], exactMatch: null };
+    const exact = patients.find((item) => isRealPatientCpf(item.cpf) && normalizeCpf(item.cpf) === cpf);
     const results = exact ? [exact] : [];
     return { results, exactMatch: exact || null };
   }
@@ -156,7 +165,7 @@ export const suggestPatients = (type, query, limit = 10, tenantId = null) => {
   if (type === 'cpf') {
     const digits = normalizeCpf(q);
     if (digits.length === 11) {
-      results = patients.filter((item) => normalizeCpf(item.cpf) === digits);
+      results = patients.filter((item) => isRealPatientCpf(item.cpf) && normalizeCpf(item.cpf) === digits);
     }
   } else if (type === 'phone') {
     const digits = normalizePhoneDigits(q);
@@ -380,7 +389,7 @@ export function computePendingFields(db, patientId) {
   const minor = isMinor(p.birth_date);
 
   const pendingFields = [];
-  const hasCpf = p.cpf && isCpfValid(p.cpf);
+  const hasCpf = isRealPatientCpf(p.cpf);
   const hasRg = Boolean(normalizeText(docs.rg));
   if (!normalizeText(p.full_name)) pendingFields.push('full_name');
   if (!hasCpf && !hasRg) pendingFields.push('cpf_or_rg');
@@ -435,8 +444,8 @@ export const createPatientFromImport = (user, payload, pendingFields = []) => {
   const sex = (normalizeText(payload.sex) || 'N').slice(0, 1).toUpperCase();
   const birthDate = normalizeText(payload.birth_date) || '1990-01-01';
   let cpf = normalizeCpf(payload.cpf);
-  if (!cpf || !isCpfValid(cpf)) {
-    cpf = generatePlaceholderCpf();
+  if (!isRealPatientCpf(cpf)) {
+    cpf = allocateMissingPatientCpf();
   }
 
   const patient = {
@@ -491,6 +500,7 @@ export const createPatientFromImport = (user, payload, pendingFields = []) => {
         marital_status: normalizeText(payload.documents.marital_status),
         responsible_name: normalizeText(payload.documents.responsible_name),
         responsible_cpf: normalizeText(payload.documents.responsible_cpf),
+        responsible_phone: normalizeText(payload.documents.responsible_phone),
       });
     }
     db.patientDocuments.push(documents);
@@ -540,7 +550,7 @@ const buildPatientFromImportPayload = (payload, pendingFields, user, tenantId) =
   const sex = (normalizeText(payload.sex) || 'N').slice(0, 1).toUpperCase();
   const birthDate = normalizeText(payload.birth_date) || '1990-01-01';
   let cpf = normalizeCpf(payload.cpf);
-  if (!cpf || !isCpfValid(cpf)) cpf = generatePlaceholderCpf();
+  if (!isRealPatientCpf(cpf)) cpf = allocateMissingPatientCpf();
   const patient = {
     id: createId('patient'),
     guid: crypto.randomUUID(),
@@ -584,10 +594,15 @@ export const createPatientsFromImportBatch = (user, items) => {
   });
   const cpfsInBatch = new Set();
   for (const { patient } of built) {
-    let cpf = normalizeCpf(patient.cpf);
-    while (cpfsInBatch.has(cpf)) {
-      cpf = generatePlaceholderCpf();
-      patient.cpf = cpf;
+    if (!isRealPatientCpf(patient.cpf)) {
+      patient.cpf = allocateMissingPatientCpf();
+      continue;
+    }
+    const cpf = normalizeCpf(patient.cpf);
+    patient.cpf = cpf;
+    if (cpfsInBatch.has(cpf)) {
+      patient.cpf = allocateMissingPatientCpf();
+      continue;
     }
     cpfsInBatch.add(cpf);
   }
@@ -617,6 +632,7 @@ export const createPatientsFromImportBatch = (user, items) => {
           marital_status: normalizeText(payload.documents.marital_status),
           responsible_name: normalizeText(payload.documents.responsible_name),
           responsible_cpf: normalizeText(payload.documents.responsible_cpf),
+          responsible_phone: normalizeText(payload.documents.responsible_phone),
         });
       }
       db.patientDocuments.push(documents);
@@ -716,38 +732,27 @@ export const createPatientsFromImportBatch = (user, items) => {
 };
 
 /**
- * Gera um CPF placeholder válido e único (para criação de paciente a partir de lead).
- * Usa 9 dígitos (1 + 8 aleatórios) + 2 dígitos verificadores; evita sequência repetida.
+ * CPF ausente permanece semanticamente MISSING.
+ * Nunca gera dígitos com checksum de CPF (isso era identidade fiscal fictícia).
  */
-function generatePlaceholderCpf() {
-  const onlyDigits = (v) => (v || '').replace(/\D/g, '');
-  const calc = (base, factor) => {
-    let total = 0;
-    for (let i = 0; i < base.length; i += 1) total += Number(base[i]) * (factor - i);
-    const mod = total % 11;
-    return mod < 2 ? 0 : 11 - mod;
-  };
-  let base = '1';
-  for (let i = 0; i < 8; i += 1) base += Math.floor(Math.random() * 10);
-  if (/^(\d)\1+$/.test(base)) base = '1' + String(Date.now() % 100000000).padStart(8, '0');
-  const d1 = calc(base, 10);
-  const d2 = calc(base + String(d1), 11);
-  return onlyDigits(base + String(d1) + String(d2));
+export function generatePlaceholderCpf() {
+  return allocateMissingPatientCpf();
 }
 
 /**
  * Cria paciente a partir dos dados do lead (conversão automática ao aprovar orçamento).
- * Mapeamento: lead.name → full_name; lead.phone → patientPhones; sex/birth/cpf com placeholder.
+ * Mapeamento: lead.name → full_name; lead.phone → patientPhones.
+ * Sem CPF civil: persiste vazio (pending), nunca um CPF fictício.
  */
 export const createPatientFromLead = (user, lead) => {
   const full_name = normalizeText(lead?.name) || 'Paciente CRM';
-  const created = createPatientQuick(user, {
+  const created = createPatientFromImport(user, {
     full_name,
     sex: 'N',
     birth_date: '1990-01-01',
-    cpf: generatePlaceholderCpf(),
+    cpf: allocateMissingPatientCpf(),
     lead_source: 'crm_lead',
-  });
+  }, ['cpf', 'cpf_or_rg', 'sex', 'birth_date']);
   const patientId = created.patientId || created.profile?.id;
   if (!patientId) throw new Error('ID do paciente inválido.');
   const digits = (lead?.phone || '').replace(/\D/g, '');
@@ -809,9 +814,14 @@ export const updatePatientProfile = (user, patientId, payload) => {
     if (!next.full_name) throw new Error('Nome completo é obrigatório.');
     if (!next.sex) throw new Error('Sexo é obrigatório.');
     if (!next.birth_date) throw new Error('Data de nascimento é obrigatória.');
-    if (!next.cpf) throw new Error('CPF é obrigatório.');
-    if (!isCpfValid(next.cpf)) throw new Error('CPF inválido.');
-    ensureCpfUnique(db, next.cpf, patientId);
+    if (isRealPatientCpf(next.cpf)) {
+      ensureCpfUnique(db, next.cpf, patientId);
+    } else if (!normalizeCpf(next.cpf)) {
+      next.cpf = allocateMissingPatientCpf();
+      if (!existing) throw new Error('CPF é obrigatório.');
+    } else {
+      throw new Error('CPF inválido.');
+    }
     if (existing) {
       next.hasPendingData = existing.hasPendingData;
       next.pendingFields = existing.pendingFields || [];
@@ -862,10 +872,12 @@ export const uploadPatientPhoto = (user, patientId, file) => {
 
 export const updatePatientDocuments = (user, patientId, payload) => {
   requirePermission(user, 'patients:write');
-  if (payload.cpf && !isCpfValid(payload.cpf)) throw new Error('CPF inválido.');
+  if (payload.cpf && !isRealPatientCpf(payload.cpf) && onlyDigits(payload.cpf)) {
+    throw new Error('CPF inválido.');
+  }
   return withDbResult((db) => {
     ensurePatient(db, patientId);
-    if (payload.cpf) ensureCpfUnique(db, payload.cpf, patientId);
+    if (isRealPatientCpf(payload.cpf)) ensureCpfUnique(db, payload.cpf, patientId);
     if (!Array.isArray(db.patientDocuments)) {
       db.patientDocuments = [];
     }
