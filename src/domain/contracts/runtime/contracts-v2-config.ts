@@ -14,6 +14,9 @@ import {
   type ContractsV2RateLimitMode,
   type PublicSigningRateLimitConfig,
 } from './contracts-v2-rate-limit-config.js';
+import {
+  resolveContractsV2PrivateStorageBinding,
+} from '../files/contracts-v2-private-storage-binding.js';
 
 export const CONTRACTS_V2_RUNTIME_MODES = [
   'disabled',
@@ -34,7 +37,8 @@ export type ContractsV2StorageMode =
   | 'unavailable'
   | 'memory'
   | 'private-local'
-  | 'private-staging-configured';
+  | 'private-staging-configured'
+  | 'private-production';
 
 export type ContractsV2DeliveryMode = 'disabled' | 'simulation';
 
@@ -205,7 +209,7 @@ export function loadContractsV2EnvironmentConfig(
     errors.push({ code: 'CONTRACTS_V2_DATABASE_MODE_INVALID', message: `databaseMode inválido: ${databaseMode}` });
   }
   const allowedStorage: ContractsV2StorageMode[] = [
-    'unavailable', 'memory', 'private-local', 'private-staging-configured',
+    'unavailable', 'memory', 'private-local', 'private-staging-configured', 'private-production',
   ];
   if (!allowedStorage.includes(storageMode)) {
     errors.push({ code: 'CONTRACTS_V2_STORAGE_MODE_INVALID', message: `storageMode inválido: ${storageMode}` });
@@ -291,6 +295,23 @@ export function loadContractsV2EnvironmentConfig(
     errors.push({
       code: 'CONTRACTS_V2_PRIVATE_BUCKET_STAGING_ONLY',
       message: 'Bucket staging só com runtime staging-disabled.',
+    });
+  }
+
+  if (storageMode === 'private-production') {
+    if (runtimeMode === 'local-integration' || runtimeMode === 'memory-test' || runtimeMode === 'staging-disabled') {
+      errors.push({
+        code: 'CONTRACTS_V2_PRODUCTION_STORAGE_RUNTIME_MISMATCH',
+        message: 'Storage private-production não combina com runtime local/staging.',
+      });
+    }
+  }
+
+  const storageBinding = resolveContractsV2PrivateStorageBinding(env);
+  if (!storageBinding.ok) {
+    errors.push({
+      code: storageBinding.code || 'CONTRACTS_V2_STORAGE_BINDING_INVALID',
+      message: storageBinding.reasons[0] || 'Binding de storage privado inválido.',
     });
   }
 

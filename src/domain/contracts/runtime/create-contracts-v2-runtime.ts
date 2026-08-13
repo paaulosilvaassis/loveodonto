@@ -155,6 +155,7 @@ export function createContractsV2Runtime(deps: ContractsV2RuntimeDependencies = 
       config.storageMode === 'memory'
       || config.storageMode === 'private-local'
       || config.storageMode === 'private-staging-configured'
+      || config.storageMode === 'private-production'
     ),
     bucketPrivate: deps.storage?.privateBucket ?? (
       config.storageMode === 'memory' || Boolean(config.privateBucket)

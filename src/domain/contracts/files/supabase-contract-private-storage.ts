@@ -24,7 +24,10 @@ import { buildGeneratedContractFileName } from './contract-file-names.js';
 import { createContractStoragePathBuilder } from './contract-storage-path.js';
 import { sha256Bytes, timingSafeEqualHex } from './contract-binary-hash.js';
 import type { ContractObjectStorageDriver } from './contract-object-storage-driver.js';
-const CONTRACTS_V2_PRIVATE_LOCAL_BUCKET = 'contracts-v2-private-local';
+import {
+  assertPrivateStorageAdapterBinding,
+  type ContractsV2PrivateStorageAdapterMode,
+} from './contracts-v2-private-storage-binding.js';
 import type {
   AuthorizedContractFileDownload,
   ContractAuditActor,
@@ -99,7 +102,7 @@ async function appendOp(
 }
 
 export function createSupabaseContractPrivateStorage(options: {
-  mode: 'local-test';
+  mode: ContractsV2PrivateStorageAdapterMode;
   bucket: string;
   driver: ContractObjectStorageDriver;
   fileRepository: ContractFilePersistenceCallbacks;
@@ -108,11 +111,15 @@ export function createSupabaseContractPrivateStorage(options: {
   ids?: ContractIdFactory;
   limits?: Partial<ContractFileSizeLimits>;
 }): ContractPrivateStorage {
-  if (options.mode !== 'local-test') {
-    fail('CONTRACTS_V2_LOCAL_STORAGE_REQUIRED', 'Modo local-test obrigatório.');
-  }
-  if (options.bucket !== CONTRACTS_V2_PRIVATE_LOCAL_BUCKET) {
-    fail('CONTRACT_STORAGE_BUCKET_UNAVAILABLE', 'Bucket fora do allowlist local.');
+  let binding: ReturnType<typeof assertPrivateStorageAdapterBinding>;
+  try {
+    binding = assertPrivateStorageAdapterBinding(options.mode, options.bucket);
+  } catch (err) {
+    const code = (err as { code?: string }).code;
+    if (code === 'CONTRACTS_V2_STORAGE_MODE_INVALID' && options.mode !== 'local-test') {
+      fail('CONTRACTS_V2_LOCAL_STORAGE_REQUIRED', 'Modo de storage adapter inválido.');
+    }
+    fail('CONTRACT_STORAGE_BUCKET_UNAVAILABLE', 'Bucket fora do allowlist do modo.');
   }
 
   const clock = options.clock || createSystemContractClock();
@@ -120,8 +127,12 @@ export function createSupabaseContractPrivateStorage(options: {
   const limits = resolveContractFileSizeLimits(options.limits);
   const pathBuilder = createContractStoragePathBuilder();
   const { driver, fileRepository, opsLedger } = options;
-  const bucket = options.bucket;
-  const storageProvider = 'supabase-local';
+  const bucket = binding.bucket;
+  const storageProvider = binding.mode === 'private-production'
+    ? 'supabase-production'
+    : binding.mode === 'private-staging-configured'
+      ? 'supabase-staging'
+      : 'supabase-local';
 
   async function compensationDelete(
     tenantId: TenantId,

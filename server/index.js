@@ -106,6 +106,10 @@ import { createSignatureEnvelopesV2Handlers } from './lib/signatureEnvelopesV2Ap
 import { createPublicSignaturesV2Handlers } from './lib/publicSignaturesV2Api.js';
 import { createPublicSignaturesV2CorsMiddleware } from './lib/contractsV2PublicSecurity.js';
 import { createContractsV2RuntimeReadinessHandlers } from './lib/contractsV2RuntimeReadinessApi.js';
+import {
+  resolveContractsV2PrivateStorageBinding,
+  toPublicStorageBindingPayload,
+} from './lib/contractsV2PrivateStorageBinding.js';
 import { createContractDocumentsV2Handlers } from './lib/contractDocumentsV2Api.js';
 import { createContractSigningCompletionV2Handlers } from './lib/contractSigningCompletionV2Api.js';
 import { createCreateTenantUserFromApp } from './lib/createTenantUserFromApp.js';
@@ -183,6 +187,9 @@ app.use(express.json({ limit: '1mb' }));
 
 /** Health check leve (sem Supabase) â€” usado pelo script `npm run console:stack` para saber quando a API estÃ¡ escutando. */
 app.get('/health', (_req, res) => {
+  const contractsV2Storage = toPublicStorageBindingPayload(
+    resolveContractsV2PrivateStorageBinding(process.env),
+  );
   res.status(200).json({
     ok: true,
     service: 'saas-admin-api',
@@ -192,6 +199,7 @@ app.get('/health', (_req, res) => {
       identityService: true,
       supabaseAuthPublicClient: Boolean(process.env.SUPABASE_ANON_KEY),
     },
+    contractsV2Storage,
   });
 });
 

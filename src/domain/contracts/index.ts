@@ -154,6 +154,7 @@ export type {
   ContractAuditActor,
 } from './files/contract-private-storage.js';
 export * from './files/contract-object-storage-driver.js';
+export * from './files/contracts-v2-private-storage-binding.js';
 export * from './files/supabase-contract-private-storage.js';
 export * from './files/contract-file-reconciliation.service.js';
 export * from './files/signature-graphic-artifact.service.js';

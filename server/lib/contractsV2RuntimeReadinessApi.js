@@ -8,6 +8,10 @@ import {
   getPublicSigningCorsPolicy,
   parseBool,
 } from './contractsV2PublicSecurity.js';
+import {
+  resolveContractsV2PrivateStorageBinding,
+  toPublicStorageBindingPayload,
+} from './contractsV2PrivateStorageBinding.js';
 
 const EXPECTED_MIGRATIONS = [
   '028_app_contracts_v2_foundation.sql',
@@ -58,7 +62,8 @@ export function createContractsV2RuntimeReadinessHandlers(deps = {}) {
 
       const mode = String(env.CONTRACTS_V2_RUNTIME_MODE || 'disabled').trim().toLowerCase();
       const origins = getPublicSigningCorsPolicy(env).allowedOrigins;
-      const bucket = env.CONTRACTS_V2_PRIVATE_BUCKET || null;
+      const storageBinding = resolveContractsV2PrivateStorageBinding(env);
+      const storagePublic = toPublicStorageBindingPayload(storageBinding);
       const deliveryMode = String(env.CONTRACTS_V2_DELIVERY_MODE || 'disabled').trim().toLowerCase();
       const rateLimitMode = String(env.CONTRACTS_V2_RATE_LIMIT_MODE || 'disabled').trim().toLowerCase();
       const trustProxy = String(env.CONTRACTS_V2_TRUST_PROXY ?? '0');
@@ -97,7 +102,16 @@ export function createContractsV2RuntimeReadinessHandlers(deps = {}) {
         { name: 'rate_limit_mode', ok: mode !== 'staging-disabled' || rateLimitMode === 'persisted' },
         { name: 'delivery', ok: deliveryMode === 'disabled' || mode === 'local-integration' },
         { name: 'feature_flags', ok: !parseBool(env.VITE_CONTRACTS_DOMAIN_V2_ENABLED) },
-        { name: 'bucket_configured', ok: Boolean(bucket) || mode === 'disabled' || mode === 'memory-test' },
+        {
+          name: 'bucket_configured',
+          ok: storageBinding.ok && (
+            storagePublic.bound
+            || storageBinding.storageMode === 'unavailable'
+            || storageBinding.storageMode === 'memory'
+            || mode === 'memory-test'
+          ),
+        },
+        { name: 'storage_binding', ok: storageBinding.ok },
       ];
 
       for (const c of components) {
@@ -120,7 +134,8 @@ export function createContractsV2RuntimeReadinessHandlers(deps = {}) {
         state,
         components: components.map((c) => ({ name: c.name, ok: c.ok })),
         expectedMigrations: EXPECTED_MIGRATIONS,
-        bucketConfigured: Boolean(bucket),
+        bucketConfigured: Boolean(storagePublic.bound),
+        storageBinding: storagePublic,
         flagsEnabled: false,
         flagsAllDisabled: true,
         blockers: [...new Set(blockers)],
