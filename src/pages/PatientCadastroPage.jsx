@@ -299,7 +299,7 @@ export default function PatientCadastroPage() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (searchParams.get('highlight') === 'pending' && searchParams.get('tab') === 'enderecos') {
+    if (searchParams.get('highlight') === 'pending') {
       setEditMode(true);
     }
   }, [searchParams]);

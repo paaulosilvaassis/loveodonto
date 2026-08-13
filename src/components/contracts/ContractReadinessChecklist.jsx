@@ -2,8 +2,8 @@ import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { buildContractPrerequisiteResolutionCards } from '../../contracts/contractPrerequisitesResolution.js';
 
 /**
- * Painel "Dados obrigatórios pendentes" com CTAs de resolução contextual.
- * A habilitação de gerar contrato continua vindo de checklist.canGenerate (validações reais).
+ * Central de resolução de pendências do contrato.
+ * canGenerate continua vindo do validator real (checklist.canGenerate).
  */
 export function ContractReadinessChecklist({
   checklist,
@@ -20,6 +20,7 @@ export function ContractReadinessChecklist({
       appointmentId: resolutionContext.appointmentId,
       budgetId: resolutionContext.budgetId,
       contractId: resolutionContext.contractId,
+      professionalId: resolutionContext.professionalId,
     })
     : null;
 
@@ -27,6 +28,9 @@ export function ContractReadinessChecklist({
   const hasPending = resolution
     ? resolution.cards.some((card) => card.status === 'pending')
     : Object.values(groups).some((items) => items?.length);
+  const hasBlocking = resolution
+    ? resolution.cards.some((card) => card.status === 'pending' && card.isBlocking)
+    : !canGenerate;
 
   if (!hasPending && canGenerate) {
     return (
@@ -43,29 +47,46 @@ export function ContractReadinessChecklist({
 
   if (!hasPending) return null;
 
+  const panelTone = hasBlocking ? 'pending' : 'warn';
+  const title = canGenerate
+    ? 'Pendências corrigíveis'
+    : 'Requisitos pendentes';
+  const subtitle = canGenerate
+    ? `Qualificação: ${partyLabel}`
+    : 'Resolva os itens abaixo para liberar o contrato.';
+
   return (
     <div
-      className={`contract-readiness contract-readiness--pending ${className}`.trim()}
+      className={`contract-readiness contract-readiness--${panelTone} ${className}`.trim()}
       role="status"
       data-testid="contract-readiness-pending"
     >
-      <p><strong>{canGenerate ? 'Atenção antes do envio' : 'Dados obrigatórios pendentes'}</strong></p>
-      <p className="contract-readiness-meta">Qualificação: {partyLabel}</p>
+      <p><strong>{title}</strong></p>
+      <p className="contract-readiness-meta">{subtitle}</p>
 
       {resolution ? (
         <div className="contract-readiness-cards">
           {resolution.cards.map((card) => (
             <article
               key={card.group}
-              className={`contract-readiness-card contract-readiness-card--${card.status}`}
+              className={[
+                'contract-readiness-card',
+                `contract-readiness-card--${card.status}`,
+                card.status === 'pending' && card.isBlocking ? 'is-blocking' : '',
+              ].filter(Boolean).join(' ')}
               data-testid={`contract-prereq-card-${card.group}`}
               data-status={card.status}
+              data-blocking={card.isBlocking ? 'true' : 'false'}
             >
               <header className="contract-readiness-card__head">
                 {card.status === 'complete' ? (
                   <CheckCircle2 size={16} aria-hidden className="contract-readiness-card__icon is-ok" />
                 ) : (
-                  <AlertTriangle size={16} aria-hidden className="contract-readiness-card__icon is-warn" />
+                  <AlertTriangle
+                    size={16}
+                    aria-hidden
+                    className={`contract-readiness-card__icon ${card.isBlocking ? 'is-critical' : 'is-warn'}`}
+                  />
                 )}
                 <h4>{card.title}</h4>
               </header>
@@ -91,10 +112,18 @@ export function ContractReadinessChecklist({
                       data-patient-id={card.destination.patientId || ''}
                       data-appointment-id={card.destination.appointmentId || ''}
                       data-budget-id={card.destination.budgetId || ''}
+                      data-professional-id={card.destination.professionalId || ''}
                       onClick={() => onResolve?.(card)}
                     >
                       {card.destination.ctaLabel}
                     </button>
+                  ) : card.explicitlyNonActionable || card.destination?.mode === 'blocked' ? (
+                    <p
+                      className="contract-readiness-card__nonactionable"
+                      data-testid={`contract-prereq-nonactionable-${card.group}`}
+                    >
+                      {card.nonActionableReason || card.destination?.reason}
+                    </p>
                   ) : null}
                 </>
               )}

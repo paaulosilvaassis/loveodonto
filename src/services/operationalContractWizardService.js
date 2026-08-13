@@ -13,6 +13,8 @@ import { resolveAttachedTcleIdsFromClinicalDocuments } from './clinicalTcleAttac
 import { formatUxMessage } from '../contracts/operationalUxMessages.js';
 import { formatCurrencyBRL } from '../utils/currency.js';
 import { resolveWizardFinancialDisplay } from './operationalContractWizardSupport.js';
+import { detectAllTreatmentTypes } from '../components/clinical/contract/detectTreatmentType.js';
+import { resolveRequiredTcles } from '../contracts/contractTcleRegistry.js';
 
 export {
   listWizardFinalizePrerequisites,
@@ -111,6 +113,14 @@ export function buildDocumentPackageForBudget({
   }) || [];
   const contract = getContractStatusForQuote(appointmentId, 'clinical_budget', budgetId, patientId);
   const pendency = deriveContractPendency(contract);
+  const treatmentTypes = detectAllTreatmentTypes({
+    planName: budget?.planName || '',
+    procedures: budget?.procedures || [],
+  });
+  const requiredTcles = resolveRequiredTcles(treatmentTypes);
+  const tcleRequired = requiredTcles.length > 0;
+  const tcleReady = !tcleRequired || attachedTcleIds.length > 0;
+  const tcleTitles = requiredTcles.map((item) => item.title).filter(Boolean).join(', ');
 
   const items = [
     {
@@ -126,11 +136,15 @@ export function buildDocumentPackageForBudget({
       id: 'tcle',
       documentType: 'TCLE',
       label: attachedTcleIds.length > 1 ? `TCLE(s) (${attachedTcleIds.length})` : 'TCLE',
-      required: true,
-      ready: attachedTcleIds.length > 0 || Boolean(clinical?.documents?.length),
+      required: tcleRequired,
+      ready: tcleReady,
       version: '1',
       hash: null,
-      detail: attachedTcleIds.length ? `${attachedTcleIds.length} anexo(s)` : 'Pendente de anexação clínica',
+      detail: attachedTcleIds.length
+        ? `${attachedTcleIds.length} anexo(s)`
+        : tcleRequired
+          ? `Pendente: anexe em Documentos → Consentimentos${tcleTitles ? ` (${tcleTitles})` : ''}`
+          : 'Não exigido para este tratamento',
     },
     {
       id: 'lgpd',

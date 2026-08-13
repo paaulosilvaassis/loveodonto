@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import GenerateContractModal from '../contracts/GenerateContractModal.jsx';
 import { ClinicalStageShell, ClinicalBtn } from './ClinicalStageShell.jsx';
-import { ContractBlockModal } from './contract/ContractBlockModal.jsx';
 import { formatContractEventLabel } from './contract/contractEventLabels.js';
 import { linkFinancingToClinicalContract } from '../../services/clinicalBudgetFinancingIntegration.js';
 import { markBudgetContractGenerated } from '../../services/clinicalBudgetLockService.js';
@@ -27,7 +26,7 @@ import { notifyClinicalBudgetUpdated } from '../../services/clinicalBudgetApprov
 import { cancelContractSecure } from '../../services/cancelContractSecureService.js';
 import { can } from '../../permissions/permissions.js';
 import { loadDb } from '../../db/index.js';
-import { getPatient, PENDING_FIELDS_MAP } from '../../services/patientService.js';
+import { getPatient } from '../../services/patientService.js';
 import {
   getContractStatusForQuote,
   getContractDetails,
@@ -48,14 +47,13 @@ import {
 import { getPaymentOptionTitle } from './budget/budgetEventLabels.js';
 import { contractHtmlWithSignatures } from '../../services/contractPdfService.js';
 import { composeProfessionalClinicalContractHtml } from './contract/composeProfessionalClinicalContract.js';
-import { getClinicForumCityFromDb } from './contract/buildProfessionalContractContext.js';
-import { CLINIC_FORUM_VALIDATION_MESSAGE } from './contract/professionalContractClauses.js';
 import { ContractReadinessChecklist } from '../contracts/ContractReadinessChecklist.jsx';
 import { getContractReadinessChecklist } from '../../services/contractValidationService.js';
 import {
-  buildPrerequisiteDestination,
+  enrichContractReadinessChecklist,
   isSafeClinicalReturnUrl,
 } from '../../contracts/contractPrerequisitesResolution.js';
+import { resolveAttendingProfessionalCro } from '../../contracts/clinicTechnicalResponsible.js';
 import { getBudgetLockContext, getBudgetLockContextForBudget } from '../../services/clinicalBudgetLockService.js';
 import { generateProfessionalContractPdf } from './contract/generateProfessionalContractPdf.js';
 import { buildFinancialSection } from './contract/clinicalContractSchedule.js';
@@ -121,21 +119,7 @@ function InfoGrid({ rows }) {
   );
 }
 
-function resolveContractGenerateReadiness({
-  professionalId,
-  pendingCriticalFields,
-  clinicForumCity,
-  linkedContract,
-}) {
-  if (linkedContract) return { ready: true, reasons: [] };
-  const reasons = [];
-  if (pendingCriticalFields.length) reasons.push('Cadastro do paciente incompleto.');
-  if (!professionalId) reasons.push('Profissional responsável não definido.');
-  if (!clinicForumCity) reasons.push(CLINIC_FORUM_VALIDATION_MESSAGE);
-  return { ready: reasons.length === 0, reasons };
-}
-
-function resolveUiStatus({ contractAccessible, generateReadiness, linkedContract, contractReadiness }) {
+function resolveUiStatus({ contractAccessible, linkedContract, contractReadiness }) {
   if (!contractAccessible && !linkedContract) {
     return { key: 'blocked', label: 'Bloqueado', tone: 'blocked' };
   }
@@ -160,9 +144,6 @@ function resolveUiStatus({ contractAccessible, generateReadiness, linkedContract
       label: CONTRACT_STATUS_LABELS[linkedContract.status] || 'Em andamento',
       tone: 'draft',
     };
-  }
-  if (!generateReadiness.ready) {
-    return { key: 'pending', label: 'Pendente', tone: 'draft' };
   }
   if (contractReadiness && !contractReadiness.canGenerate) {
     const tclePending = (contractReadiness.groups?.tcle || []).length > 0;
@@ -205,7 +186,6 @@ export function ClinicalContractSection({
   const db = loadDb();
   const fullPatient = patientId ? getPatient(patientId) : null;
   const pendingCriticalFields = fullPatient?.profile?.pendingCriticalFields || [];
-  const [blockModalOpen, setBlockModalOpen] = useState(false);
   const [contractModalOpen, setContractModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
@@ -265,11 +245,6 @@ export function ClinicalContractSection({
     return getTreatmentTypeLabel(type);
   }, [effectiveBudget?.planName, effectiveBudget?.procedures, budget?.planName, budget?.procedures]);
 
-  const clinicForumCity = useMemo(
-    () => getClinicForumCityFromDb(db).clinicForumCity,
-    [db],
-  );
-
   const lockCtx = useMemo(
     () => (effectiveBudget
       ? getBudgetLockContextForBudget(appointmentId, effectiveBudget)
@@ -287,38 +262,45 @@ export function ClinicalContractSection({
     [effectiveBudget, lockCtx],
   );
 
-  const generateReadiness = useMemo(
-    () => resolveContractGenerateReadiness({
-      professionalId: appointment?.professionalId,
-      pendingCriticalFields,
-      clinicForumCity,
-      linkedContract,
-    }),
-    [appointment?.professionalId, pendingCriticalFields, clinicForumCity, linkedContract],
-  );
-
   const attachedTcleIds = useMemo(
     () => resolveAttachedTcleIdsFromClinicalDocuments({ patientId, appointmentId }),
     [patientId, appointmentId, historyKey],
   );
 
   const contractReadiness = useMemo(
-    () => (patientId && appointmentId && (effectiveBudget || budget)
-      ? getContractReadinessChecklist({
+    () => {
+      if (!patientId || !appointmentId || !(effectiveBudget || budget)) return null;
+      const base = getContractReadinessChecklist({
         quoteSource: 'clinical_budget',
         quoteId: appointmentId,
         patientId,
         currentUser: user,
         contractNumber: linkedContract?.contractNumber,
         attachedTcleIds,
-      })
-      : null),
-    [patientId, appointmentId, effectiveBudget, budget, user, linkedContract?.contractNumber, attachedTcleIds, historyKey],
+      });
+      return enrichContractReadinessChecklist(base, {
+        pendingCriticalFields,
+        professionalId: appointment?.professionalId || professional?.id || null,
+        professionalCro: resolveAttendingProfessionalCro(professional || {}),
+      });
+    },
+    [
+      patientId,
+      appointmentId,
+      effectiveBudget,
+      budget,
+      user,
+      linkedContract?.contractNumber,
+      attachedTcleIds,
+      historyKey,
+      pendingCriticalFields,
+      appointment?.professionalId,
+      professional,
+    ],
   );
 
   const uiStatus = resolveUiStatus({
     contractAccessible,
-    generateReadiness,
     linkedContract,
     contractReadiness,
   });
@@ -349,7 +331,18 @@ export function ClinicalContractSection({
     appointmentId: appointmentId || null,
     budgetId: effectiveBudget?.id || budget?.id || viewBudgetId || null,
     contractId: linkedContract?.id || viewContractId || null,
-  }), [patientId, appointmentId, effectiveBudget?.id, budget?.id, viewBudgetId, linkedContract?.id, viewContractId]);
+    professionalId: appointment?.professionalId || professional?.id || null,
+  }), [
+    patientId,
+    appointmentId,
+    effectiveBudget?.id,
+    budget?.id,
+    viewBudgetId,
+    linkedContract?.id,
+    viewContractId,
+    appointment?.professionalId,
+    professional?.id,
+  ]);
 
   const handleResolvePrerequisite = useCallback((card) => {
     const destination = card?.destination;
@@ -382,6 +375,8 @@ export function ClinicalContractSection({
         patientId: destination.patientId || patientId || undefined,
         appointmentId: destination.appointmentId || appointmentId || undefined,
         budgetId: destination.budgetId || budget?.id || undefined,
+        openCollaboratorId: destination.professionalId || undefined,
+        tab: card.group === 'profissional' ? 'profissional' : undefined,
         docCategory: destination.focus === 'consentimentos' ? 'consentimentos' : undefined,
         docTemplate: destination.templateKey || undefined,
       },
@@ -393,9 +388,8 @@ export function ClinicalContractSection({
       showToast(accessBlockReasons[0] || 'Contrato bloqueado.', 'error');
       return;
     }
-    if (!generateReadiness.ready) {
-      if (pendingCriticalFields.length) setBlockModalOpen(true);
-      else showToast(generateReadiness.reasons[0] || 'Complete os requisitos para gerar o contrato.', 'error');
+    if (!contractReadiness?.canGenerate) {
+      showToast('Resolva os requisitos pendentes abaixo para gerar o contrato.', 'error');
       return;
     }
     setContractModalOpen(true);
@@ -492,12 +486,11 @@ export function ClinicalContractSection({
   );
 
   const canGenerate = contractAccessible
-    && generateReadiness.ready
     && !linkedContract
     && (contractReadiness?.canGenerate ?? false);
   const canEdit = linkedContract?.status === CONTRACT_STATUS.DRAFT;
   const canView = Boolean(linkedContract?.renderedHtml || linkedContract?.editedHtml || contractAccessible);
-  const canPreview = contractAccessible && (generateReadiness.ready || linkedContract);
+  const canPreview = contractAccessible && ((contractReadiness?.canGenerate ?? false) || linkedContract);
   const canSend = canSendContractForSignature({ contract: linkedContract, budget: effectiveBudget });
   const canCancel = canCancelAsAdmin
     && linkedContract
@@ -568,19 +561,6 @@ export function ClinicalContractSection({
                 contractStatus={linkedContract?.status || null}
                 compact
               />
-            ) : null}
-            {!generateReadiness.ready && !linkedContract ? (
-              <div className="clinical-contract-canceled-banner" role="status">
-                <Lock size={18} aria-hidden />
-                <div>
-                  <strong>Requisitos pendentes para gerar o contrato</strong>
-                  <ul className="clinical-contract-block-reasons">
-                    {generateReadiness.reasons.map((reason) => (
-                      <li key={reason}>{reason}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
             ) : null}
             {contractReadiness && !linkedContract ? (
               <ContractReadinessChecklist
@@ -786,27 +766,6 @@ export function ClinicalContractSection({
         onOpenChange={setCancelModalOpen}
         busy={cancelBusy}
         onConfirm={handleConfirmCancelContract}
-      />
-
-      <ContractBlockModal
-        open={blockModalOpen}
-        onClose={() => setBlockModalOpen(false)}
-        pendingFields={pendingCriticalFields}
-        fieldsMap={PENDING_FIELDS_MAP}
-        onFillPatient={() => {
-          setBlockModalOpen(false);
-          if (!patientId) return;
-          handleResolvePrerequisite({
-            group: 'paciente',
-            destination: buildPrerequisiteDestination('paciente', {
-              patientId,
-              appointmentId,
-              budgetId: budget?.id || viewBudgetId || null,
-              contractId: linkedContract?.id || viewContractId || null,
-              items: [{ label: 'Cadastro pendente' }],
-            }),
-          });
-        }}
       />
 
       {toast ? (

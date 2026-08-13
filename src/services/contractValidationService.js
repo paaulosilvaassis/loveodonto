@@ -93,8 +93,11 @@ export function getContractReadinessChecklist(input = {}) {
     paciente: [],
     dependente: [],
     responsavel: [],
+    profissional: [],
     contrato: [],
+    financeiro: [],
     tcle: [],
+    lgpd: [],
     template: [],
   };
 

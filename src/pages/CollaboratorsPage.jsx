@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth.js';
 import { Field } from '../components/Field.jsx';
 import { loadDb } from '../db/index.js';
@@ -53,6 +53,7 @@ import {
   getCollaboratorSpecialty as resolveCollaboratorSpecialty,
   resolveCollaboratorForDisplay,
 } from '../utils/collaboratorDisplay.js';
+import { isSafeClinicalReturnUrl } from '../contracts/contractPrerequisitesResolution.js';
 
 const CADASTRO_TABS = new Set(['pessoais', 'documentos', 'profissional', 'endereco', 'contatos']);
 const EDITABLE_TABS = new Set([...CADASTRO_TABS, 'horarios', 'financeiro']);
@@ -96,6 +97,8 @@ const isCollaboratorActive = (collaborator) =>
 
 export default function CollaboratorsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [openNewCollaborator, setOpenNewCollaborator] = useState(false);
   const [collaborators, setCollaborators] = useState([]);
@@ -117,6 +120,9 @@ export default function CollaboratorsPage() {
   const [selectedIdentity, setSelectedIdentity] = useState(null);
   const editFormRef = useRef(null);
   const accessReconcileGenRef = useRef(0);
+  const openedFromContractRef = useRef(false);
+  const returnToRaw = searchParams.get('returnTo') || location.state?.returnTo || '';
+  const returnToClinical = isSafeClinicalReturnUrl(returnToRaw);
 
   const [draft, setDraft] = useState({
     profile: {},
@@ -519,6 +525,27 @@ export default function CollaboratorsPage() {
     reconcileAccessInBackground,
   ]);
 
+  useEffect(() => {
+    if (openedFromContractRef.current || listLoading) return;
+    const fromState = location.state?.openCollaboratorId;
+    const fromQuery = searchParams.get('collaboratorId');
+    const id = fromState || fromQuery;
+    if (!id) return;
+    openedFromContractRef.current = true;
+    if (!selectCollaborator(id)) {
+      openedFromContractRef.current = false;
+      return;
+    }
+    const tab = searchParams.get('tab') || location.state?.tab || 'profissional';
+    if (CADASTRO_TABS.has(tab) || tab === 'acesso') {
+      setActiveTab(tab);
+      if (CADASTRO_TABS.has(tab)) {
+        setEditingSection('');
+        setEditingTab(tab);
+      }
+    }
+  }, [listLoading, location.state, searchParams, selectCollaborator]);
+
   const handleCollaboratorCreated = async (newId, meta = {}) => {
     setOpenNewCollaborator(false);
     setActiveTab('geral');
@@ -785,6 +812,9 @@ export default function CollaboratorsPage() {
       setEditingSection('');
       refreshCollaboratorDraft(undefined, { refreshList: true });
       setSuccess('Alterações salvas com sucesso.');
+      if (returnToClinical) {
+        navigate(returnToRaw);
+      }
     } catch (err) {
       if (err?.code === 'WORK_HOURS_CONFLICT') {
         setHoursConflictModal({ open: true, conflicts: err?.details?.conflicts || [] });

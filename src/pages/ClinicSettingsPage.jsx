@@ -36,6 +36,8 @@ const EDITABLE_SECTIONS = new Set([
   'nfse', 'integracoes', 'web', 'licenca',
 ]);
 
+const CLINIC_QUERY_SECTIONS = new Set(['documentacao', 'enderecos', 'cadastro']);
+
 const defaultHours = [
   { diaSemana: 0, abre: '08:00', fecha: '18:00', fechado: true, intervaloInicio: '', intervaloFim: '' },
   { diaSemana: 1, abre: '08:00', fecha: '18:00', fechado: false, intervaloInicio: '12:00', intervaloFim: '13:00' },
@@ -58,10 +60,10 @@ export default function ClinicSettingsPage() {
   const highlightFromQuery = searchParams.get('highlight') || '';
 
   const [activeSection, setActiveSection] = useState(() => (
-    sectionFromQuery === 'documentacao' ? 'documentacao' : 'geral'
+    CLINIC_QUERY_SECTIONS.has(sectionFromQuery) ? sectionFromQuery : 'geral'
   ));
   const [editingSection, setEditingSection] = useState(() => (
-    sectionFromQuery === 'documentacao' ? 'documentacao' : ''
+    CLINIC_QUERY_SECTIONS.has(sectionFromQuery) ? sectionFromQuery : ''
   ));
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -76,10 +78,9 @@ export default function ClinicSettingsPage() {
   const isAdmin = can(user, 'team:write');
 
   useEffect(() => {
-    if (sectionFromQuery === 'documentacao') {
-      setActiveSection('documentacao');
-      setEditingSection('documentacao');
-    }
+    if (!CLINIC_QUERY_SECTIONS.has(sectionFromQuery)) return;
+    setActiveSection(sectionFromQuery);
+    setEditingSection(sectionFromQuery);
   }, [sectionFromQuery]);
 
   useEffect(() => {
@@ -190,7 +191,7 @@ export default function ClinicSettingsPage() {
       setEditingSection('');
       refresh();
       setSuccess('Dados salvos com sucesso.');
-      if (returnToClinical && (section === 'documentacao' || section === 'cadastro')) {
+      if (returnToClinical && (section === 'documentacao' || section === 'cadastro' || section === 'enderecos')) {
         navigate(returnToRaw);
       }
     } catch (err) {
@@ -262,6 +263,9 @@ export default function ClinicSettingsPage() {
       addClinicAddress(user, draft.newAddress);
       setDraft((prev) => ({ ...prev, newAddress: { tipo: '', cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '', principal: false } }));
       refresh();
+      if (returnToClinical) {
+        navigate(returnToRaw);
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -1206,7 +1210,7 @@ export default function ClinicSettingsPage() {
         <div className="contract-return-banner" role="status" data-testid="clinic-return-to-contract">
           <div>
             <strong>Correção a partir do contrato</strong>
-            <p className="muted">Após salvar a documentação, você voltará à etapa Contrato do atendimento.</p>
+            <p className="muted">Após salvar, você voltará à etapa Contrato do atendimento.</p>
           </div>
           <button type="button" className="button secondary" onClick={() => navigate(returnToRaw)}>
             Voltar ao contrato

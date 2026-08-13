@@ -6,8 +6,11 @@ import {
   buildContractPrerequisiteResolutionCards,
   buildContractReturnUrl,
   buildPrerequisiteDestination,
+  enrichContractReadinessChecklist,
   isSafeClinicalReturnUrl,
+  listUnactionableBlockingCards,
   resolvePatientCadastroTab,
+  UNKNOWN_BLOCKER_FAILSAFE,
 } from '../contracts/contractPrerequisitesResolution.js';
 import { getContractReadinessChecklist } from '../services/contractValidationService.js';
 
@@ -23,8 +26,11 @@ function baseChecklist({ missing = [], requiredTcles = [], canGenerate = false }
     paciente: [],
     dependente: [],
     responsavel: [],
+    profissional: [],
     contrato: [],
+    financeiro: [],
     tcle: [],
+    lgpd: [],
     template: [],
   };
   for (const item of missing) {
@@ -219,5 +225,223 @@ describe('PHASE_CONTRACT_PREREQUISITES_ACTIONABLE_RESOLUTION_UX', () => {
     expect(checklistSrc).toContain('contract-prereq-cta-');
     expect(clinicalSrc).toContain('handleResolvePrerequisite');
     expect(clinicalSrc).toContain('resolutionContext');
+    expect(clinicalSrc).toContain('enrichContractReadinessChecklist');
+    expect(clinicalSrc).not.toContain('Cadastro do paciente incompleto.');
+  });
+});
+
+function cardsFor(checklist, extra = {}) {
+  return buildContractPrerequisiteResolutionCards({
+    checklist,
+    patientId: PATIENT_ID,
+    appointmentId: APPOINTMENT_ID,
+    budgetId: BUDGET_ID,
+    professionalId: extra.professionalId || 'col-prereq-1',
+  });
+}
+
+describe('PHASE_CONTRACT_BLOCKER_RESOLUTION_CENTER_V2', () => {
+  it('1) endereço do paciente ausente → CTA cadastro do paciente', () => {
+    const cards = cardsFor(baseChecklist({
+      missing: [{ tag: '#pacienteEndereco', label: 'Endereço do paciente', group: 'paciente', critical: true }],
+    }));
+    const patient = cards.cards.find((c) => c.group === 'paciente');
+    expect(patient?.destination?.ctaLabel).toBe('Completar cadastro do paciente');
+    expect(patient?.destination?.href).toContain(`/pacientes/cadastro/${PATIENT_ID}`);
+    expect(patient?.destination?.href).toContain('tab=enderecos');
+    expect(patient?.isBlocking).toBe(true);
+  });
+
+  it('2) telefone ausente → mesmo CTA de paciente (tab contatos)', () => {
+    const enriched = enrichContractReadinessChecklist(baseChecklist({ canGenerate: true }), {
+      pendingCriticalFields: ['phone'],
+    });
+    expect(enriched.canGenerate).toBe(true);
+    const cards = cardsFor(enriched);
+    const patient = cards.cards.find((c) => c.group === 'paciente');
+    expect(patient?.items.some((i) => /Telefone/i.test(i.label))).toBe(true);
+    expect(patient?.destination?.ctaLabel).toBe('Completar cadastro do paciente');
+    expect(patient?.destination?.href).toContain('tab=contatos');
+    expect(cards.cards.filter((c) => c.group === 'paciente')).toHaveLength(1);
+  });
+
+  it('3) endereço da clínica ausente → CTA Dados da Clínica / endereços', () => {
+    const cards = cardsFor(baseChecklist({
+      missing: [{ tag: '#clinicaEndereco', label: 'Endereço da clínica', group: 'clinica', critical: true }],
+    }));
+    const clinic = cards.cards.find((c) => c.group === 'clinica');
+    expect(clinic?.destination?.ctaLabel).toBe('Corrigir dados da clínica');
+    expect(clinic?.destination?.href).toContain('/admin/dados-clinica');
+    expect(clinic?.destination?.href).toContain('section=enderecos');
+  });
+
+  it('4) RT/CRO ausente → CTA Dados da Clínica / documentação', () => {
+    const cards = cardsFor(baseChecklist({
+      missing: [
+        { tag: '#responsavelTecnicoCRO', label: 'CRO do responsável técnico', group: 'clinica', critical: true },
+      ],
+    }));
+    const clinic = cards.cards.find((c) => c.group === 'clinica');
+    expect(clinic?.destination?.href).toContain('section=documentacao');
+    expect(clinic?.destination?.href).toContain('highlight=responsavel-tecnico');
+  });
+
+  it('5) CRO do profissional ausente → CTA colaborador correto', () => {
+    const enriched = enrichContractReadinessChecklist(baseChecklist({ canGenerate: true }), {
+      professionalId: 'col-prereq-1',
+      professionalCro: '',
+    });
+    expect(enriched.canGenerate).toBe(false);
+    const cards = cardsFor(enriched, { professionalId: 'col-prereq-1' });
+    const professional = cards.cards.find((c) => c.group === 'profissional');
+    expect(professional?.destination?.ctaLabel).toBe('Corrigir dados do profissional');
+    expect(professional?.destination?.href).toContain('/admin/colaboradores');
+    expect(professional?.destination?.href).toContain('collaboratorId=col-prereq-1');
+    expect(professional?.destination?.href).toContain('tab=profissional');
+    expect(professional?.destination?.href).not.toContain('/admin/colaboradores/novo');
+  });
+
+  it('6) TCLE ausente → CTA Consentimentos', () => {
+    const cards = cardsFor(baseChecklist({
+      missing: [{ tag: 'tcle:tcle_implante', label: 'TCLE obrigatório: Implantes', group: 'tcle', critical: true }],
+      requiredTcles: [{ id: 'tcle_implante', title: 'Implantes' }],
+    }));
+    const tcle = cards.cards.find((c) => c.group === 'tcle');
+    expect(tcle?.destination?.ctaLabel).toBe('Resolver TCLE');
+    expect(tcle?.destination?.href).toContain('section=documentos');
+    expect(tcle?.destination?.href).toContain('docCategory=consentimentos');
+  });
+
+  it('7) LGPD ausente → CTA correspondente; LGPD pronto não gera CTA', () => {
+    const missing = cardsFor(baseChecklist({
+      missing: [{ tag: 'lgpd:missing', label: 'Termo LGPD pendente', group: 'lgpd', critical: true }],
+    }));
+    expect(missing.cards.find((c) => c.group === 'lgpd')?.destination?.ctaLabel).toBe('Resolver LGPD');
+
+    const ready = cardsFor(baseChecklist({ canGenerate: true }));
+    expect(ready.cards.find((c) => c.group === 'lgpd')).toBeUndefined();
+  });
+
+  it('8) pagamento ausente → CTA Orçamento / condição financeira', () => {
+    const cards = cardsFor(baseChecklist({
+      missing: [{ tag: '#formaPagamento', label: 'Forma de pagamento', group: 'contrato', critical: true }],
+    }));
+    const financeiro = cards.cards.find((c) => c.group === 'financeiro');
+    expect(financeiro?.destination?.ctaLabel).toBe('Corrigir condição financeira');
+    expect(financeiro?.destination?.href).toContain('section=orcamento');
+    expect(cards.cards.find((c) => c.group === 'contrato' && c.status === 'pending')).toBeUndefined();
+  });
+
+  it('9) vários blockers de paciente → 1 CTA de paciente', () => {
+    const enriched = enrichContractReadinessChecklist(baseChecklist({
+      missing: [
+        { tag: '#pacienteEndereco', label: 'Endereço do paciente', group: 'paciente', critical: true },
+      ],
+    }), { pendingCriticalFields: ['phone', 'sex'] });
+    const cards = cardsFor(enriched);
+    const patientCards = cards.cards.filter((c) => c.group === 'paciente' && c.status === 'pending');
+    expect(patientCards).toHaveLength(1);
+    expect(patientCards[0].items.length).toBeGreaterThanOrEqual(2);
+    expect(patientCards[0].destination?.ctaLabel).toBe('Completar cadastro do paciente');
+  });
+
+  it('10) vários domínios → 1 CTA por grupo', () => {
+    const cards = cardsFor(baseChecklist({
+      missing: [
+        { tag: '#pacienteEndereco', label: 'Endereço do paciente', group: 'paciente', critical: true },
+        { tag: '#clinicaEndereco', label: 'Endereço da clínica', group: 'clinica', critical: true },
+        { tag: 'tcle:tcle_implante', label: 'TCLE obrigatório: Implantes', group: 'tcle', critical: true },
+      ],
+      requiredTcles: [{ id: 'tcle_implante', title: 'Implantes' }],
+    }));
+    const pending = cards.cards.filter((c) => c.status === 'pending');
+    expect(pending.map((c) => c.group).sort()).toEqual(['clinica', 'paciente', 'tcle']);
+    expect(pending.every((c) => c.destination?.ctaLabel)).toBe(true);
+  });
+
+  it('11) returnTo mantém appointment/budget/patient', () => {
+    const dest = buildPrerequisiteDestination('paciente', {
+      patientId: PATIENT_ID,
+      appointmentId: APPOINTMENT_ID,
+      budgetId: BUDGET_ID,
+      items: [{ label: 'Endereço do paciente' }],
+    });
+    expect(dest.returnUrl).toContain(`/atendimento-clinico/${APPOINTMENT_ID}`);
+    expect(dest.returnUrl).toContain(`budgetId=${BUDGET_ID}`);
+    expect(dest.returnUrl).toContain(`patientId=${PATIENT_ID}`);
+    expect(dest.returnUrl).toContain('section=contratos');
+    expect(dest.returnUrl).toContain('revalidate=1');
+    expect(dest.href).toContain(PATIENT_ID);
+  });
+
+  it('12) revalidação remove blocker após correção', () => {
+    const blocked = enrichContractReadinessChecklist(baseChecklist({
+      missing: [{ tag: '#pacienteEndereco', label: 'Endereço do paciente', group: 'paciente', critical: true }],
+    }), { professionalId: 'col-1', professionalCro: 'CRO-MG 1' });
+    expect(cardsFor(blocked).canGenerate).toBe(false);
+
+    const ready = enrichContractReadinessChecklist(baseChecklist({
+      missing: [],
+      canGenerate: true,
+    }), { professionalId: 'col-1', professionalCro: 'CRO-MG 1' });
+    const readyCards = cardsFor(ready);
+    expect(readyCards.canGenerate).toBe(true);
+    expect(readyCards.cards.filter((c) => c.status === 'pending')).toHaveLength(0);
+  });
+
+  it('13) canGenerate só libera quando o validator real libera', () => {
+    const validatorBlocked = enrichContractReadinessChecklist(baseChecklist({
+      missing: [{ tag: '#pacienteCPF', label: 'CPF do paciente', group: 'paciente', critical: true }],
+      canGenerate: false,
+    }), { pendingCriticalFields: [], professionalId: 'col-1', professionalCro: 'CRO-1' });
+    expect(validatorBlocked.canGenerate).toBe(false);
+
+    const validatorOk = enrichContractReadinessChecklist(baseChecklist({
+      missing: [],
+      canGenerate: true,
+    }), { pendingCriticalFields: ['phone', 'sex', 'birth_date'], professionalId: 'col-1', professionalCro: 'CRO-1' });
+    expect(validatorOk.canGenerate).toBe(true);
+  });
+
+  it('14) rota cross-tenant / externa não é construída', () => {
+    const dest = buildPrerequisiteDestination('clinica', {
+      patientId: PATIENT_ID,
+      appointmentId: APPOINTMENT_ID,
+      budgetId: BUDGET_ID,
+      items: [{ tag: '#responsavelTecnicoCRO', label: 'CRO' }],
+    });
+    expect(dest.href.startsWith('/admin/dados-clinica')).toBe(true);
+    expect(dest.href).not.toContain('://');
+    expect(isSafeClinicalReturnUrl(dest.returnUrl)).toBe(true);
+    expect(isSafeClinicalReturnUrl('https://evil.com/atendimento-clinico/x')).toBe(false);
+    expect(isSafeClinicalReturnUrl('//other-tenant.example/atendimento-clinico/x')).toBe(false);
+  });
+
+  it('15) unknown blocking reason → fail-safe message', () => {
+    const checklist = baseChecklist({ canGenerate: false });
+    checklist.groups.mystery = [{ tag: 'mystery:x', label: 'Motivo desconhecido', critical: true }];
+    const cards = cardsFor(checklist);
+    const unknown = cards.cards.find((c) => c.group === 'mystery');
+    expect(unknown?.explicitlyNonActionable).toBe(true);
+    expect(unknown?.nonActionableReason).toBe(UNKNOWN_BLOCKER_FAILSAFE);
+    expect(unknown?.destination?.href).toBeNull();
+  });
+
+  it('16) blocker acionável conhecido nunca fica sem CTA', () => {
+    const checklist = enrichContractReadinessChecklist(baseChecklist({
+      missing: [
+        { tag: '#pacienteEndereco', label: 'Endereço do paciente', group: 'paciente', critical: true },
+        { tag: '#clinicaEndereco', label: 'Endereço da clínica', group: 'clinica', critical: true },
+        { tag: '#formaPagamento', label: 'Forma de pagamento', group: 'contrato', critical: true },
+        { tag: 'tcle:tcle_implante', label: 'TCLE obrigatório: Implantes', group: 'tcle', critical: true },
+        { tag: 'lgpd:missing', label: 'Termo LGPD pendente', group: 'lgpd', critical: true },
+      ],
+      requiredTcles: [{ id: 'tcle_implante', title: 'Implantes' }],
+    }), { professionalId: 'col-prereq-1', professionalCro: '' });
+    const resolution = cardsFor(checklist, { professionalId: 'col-prereq-1' });
+    expect(listUnactionableBlockingCards(resolution)).toEqual([]);
+    const pending = resolution.cards.filter((c) => c.status === 'pending' && !c.explicitlyNonActionable);
+    expect(pending.length).toBeGreaterThan(0);
+    expect(pending.every((c) => c.destination?.href && c.destination.action)).toBe(true);
   });
 });

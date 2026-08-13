@@ -31068,6 +31068,11 @@ a.button {
   background: #fffbeb;
 }
 
+.contract-readiness--warn {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
 .contract-readiness-meta {
   color: #64748b;
   margin: 0.25rem 0 0.5rem;
@@ -31109,6 +31114,21 @@ a.button {
 
 .contract-readiness-card--pending {
   border-color: #fcd34d;
+}
+
+.contract-readiness-card--pending.is-blocking {
+  border-color: #fca5a5;
+  background: #fff7f7;
+}
+
+.contract-readiness-card__icon.is-critical {
+  color: #b91c1c;
+}
+
+.contract-readiness-card__nonactionable {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #64748b;
 }
 
 .contract-readiness-card--complete {
