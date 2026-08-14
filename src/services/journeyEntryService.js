@@ -1,5 +1,10 @@
 import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
+import {
+  findClinicalAppointmentFor,
+  resolveClinicalAttendanceState,
+  todayLocalIso,
+} from './clinicalAttendanceState.js';
 
 export const JOURNEY_STAGE = {
   AGENDADOS: 'agendados',
@@ -120,9 +125,19 @@ export const upsertJourneyEntryForAppointment = (db, appointment, overrides = {}
   return entry;
 };
 
-export const ensureJourneyEntriesForDate = (db, date) => {
+function appointmentBelongsToTenant(appointment, expectedTenant) {
+  if (!expectedTenant) return true;
+  const rowTenant = appointment?.tenant_id || appointment?.tenantId || null;
+  if (!rowTenant) return true;
+  return rowTenant === expectedTenant;
+}
+
+export const ensureJourneyEntriesForDate = (db, date, { tenantId } = {}) => {
   ensureJourneyEntries(db);
-  const appointments = (db.appointments || []).filter((apt) => apt.date === date);
+  const appointments = (db.appointments || []).filter((apt) => {
+    if (apt.date !== date) return false;
+    return appointmentBelongsToTenant(apt, tenantId);
+  });
   const entriesByAppointmentId = new Map();
 
   appointments.forEach((appointment) => {
@@ -135,24 +150,75 @@ export const ensureJourneyEntriesForDate = (db, date) => {
   return { appointments, entriesByAppointmentId };
 };
 
-export const listJourneyEntriesByDate = (date) =>
+function mapJourneyRow(db, appointment, entry) {
+  const clinical = findClinicalAppointmentFor(db, appointment.id);
+  const attendance = resolveClinicalAttendanceState({
+    appointment,
+    clinicalAppointment: clinical,
+    asOfDate: todayLocalIso(),
+    tenantId: appointment.tenant_id || db.clinicProfile?.tenant_id || null,
+  });
+  const enriched = enrichAppointment(db, appointment);
+  return {
+    ...enriched,
+    journeyEntryId: entry?.id || null,
+    journeyStage: entry?.stage || getJourneyStageFromStatus(appointment.status),
+    journeyStatus: entry?.status || appointment.status,
+    journeyCheckedInAt: entry?.checkedInAt || null,
+    journeyCalledAt: entry?.calledAt || null,
+    journeyStartedAt: entry?.startedAt || null,
+    journeyFinishedAt: entry?.finishedAt || null,
+    journeyUpdatedAt: entry?.updatedAt || null,
+    attendance,
+  };
+}
+
+export const listJourneyEntriesByDate = (date, { tenantId } = {}) =>
   withDb((db) => {
-    const { appointments, entriesByAppointmentId } = ensureJourneyEntriesForDate(db, date);
-    return appointments.map((appointment) => {
-      const entry = entriesByAppointmentId.get(appointment.id);
-      const enriched = enrichAppointment(db, appointment);
-      return {
-        ...enriched,
-        journeyEntryId: entry?.id || null,
-        journeyStage: entry?.stage || getJourneyStageFromStatus(appointment.status),
-        journeyStatus: entry?.status || appointment.status,
-        journeyCheckedInAt: entry?.checkedInAt || null,
-        journeyCalledAt: entry?.calledAt || null,
-        journeyStartedAt: entry?.startedAt || null,
-        journeyFinishedAt: entry?.finishedAt || null,
-        journeyUpdatedAt: entry?.updatedAt || null,
-      };
+    const expectedTenant = tenantId || db.clinicProfile?.tenant_id || null;
+    const { appointments, entriesByAppointmentId } = ensureJourneyEntriesForDate(db, date, {
+      tenantId: expectedTenant,
     });
+    return appointments.map((appointment) => (
+      mapJourneyRow(db, appointment, entriesByAppointmentId.get(appointment.id))
+    ));
+  });
+
+/**
+ * Visão operacional da Jornada: agendados da data + abertos/stale de outros dias.
+ * Não mistura “agendado para a data” com “ainda aberto agora”.
+ */
+export const listJourneyOperationalEntries = (selectedDate, { asOfDate, tenantId } = {}) =>
+  withDb((db) => {
+    const asOf = asOfDate || todayLocalIso();
+    const expectedTenant = tenantId || db.clinicProfile?.tenant_id || null;
+    const { appointments: scheduled, entriesByAppointmentId } = ensureJourneyEntriesForDate(db, selectedDate, {
+      tenantId: expectedTenant,
+    });
+    const scheduledIds = new Set(scheduled.map((apt) => apt.id));
+    const spillover = [];
+
+    for (const appointment of db.appointments || []) {
+      if (!appointment?.id || scheduledIds.has(appointment.id)) continue;
+      if (!appointmentBelongsToTenant(appointment, expectedTenant)) continue;
+      const clinical = findClinicalAppointmentFor(db, appointment.id);
+      const state = resolveClinicalAttendanceState({
+        appointment,
+        clinicalAppointment: clinical,
+        asOfDate: asOf,
+        tenantId: expectedTenant,
+      });
+      if (!state.isWaiting && !state.isInAttendance && !state.isStale && !state.requiresResolution) continue;
+      const existing = (db.patientJourneyEntries || []).find((row) => row.appointmentId === appointment.id);
+      const entry = existing || upsertJourneyEntryForAppointment(db, appointment);
+      spillover.push({ appointment, entry });
+    }
+
+    const scheduledRows = scheduled.map((appointment) => (
+      mapJourneyRow(db, appointment, entriesByAppointmentId.get(appointment.id))
+    ));
+    const spilloverRows = spillover.map(({ appointment, entry }) => mapJourneyRow(db, appointment, entry));
+    return [...scheduledRows, ...spilloverRows];
   });
 
 export const confirmArrival = (user, appointmentId) =>

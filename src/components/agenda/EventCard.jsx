@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { Check, MessageCircle, RotateCcw, X } from 'lucide-react';
+import { getAgendaStatusPresentation } from '../../services/clinicalAttendanceState.js';
 
 export const EventCard = ({
   appointment,
@@ -25,7 +26,7 @@ export const EventCard = ({
     isReturn,
     status,
   } = appointment;
-  const statusStyle = statusStyles[status] || {};
+  const statusStyle = getAgendaStatusPresentation(appointment, statusStyles);
 
 
   const borderLeftColor = statusStyle.borderLeft || statusStyle.border || '#e2e8f0';
@@ -136,7 +137,8 @@ export const EventCard = ({
       className={`event-card event-card--improved ${isDragging ? 'event-card--dragging' : ''} ${
         overlapCount > 1 ? 'event-card--overlap' : ''
       } ${isDragOver ? 'event-card--drag-over' : ''}`}
-      data-status={status}
+      data-status={statusStyle.key || status}
+      data-attendance-lifecycle={statusStyle.lifecycleStatus || ''}
       data-appointment-id={appointment.id}
       data-overlap-count={overlapCount}
       draggable

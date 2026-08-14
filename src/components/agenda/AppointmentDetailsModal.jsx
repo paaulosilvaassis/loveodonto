@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAppointmentDetails, updateAppointment, checkInAppointment, APPOINTMENT_STATUS } from '../../services/appointmentService.js';
 import { AGENDA_CONFIG } from '../../utils/agendaConfig.js';
+import { getAgendaStatusPresentation } from '../../services/clinicalAttendanceState.js';
 import { useAuth } from '../../auth/useAuth.js';
 import { suggestPatients, recalcAndPersistPendingData, resolveUserTenantId } from '../../services/patientService.js';
 import { getLeadById } from '../../services/crmService.js';
@@ -123,7 +124,10 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
 
   const { appointment, patient, professional, room, phone, recordNumber, email } = details;
   const currentStatus = isEditing ? draft.status : appointment.status;
-  const statusConfig = AGENDA_CONFIG.status[currentStatus] || AGENDA_CONFIG.status.agendado;
+  const attendanceView = getAgendaStatusPresentation(appointment, AGENDA_CONFIG.status);
+  const statusConfig = attendanceView.isStale || attendanceView.requiresResolution
+    ? attendanceView
+    : (AGENDA_CONFIG.status[currentStatus] || AGENDA_CONFIG.status.agendado);
   
   // Determinar paciente atual (pode ter sido trocado no draft)
   const currentPatientId = isEditing && draft.patientId ? draft.patientId : appointment.patientId;
@@ -619,6 +623,21 @@ export const AppointmentDetailsModal = ({ open, appointmentId, onClose, onResche
                 </span>
               )}
             </div>
+            {attendanceView.requiresResolution ? (
+              <div className="appointment-stale-banner" data-testid="stale-attendance-banner" role="status">
+                <p>{attendanceView.message}</p>
+                <button
+                  type="button"
+                  className="button primary"
+                  data-testid="resolve-attendance-cta"
+                  onClick={() => {
+                    if (attendanceView.ctaHref) navigate(attendanceView.ctaHref);
+                  }}
+                >
+                  {attendanceView.ctaLabel}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {showReschedule ? (

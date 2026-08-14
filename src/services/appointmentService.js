@@ -4,6 +4,7 @@ import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
 import { canPlaceEvent } from '../utils/calendar/overlap.js';
 import { upsertJourneyEntryForAppointment } from './journeyEntryService.js';
+import { syncClinicalAppointmentFinished } from './clinicalAttendanceState.js';
 import { addLeadEvent, moveLeadToStage } from './crmService.js';
 import {
   syncCheckinCommissionsForAppointment,
@@ -717,20 +718,30 @@ export const finishAppointment = (user, appointmentId) => {
       throw new Error('Consulta não encontrada.');
     }
     const appointment = normalizeWorkflow(db.appointments[index]);
-    
+    const now = new Date().toISOString();
+
+    if (appointment.status === APPOINTMENT_STATUS.FINALIZADO || appointment.status === APPOINTMENT_STATUS.ATENDIDO) {
+      syncClinicalAppointmentFinished(db, appointmentId, appointment.finishedAt || now);
+      upsertJourneyEntryForAppointment(db, appointment, {
+        finishedAt: appointment.finishedAt || now,
+      });
+      return db.appointments[index];
+    }
+
     if (appointment.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO) {
       throw new Error('Paciente deve estar em atendimento para finalizar.');
     }
 
-    const now = new Date().toISOString();
     const next = {
       ...appointment,
       status: APPOINTMENT_STATUS.FINALIZADO,
       finishedAt: now,
+      updatedAt: now,
     };
 
     db.appointments[index] = next;
     upsertJourneyEntryForAppointment(db, next, { finishedAt: now });
+    syncClinicalAppointmentFinished(db, appointmentId, now);
     logAction('journey:finish', { appointmentId, userId: user.id, finishedAt: now });
     return db.appointments[index];
   });

@@ -9,7 +9,7 @@ import {
   returnToWaiting,
   checkInAppointment,
 } from '../services/appointmentService.js';
-import { JOURNEY_STAGE, listJourneyEntriesByDate } from '../services/journeyEntryService.js';
+import { JOURNEY_STAGE, listJourneyOperationalEntries } from '../services/journeyEntryService.js';
 import { listRooms } from '../services/teamService.js';
 import { useNowTick } from '../hooks/useNowTick.js';
 import {
@@ -77,10 +77,12 @@ export default function PatientJourneyPage() {
   }, []);
 
   const refreshData = useCallback(() => {
-    const journeyEntries = listJourneyEntriesByDate(selectedDate);
+    const journeyEntries = listJourneyOperationalEntries(selectedDate, {
+      tenantId: user?.tenant_id || user?.tenantId || null,
+    });
     setAppointments(journeyEntries);
     setRooms(listRooms());
-  }, [selectedDate]);
+  }, [selectedDate, user]);
 
   const getJourneyStage = (appointment) => {
     const raw = appointment?.journeyStage ?? appointment?.status;
@@ -143,9 +145,13 @@ export default function PatientJourneyPage() {
 
     // Filtrar por tab
     if (activeTab === 'waiting') {
-      filtered = filtered.filter((apt) => getJourneyStage(apt) === JOURNEY_STAGE.SALA_ESPERA);
+      filtered = filtered.filter((apt) => getJourneyStage(apt) === JOURNEY_STAGE.SALA_ESPERA && !apt.attendance?.isStale);
     } else if (activeTab === 'in_progress') {
-      filtered = filtered.filter((apt) => getJourneyStage(apt) === JOURNEY_STAGE.CONSULTORIO);
+      filtered = filtered.filter((apt) =>
+        getJourneyStage(apt) === JOURNEY_STAGE.CONSULTORIO
+        || apt.attendance?.isStale
+        || apt.attendance?.requiresResolution
+      );
     } else if (activeTab === 'finished') {
       filtered = filtered.filter((apt) => getJourneyStage(apt) === JOURNEY_STAGE.FINALIZADO && apt.date === selectedDate);
     }
@@ -199,22 +205,28 @@ export default function PatientJourneyPage() {
 
   // KPIs
   const kpis = useMemo(() => {
-    const waiting = appointments.filter((apt) => getJourneyStage(apt) === JOURNEY_STAGE.SALA_ESPERA);
-    const inProgress = appointments.filter((apt) => getJourneyStage(apt) === JOURNEY_STAGE.CONSULTORIO);
+    const waiting = appointments.filter((apt) => apt.attendance?.isWaiting && !apt.attendance?.isStale);
+    const inProgress = appointments.filter((apt) => apt.attendance?.isInAttendance && !apt.attendance?.isStale);
+    const staleOpen = appointments.filter((apt) => apt.attendance?.isStale || apt.attendance?.requiresResolution);
     const longestWait = getLongestWaitTime(waiting, now);
-    const avgWait = calculateAverageWaitTime(appointments);
+    const avgWait = calculateAverageWaitTime(appointments.filter((apt) => apt.date === selectedDate));
     const occupiedRooms = new Set(inProgress.map((apt) => apt.consultorioId || apt.roomId).filter(Boolean));
     const totalRooms = rooms.filter((r) => r.active).length;
 
     return {
       waitingCount: waiting.length,
-      inProgressCount: inProgress.length,
-    longestWait: longestWait ? { time: longestWait.seconds, name: longestWait.name } : null,
-    avgWaitMinutes: avgWait,
-    occupiedRooms: occupiedRooms.size,
-    totalRooms,
+      inProgressCount: inProgress.length + staleOpen.filter((apt) => apt.attendance?.isInAttendance).length,
+      liveInProgressCount: inProgress.length,
+      staleCount: staleOpen.length,
+      longestWait: longestWait ? { time: longestWait.seconds, name: longestWait.name } : null,
+      avgWaitMinutes: avgWait,
+      occupiedRooms: occupiedRooms.size,
+      totalRooms,
+      stalePrimaryHref: staleOpen.length === 1
+        ? `/atendimento-clinico/${staleOpen[0].id}`
+        : null,
     };
-  }, [appointments, now, rooms]);
+  }, [appointments, now, rooms, selectedDate]);
 
   const formattedSelectedDate = selectedDate ? new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
 
@@ -320,8 +332,12 @@ export default function PatientJourneyPage() {
   }, [appointments, db]);
 
   // Contadores devem usar appointments (total) e não filteredAppointments (já filtrado)
-  const waitingCount = appointments.filter((a) => getJourneyStage(a) === JOURNEY_STAGE.SALA_ESPERA).length;
-  const inProgressCount = appointments.filter((a) => getJourneyStage(a) === JOURNEY_STAGE.CONSULTORIO).length;
+  const waitingCount = appointments.filter((a) => getJourneyStage(a) === JOURNEY_STAGE.SALA_ESPERA && !a.attendance?.isStale).length;
+  const inProgressCount = appointments.filter((a) =>
+    getJourneyStage(a) === JOURNEY_STAGE.CONSULTORIO
+    || a.attendance?.isStale
+    || a.attendance?.requiresResolution
+  ).length;
   const finishedCount = appointments.filter((a) => getJourneyStage(a) === JOURNEY_STAGE.FINALIZADO && a.date === selectedDate).length;
 
   return (
@@ -396,6 +412,35 @@ export default function PatientJourneyPage() {
           </div>
         )}
       </div>
+      {kpis.staleCount > 0 ? (
+        <div className="patient-journey-stale-banner" data-testid="journey-stale-banner" role="status">
+          <AlertTriangle size={18} aria-hidden />
+          <span>
+            {kpis.staleCount === 1
+              ? '1 atendimento iniciado em dia anterior ainda não foi encerrado.'
+              : `${kpis.staleCount} atendimentos iniciados em dias anteriores ainda não foram encerrados.`}
+            {' '}Consultório não é considerado ocupado hoje até a resolução.
+          </span>
+          {kpis.stalePrimaryHref ? (
+            <button
+              type="button"
+              className="button primary"
+              data-testid="resolve-attendance-cta"
+              onClick={() => navigate(kpis.stalePrimaryHref)}
+            >
+              Resolver atendimento
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() => setActiveTab('in_progress')}
+            >
+              Ver atendimentos
+            </button>
+          )}
+        </div>
+      ) : null}
 
       {/* Control Bar Premium */}
       <div className="patient-journey-control-bar">
@@ -655,10 +700,16 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
       <div className="patient-journey-card-center">
         <div className="patient-journey-card-name-row">
           <h3 className="patient-journey-card-name-premium">{formatPatientName(appointment.patientName)}</h3>
-          <span className={`patient-journey-card-badge patient-journey-card-badge--${statusConfig.badge}`}>
-            {stage === JOURNEY_STAGE.SALA_ESPERA && 'Em Espera'}
-            {stage === JOURNEY_STAGE.CONSULTORIO && 'Em Atendimento'}
-            {stage === JOURNEY_STAGE.FINALIZADO && 'Finalizado'}
+          <span className={`patient-journey-card-badge patient-journey-card-badge--${appointment.attendance?.isStale ? 'stale' : statusConfig.badge}`}>
+            {appointment.attendance?.isStale
+              ? 'Atendimento não encerrado'
+              : stage === JOURNEY_STAGE.SALA_ESPERA
+                ? 'Em Espera'
+                : stage === JOURNEY_STAGE.CONSULTORIO
+                  ? 'Em Atendimento'
+                  : stage === JOURNEY_STAGE.FINALIZADO
+                    ? 'Finalizado'
+                    : appointment.attendance?.displayLabel || ''}
           </span>
           {financialStatus?.isDelinquent ? (
             <span className="patient-journey-card-badge patient-journey-card-badge--delinquent">
@@ -739,6 +790,21 @@ const PatientJourneyCard = memo(function PatientJourneyCard({
               </div>
             </div>
             <div className="patient-journey-card-actions">
+              {appointment.attendance?.requiresResolution ? (
+                <button
+                  type="button"
+                  className="patient-journey-card-action-btn patient-journey-card-action-btn--primary"
+                  data-testid="resolve-attendance-cta"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (appointment?.id) navigate(`/atendimento-clinico/${appointment.id}`);
+                  }}
+                >
+                  <AlertTriangle size={18} />
+                  Resolver atendimento
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="patient-journey-card-action-btn patient-journey-card-action-btn--primary"
