@@ -23,6 +23,9 @@ export default function ContractSignModal({
   signerRole = 'PATIENT',
   signerPersonId = null,
   expectedName = '',
+  expectedAppointmentId = null,
+  expectedBudgetId = null,
+  expectedPatientId = null,
 }) {
   const [signerName, setSignerName] = useState('');
   const [signerCpf, setSignerCpf] = useState('');
@@ -68,6 +71,9 @@ export default function ContractSignModal({
         signatureImageDataUrl: signatureData,
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
         packageManifestId: contract.metadata?.packageManifestId || null,
+        expectedAppointmentId: expectedAppointmentId || contract.quoteId || null,
+        expectedBudgetId: expectedBudgetId || contract.budgetId || null,
+        expectedPatientId: expectedPatientId || contract.patientId || null,
       });
       onSigned?.(result);
       handleOpen(false);

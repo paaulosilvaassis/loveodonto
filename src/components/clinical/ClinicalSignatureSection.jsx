@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FileText, PenLine, Send, AlertTriangle } from 'lucide-react';
+import { FileText, PenLine, Send, AlertTriangle, Printer } from 'lucide-react';
 import { ClinicalStageShell, ClinicalBtn } from './ClinicalStageShell.jsx';
 import ClinicalDocumentPackagePanel from '../contracts/operational/ClinicalDocumentPackagePanel.jsx';
 import ContractSignModal from '../contracts/ContractSignModal.jsx';
@@ -12,6 +12,12 @@ import {
 } from '../../contracts/clinicalSignatureReadiness.js';
 import { CLINICAL_SIGNER_ROLE } from '../../contracts/clinicalRequiredSigners.js';
 import { addOptionalWitness } from '../../contracts/clinicalSignatureCeremony.js';
+import {
+  canAuthenticatedUserSignSlot,
+  isAuthenticatedIdentityRole,
+  isOperatorCollectedRole,
+} from '../../contracts/authenticatedSignerIdentity.js';
+import { printClinicalContractForManualSignature } from '../../contracts/printClinicalContractForManualSignature.js';
 import { prepareClinicalSignaturePackage } from '../../services/clinicalSignaturePackageService.js';
 import { getPatient } from '../../services/patientService.js';
 import { resolvePatientFullName } from '../../utils/patientIdentity.js';
@@ -87,6 +93,21 @@ export function ClinicalSignatureSection({
     if (blocker.ctaSection) onNavigate?.(blocker.ctaSection);
   };
 
+  const handlePrintManual = (slot) => {
+    const result = printClinicalContractForManualSignature({
+      user,
+      contractId: readiness.identity?.contractId || readiness.contract?.id,
+      appointmentId,
+      budgetId,
+      patientId,
+    });
+    if (!result.ok) {
+      showMsg(result.error || 'Não foi possível imprimir o contrato.', 'error');
+      return;
+    }
+    showMsg('Documento aberto para impressão. Imprimir não registra assinatura.');
+  };
+
   const handleAddWitness = () => {
     try {
       addOptionalWitness({
@@ -156,31 +177,51 @@ export function ClinicalSignatureSection({
               <p><strong>{slot.label}</strong> {slot.required ? '' : <span>(opcional)</span>}</p>
               <p>{slot.name || '—'}</p>
               {slot.cro ? <p>CRO{slot.uf ? `-${slot.uf}` : ''} {slot.cro}</p> : null}
-              <p>{slot.status === 'signed' ? 'Assinado' : 'Pendente'}</p>
+              <p>{slot.status === 'signed' ? 'Assinado' : (canAuthenticatedUserSignSlot(user, slot).waitingLabel || 'Pendente')}</p>
               {slot.satisfiedBySameProfessional ? (
                 <p>Satisfeito pela mesma assinatura profissional</p>
               ) : null}
-              {canOpenCeremony && slot.status !== 'signed' && slot.role === CLINICAL_SIGNER_ROLE.PATIENT ? (
+              {canOpenCeremony && slot.status !== 'signed' && isOperatorCollectedRole(slot.role) ? (
                 <>
-                  <ClinicalBtn variant="secondary" icon={PenLine} data-testid="clinical-sign-now-cta" onClick={() => setSignTarget(slot)}>
+                  <ClinicalBtn
+                    variant="secondary"
+                    icon={PenLine}
+                    data-testid={slot.role === CLINICAL_SIGNER_ROLE.PATIENT ? 'clinical-sign-now-cta' : `clinical-sign-${String(slot.role).toLowerCase()}-cta`}
+                    onClick={() => setSignTarget(slot)}
+                  >
                     Assinar agora
                   </ClinicalBtn>
-                  {readiness.canSend ? (
+                  {slot.role === CLINICAL_SIGNER_ROLE.PATIENT && readiness.canSend ? (
                     <ClinicalBtn variant="secondary" icon={Send} data-testid="clinical-send-signature-cta" onClick={() => setSendOpen(true)}>
                       Enviar para assinatura
                     </ClinicalBtn>
                   ) : null}
                 </>
               ) : null}
-              {canOpenCeremony && slot.status !== 'signed' && slot.role === CLINICAL_SIGNER_ROLE.PROFESSIONAL ? (
-                <ClinicalBtn variant="secondary" icon={PenLine} data-testid="clinical-sign-professional-cta" onClick={() => setSignTarget(slot)}>
-                  Assinar como profissional
-                </ClinicalBtn>
-              ) : null}
-              {canOpenCeremony && slot.status !== 'signed' && slot.role === CLINICAL_SIGNER_ROLE.LEGAL_GUARDIAN ? (
-                <ClinicalBtn variant="secondary" icon={PenLine} onClick={() => setSignTarget(slot)}>
-                  Assinar agora
-                </ClinicalBtn>
+              {canOpenCeremony && slot.status !== 'signed' && isAuthenticatedIdentityRole(slot.role) ? (
+                canAuthenticatedUserSignSlot(user, slot).canSignElectronically ? (
+                  <ClinicalBtn
+                    variant="secondary"
+                    icon={PenLine}
+                    data-testid={slot.role === CLINICAL_SIGNER_ROLE.PROFESSIONAL
+                      ? 'clinical-sign-professional-cta'
+                      : 'clinical-sign-clinic-representative-cta'}
+                    onClick={() => setSignTarget(slot)}
+                  >
+                    {slot.role === CLINICAL_SIGNER_ROLE.CLINIC_REPRESENTATIVE
+                      ? 'Assinar como responsável técnico'
+                      : 'Assinar como profissional'}
+                  </ClinicalBtn>
+                ) : (
+                  <ClinicalBtn
+                    variant="secondary"
+                    icon={Printer}
+                    data-testid="clinical-print-manual-signature-cta"
+                    onClick={() => handlePrintManual(slot)}
+                  >
+                    Imprimir para assinatura manual
+                  </ClinicalBtn>
+                )
               ) : null}
             </article>
           ))}
@@ -217,6 +258,9 @@ export function ClinicalSignatureSection({
         signerRole={signTarget?.role}
         signerPersonId={signTarget?.personId}
         expectedName={signTarget?.name}
+        expectedAppointmentId={appointmentId}
+        expectedBudgetId={budgetId}
+        expectedPatientId={patientId}
         onSigned={() => {
           setSignTarget(null);
           bump();

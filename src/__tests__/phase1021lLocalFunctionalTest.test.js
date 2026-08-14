@@ -116,6 +116,9 @@ function seedClinic() {
       nomeCompleto: 'Dr. Teste Local',
       conselhoNumero: '1021',
     }];
+    db.collaboratorAccess = [
+      { collaboratorId: 'prof-1021l', userId: user.id, role: 'profissional' },
+    ];
   });
   ensureContractsModuleSeeded();
 }

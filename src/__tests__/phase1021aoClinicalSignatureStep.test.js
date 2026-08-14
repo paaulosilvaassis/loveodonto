@@ -15,6 +15,7 @@ globalThis.React = React;
 vi.mock('../services/contractPdfService.js', () => ({
   contractHtmlWithSignatures: (html) => html || '',
   downloadContractPdfFromElement: async () => {},
+  printContractElement: () => {},
 }));
 vi.mock('html2canvas', () => ({ default: async () => ({ toDataURL: () => '' }) }));
 vi.mock('jspdf', () => ({ jsPDF: class JsPDF { save() {} } }));
@@ -68,6 +69,7 @@ const OTHER_BUDGET = 'budget-other-ao';
 const CONTRACT_ID = 'gctr-ctr-2026-00001';
 const OTHER_CONTRACT = 'gctr-other-ao';
 const user = { id: 'user-ao', role: 'admin', tenantId: TENANT, tenant_id: TENANT };
+const dentistUser = { id: 'user-juliana-ao', role: 'profissional', tenantId: TENANT, tenant_id: TENANT };
 
 function readSrc(rel) {
   return readFileSync(path.join(ROOT, rel), 'utf8');
@@ -100,6 +102,9 @@ function seedScenario({
       conselhoUf: 'MG',
       tenant_id: tenantId,
     }];
+    db.collaboratorAccess = [
+      { collaboratorId: 'col-ao', userId: 'user-juliana-ao', role: 'profissional' },
+    ];
     db.clinicAddresses = [{ principal: true, cidade: 'Belo Horizonte', uf: 'MG', logradouro: 'Rua AO', numero: '1' }];
     db.patients = [
       { id: patientId, full_name: 'Paulo Henrique Silva de Assis', tenant_id: tenantId, cpf: '39053344705' },
@@ -339,7 +344,7 @@ describe('PHASE_10.21AO clinical signature step', () => {
     });
     expect(partial.contract.status).not.toBe(CONTRACT_STATUS.SIGNED);
     expect(evalReady().step).toBe(CLINICAL_SIGNATURE_STEP.PARTIALLY_SIGNED);
-    const signed = signContractOnScreen(user, CONTRACT_ID, {
+    const signed = signContractOnScreen(dentistUser, CONTRACT_ID, {
       signerName: 'Juliana de Oliveira Freire',
       signerRole: 'PROFESSIONAL',
       signerPersonId: 'col-ao',

@@ -24,6 +24,10 @@ import {
 } from '../contracts/clinicalSignatureCeremony.js';
 import { mapLegacySignerRole } from '../contracts/clinicalRequiredSigners.js';
 import {
+  assertAuthenticatedSignerForStroke,
+  isOperatorCollectedRole,
+} from '../contracts/authenticatedSignerIdentity.js';
+import {
   createGeneratedContractDraft,
   updateDraftGeneratedContract,
   finalizeGeneratedContract,
@@ -407,6 +411,9 @@ export function signContractOnScreen(user, contractId, {
   ipAddress = '',
   userAgent = '',
   packageManifestId = null,
+  expectedAppointmentId = null,
+  expectedBudgetId = null,
+  expectedPatientId = null,
 }) {
   if (!signerName?.trim()) throw new Error('Nome do signatário é obrigatório.');
   if (!signatureImageDataUrl) throw new Error('Assinatura é obrigatória.');
@@ -417,6 +424,15 @@ export function signContractOnScreen(user, contractId, {
   }
   if (contract.status === CONTRACT_STATUS.SIGNED) throw new Error('Contrato já assinado.');
   const tenantId = tenantIdFromUser(user);
+  const identityGate = assertAuthenticatedSignerForStroke(user, {
+    signerRole,
+    signerPersonId,
+    tenantId,
+    expectedAppointmentId,
+    expectedBudgetId,
+    expectedPatientId,
+    contract,
+  });
   let rolesSatisfied = [mapLegacySignerRole(signerRole)];
   let documentTypes = ['CONTRACT_SERVICES'];
   if (contract.quoteSource === 'clinical_budget') {
@@ -467,6 +483,12 @@ export function signContractOnScreen(user, contractId, {
       evidenceJson: {
         hash,
         signedByUserId: user?.id || null,
+        operatorUserId: isOperatorCollectedRole(signerRole) ? (user?.id || null) : null,
+        operatorPersonId: isOperatorCollectedRole(signerRole)
+          ? (identityGate.identity?.personId || null)
+          : null,
+        signatureMethod: identityGate.method,
+        authenticatedPersonId: identityGate.identity?.personId || null,
         packageManifestId: contract.metadata?.packageManifestId || null,
         packageManifestHash: contract.metadata?.packageManifestHash || null,
         contractVersion: contract.version || 1,

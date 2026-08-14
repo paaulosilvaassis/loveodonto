@@ -14,6 +14,7 @@ globalThis.React = React;
 vi.mock('../services/contractPdfService.js', () => ({
   contractHtmlWithSignatures: (html) => html || '',
   downloadContractPdfFromElement: async () => {},
+  printContractElement: () => {},
 }));
 vi.mock('html2canvas', () => ({ default: async () => ({ toDataURL: () => '' }) }));
 vi.mock('jspdf', () => ({ jsPDF: class JsPDF { save() {} } }));
@@ -54,6 +55,7 @@ const CONTRACT_ID = 'gctr-ctr-2026-00001';
 const DENTIST_ID = 'col-juliana';
 const OTHER_DENTIST = 'col-other';
 const user = { id: 'user-ap', role: 'admin', tenantId: TENANT, tenant_id: TENANT };
+const dentistUser = { id: 'user-juliana-ap', role: 'profissional', tenantId: TENANT, tenant_id: TENANT };
 
 function seed({
   contractStatus = CONTRACT_STATUS.GENERATED,
@@ -88,6 +90,10 @@ function seed({
         tenant_id: TENANT,
       },
       { id: OTHER_DENTIST, nomeCompleto: 'Outro Dentista', conselhoNumero: '99999', conselhoUf: 'MG', tenant_id: TENANT },
+    ];
+    db.collaboratorAccess = [
+      { collaboratorId: dentistId, userId: dentistUser.id, role: 'profissional' },
+      { collaboratorId: OTHER_DENTIST, userId: 'user-other-dentist-ap', role: 'profissional' },
     ];
     db.patients = [
       {
@@ -168,8 +174,8 @@ function signPatient() {
   });
 }
 
-function signDentist(personId = DENTIST_ID) {
-  return signContractOnScreen(user, CONTRACT_ID, {
+function signDentist(personId = DENTIST_ID, actor = dentistUser) {
+  return signContractOnScreen(actor, CONTRACT_ID, {
     signerName: 'Juliana de Oliveira Freire',
     signerRole: 'PROFESSIONAL',
     signerPersonId: personId,
@@ -423,7 +429,9 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
       appointmentId: APPT_ID, patientId: PATIENT_ID, budgetId: BUDGET_ID, user,
     }));
     expect(html).toContain('Assinatura parcial');
-    expect(html).toContain('clinical-sign-professional-cta');
+    expect(html).not.toContain('clinical-sign-professional-cta');
+    expect(html).toContain('Aguardando assinatura da profissional');
+    expect(html).toContain('clinical-print-manual-signature-cta');
   });
 
   it('Y package visualiza required signers', async () => {
