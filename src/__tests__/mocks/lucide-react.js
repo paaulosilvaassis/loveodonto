@@ -12,3 +12,7 @@ export const ChevronDown = () => null;
 export const ChevronUp = () => null;
 export const Presentation = () => null;
 export const Settings2 = () => null;
+export const Calendar = () => null;
+export const DollarSign = () => null;
+export const FileCheck = () => null;
+export const FileSignature = () => null;

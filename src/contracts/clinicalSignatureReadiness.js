@@ -54,6 +54,14 @@ const FINALIZED_STATUSES = new Set([
   ...SIGNED_STATUSES,
 ]);
 
+/** Contrato juridicamente finalizado (generated/frozen). Draft/em edição não conta. */
+export function isClinicalContractLegallyFinalized(contract) {
+  if (!contract?.id) return false;
+  const status = String(contract.status || '').toLowerCase();
+  if (!status || status === CONTRACT_STATUS.DRAFT) return false;
+  return FINALIZED_STATUSES.has(status);
+}
+
 function tenantOf(user) {
   return user?.tenantId || user?.tenant_id || loadDb().clinicProfile?.tenant_id || null;
 }
@@ -221,7 +229,7 @@ export function evaluateClinicalSignatureReadiness({
     signatureReady,
     canSignNow,
     canSend,
-    contractFinalized: Boolean(contract?.id && FINALIZED_STATUSES.has(status) && status !== CONTRACT_STATUS.DRAFT),
+    contractFinalized: isClinicalContractLegallyFinalized(contract),
     packageReady,
     manifestFrozen,
     manifestLabel,

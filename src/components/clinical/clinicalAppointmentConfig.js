@@ -19,6 +19,7 @@ import { getContractStatusForQuote } from '../../services/contractModuleService.
 import { areRequiredApplicableDocumentsSatisfied } from '../../contracts/treatmentDocumentRequirements.js';
 import {
   evaluateClinicalSignatureReadiness,
+  isClinicalContractLegallyFinalized,
   CLINICAL_SIGNATURE_STEP,
 } from '../../contracts/clinicalSignatureReadiness.js';
 
@@ -175,6 +176,8 @@ export function getClinicalWorkflowState(appointmentId, viewBudgetId = null) {
     linkedContract
     && !['canceled', 'replaced', 'refused'].includes(String(linkedContract.status || '').toLowerCase()),
   );
+  const contractFinalized = isClinicalContractLegallyFinalized(linkedContract);
+  const contractInEdit = Boolean(hasPersistedContract && !contractFinalized);
   const contractAccessible = canAccessContract(budget, lockCtx) || hasPersistedContract;
   const contractUnlocked = contractAccessible;
 
@@ -190,6 +193,9 @@ export function getClinicalWorkflowState(appointmentId, viewBudgetId = null) {
     contractAccessible,
     contractUnlocked,
     hasPersistedContract,
+    contractFinalized,
+    contractInEdit,
+    linkedContractStatus: linkedContract?.status || null,
     budgetStatus: budget?.status || null,
     phase,
     plannedCount: isHistoricalView ? plannedFromBudget.length : plannedFromClinical.length,
@@ -264,15 +270,8 @@ export function getNavStepCompletionStatus(stepId, workflow) {
   }
 
   if (stepId === 'contratos') {
-    if (
-      workflow.hasPersistedContract
-      || (
-        workflow.lockCtx?.contractApplies
-        && (workflow.lockCtx?.hasActiveContract || workflow.lockCtx?.contractSigned)
-      )
-    ) {
-      return STEP_STATUS.COMPLETED;
-    }
+    if (workflow.contractFinalized) return STEP_STATUS.COMPLETED;
+    if (workflow.hasPersistedContract || workflow.contractInEdit) return STEP_STATUS.IN_PROGRESS;
     if (workflow.contractAccessible) return STEP_STATUS.PENDING;
     return STEP_STATUS.BLOCKED;
   }
@@ -280,6 +279,9 @@ export function getNavStepCompletionStatus(stepId, workflow) {
   if (stepId === 'documentos') {
     if (!(workflow.budgetApproved || workflow.contractAccessible)) {
       return STEP_STATUS.BLOCKED;
+    }
+    if (!workflow.contractFinalized) {
+      return STEP_STATUS.PENDING;
     }
     const docsComplete = areRequiredApplicableDocumentsSatisfied({
       appointmentId: workflow.appointmentId,
