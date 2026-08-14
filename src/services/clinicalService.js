@@ -1,7 +1,11 @@
 import { loadDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
-import { assertBudgetEditable, assertBudgetStatusChangeAllowed } from './clinicalBudgetLockService.js';
+import {
+  allocateNextBudgetDisplayNumber,
+  assertBudgetEditable,
+  assertBudgetStatusChangeAllowed,
+} from './clinicalBudgetLockService.js';
 
 export { BUDGET_STATUS };
 
@@ -432,6 +436,25 @@ export const saveBudget = (user, appointmentId, budgetData, options = {}) => {
       updatedAt: new Date().toISOString(),
       updatedBy: user.id,
     };
+
+    const incomingNumber = budgetData?.budgetNumber || null;
+    const existingNumber = existing?.budgetNumber || null;
+    let budgetNumber = incomingNumber || existingNumber;
+    if (!budgetNumber) {
+      const sameIdUnlabeled = Boolean(existing?.id)
+        && existing.id === clinicalData.budget.id
+        && !existing.budgetNumber;
+      if (!sameIdUnlabeled) {
+        const apt = (db.appointments || []).find((a) => a.id === appointmentId);
+        budgetNumber = allocateNextBudgetDisplayNumber({
+          ...clinicalData,
+          patientId: clinicalData.patientId || apt?.patientId || null,
+        }, db);
+      }
+    }
+    if (budgetNumber) {
+      clinicalData.budget.budgetNumber = budgetNumber;
+    }
 
     if (!clinicalData.budget.createdAt) {
       clinicalData.budget.createdAt = new Date().toISOString();

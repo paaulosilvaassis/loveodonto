@@ -155,12 +155,20 @@ export function assertBudgetStatusChangeAllowed(appointmentId) {
   if (ctx.isLocked) throw new Error(BUDGET_LOCK_ERROR);
 }
 
-function nextBudgetDisplayNumber(clinical, db) {
+/**
+ * Sequência ORC-NNN por paciente.
+ * Orçamentos sem budgetNumber persistido (ex.: ORC-001 legado só de display)
+ * ocupam um slot via id único. Não muta registros existentes.
+ */
+export function allocateNextBudgetDisplayNumber(clinical, db) {
   const patientId = clinical?.patientId || resolveClinicalPatientId(clinical, db);
-  let max = 0;
+  let maxParsed = 0;
+  const seenIds = new Set();
   const consider = (budget) => {
-    const match = String(budget?.budgetNumber || '').match(/^ORC-(\d+)$/i);
-    if (match) max = Math.max(max, Number(match[1]));
+    if (!budget) return;
+    const match = String(budget.budgetNumber || '').match(/^ORC-(\d+)$/i);
+    if (match) maxParsed = Math.max(maxParsed, Number(match[1]));
+    if (budget.id) seenIds.add(budget.id);
   };
   for (const ca of db.clinicalAppointments || []) {
     const caPatient = resolveClinicalPatientId(ca, db);
@@ -168,7 +176,12 @@ function nextBudgetDisplayNumber(clinical, db) {
     consider(ca.budget);
     for (const archived of ca.budgetHistory || []) consider(archived);
   }
+  const max = Math.max(maxParsed, seenIds.size);
   return `ORC-${String(max + 1).padStart(3, '0')}`;
+}
+
+function nextBudgetDisplayNumber(clinical, db) {
+  return allocateNextBudgetDisplayNumber(clinical, db);
 }
 
 function mapBudgetProcedureToPlanned(proc, appointment) {
