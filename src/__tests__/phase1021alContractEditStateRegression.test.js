@@ -290,7 +290,7 @@ describe('PHASE_10.21AL contract edit state regression', () => {
       path.join(ROOT, 'src/services/operationalContractWizardService.js'),
       'utf8',
     );
-    expect(pkgSrc).toContain('resolveRequiredTcles');
+    expect(pkgSrc).toContain('getTreatmentDocumentRequirements');
     expect(pkgSrc).toContain('tcleRequired');
   });
 

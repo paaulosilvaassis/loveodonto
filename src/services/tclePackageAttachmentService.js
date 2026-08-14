@@ -8,6 +8,11 @@ import { withDb, loadDb } from '../db/index.js';
 import { mapDocumentTemplateToTcleId } from './clinicalTcleAttachmentService.js';
 import { getContractStatusForQuote } from './contractModuleService.js';
 import { buildDocumentPackageForBudget } from './operationalContractWizardService.js';
+import {
+  assertDocumentPackageEligibility,
+  findEligibleTcleDocumentForPackage,
+  DOCUMENT_APPLICABILITY,
+} from '../contracts/treatmentDocumentRequirements.js';
 
 /**
  * @returns {{ ok: boolean, attached: boolean, duplicate: boolean, tcleId: string|null, contractId: string|null, packageSnapshot: object|null, error?: string }}
@@ -32,15 +37,26 @@ export function attachTcleDocumentToTreatmentPackage({
     || mapDocumentTemplateToTcleId(templateKey)
     || null;
 
-  if (!tcleId) {
+  const gate = assertDocumentPackageEligibility({
+    user,
+    patientId,
+    appointmentId,
+    budgetId,
+    documentId,
+    templateKey,
+    tcleId,
+  });
+  if (!gate.ok) {
     return {
       ok: false,
       attached: false,
       duplicate: false,
-      tcleId: null,
-      contractId: null,
+      tcleId: tcleId || null,
+      contractId: gate.requirements?.contract?.id || null,
       packageSnapshot: null,
-      error: 'Modelo não mapeado para TCLE obrigatório do contrato.',
+      error: gate.error,
+      reason: gate.reason || null,
+      frozen: Boolean(gate.frozen),
     };
   }
 
@@ -97,11 +113,12 @@ export function attachTcleDocumentToTreatmentPackage({
       const row = docs[idx];
       docs[idx] = {
         ...row,
-        metadata: {
-          ...(row.metadata || {}),
-          tcleId,
-          packageAttached: true,
-        },
+          metadata: {
+            ...(row.metadata || {}),
+            tcleId,
+            packageAttached: true,
+            applicability: DOCUMENT_APPLICABILITY.APPLICABLE,
+          },
       };
       if (db.documentRecords) db.documentRecords = docs;
       return db;
@@ -157,7 +174,38 @@ export function listPackageDocumentStatuses({
   });
 }
 
-/** Diagnóstico local — não dispara comunicação. */
+export function attachEligibleTcleToTreatmentPackage({
+  user,
+  patientId,
+  appointmentId,
+  budgetId = null,
+} = {}) {
+  const found = findEligibleTcleDocumentForPackage({ patientId, appointmentId, budgetId });
+  if (!found.ok) {
+    const error = found.reason === 'not_required_for_treatment'
+      ? 'TCLE não é exigido para este tratamento. Nada foi vinculado ao pacote.'
+      : 'Não há TCLE compatível com o tratamento atual para vincular ao pacote.';
+    return {
+      ok: false,
+      attached: false,
+      duplicate: false,
+      tcleId: null,
+      contractId: found.requirements?.contract?.id || null,
+      packageSnapshot: null,
+      error,
+      reason: found.reason,
+    };
+  }
+  return attachTcleDocumentToTreatmentPackage({
+    user,
+    patientId,
+    appointmentId,
+    budgetId,
+    documentId: found.document.id,
+    templateKey: found.document.templateKey,
+    tcleId: found.document.metadata?.tcleId || null,
+  });
+}
 export function inspectTclePackageLink({ patientId, appointmentId, budgetId } = {}) {
   const db = loadDb();
   const contract = getContractStatusForQuote(appointmentId, 'clinical_budget', budgetId, patientId);

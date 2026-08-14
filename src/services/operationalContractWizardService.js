@@ -9,12 +9,10 @@ import { getContractStatusForQuote } from './contractModuleService.js';
 import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
 import { resolveBudgetContractCta, deriveContractPendency } from '../contracts/operationalContractUi.js';
 import { LINKED_DOCUMENTS } from '../components/clinical/contract/professionalContractClauses.js';
-import { resolveAttachedTcleIdsFromClinicalDocuments } from './clinicalTcleAttachmentService.js';
 import { formatUxMessage } from '../contracts/operationalUxMessages.js';
 import { formatCurrencyBRL } from '../utils/currency.js';
 import { resolveWizardFinancialDisplay } from './operationalContractWizardSupport.js';
-import { detectAllTreatmentTypes } from '../components/clinical/contract/detectTreatmentType.js';
-import { resolveRequiredTcles } from '../contracts/contractTcleRegistry.js';
+import { getTreatmentDocumentRequirements } from '../contracts/treatmentDocumentRequirements.js';
 
 export {
   listWizardFinalizePrerequisites,
@@ -107,20 +105,19 @@ export function buildDocumentPackageForBudget({
     return clinical.budget || null;
   })();
 
-  const attachedTcleIds = resolveAttachedTcleIdsFromClinicalDocuments({
-    patientId,
+  const requirements = getTreatmentDocumentRequirements({
     appointmentId,
-  }) || [];
-  const contract = getContractStatusForQuote(appointmentId, 'clinical_budget', budgetId, patientId);
-  const pendency = deriveContractPendency(contract);
-  const treatmentTypes = detectAllTreatmentTypes({
-    planName: budget?.planName || '',
-    procedures: budget?.procedures || [],
+    budgetId,
+    patientId,
   });
-  const requiredTcles = resolveRequiredTcles(treatmentTypes);
-  const tcleRequired = requiredTcles.length > 0;
-  const tcleReady = !tcleRequired || attachedTcleIds.length > 0;
-  const tcleTitles = requiredTcles.map((item) => item.title).filter(Boolean).join(', ');
+  const contract = requirements.contract
+    || getContractStatusForQuote(appointmentId, 'clinical_budget', budgetId, patientId);
+  const pendency = deriveContractPendency(contract);
+  const tcle = requirements.documents.tcle;
+  const tcleRequired = tcle.required;
+  const tcleReady = tcle.ready;
+  const attachedTcleIds = tcle.attachedEligibleIds || [];
+  const tcleTitles = (tcle.requiredTcles || []).map((item) => item.title).filter(Boolean).join(', ');
 
   const items = [
     {
@@ -140,11 +137,11 @@ export function buildDocumentPackageForBudget({
       ready: tcleReady,
       version: '1',
       hash: null,
-      detail: attachedTcleIds.length
-        ? `${attachedTcleIds.length} anexo(s)`
-        : tcleRequired
-          ? `Pendente: anexe em Documentos → Consentimentos${tcleTitles ? ` (${tcleTitles})` : ''}`
-          : 'Não exigido para este tratamento',
+      detail: tcleRequired
+        ? (attachedTcleIds.length
+          ? `${attachedTcleIds.length} anexo(s)`
+          : `Pendente: anexe em Documentos → Consentimentos${tcleTitles ? ` (${tcleTitles})` : ''}`)
+        : 'Não exigido para este tratamento',
     },
     {
       id: 'lgpd',

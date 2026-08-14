@@ -8,7 +8,7 @@ import {
   listDocumentRecords,
 } from '../../services/documentService.js';
 import { mapDocumentTemplateToTcleId } from '../../services/clinicalTcleAttachmentService.js';
-import { attachTcleDocumentToTreatmentPackage } from '../../services/tclePackageAttachmentService.js';
+import { attachTcleDocumentToTreatmentPackage, attachEligibleTcleToTreatmentPackage } from '../../services/tclePackageAttachmentService.js';
 import { getPatient } from '../../services/patientService.js';
 import {
   DOCUMENT_CATEGORIES,
@@ -31,6 +31,12 @@ import {
   resolveProfessionalFullName,
 } from '../../utils/patientIdentity.js';
 import { getClinicLogo } from '../../utils/clinicLogo.js';
+import {
+  getTreatmentDocumentRequirements,
+  evaluateTcleTemplateEligibility,
+  buildIncompatibleTcleWarning,
+  DOCUMENT_APPLICABILITY,
+} from '../../contracts/treatmentDocumentRequirements.js';
 
 export default function DocumentsSection({
   appointmentId,
@@ -54,7 +60,6 @@ export default function DocumentsSection({
   const [editingContent, setEditingContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
-  const [lastSavedDoc, setLastSavedDoc] = useState(null);
   const [packageAttachState, setPackageAttachState] = useState(null);
   const [docsRefreshKey, setDocsRefreshKey] = useState(0);
 
@@ -99,6 +104,16 @@ export default function DocumentsSection({
       patientId: patient?.id,
     });
   }, [appointmentId, patient?.id, docsRefreshKey]);
+
+  const documentRequirements = useMemo(() => (
+    getTreatmentDocumentRequirements({
+      appointmentId,
+      budgetId,
+      patientId: patient?.id || null,
+    })
+  ), [appointmentId, budgetId, patient?.id, docsRefreshKey]);
+
+  const tcleRequired = Boolean(documentRequirements.documents?.tcle?.required);
 
   // Endereço e telefone formatados (mesmo padrão do orçamento/PDF)
   const enderecoClinica = useMemo(() => {
@@ -278,6 +293,20 @@ export default function DocumentsSection({
 
   const isConsentTab = activeTab === DOCUMENT_CATEGORIES.CONSENTIMENTOS;
   const mappedTcleId = selectedTemplate ? mapDocumentTemplateToTcleId(selectedTemplate) : null;
+  const tcleEligibility = useMemo(() => (
+    evaluateTcleTemplateEligibility({
+      templateKey: selectedTemplate,
+      tcleId: mappedTcleId,
+      treatmentTypes: documentRequirements.treatmentTypes || [],
+    })
+  ), [selectedTemplate, mappedTcleId, documentRequirements.treatmentTypes]);
+  const incompatibleTcle = Boolean(
+    isConsentTab && selectedTemplate && mappedTcleId && !tcleEligibility.eligibleForPackage,
+  );
+  const incompatibleWarning = incompatibleTcle
+    ? buildIncompatibleTcleWarning(tcleEligibility, documentRequirements.budget)
+    : null;
+  const canAttachToPackage = isConsentTab && mappedTcleId && tcleEligibility.eligibleForPackage;
 
   const handleSaveDocument = async ({ attachToPackage = false } = {}) => {
     if (!selectedTemplate) return;
@@ -314,15 +343,21 @@ export default function DocumentsSection({
         title: template.title,
         content: finalContent,
         metadata: mappedTcleId
-          ? { tcleId: mappedTcleId }
+          ? {
+            tcleId: mappedTcleId,
+            budgetId: budgetId || documentRequirements.budgetId || null,
+            origin: incompatibleTcle ? DOCUMENT_APPLICABILITY.MANUAL : DOCUMENT_APPLICABILITY.APPLICABLE,
+            applicability: incompatibleTcle
+              ? DOCUMENT_APPLICABILITY.NOT_APPLICABLE_TO_CURRENT_TREATMENT
+              : DOCUMENT_APPLICABILITY.APPLICABLE,
+          }
           : {},
       });
 
-      setLastSavedDoc(created || null);
       setDocsRefreshKey((k) => k + 1);
 
       let attachResult = null;
-      if (attachToPackage && mappedTcleId) {
+      if (attachToPackage && mappedTcleId && !incompatibleTcle) {
         attachResult = attachTcleDocumentToTreatmentPackage({
           user,
           patientId: patient.id,
@@ -342,6 +377,11 @@ export default function DocumentsSection({
             : 'TCLE salvo e adicionado ao pacote de assinatura.',
           type: 'success',
         });
+      } else if (incompatibleTcle) {
+        setToast({
+          message: 'Documento avulso salvo no prontuário. Não entra no pacote de assinatura deste tratamento.',
+          type: 'success',
+        });
       } else {
         setToast({ message: 'Documento salvo com sucesso', type: 'success' });
       }
@@ -356,20 +396,16 @@ export default function DocumentsSection({
   };
 
   const handleAttachLastSavedToPackage = () => {
-    if (!lastSavedDoc && !selectedTemplate) return;
-    const templateKey = lastSavedDoc?.templateKey || selectedTemplate;
-    const result = attachTcleDocumentToTreatmentPackage({
+    const result = attachEligibleTcleToTreatmentPackage({
       user,
       patientId: patient.id,
       appointmentId,
       budgetId,
-      documentId: lastSavedDoc?.id || null,
-      templateKey,
     });
     setPackageAttachState(result);
     setToast({
       message: result.ok
-        ? (result.duplicate ? 'TCLE já estava no pacote.' : 'TCLE adicionado ao pacote de assinatura.')
+        ? (result.duplicate ? 'TCLE já estava no pacote.' : 'TCLE compatível adicionado ao pacote de assinatura.')
         : (result.error || 'Não foi possível adicionar ao pacote.'),
       type: result.ok ? 'success' : 'error',
     });
@@ -538,11 +574,11 @@ export default function DocumentsSection({
 
   return (
     <SectionCard>
-      {returnToContractHref || onReturnToContract ? (
+      {tcleRequired && (returnToContractHref || onReturnToContract) ? (
         <div className="contract-return-banner" role="status" data-testid="docs-return-to-contract">
           <div>
             <strong>Resolver TCLE do contrato</strong>
-            <p className="muted">Selecione e salve o modelo de consentimento correspondente. Depois volte ao contrato para revalidar.</p>
+            <p className="muted">Selecione e salve o modelo de consentimento correspondente ao tratamento. Depois volte ao contrato para revalidar.</p>
           </div>
           <button
             type="button"
@@ -642,6 +678,9 @@ export default function DocumentsSection({
                     <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', padding: 'var(--spacing-sm)', fontSize: 'var(--font-size-xs)', color: 'var(--color-text-muted)', marginBottom: 'var(--spacing-xs)' }}>
                       <FileText size={12} />
                       <span style={{ flex: 1 }}>{doc.title}</span>
+                      {doc.metadata?.applicability === DOCUMENT_APPLICABILITY.NOT_APPLICABLE_TO_CURRENT_TREATMENT ? (
+                        <span data-testid="doc-avulso-badge">Avulso</span>
+                      ) : null}
                       <span style={{ fontSize: 'var(--font-size-xs)', color: 'var(--color-text-light)' }}>
                         {new Date(doc.createdAt).toLocaleDateString('pt-BR')}
                       </span>
@@ -670,6 +709,13 @@ export default function DocumentsSection({
                       <X size={16} />
                     </button>
                   </div>
+
+                  {incompatibleWarning ? (
+                    <div className="alert error" role="status" data-testid="tcle-incompatible-warning">
+                      <strong>{incompatibleWarning.title}</strong>
+                      <p style={{ whiteSpace: 'pre-wrap', margin: '8px 0 0' }}>{incompatibleWarning.message}</p>
+                    </div>
+                  ) : null}
 
                   {/* Campos Variáveis */}
                   {currentTemplate.fields.length > 0 && (
@@ -772,7 +818,7 @@ export default function DocumentsSection({
                       <Save size={16} />
                       Salvar no Prontuário
                     </button>
-                    {isConsentTab && mappedTcleId ? (
+                    {canAttachToPackage ? (
                       <button
                         type="button"
                         className="button primary"
@@ -785,14 +831,14 @@ export default function DocumentsSection({
                         Adicionar ao pacote de assinatura
                       </button>
                     ) : null}
-                    {isConsentTab && lastSavedDoc && mappedTcleId ? (
+                    {tcleRequired && canAttachToPackage ? (
                       <button
                         type="button"
                         className="button secondary"
                         data-testid="tcle-attach-existing-cta"
                         onClick={handleAttachLastSavedToPackage}
                       >
-                        Vincular último TCLE ao pacote
+                        Vincular TCLE elegível ao pacote
                       </button>
                     ) : null}
                     {packageAttachState?.ok && onReturnToContract ? (

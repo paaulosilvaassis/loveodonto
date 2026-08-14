@@ -15,6 +15,7 @@ import {
   isBudgetApprovedStatus,
 } from './contract/contractAccessUtils.js';
 import { getContractStatusForQuote } from '../../services/contractModuleService.js';
+import { areRequiredApplicableDocumentsSatisfied } from '../../contracts/treatmentDocumentRequirements.js';
 
 /** Etapas do fluxo clínico comercial (header). */
 export const CLINICAL_WORKFLOW_STEPS = [
@@ -188,6 +189,9 @@ export function getClinicalWorkflowState(appointmentId, viewBudgetId = null) {
     viewBudgetId: viewBudgetId || null,
     isHistoricalView,
     isReadOnly,
+    appointmentId,
+    patientId: clinical?.patientId || null,
+    budgetId: budget?.id || viewBudgetId || null,
   };
 }
 
@@ -255,9 +259,17 @@ export function getNavStepStatus(stepId, workflow, activeSection) {
   }
 
   if (stepId === 'documentos') {
+    if (!(workflow.budgetApproved || workflow.contractAccessible)) {
+      return STEP_STATUS.BLOCKED;
+    }
+    const docsComplete = areRequiredApplicableDocumentsSatisfied({
+      appointmentId: workflow.appointmentId,
+      budgetId: workflow.budgetId || workflow.viewBudgetId || workflow.budget?.id || null,
+      patientId: workflow.patientId,
+    });
+    if (docsComplete) return STEP_STATUS.COMPLETED;
     if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
-    if (workflow.budgetApproved || workflow.contractAccessible) return STEP_STATUS.PENDING;
-    return STEP_STATUS.BLOCKED;
+    return STEP_STATUS.PENDING;
   }
 
   if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
