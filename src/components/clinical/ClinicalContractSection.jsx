@@ -34,6 +34,12 @@ import {
 import SendContractSignatureModal from '../contracts/SendContractSignatureModal.jsx';
 import { canSendContractForSignature, resolveBudgetForContractSend } from '../../services/contractSignatureFlowService.js';
 import { CancelContractSecureModal } from './contract/CancelContractSecureModal.jsx';
+import { FinalizeClinicalContractModal } from './contract/FinalizeClinicalContractModal.jsx';
+import {
+  canFinalizeClinicalContract,
+  canShowFinalizeClinicalContractCta,
+  finalizeClinicalContractDraft,
+} from './contract/finalizeClinicalContractDraft.js';
 import {
   CONTRACT_STATUS,
   CONTRACT_STATUS_LABELS,
@@ -189,8 +195,11 @@ export function ClinicalContractSection({
   const [contractModalOpen, setContractModalOpen] = useState(false);
   const [contractModalMode, setContractModalMode] = useState('create');
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [finalizeModalOpen, setFinalizeModalOpen] = useState(false);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [finalizeBusy, setFinalizeBusy] = useState(false);
+  const [finalizeError, setFinalizeError] = useState('');
   const [toast, setToast] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);
 
@@ -503,6 +512,37 @@ export function ClinicalContractSection({
     }
   };
 
+  const openFinalizeContract = () => {
+    if (!canShowFinalizeClinicalContractCta(linkedContract) || !canFinalizeClinicalContract(user)) {
+      showToast('Este contrato não pode ser finalizado agora.', 'error');
+      return;
+    }
+    setFinalizeError('');
+    setFinalizeModalOpen(true);
+  };
+
+  const handleConfirmFinalizeContract = () => {
+    if (finalizeBusy) return;
+    setFinalizeBusy(true);
+    setFinalizeError('');
+    const result = finalizeClinicalContractDraft(user, {
+      contractId: linkedContract?.id,
+      appointmentId,
+      budgetId: effectiveBudget?.id || budget?.id || null,
+      patientId,
+    });
+    setFinalizeBusy(false);
+    if (!result.ok) {
+      setFinalizeError(result.error || 'Não foi possível finalizar o contrato.');
+      return;
+    }
+    setFinalizeModalOpen(false);
+    setHistoryKey((k) => k + 1);
+    notifyClinicalBudgetUpdated(patientId);
+    onWorkflowRefresh?.();
+    showToast('Contrato finalizado. Documentos e Assinatura foram reavaliados.');
+  };
+
   const historyEvents = (contractDetails?.events || [])
     .map((event) => ({ event, label: formatContractEventLabel(event) }))
     .filter((item) => item.label);
@@ -515,13 +555,16 @@ export function ClinicalContractSection({
     && !linkedContract
     && (contractReadiness?.canGenerate ?? false);
   const canEdit = linkedContract?.status === CONTRACT_STATUS.DRAFT;
+  const isCanceled = linkedContract?.status === CONTRACT_STATUS.CANCELED;
+  const canFinalize = canShowFinalizeClinicalContractCta(linkedContract)
+    && canFinalizeClinicalContract(user)
+    && !isCanceled;
   const canView = Boolean(linkedContract?.renderedHtml || linkedContract?.editedHtml || contractAccessible);
   const canPreview = contractAccessible && ((contractReadiness?.canGenerate ?? false) || linkedContract);
   const canSend = canSendContractForSignature({ contract: linkedContract, budget: effectiveBudget });
   const canCancel = canCancelAsAdmin
     && linkedContract
     && ![CONTRACT_STATUS.SIGNED, CONTRACT_STATUS.CANCELED].includes(linkedContract.status);
-  const isCanceled = linkedContract?.status === CONTRACT_STATUS.CANCELED;
 
   return (
     <>
@@ -533,6 +576,17 @@ export function ClinicalContractSection({
             <ClinicalBtn variant="secondary" icon={FileSignature} onClick={openCreateContract} disabled={!canGenerate}>
               Gerar contrato
             </ClinicalBtn>
+            {canFinalize ? (
+              <ClinicalBtn
+                variant="primary"
+                icon={CheckCircle2}
+                data-testid="finalize-clinical-contract-cta"
+                onClick={openFinalizeContract}
+                disabled={finalizeBusy}
+              >
+                Finalizar contrato
+              </ClinicalBtn>
+            ) : null}
             {canPreview && !isCanceled ? (
               <ClinicalBtn variant="secondary" icon={FileText} onClick={handlePreviewContract}>
                 Pré-visualizar
@@ -797,6 +851,19 @@ export function ClinicalContractSection({
         onOpenChange={setCancelModalOpen}
         busy={cancelBusy}
         onConfirm={handleConfirmCancelContract}
+      />
+
+      <FinalizeClinicalContractModal
+        open={finalizeModalOpen}
+        onOpenChange={(next) => {
+          if (!next && finalizeBusy) return;
+          setFinalizeModalOpen(next);
+          if (!next) setFinalizeError('');
+        }}
+        busy={finalizeBusy}
+        contractNumber={linkedContract?.contractNumber || ''}
+        error={finalizeError}
+        onConfirm={handleConfirmFinalizeContract}
       />
 
       {toast ? (
