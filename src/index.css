@@ -18874,29 +18874,67 @@ a.button {
 .clinical-attendance-session-bar {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin: 0 0 1rem;
-  padding: 0.9rem 1rem;
-  border: 1px solid #fdba74;
-  background: #fff7ed;
-  color: #9a3412;
-  border-radius: 12px;
+  gap: 0.5rem 1rem;
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--color-text);
+  border-radius: var(--radius-md);
 }
 
 .clinical-attendance-session-bar-text {
   flex: 1;
-  min-width: 240px;
+  min-width: 220px;
+}
+
+.clinical-attendance-session-bar-text strong {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 .clinical-attendance-session-bar-text p {
-  margin: 0.35rem 0 0;
+  margin: 0.15rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.clinical-attendance-session-bar-text p[role="alert"] {
+  color: var(--color-error);
 }
 
 .clinical-attendance-session-bar .button.primary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.clinical-attendance-session-bar.is-attention {
+  border-color: #fdba74;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.clinical-attendance-session-bar.is-attention strong,
+.clinical-attendance-session-bar.is-attention p {
+  color: inherit;
+}
+
+@media (max-width: 640px) {
+  .clinical-attendance-session-bar {
+    align-items: stretch;
+  }
+
+  .clinical-attendance-session-bar .button.primary {
+    width: 100%;
+  }
 }
 
 .patient-journey-card-meta {

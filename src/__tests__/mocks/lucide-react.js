@@ -6,3 +6,4 @@ export const AlertTriangle = () => null;
 export const PenLine = () => null;
 export const CheckCircle2 = () => null;
 export const Circle = () => null;
+export const DoorClosed = () => null;

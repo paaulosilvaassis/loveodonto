@@ -9,6 +9,11 @@ import {
 import { resolveClinicalAttendanceState } from '../../services/clinicalAttendanceState.js';
 import { FinishAppointmentModal } from './budget/FinishAppointmentModal.jsx';
 
+export const ATTENDANCE_SESSION_COPY = {
+  title: 'Atendimento em andamento',
+  subtitle: 'Finalize o atendimento quando concluir esta consulta.',
+};
+
 export function ClinicalAttendanceSessionBar({
   user,
   appointment,
@@ -30,6 +35,11 @@ export function ClinicalAttendanceSessionBar({
     appointmentId: appointment.id,
   });
   const blocker = readiness.blockers[0] || null;
+  const needsAttention = Boolean(attendance.requiresResolution);
+  const title = needsAttention ? attendance.displayLabel : ATTENDANCE_SESSION_COPY.title;
+  const subtitle = needsAttention
+    ? (attendance.message || ATTENDANCE_SESSION_COPY.subtitle)
+    : ATTENDANCE_SESSION_COPY.subtitle;
 
   const handleConfirm = ({ reason, notes }) => {
     setConfirming(true);
@@ -53,12 +63,17 @@ export function ClinicalAttendanceSessionBar({
   };
 
   return (
-    <div className="clinical-attendance-session-bar" data-testid="clinical-finish-session-bar">
+    <div
+      className={['clinical-attendance-session-bar', needsAttention ? 'is-attention' : '']
+        .filter(Boolean)
+        .join(' ')}
+      data-testid="clinical-finish-session-bar"
+      role="status"
+      aria-label={title}
+    >
       <div className="clinical-attendance-session-bar-text">
-        <strong>{attendance.displayLabel}</strong>
-        {attendance.message ? <p>{attendance.message}</p> : (
-          <p>Encerrar este atendimento pelo workflow oficial, sem alterar orçamento ou contrato históricos.</p>
-        )}
+        <strong data-testid="clinical-session-title">{title}</strong>
+        <p data-testid="clinical-session-subtitle">{subtitle}</p>
         {blocker ? (
           <p>
             {blocker.message}
