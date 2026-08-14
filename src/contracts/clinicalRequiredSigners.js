@@ -10,6 +10,7 @@ import { resolveRequiredTcles } from './contractTcleRegistry.js';
 import { detectPartyModel } from './contractVariableResolver.js';
 import { DEFAULT_CONTRACT_SETTINGS } from './contractConstants.js';
 import { resolvePatientFullName } from '../utils/patientIdentity.js';
+import { resolveAttendingProfessionalCro } from './clinicTechnicalResponsible.js';
 
 export const CLINICAL_SIGNER_ROLE = {
   PATIENT: 'PATIENT',
@@ -71,7 +72,7 @@ function treatingDentist(appointmentId) {
   const col = professionalId
     ? (db.collaborators || []).find((c) => c.id === professionalId)
     : null;
-  const cro = col?.conselhoNumero || col?.cro || col?.croNumero || '';
+  const cro = resolveAttendingProfessionalCro(col);
   const uf = col?.conselhoUf || col?.croUf || col?.uf || '';
   return {
     personId: professionalId || null,
@@ -91,7 +92,7 @@ function technicalResponsible() {
   const collaborators = db.collaborators || [];
   const croNorm = normalizeCro(cro);
   const linked = collaborators.find((c) => {
-    const cCro = normalizeCro(c.conselhoNumero || c.cro || c.croNumero);
+    const cCro = normalizeCro(resolveAttendingProfessionalCro(c));
     return croNorm && cCro && cCro === croNorm;
   }) || null;
   return {

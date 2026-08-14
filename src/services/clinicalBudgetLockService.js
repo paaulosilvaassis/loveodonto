@@ -155,10 +155,20 @@ export function assertBudgetStatusChangeAllowed(appointmentId) {
   if (ctx.isLocked) throw new Error(BUDGET_LOCK_ERROR);
 }
 
-function nextBudgetDisplayNumber(clinical) {
-  const historyLen = (clinical?.budgetHistory || []).length;
-  const seq = historyLen + 1;
-  return `ORC-${String(seq).padStart(3, '0')}`;
+function nextBudgetDisplayNumber(clinical, db) {
+  const patientId = clinical?.patientId || resolveClinicalPatientId(clinical, db);
+  let max = 0;
+  const consider = (budget) => {
+    const match = String(budget?.budgetNumber || '').match(/^ORC-(\d+)$/i);
+    if (match) max = Math.max(max, Number(match[1]));
+  };
+  for (const ca of db.clinicalAppointments || []) {
+    const caPatient = resolveClinicalPatientId(ca, db);
+    if (patientId && caPatient && caPatient !== patientId) continue;
+    consider(ca.budget);
+    for (const archived of ca.budgetHistory || []) consider(archived);
+  }
+  return `ORC-${String(max + 1).padStart(3, '0')}`;
 }
 
 function mapBudgetProcedureToPlanned(proc, appointment) {
@@ -306,7 +316,7 @@ export function createNewBudgetForAppointment(user, appointmentId) {
     }
 
     clinical.plannedProcedures = [];
-    const displayNumber = nextBudgetDisplayNumber(clinical);
+    const displayNumber = nextBudgetDisplayNumber(clinical, db);
     clinical.budget = buildEmptyBudget(clinical, displayNumber, archivedBudgetId, user);
     clinical.planName = '';
 

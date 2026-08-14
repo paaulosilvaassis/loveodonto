@@ -60,6 +60,7 @@ function seed({
   birthDate = '1988-01-01',
   guardian = null,
   dentistCro = '27267',
+  dentistRegistro = null,
   dentistId = DENTIST_ID,
   rtName = 'Dra. Juliana de Oliveira Freire',
   rtCro = 'CRO-MG 27267',
@@ -78,7 +79,14 @@ function seed({
       croResponsavelTecnico: rtCro,
     };
     db.collaborators = [
-      { id: dentistId, nomeCompleto: 'Juliana de Oliveira Freire', conselhoNumero: dentistCro, conselhoUf: 'MG', tenant_id: TENANT },
+      {
+        id: dentistId,
+        nomeCompleto: 'Juliana de Oliveira Freire',
+        conselhoNumero: dentistCro,
+        registroProfissional: dentistRegistro || dentistCro,
+        conselhoUf: 'MG',
+        tenant_id: TENANT,
+      },
       { id: OTHER_DENTIST, nomeCompleto: 'Outro Dentista', conselhoNumero: '99999', conselhoUf: 'MG', tenant_id: TENANT },
     ];
     db.patients = [
@@ -224,6 +232,21 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
       tenantId: TENANT, patientId: PATIENT_ID, appointmentId: APPT_ID, budgetId: BUDGET_ID, contractId: CONTRACT_ID,
     });
     expect(resolved.blockers.some((b) => b.code === 'PROFESSIONAL_CRO_MISSING')).toBe(true);
+  });
+
+  it('F2 registroProfissional (campo RH) satisfaz CRO e permite dedup com RT', () => {
+    seed({ dentistCro: '', dentistRegistro: '27267' });
+    const resolved = resolveRequiredSigners({
+      tenantId: TENANT, patientId: PATIENT_ID, appointmentId: APPT_ID, budgetId: BUDGET_ID, contractId: CONTRACT_ID,
+    });
+    expect(resolved.blockers.some((b) => b.code === 'PROFESSIONAL_CRO_MISSING')).toBe(false);
+    const professional = resolved.requiredSigners.find((s) => s.role === CLINICAL_SIGNER_ROLE.PROFESSIONAL);
+    expect(professional?.cro).toBe('27267');
+    expect(professional?.dedupedRoles).toEqual([
+      CLINICAL_SIGNER_ROLE.PROFESSIONAL,
+      CLINICAL_SIGNER_ROLE.CLINIC_REPRESENTATIVE,
+    ]);
+    expect(resolved.requiredSigners.some((s) => s.role === CLINICAL_SIGNER_ROLE.CLINIC_REPRESENTATIVE && s.required)).toBe(false);
   });
 
   it('G/H RT required vs optional', () => {
