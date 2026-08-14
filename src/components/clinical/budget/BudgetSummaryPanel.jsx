@@ -18,7 +18,7 @@ import { BudgetHistoryPanel } from './BudgetHistoryPanel.jsx';
 
 
 export function BudgetSummaryPanel({
-
+  displayNumber = '',
   patientName,
 
   planName,
@@ -85,6 +85,13 @@ export function BudgetSummaryPanel({
 
 
       <dl className="budget-tab-summary-dl">
+
+        {displayNumber ? (
+          <div>
+            <dt>Orçamento</dt>
+            <dd data-testid="budget-summary-identity">{displayNumber}</dd>
+          </div>
+        ) : null}
 
         <div><dt>Paciente</dt><dd>{patientName}</dd></div>
 

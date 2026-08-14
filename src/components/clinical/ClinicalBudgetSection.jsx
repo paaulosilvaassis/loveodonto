@@ -15,14 +15,13 @@ import {
   getBudgetLockContext,
   getBudgetLockContextForBudget,
   createNewBudgetForAppointment,
-  listPatientBudgetHistory,
+  resolveClinicalBudgetIdentity,
 } from '../../services/clinicalBudgetLockService.js';
 import {
   resolveBudgetForView,
   validateBudgetConsistency,
   BUDGET_CONSISTENCY_ALERT,
 } from '../../services/budgetNavigationService.js';
-import { formatFriendlyBudgetNumber } from '../../utils/friendlyNumbers.js';
 import { notifyClinicalBudgetUpdated } from '../../services/clinicalBudgetApprovedService.js';
 import { processApprovedBudgetFinance } from '../../services/clinicalBudgetFinance.js';
 import { BudgetPaymentConditions } from './budget/BudgetPaymentConditions.jsx';
@@ -50,7 +49,7 @@ import {
   buildPaymentOptionSnapshot,
   PAYMENT_PRESENTATION_STATUS,
 } from './budget/budgetPaymentPdfUtils.js';
-import { DEFAULT_PAYMENT_OPTIONS } from './clinicalAppointmentConfig.js';
+import { BUDGET_STATUS_BADGES, DEFAULT_PAYMENT_OPTIONS } from './clinicalAppointmentConfig.js';
 import { ClinicalBtn } from './ClinicalStageShell.jsx';
 import { CreateNewBudgetModal } from './budget/CreateNewBudgetModal.jsx';
 import { FinishAppointmentModal } from './budget/FinishAppointmentModal.jsx';
@@ -212,34 +211,27 @@ export function ClinicalBudgetSection({
     [budget],
   );
 
-  const activeBudget = useMemo(
-    () => (viewBudgetId ? getBudget(appointmentId) : null),
-    [appointmentId, viewBudgetId, historyKey],
+  const viewedBudgetIdentity = useMemo(
+    () => resolveClinicalBudgetIdentity({
+      appointmentId,
+      budgetId: budget?.id || viewBudgetId || null,
+    }),
+    [appointmentId, budget?.id, viewBudgetId, historyKey],
   );
 
-  const activeBudgetDisplayNumber = useMemo(() => {
-    if (!activeBudget?.id) return '';
-    const patientId = patient?.id || appointment?.patientId;
-    if (patientId) {
-      const match = listPatientBudgetHistory(patientId).find((item) => item.id === activeBudget.id);
-      if (match?.budgetNumber) return match.budgetNumber;
-    }
-    return formatFriendlyBudgetNumber(activeBudget.budgetNumber, 1);
-  }, [activeBudget?.id, activeBudget?.budgetNumber, patient?.id, appointment?.patientId]);
+  const activeBudgetIdentity = useMemo(
+    () => resolveClinicalBudgetIdentity({ appointmentId }),
+    [appointmentId, historyKey],
+  );
+
+  const budgetDisplayNumber = viewedBudgetIdentity?.displayNumber || '';
+  const activeBudgetDisplayNumber = activeBudgetIdentity?.displayNumber || '';
+  const budgetStatusLabel = BUDGET_STATUS_BADGES.find((item) => item.value === budget?.status)?.label
+    || null;
 
   const showGoToActiveBudget = isHistoricalView
-    && activeBudget?.id
-    && activeBudget.id !== budget?.id;
-
-  const budgetDisplayNumber = useMemo(() => {
-    if (!budget) return '';
-    const patientId = patient?.id || appointment?.patientId;
-    if (patientId) {
-      const match = listPatientBudgetHistory(patientId).find((item) => item.id === budget.id);
-      if (match?.budgetNumber) return match.budgetNumber;
-    }
-    return formatFriendlyBudgetNumber(budget.budgetNumber, 1);
-  }, [budget?.id, budget?.budgetNumber, patient?.id, appointment?.patientId]);
+    && activeBudgetIdentity?.budgetId
+    && activeBudgetIdentity.budgetId !== budget?.id;
 
   const nextSteps = useMemo(
     () => resolveNextSteps(budget, financials, lockCtx),
@@ -624,6 +616,8 @@ export function ClinicalBudgetSection({
         hasChosenCondition={Boolean(chosenPaymentOption)}
         hasDocuments={(budget.documents?.length || 0) > 0}
         hasActiveContract={lockCtx.hasActiveContract}
+        displayNumber={budgetDisplayNumber}
+        statusLabel={budgetStatusLabel || ''}
         budgetStatus={budget.status}
         saving={saving}
         onSave={handleSave}
@@ -659,7 +653,7 @@ export function ClinicalBudgetSection({
             <ClinicalBtn
               variant="primary"
               size="sm"
-              onClick={() => onActiveBudgetChange(activeBudget.id)}
+              onClick={() => onActiveBudgetChange(activeBudgetIdentity.budgetId)}
             >
               Ir para orçamento atual
               {activeBudgetDisplayNumber ? ` (${activeBudgetDisplayNumber})` : ''}
@@ -671,7 +665,9 @@ export function ClinicalBudgetSection({
       {!isEditBlocked && !isApprovedView ? (
         <div className="clinical-budget-info-banner" role="status">
           <p>
-            Orçamento em negociação. Você pode apresentar condições, marcar a condição escolhida e aprovar quando o paciente aceitar.
+            {budgetDisplayNumber ? `Orçamento ${budgetDisplayNumber}` : 'Orçamento'}
+            {budgetStatusLabel ? ` • ${budgetStatusLabel}` : ' em negociação'}
+            . Você pode apresentar condições, marcar a condição escolhida e aprovar quando o paciente aceitar.
           </p>
         </div>
       ) : null}
@@ -761,6 +757,7 @@ export function ClinicalBudgetSection({
         </div>
 
         <BudgetSummaryPanel
+          displayNumber={budgetDisplayNumber}
           patientName={patientName}
           planName={budget.planName}
           professionalName={professionalName}

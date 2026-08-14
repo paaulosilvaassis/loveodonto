@@ -9,6 +9,8 @@ export function BudgetPremiumHeader({
   hasChosenCondition = false,
   hasDocuments,
   hasActiveContract,
+  displayNumber = '',
+  statusLabel = '',
   budgetStatus,
   saving,
   onSave,
@@ -28,6 +30,17 @@ export function BudgetPremiumHeader({
     <header className="budget-premium-header">
       <div className="budget-premium-header-text">
         <h2>Orçamento do Tratamento</h2>
+        {displayNumber ? (
+          <p className="budget-premium-header-identity" data-testid="budget-active-identity">
+            <span className="budget-premium-header-number">{displayNumber}</span>
+            {statusLabel ? (
+              <>
+                <span aria-hidden> • </span>
+                <span>{statusLabel}</span>
+              </>
+            ) : null}
+          </p>
+        ) : null}
         <p>
           {isApprovedView
             ? 'Orçamento aprovado. Gere o contrato na aba Contrato para continuar o fluxo.'

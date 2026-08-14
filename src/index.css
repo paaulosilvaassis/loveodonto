@@ -29457,6 +29457,20 @@ a.button {
   color: #0f172a;
 }
 
+.budget-premium-header-identity {
+  margin: 0 0 0.35rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #334155;
+  letter-spacing: 0.01em;
+}
+
+.budget-premium-header-number {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: #6a00ff;
+}
+
 .budget-premium-header-text p {
   margin: 0;
   max-width: 520px;

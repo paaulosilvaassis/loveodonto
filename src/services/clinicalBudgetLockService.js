@@ -16,7 +16,7 @@ import {
   hasRealReceivableLinkedToBudget,
   hasRealFinancingLinkedToBudget,
 } from '../components/clinical/budget/budgetEditAccessUtils.js';
-import { formatFriendlyBudgetNumber } from '../utils/friendlyNumbers.js';
+import { formatFriendlyBudgetNumber, isTechnicalId } from '../utils/friendlyNumbers.js';
 
 export const BUDGET_LOCK_ERROR = 'Registro bloqueado por contrato gerado.';
 
@@ -489,4 +489,48 @@ export function listPatientBudgetHistory(patientId) {
   return numbered.sort(
     (a, b) => new Date(b.archivedAt || b.createdAt || 0) - new Date(a.archivedAt || a.createdAt || 0),
   );
+}
+
+/**
+ * Identidade do orçamento vinculado a UM atendimento clínico.
+ * Não usa índice visual, não escolhe o último orçamento do paciente
+ * e não atravessa appointmentId.
+ */
+export function resolveClinicalBudgetIdentity({ appointmentId, budgetId = null } = {}) {
+  if (!appointmentId) return null;
+  const db = loadDb();
+  const clinical = (db.clinicalAppointments || []).find((ca) => ca.appointmentId === appointmentId);
+  if (!clinical) return null;
+
+  const scoped = [
+    ...(clinical.budget ? [clinical.budget] : []),
+    ...(clinical.budgetHistory || []),
+  ].filter((item) => item?.id);
+
+  const budget = budgetId
+    ? scoped.find((item) => item.id === budgetId) || null
+    : (clinical.budget || null);
+
+  if (!budget) return null;
+
+  const persistedRaw = String(budget.budgetNumber || '').trim();
+  const persistedFriendly = persistedRaw && !isTechnicalId(persistedRaw)
+    ? formatFriendlyBudgetNumber(persistedRaw)
+    : null;
+
+  const patientId = resolveClinicalPatientId(clinical, db);
+  const historyMatch = patientId
+    ? listPatientBudgetHistory(patientId).find((item) => item.id === budget.id)
+    : null;
+
+  return {
+    appointmentId,
+    clinicalAppointmentId: clinical.id || null,
+    budgetId: budget.id,
+    persistedBudgetNumber: budget.budgetNumber ?? null,
+    displayNumber: persistedFriendly || historyMatch?.budgetNumber || null,
+    status: budget.status || null,
+    patientId,
+    value: budget.totalValue ?? null,
+  };
 }
