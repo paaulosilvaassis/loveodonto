@@ -272,8 +272,8 @@ Data mutated: NO
 Tests: PASS (39) — csvXlsxHeaderMap, patientImportSearchProductionFix, patientSuggestHelpers, importPatients, agendaPatientSearch, phase1021r identity
 Build: PASS (vite build)
 Deploy required: YES — autorizado na fase B
-Deploy status: IN_PROGRESS
-Secrets: check no diff da correção; nenhum secret adicionado
+Deploy status: PASS (Vercel loveodonto + Railway production, commit 3352f8f)
+Secrets: PASS (nenhum secret no diff)
 
 Production search retest: PENDENTE (Paulo, após deploy)
 Agenda selector: PENDENTE
@@ -298,10 +298,9 @@ External communication: NO
 
 ## Remaining blockers
 
-1. Deploy do código para produção.
-2. Autorização do Paulo para reparo `update_cpf` com a planilha original.
-3. Teste manual: Agenda → Novo Agendamento → buscar paciente importado.
-4. PHASE_10.21AL continua pausada até o Paulo confirmar a busca.
+1. Teste manual do Paulo no **mesmo browser** da importação (Agenda → Novo Agendamento).
+2. Se nomes civis ainda estiverem corrompidos no IndexedDB: autorização de reparo `update_cpf` (ainda **não** autorizado).
+3. PHASE_10.21AL continua pausada.
 
 ---
 
@@ -348,10 +347,10 @@ Files changed:
 - docs/reports/PHASE_PATIENT_IMPORT_SEARCH_PRODUCTION_FIX.md
 Tests: PASS (39)
 Build: PASS
-Commit: (preenchido após git)
-Push: (preenchido após git)
-Deploy: (preenchido após Vercel)
-Production health: (preenchido após HTTP)
+Commit: 3352f8f
+Push: origin/main (a1a7584..3352f8f)
+Deploy: Vercel Production – loveodonto SUCCESS (5891107698); Railway kind-victory / production SUCCESS (5891098886)
+Production health: https://loveodonto.com.br/ HTTP 200; Railway /health HTTP 200 (contractsV2Storage bound, inalterado)
 Patient data mutated: NO
 Reimport performed: NO
 IndexedDB repair performed: NO
