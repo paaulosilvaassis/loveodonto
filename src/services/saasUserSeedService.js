@@ -83,6 +83,7 @@ export function ensureSaasUserInLocalDb(user) {
       role: isMaster ? 'admin' : (user.role || 'atendimento'),
       active: true,
       has_system_access: true,
+      ...(user.permissionOverrides ? { permissionOverrides: user.permissionOverrides } : {}),
     };
     if (uIdx >= 0) {
       d.users[uIdx] = { ...d.users[uIdx], ...userRecord };
@@ -137,11 +138,16 @@ export function ensureSaasUserInLocalDb(user) {
       d.memberships.push(membershipRecord);
     }
 
+    const hintedId = String(user.collaboratorId || user.collaborator_id || '').trim();
     const cIdx = d.collaborators.findIndex(
-      (c) => c.id === collabId || ((c.email || '').toLowerCase() === email && email),
+      (c) => c.id === collabId
+        || (hintedId && c.id === hintedId)
+        || ((c.email || '').toLowerCase() === email && email),
     );
+    const keepExistingId = cIdx >= 0 ? d.collaborators[cIdx].id : null;
+    const resolvedCollabId = keepExistingId || hintedId || collabId;
     const collaboratorRecord = {
-      id: collabId,
+      id: resolvedCollabId,
       status: 'ativo',
       apelido: fullName.split(' ')[0] || fullName,
       nomeCompleto: fullName,
@@ -165,10 +171,10 @@ export function ensureSaasUserInLocalDb(user) {
     if (cIdx >= 0) {
       d.collaborators[cIdx] = {
         ...d.collaborators[cIdx],
-        id: collabId,
-        nomeCompleto: fullName,
-        apelido: fullName.split(' ')[0] || fullName,
-        email,
+        id: keepExistingId,
+        nomeCompleto: d.collaborators[cIdx].nomeCompleto || fullName,
+        apelido: d.collaborators[cIdx].apelido || fullName.split(' ')[0] || fullName,
+        email: d.collaborators[cIdx].email || email,
         status: 'ativo',
         updatedAt: now,
       };
@@ -178,7 +184,7 @@ export function ensureSaasUserInLocalDb(user) {
 
     const aIdx = d.collaboratorAccess.findIndex((a) => a.userId === authUserId);
     const accessRecord = {
-      collaboratorId: collabId,
+      collaboratorId: resolvedCollabId,
       userId: authUserId,
       role: isMaster ? 'admin' : (user.role || 'atendimento'),
       permissions: [],
