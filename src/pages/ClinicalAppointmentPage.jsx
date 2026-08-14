@@ -52,6 +52,7 @@ import ProcedureSelectorModal from '../components/ProcedureSelectorModal.jsx';
 import DocumentsSection from '../components/clinical/DocumentsSection.jsx';
 import { ClinicalPlanningSection } from '../components/clinical/ClinicalPlanningSection.jsx';
 import { ClinicalStepNav } from '../components/clinical/ClinicalStepNav.jsx';
+import { ClinicalAttendanceSessionBar } from '../components/clinical/ClinicalAttendanceSessionBar.jsx';
 import { ClinicalStageShell, ClinicalBlock, ClinicalBtn } from '../components/clinical/ClinicalStageShell.jsx';
 import { ClinicalBudgetSection } from '../components/clinical/ClinicalBudgetSection.jsx';
 import { ClinicalContractSection } from '../components/clinical/ClinicalContractSection.jsx';
@@ -62,6 +63,7 @@ import {
   sectionLockMessage,
   getClinicalWorkflowState,
 } from '../components/clinical/clinicalAppointmentConfig.js';
+import { resolveClinicalAttendanceState } from '../services/clinicalAttendanceState.js';
 import { findBudgetRecord, buildClinicalAppointmentUrl, resolveEffectiveViewBudgetId } from '../services/budgetNavigationService.js';
 import { isSafeClinicalReturnUrl } from '../contracts/contractPrerequisitesResolution.js';
 import { getGeneratedContract } from '../services/contractService.js';
@@ -410,7 +412,7 @@ function ClinicalAppointmentPageContent() {
 
           <div className="clinical-appointment-header-status-badge">
             <Activity size={14} />
-            <span>Em atendimento</span>
+            <span>{resolveClinicalAttendanceState({ appointment }).displayLabel}</span>
           </div>
         </div>
       </header>
@@ -423,6 +425,13 @@ function ClinicalAppointmentPageContent() {
             workflow={workflow}
             onSelect={handleNavClick}
             getLockMessage={(id) => sectionLockMessage(id, workflow)}
+          />
+          <ClinicalAttendanceSessionBar
+            user={user}
+            appointment={appointment}
+            patient={patient}
+            budget={workflow.budget}
+            onClosed={() => navigate('/gestao-comercial/jornada-do-paciente')}
           />
 
           <div className="clinical-appointment-content">

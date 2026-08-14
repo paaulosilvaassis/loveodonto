@@ -61,6 +61,7 @@ import { APPOINTMENT_STATUS } from '../../services/appointmentService.js';
 import {
   APPOINTMENT_CLOSE_REASON,
   closeClinicalAppointment,
+  resolveClinicalFinishReadiness,
 } from '../../services/clinicalAppointmentCloseService.js';
 
 function defaultValidityDate() {
@@ -526,12 +527,17 @@ export function ClinicalBudgetSection({
 
   const canFinishAppointment = appointment?.status === APPOINTMENT_STATUS.EM_ATENDIMENTO
     && !isHistoricalView;
+  const finishReadiness = resolveClinicalFinishReadiness({
+    appointment,
+    budget,
+    appointmentId,
+  });
 
   const handleFinishAppointmentConfirm = async ({ reason, notes }) => {
     if (!user || !appointmentId) return;
     setFinishingAppointment(true);
     try {
-      if (!isEditBlocked && budget) {
+      if (!isEditBlocked && budget && !finishReadiness.legallyFrozen) {
         saveBudget(user, appointmentId, budget);
       }
       const result = closeClinicalAppointment(user, {
@@ -824,6 +830,13 @@ export function ClinicalBudgetSection({
         onClose={() => setFinishModalOpen(false)}
         onConfirm={handleFinishAppointmentConfirm}
         confirming={finishingAppointment}
+        defaultReason={finishReadiness.defaultReason}
+        disabledReasons={finishReadiness.disabledReasons}
+        description={
+          finishReadiness.legallyFrozen
+            ? 'O orçamento e o contrato históricos permanecem intactos. Escolha o motivo oficial do encerramento.'
+            : undefined
+        }
       />
 
       <ClinicalGuideModal

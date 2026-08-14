@@ -242,29 +242,34 @@ export function sectionLockMessage(sectionId, workflow) {
   return null;
 }
 
-export function getNavStepStatus(stepId, workflow, activeSection) {
+/**
+ * Completion de negócio da etapa — independente da aba selecionada.
+ * Aba ativa pode destacar visualmente, mas não reabre etapa já concluída.
+ */
+export function getNavStepCompletionStatus(stepId, workflow) {
   const locked = !canAccessClinicalSection(stepId, workflow);
   if (locked) return STEP_STATUS.BLOCKED;
 
   if (stepId === 'planejamento') {
-    if (activeSection === 'planejamento') return STEP_STATUS.IN_PROGRESS;
-    if (workflow.hasPlanning) return STEP_STATUS.COMPLETED;
+    if (workflow.hasPlanning || workflow.hasBudget || workflow.budgetApproved) {
+      return STEP_STATUS.COMPLETED;
+    }
     return STEP_STATUS.PENDING;
   }
 
   if (stepId === 'orcamento') {
-    if (activeSection === 'orcamento') return STEP_STATUS.IN_PROGRESS;
-    if (workflow.budgetApproved) return STEP_STATUS.COMPLETED;
-    if (workflow.hasBudget) return STEP_STATUS.COMPLETED;
+    if (workflow.budgetApproved || workflow.hasBudget) return STEP_STATUS.COMPLETED;
     if (workflow.hasPlanning) return STEP_STATUS.PENDING;
     return STEP_STATUS.BLOCKED;
   }
 
   if (stepId === 'contratos') {
-    if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
     if (
-      workflow.lockCtx?.contractApplies
-      && (workflow.lockCtx?.hasActiveContract || workflow.lockCtx?.contractSigned)
+      workflow.hasPersistedContract
+      || (
+        workflow.lockCtx?.contractApplies
+        && (workflow.lockCtx?.hasActiveContract || workflow.lockCtx?.contractSigned)
+      )
     ) {
       return STEP_STATUS.COMPLETED;
     }
@@ -281,9 +286,7 @@ export function getNavStepStatus(stepId, workflow, activeSection) {
       budgetId: workflow.budgetId || workflow.viewBudgetId || workflow.budget?.id || null,
       patientId: workflow.patientId,
     });
-    if (docsComplete) return STEP_STATUS.COMPLETED;
-    if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
-    return STEP_STATUS.PENDING;
+    return docsComplete ? STEP_STATUS.COMPLETED : STEP_STATUS.PENDING;
   }
 
   if (stepId === 'assinatura') {
@@ -303,15 +306,20 @@ export function getNavStepStatus(stepId, workflow, activeSection) {
     ) {
       return STEP_STATUS.IN_PROGRESS;
     }
-    if (signature.step === CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE) {
-      return activeSection === stepId ? STEP_STATUS.IN_PROGRESS : STEP_STATUS.PENDING;
-    }
-    if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
     return STEP_STATUS.PENDING;
   }
 
-  if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
   return STEP_STATUS.PENDING;
+}
+
+export function getNavStepStatus(stepId, workflow, activeSection) {
+  const completion = getNavStepCompletionStatus(stepId, workflow);
+  if (completion === STEP_STATUS.COMPLETED || completion === STEP_STATUS.BLOCKED) {
+    return completion;
+  }
+  if (completion === STEP_STATUS.IN_PROGRESS) return completion;
+  if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
+  return completion;
 }
 
 export const BUDGET_STATUS_UI = [

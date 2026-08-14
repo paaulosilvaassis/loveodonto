@@ -18871,6 +18871,34 @@ a.button {
   border-radius: 12px;
 }
 
+.clinical-attendance-session-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid #fdba74;
+  background: #fff7ed;
+  color: #9a3412;
+  border-radius: 12px;
+}
+
+.clinical-attendance-session-bar-text {
+  flex: 1;
+  min-width: 240px;
+}
+
+.clinical-attendance-session-bar-text p {
+  margin: 0.35rem 0 0;
+}
+
+.clinical-attendance-session-bar .button.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
 .patient-journey-card-meta {
   display: flex;
   align-items: center;

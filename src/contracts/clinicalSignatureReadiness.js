@@ -164,12 +164,13 @@ export function evaluateClinicalSignatureReadiness({
   });
   for (const b of ceremony.blockers || []) blockers.push(b);
 
-  const legacy = isLegacyClinicalSignature(contract);
-  const ceremonyComplete = Boolean(ceremony.allRequiredSatisfied) && !ceremony.rejected;
+  const effectiveContract = contract || ceremony.contract || null;
+  const effectiveStatus = String(effectiveContract?.status || status || '').toLowerCase();
+  const legacy = isLegacyClinicalSignature(effectiveContract);
   const pendingRequired = (ceremony.requiredSigners || []).some((s) => s.required && s.status !== 'signed');
 
   let step = CLINICAL_SIGNATURE_STEP.BLOCKED;
-  if (legacy || (SIGNED_STATUSES.has(status) && ceremonyComplete)) {
+  if (legacy || SIGNED_STATUSES.has(effectiveStatus)) {
     step = CLINICAL_SIGNATURE_STEP.SIGNED;
   } else if (ceremony.status === CEREMONY_STATUS.PARTIALLY_SIGNED) {
     step = CLINICAL_SIGNATURE_STEP.PARTIALLY_SIGNED;

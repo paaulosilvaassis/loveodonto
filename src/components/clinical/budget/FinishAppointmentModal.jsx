@@ -26,15 +26,22 @@ export function FinishAppointmentModal({
   onClose,
   onConfirm,
   confirming = false,
+  defaultReason = APPOINTMENT_CLOSE_REASON.ANALYZE_LATER,
+  disabledReasons = [],
+  description,
 }) {
-  const [reason, setReason] = useState(APPOINTMENT_CLOSE_REASON.ANALYZE_LATER);
+  const [reason, setReason] = useState(defaultReason);
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
     if (!open) return;
-    setReason(APPOINTMENT_CLOSE_REASON.ANALYZE_LATER);
+    const disabled = new Set(disabledReasons);
+    const next = disabled.has(defaultReason)
+      ? REASON_OPTIONS.find((option) => !disabled.has(option)) || defaultReason
+      : defaultReason;
+    setReason(next);
     setNotes('');
-  }, [open]);
+  }, [open, defaultReason, disabledReasons]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -48,7 +55,7 @@ export function FinishAppointmentModal({
           <ModalHeader>
             <ModalTitle>Finalizar atendimento</ModalTitle>
             <ModalDescription>
-              O orçamento continuará pendente. Você poderá retomar a negociação em outro momento pela Central do Paciente.
+              {description || 'O orçamento continuará pendente. Você poderá retomar a negociação em outro momento pela Central do Paciente.'}
             </ModalDescription>
           </ModalHeader>
           <ModalBody>
@@ -62,7 +69,7 @@ export function FinishAppointmentModal({
                     value={option}
                     checked={reason === option}
                     onChange={() => setReason(option)}
-                    disabled={confirming}
+                    disabled={confirming || disabledReasons.includes(option)}
                   />
                   <span>{APPOINTMENT_CLOSE_REASON_LABELS[option]}</span>
                 </label>

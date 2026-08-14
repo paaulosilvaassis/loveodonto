@@ -1,4 +1,4 @@
-import { finishAppointment } from './appointmentService.js';
+import { finishAppointment, getAppointmentDetails } from './appointmentService.js';
 import { getBudget, logClinicalEvent, updateBudgetStatus, BUDGET_STATUS } from './clinicalService.js';
 import { listPatientBudgetHistory } from './clinicalBudgetLockService.js';
 import { formatFriendlyBudgetNumber } from '../utils/friendlyNumbers.js';
@@ -106,9 +106,52 @@ function createPendingBudgetFollowUp(user, { patientId, budgetId, appointmentId,
   return { task, followUp, dueInDays: days };
 }
 
+function isLegallyFrozenBudget(budget) {
+  return Boolean(budget?.id && CLOSED_BUDGET_STATUSES.has(budget.status));
+}
+
+export function resolveClinicalFinishReadiness({
+  appointment = null,
+  budget = null,
+  appointmentId = null,
+} = {}) {
+  const id = appointment?.id || appointmentId || null;
+  const status = String(appointment?.status || '').toLowerCase();
+  const legallyFrozen = isLegallyFrozenBudget(budget);
+  const blockers = [];
+
+  if (!id) {
+    blockers.push({
+      code: 'APPOINTMENT_MISSING',
+      message: 'Atendimento não informado.',
+      ctaLabel: 'Abrir Jornada do Paciente',
+      ctaHref: '/gestao-comercial/jornada-do-paciente',
+    });
+  } else if (status && status !== 'em_atendimento' && status !== 'finalizado' && status !== 'atendido') {
+    blockers.push({
+      code: 'APPOINTMENT_NOT_IN_ATTENDANCE',
+      message: 'Este agendamento não está em atendimento.',
+      ctaLabel: 'Abrir Jornada do Paciente',
+      ctaHref: '/gestao-comercial/jornada-do-paciente',
+    });
+  }
+
+  return {
+    canFinish: Boolean(id) && status === 'em_atendimento',
+    alreadyFinished: status === 'finalizado' || status === 'atendido',
+    legallyFrozen,
+    defaultReason: legallyFrozen
+      ? APPOINTMENT_CLOSE_REASON.BUDGET_APPROVED
+      : APPOINTMENT_CLOSE_REASON.ANALYZE_LATER,
+    disabledReasons: legallyFrozen ? [APPOINTMENT_CLOSE_REASON.TREATMENT_REFUSED] : [],
+    blockers,
+  };
+}
+
 /**
  * Encerra o atendimento clínico sem exigir aprovação do orçamento.
  * Não gera contrato, financeiro ou parcelas.
+ * Não altera orçamento/contrato/assinatura já congelados juridicamente.
  */
 export function closeClinicalAppointment(user, payload) {
   const {
@@ -128,8 +171,27 @@ export function closeClinicalAppointment(user, payload) {
   const budget = budgetId
     ? listPatientBudgetHistory(patientId).find((b) => b.id === budgetId)
     : getBudget(appointmentId);
+  const currentAppointment = getAppointmentDetails(appointmentId)?.appointment || null;
+  const wasFinished = ['finalizado', 'atendido'].includes(
+    String(currentAppointment?.status || '').toLowerCase(),
+  );
 
-  if (reason === APPOINTMENT_CLOSE_REASON.TREATMENT_REFUSED && budget?.id) {
+  if (reason === APPOINTMENT_CLOSE_REASON.TREATMENT_REFUSED && isLegallyFrozenBudget(budget)) {
+    const error = new Error(
+      'Não é possível reprovar um orçamento com contrato já gerado ou aprovado.',
+    );
+    error.ctaLabel = 'Ver contrato';
+    error.ctaHref = `/atendimento-clinico/${appointmentId}?section=contratos`;
+    error.blockers = [{
+      code: 'LEGAL_BUDGET_FROZEN',
+      message: error.message,
+      ctaLabel: error.ctaLabel,
+      ctaHref: error.ctaHref,
+    }];
+    throw error;
+  }
+
+  if (reason === APPOINTMENT_CLOSE_REASON.TREATMENT_REFUSED && budget?.id && !isLegallyFrozenBudget(budget)) {
     updateBudgetStatus(user, appointmentId, BUDGET_STATUS.REPROVADO);
   }
 
@@ -152,12 +214,13 @@ export function closeClinicalAppointment(user, payload) {
       budgetNumber,
       budgetStatus: budgetAfter?.status || budget?.status || null,
       userName: user?.name || user?.email || null,
+      idempotent: wasFinished,
     },
     user?.id || null,
   );
 
   let followUp = null;
-  if (patientId && shouldCreateFollowUp(reason, budgetAfter || budget)) {
+  if (patientId && !wasFinished && shouldCreateFollowUp(reason, budgetAfter || budget)) {
     followUp = createPendingBudgetFollowUp(user, {
       patientId,
       budgetId: budget?.id || budgetId,

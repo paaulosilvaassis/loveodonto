@@ -36,7 +36,7 @@ export function ClinicalStepNav({ items, activeSection, workflow, onSelect, getL
                 <span className="clinical-step-nav-icon">
                   {isBlocked ? (
                     <Lock size={14} aria-hidden="true" />
-                  ) : isDone && !isCurrent ? (
+                  ) : isDone ? (
                     <CheckCircle2 size={14} aria-hidden="true" />
                   ) : (
                     <Icon size={14} aria-hidden="true" />
