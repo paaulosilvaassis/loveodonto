@@ -226,6 +226,17 @@ export function createContractDraft(user, payload) {
       console.debug('[contractModuleService] createContractDraft chamado sem budgetId — vínculo pode ser órfão.');
     }
   }
+  if (payload.quoteSource === 'clinical_budget' && payload.allowDuplicate !== true) {
+    const existing = getContractStatusForQuote(
+      payload.quoteId,
+      payload.quoteSource,
+      payload.budgetId || null,
+      payload.patientId || null,
+    );
+    if (existing && ![CONTRACT_STATUS.CANCELED, CONTRACT_STATUS.REPLACED, CONTRACT_STATUS.REFUSED].includes(existing.status)) {
+      throw new Error('Já existe contrato ativo para este orçamento. Use Editar contrato.');
+    }
+  }
   ensureContractsModuleSeeded();
   const row = createGeneratedContractDraft(user, payload);
   const tpl = getContractTemplate(payload.templateId);

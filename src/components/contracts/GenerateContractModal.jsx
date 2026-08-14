@@ -32,6 +32,10 @@ import { syncGeneratedContractToSaas } from '../../services/contractSaasSyncServ
 import { ContractReadinessChecklist } from './ContractReadinessChecklist.jsx';
 import { getContractReadinessChecklist } from '../../services/contractValidationService.js';
 import { resolveAttachedTcleIdsFromClinicalDocuments } from '../../services/clinicalTcleAttachmentService.js';
+import {
+  loadContractForEdit,
+  resolveStoredContractHtml,
+} from '../../contracts/contractEditContext.js';
 
 function canGenerateContract(user, flow) {
   if (!user) return false;
@@ -68,6 +72,8 @@ function canExportPdfContract(user) {
  *   quoteId: string,
  *   budgetId?: string|null,
  *   flow?: 'crm'|'clinical',
+ *   mode?: 'create'|'edit',
+ *   contractId?: string|null,
  *   onSuccess?: (contract: object) => void,
  * }} props
  */
@@ -80,8 +86,11 @@ export default function GenerateContractModal({
   quoteId,
   budgetId = null,
   flow = 'crm',
+  mode = 'create',
+  contractId = null,
   onSuccess,
 }) {
+  const isEdit = mode === 'edit' || Boolean(contractId);
   const editorRef = useRef(null);
   const printRef = useRef(null);
   const [templates, setTemplates] = useState([]);
@@ -109,20 +118,44 @@ export default function GenerateContractModal({
   useEffect(() => {
     if (!open) return;
     setError('');
-    setStep('edit');
-    setDraftContract(null);
     setToast(null);
     refreshTemplates();
-  }, [open, refreshTemplates]);
+    if (isEdit) {
+      try {
+        const existing = loadContractForEdit({
+          contractId,
+          patientId,
+          appointmentId: quoteId,
+          budgetId,
+          tenantId: user?.tenantId || user?.tenant_id || null,
+        });
+        const stored = resolveStoredContractHtml(existing);
+        setDraftContract(existing);
+        setHtmlBody(stored);
+        setEditorKey((k) => k + 1);
+        setStep('draft');
+      } catch (e) {
+        setDraftContract(null);
+        setHtmlBody('');
+        setStep('edit');
+        setError(e?.message || 'Não foi possível abrir o contrato existente.');
+      }
+      return;
+    }
+    setStep('edit');
+    setDraftContract(null);
+  }, [open, isEdit, contractId, patientId, quoteId, budgetId, user, refreshTemplates]);
 
   useEffect(() => {
     if (!open || !patientId || !quoteId || !quoteSource) return;
+    if (isEdit) return;
     if (flow !== 'clinical' && !selectedTemplateId) return;
     try {
       const html = flow === 'clinical'
         ? composeProfessionalClinicalContractHtml({
           quoteId,
           patientId,
+          budgetId,
           contractStatus: 'draft',
         })
         : composeTemplateHtmlForContext(selectedTemplateId, {
@@ -137,7 +170,7 @@ export default function GenerateContractModal({
     } catch (e) {
       setError(e?.message || 'Falha ao montar modelo.');
     }
-  }, [open, selectedTemplateId, patientId, quoteId, quoteSource, user, flow]);
+  }, [open, selectedTemplateId, patientId, quoteId, quoteSource, user, flow, budgetId, isEdit]);
 
   const previewHtml = useMemo(() => {
     if (flow === 'clinical') {
@@ -193,6 +226,10 @@ export default function GenerateContractModal({
   };
 
   const handleCreateDraft = async () => {
+    if (isEdit) {
+      setError('Este contrato já existe. Use salvar alterações.');
+      return;
+    }
     if (!allowed) {
       setError('Sem permissão para gerar contrato.');
       return;
@@ -221,6 +258,34 @@ export default function GenerateContractModal({
       onSuccess?.(row);
     } catch (e) {
       setError(e?.message || 'Erro ao gerar rascunho.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSaveEdits = async () => {
+    if (!isEdit || !draftContract?.id) {
+      setError('Contrato existente ausente.');
+      return;
+    }
+    if (!allowed) {
+      setError('Sem permissão para editar contrato.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const updated = updateDraftGeneratedContract(user, draftContract.id, {
+        finalContent: htmlBody,
+        skipHashtagValidation: flow === 'clinical',
+      });
+      await syncGeneratedContractToSaas(updated);
+      setDraftContract(updated);
+      setToast({ type: 'success', message: 'Alterações salvas no contrato existente.' });
+      window.setTimeout(() => setToast(null), 3000);
+      onSuccess?.(updated);
+    } catch (e) {
+      setError(e?.message || 'Erro ao salvar alterações.');
     } finally {
       setBusy(false);
     }
@@ -287,14 +352,20 @@ export default function GenerateContractModal({
     <ModalRoot open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
       <ModalContent size="xl" onInteractOutside={(e) => e.preventDefault()}>
         <ModalHeader>
-          <ModalTitle>Gerar contrato</ModalTitle>
+          <ModalTitle>{isEdit ? 'Editar contrato' : 'Gerar contrato'}</ModalTitle>
           <ModalDescription>
-            {flow === 'clinical'
-              ? 'Contrato de prestação de serviços odontológicos — documento jurídico formal gerado a partir do orçamento aprovado.'
-              : `Orçamento vinculado: ${quoteSource === 'crm_budget' ? 'CRM' : 'Clínico'} · Revise o texto e as hashtags antes de finalizar.`}
+            {isEdit
+              ? 'Revise o contrato existente. Esta ação não cria um novo contrato nem um novo orçamento.'
+              : flow === 'clinical'
+                ? 'Contrato de prestação de serviços odontológicos — documento jurídico formal gerado a partir do orçamento aprovado.'
+                : `Orçamento vinculado: ${quoteSource === 'crm_budget' ? 'CRM' : 'Clínico'} · Revise o texto e as hashtags antes de finalizar.`}
           </ModalDescription>
         </ModalHeader>
-        <ModalBody className="space-y-4 max-h-[min(85vh,900px)] overflow-y-auto">
+        <ModalBody
+          className="space-y-4 max-h-[min(85vh,900px)] overflow-y-auto"
+          data-testid="contract-modal-body"
+          data-mode={isEdit ? 'edit' : 'create'}
+        >
           {toast && (
             <div
               className={`toast ${toast.type}`}
@@ -309,11 +380,11 @@ export default function GenerateContractModal({
           )}
           {error && <p className="text-sm text-[var(--color-error)]">{error}</p>}
 
-          {allowed && readinessChecklist && (
+          {allowed && readinessChecklist && !isEdit && (
             <ContractReadinessChecklist checklist={readinessChecklist} />
           )}
 
-          {step === 'edit' && (
+          {step === 'edit' && !isEdit && (
             <>
               {flow !== 'clinical' ? (
                 <div className="form-field">
@@ -454,10 +525,11 @@ export default function GenerateContractModal({
           <button type="button" className="button secondary" onClick={handleClose}>
             Fechar
           </button>
-          {step === 'edit' && (
+          {step === 'edit' && !isEdit && (
             <button
               type="button"
               className="button primary"
+              data-testid="contract-generate-draft-cta"
               disabled={
                 busy
                 || !allowed
@@ -471,6 +543,17 @@ export default function GenerateContractModal({
           )}
           {step === 'draft' && draftContract?.status === 'draft' && (
             <>
+              {isEdit ? (
+                <button
+                  type="button"
+                  className="button secondary"
+                  data-testid="contract-save-edits-cta"
+                  disabled={busy || !allowed}
+                  onClick={handleSaveEdits}
+                >
+                  {busy ? 'Salvando…' : 'Salvar alterações'}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="button secondary"

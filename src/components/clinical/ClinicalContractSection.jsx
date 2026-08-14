@@ -187,6 +187,7 @@ export function ClinicalContractSection({
   const fullPatient = patientId ? getPatient(patientId) : null;
   const pendingCriticalFields = fullPatient?.profile?.pendingCriticalFields || [];
   const [contractModalOpen, setContractModalOpen] = useState(false);
+  const [contractModalMode, setContractModalMode] = useState('create');
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -383,15 +384,29 @@ export function ClinicalContractSection({
     });
   }, [navigate, patientId, appointmentId, budget?.id]);
 
-  const openContractFlow = () => {
+  const openCreateContract = () => {
     if (!contractAccessible) {
       showToast(accessBlockReasons[0] || 'Contrato bloqueado.', 'error');
+      return;
+    }
+    if (linkedContract) {
+      showToast('Já existe contrato para este orçamento. Use Editar contrato.', 'error');
       return;
     }
     if (!contractReadiness?.canGenerate) {
       showToast('Resolva os requisitos pendentes abaixo para gerar o contrato.', 'error');
       return;
     }
+    setContractModalMode('create');
+    setContractModalOpen(true);
+  };
+
+  const openEditContract = () => {
+    if (!linkedContract?.id) {
+      showToast('Contrato não encontrado para edição.', 'error');
+      return;
+    }
+    setContractModalMode('edit');
     setContractModalOpen(true);
   };
 
@@ -414,10 +429,21 @@ export function ClinicalContractSection({
   };
 
   const handlePreviewContract = () => {
+    const stored = linkedContract?.renderedHtml || linkedContract?.editedHtml || linkedContract?.finalContent;
+    if (stored) {
+      const viewWindow = window.open('', '_blank');
+      if (viewWindow) {
+        const isProfessional = stored.includes('contract-document') || stored.includes('Contrato de Prestação');
+        viewWindow.document.write(isProfessional ? stored : contractHtmlWithSignatures(stored));
+        viewWindow.document.close();
+      }
+      return;
+    }
     try {
       const html = composeProfessionalClinicalContractHtml({
         quoteId: appointmentId,
         patientId,
+        budgetId: effectiveBudget?.id || budget?.id || null,
         contractNumber: linkedContract?.contractNumber,
         contractStatus: linkedContract?.status || 'draft',
       });
@@ -504,7 +530,7 @@ export function ClinicalContractSection({
         description="Formalização jurídica do tratamento aprovado e da condição de pagamento escolhida."
         secondaryActions={(
           <>
-            <ClinicalBtn variant="secondary" icon={FileSignature} onClick={openContractFlow} disabled={!canGenerate}>
+            <ClinicalBtn variant="secondary" icon={FileSignature} onClick={openCreateContract} disabled={!canGenerate}>
               Gerar contrato
             </ClinicalBtn>
             {canPreview && !isCanceled ? (
@@ -518,7 +544,7 @@ export function ClinicalContractSection({
               </ClinicalBtn>
             ) : null}
             {canEdit ? (
-              <ClinicalBtn variant="secondary" icon={PenLine} onClick={openContractFlow}>
+              <ClinicalBtn variant="secondary" icon={PenLine} onClick={openEditContract}>
                 Editar contrato
               </ClinicalBtn>
             ) : null}
@@ -732,18 +758,23 @@ export function ClinicalContractSection({
 
       <GenerateContractModal
         open={contractModalOpen}
-        onOpenChange={setContractModalOpen}
+        onOpenChange={(next) => {
+          setContractModalOpen(next);
+          if (!next) setContractModalMode('create');
+        }}
         user={user}
         patientId={patientId || ''}
         quoteSource="clinical_budget"
         quoteId={appointmentId}
         budgetId={budget?.id || null}
         flow="clinical"
+        mode={contractModalMode}
+        contractId={contractModalMode === 'edit' ? (linkedContract?.id || null) : null}
         onSuccess={(contract) => {
-          if (contract?.id) {
+          if (contractModalMode === 'create' && contract?.id) {
             linkFinancingToClinicalContract(user, appointmentId, contract.id);
+            markBudgetContractGenerated(user, appointmentId);
           }
-          markBudgetContractGenerated(user, appointmentId);
           setHistoryKey((k) => k + 1);
           notifyClinicalBudgetUpdated(patientId);
           onWorkflowRefresh?.();
