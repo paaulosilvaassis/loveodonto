@@ -7,3 +7,8 @@ export const PenLine = () => null;
 export const CheckCircle2 = () => null;
 export const Circle = () => null;
 export const DoorClosed = () => null;
+export const Check = () => null;
+export const ChevronDown = () => null;
+export const ChevronUp = () => null;
+export const Presentation = () => null;
+export const Settings2 = () => null;

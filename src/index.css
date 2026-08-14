@@ -30271,6 +30271,14 @@ a.button {
   color: #fff;
 }
 
+.budget-tab-action--chosen {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #047857;
+  cursor: default;
+  pointer-events: none;
+}
+
 .budget-tab-action:disabled {
   opacity: 0.5;
   cursor: not-allowed;

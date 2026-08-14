@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PAYMENT_OPTIONS } from '../components/clinical/clinicalAppointmentConfig.js';
-import { presentPaymentCondition, markPaymentConditionAsChosen } from '../components/clinical/budget/budgetPaymentPresentationService.js';
+import {
+  presentPaymentCondition,
+  markPaymentConditionAsChosen,
+  choosePaymentCondition,
+} from '../components/clinical/budget/budgetPaymentPresentationService.js';
 import {
   buildPaymentOptionSnapshot,
   getPresentedPaymentOptions,
+  isPaymentOptionChosen,
   PAYMENT_PRESENTATION_STATUS,
 } from '../components/clinical/budget/budgetPaymentPdfUtils.js';
 
@@ -117,5 +122,48 @@ describe('markPaymentConditionAsChosen', () => {
 
     expect(result.ok).toBe(false);
     expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe('choosePaymentCondition', () => {
+  it('marca uma condição e substitui atomicamente a anterior', () => {
+    const first = choosePaymentCondition(buildBudget(), 'pay-a-vista', {
+      originalValue: ORIGINAL,
+      user,
+    });
+    expect(first.ok).toBe(true);
+    expect(first.option.accepted).toBe(true);
+    expect(first.option.presentationStatus).toBe(PAYMENT_PRESENTATION_STATUS.ESCOLHIDA);
+    expect(first.nextBudget.paymentOptions.filter(isPaymentOptionChosen)).toHaveLength(1);
+
+    const second = choosePaymentCondition(first.nextBudget, 'pay-parcelado', {
+      originalValue: ORIGINAL,
+      user,
+    });
+    const chosen = second.nextBudget.paymentOptions.filter(isPaymentOptionChosen);
+    expect(chosen).toHaveLength(1);
+    expect(chosen[0].id).toBe('pay-parcelado');
+
+    const previous = second.nextBudget.paymentOptions.find((o) => o.id === 'pay-a-vista');
+    expect(previous.accepted).toBe(false);
+    expect(previous.presentationStatus).toBe(PAYMENT_PRESENTATION_STATUS.APRESENTADA);
+  });
+
+  it('falha fechado se a condição não pertence a este orçamento', () => {
+    const result = choosePaymentCondition(buildBudget(), 'pay-from-other-budget', {
+      originalValue: ORIGINAL,
+      user,
+    });
+    expect(result.ok).toBe(false);
+    expect(result.nextBudget).toBeUndefined();
+  });
+
+  it('falha fechado se expectedBudgetId não bate', () => {
+    const result = choosePaymentCondition(buildBudget(), 'pay-a-vista', {
+      originalValue: ORIGINAL,
+      user,
+      expectedBudgetId: 'budget-other',
+    });
+    expect(result.ok).toBe(false);
   });
 });

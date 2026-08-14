@@ -35,7 +35,7 @@ const CARD_TITLES = {
 };
 
 function getPresentationStatusLabel(opt) {
-  if (opt.accepted) return { text: 'Escolhida', className: 'is-chosen' };
+  if (isPaymentOptionChosen(opt)) return { text: 'Escolhida', className: 'is-chosen' };
   if (opt.presentToPatient || opt.presentedAt) return { text: 'Apresentada', className: 'is-presented' };
   return { text: 'Não apresentada', className: 'is-idle' };
 }
@@ -100,15 +100,14 @@ function PresentedConditionsBlock({
               {!readOnly ? (
                 <footer className="budget-tab-presented-card-actions">
                   {isChosen ? (
-                    <button
-                      type="button"
-                      className="budget-tab-action budget-tab-action--primary is-active"
-                      disabled
-                      aria-pressed="true"
+                    <span
+                      className="budget-tab-action budget-tab-action--chosen"
+                      data-testid="presented-condition-chosen-state"
+                      role="status"
                     >
                       <Check size={14} aria-hidden />
                       Condição escolhida
-                    </button>
+                    </span>
                   ) : (
                     <button
                       type="button"
@@ -299,27 +298,26 @@ export function BudgetPaymentConditions({
           const rowErrors = financingErrors[opt.id] || [];
           const installmentValue = calcInstallment(finalVal, opt.downPayment, opt.installments);
           const cardInstallment = calcInstallment(finalVal, 0, opt.installments);
+          const chosen = isPaymentOptionChosen(opt);
           const statusLabel = getPresentationStatusLabel(opt);
 
           const cardClass = [
             'budget-tab-pay-card',
-            opt.accepted ? 'is-chosen' : '',
+            chosen ? 'is-chosen' : '',
             opt.presentToPatient ? 'is-presented' : '',
           ].filter(Boolean).join(' ');
 
           return (
-            <article key={opt.id} className={cardClass}>
+            <article
+              key={opt.id}
+              className={cardClass}
+              data-testid={`payment-condition-card-${opt.type}`}
+            >
               <header className="budget-tab-pay-card-head">
                 <h4>{CARD_TITLES[opt.type] || getPaymentOptionTitle(opt)}</h4>
                 <span className={`budget-tab-status-pill ${statusLabel.className}`}>
                   {statusLabel.text}
                 </span>
-                {opt.accepted ? (
-                  <span className="budget-tab-badge budget-tab-badge--chosen">
-                    <Check size={12} />
-                    Escolhida pelo paciente
-                  </span>
-                ) : null}
               </header>
 
               <div className="budget-tab-pay-card-preview">
@@ -484,22 +482,37 @@ export function BudgetPaymentConditions({
                   ) : null}
                   <button
                     type="button"
-                    className={`budget-tab-action budget-tab-action--secondary${opt.presentToPatient ? ' is-active' : ''}`}
+                    className={`budget-tab-action budget-tab-action--secondary${opt.presentToPatient || chosen ? ' is-active' : ''}`}
+                    data-testid={`payment-condition-present-cta-${opt.type}`}
                     onClick={() => togglePresent(opt)}
+                    disabled={chosen}
+                    title={chosen
+                      ? 'A condição escolhida permanece apresentada. Para alterar, marque outra condição.'
+                      : undefined}
                   >
                     <Presentation size={14} />
-                    Apresentar ao paciente
+                    {opt.presentToPatient || chosen ? 'Apresentada' : 'Apresentar ao paciente'}
                   </button>
-                  {!opt.accepted ? (
+                  {chosen ? (
+                    <span
+                      className="budget-tab-action budget-tab-action--chosen"
+                      data-testid="payment-condition-chosen-state"
+                      role="status"
+                    >
+                      <Check size={14} aria-hidden />
+                      Condição escolhida
+                    </span>
+                  ) : (
                     <button
                       type="button"
                       className="budget-tab-action budget-tab-action--primary"
+                      data-testid={`payment-condition-choose-cta-${opt.type}`}
                       onClick={() => markChosen(opt)}
                     >
                       <Check size={14} />
                       Marcar como escolhida
                     </button>
-                  ) : null}
+                  )}
                 </footer>
               ) : null}
             </article>

@@ -20,6 +20,7 @@ import {
 import {
   resolveBudgetForView,
   validateBudgetConsistency,
+  getActiveClinicalBudget,
   BUDGET_CONSISTENCY_ALERT,
 } from '../../services/budgetNavigationService.js';
 import { notifyClinicalBudgetUpdated } from '../../services/clinicalBudgetApprovedService.js';
@@ -45,10 +46,7 @@ import { resolveBudgetReadOnlyState } from './budget/budgetEditAccessUtils.js';
 import { getChosenPaymentOption } from './contract/contractAccessUtils.js';
 import { generateBudgetPdf } from './budget/generateBudgetPdf.js';
 import { buildFinancingHistoryPayload } from './budget/budgetFinancingUtils.js';
-import {
-  buildPaymentOptionSnapshot,
-  PAYMENT_PRESENTATION_STATUS,
-} from './budget/budgetPaymentPdfUtils.js';
+import { choosePaymentCondition } from './budget/budgetPaymentPresentationService.js';
 import { BUDGET_STATUS_BADGES, DEFAULT_PAYMENT_OPTIONS } from './clinicalAppointmentConfig.js';
 import { ClinicalBtn } from './ClinicalStageShell.jsx';
 import { CreateNewBudgetModal } from './budget/CreateNewBudgetModal.jsx';
@@ -319,25 +317,31 @@ export function ClinicalBudgetSection({
   };
 
   const handlePaymentChosen = (opt) => {
-    const snapshot = buildPaymentOptionSnapshot(opt, financials.originalValue, user);
+    if (!budget?.id || !appointmentId) {
+      showToast('Orçamento ativo deste atendimento não encontrado.', 'error');
+      return;
+    }
+    const active = getActiveClinicalBudget(appointmentId);
+    if (!active?.id || active.id !== budget.id) {
+      showToast('Orçamento ativo deste atendimento não encontrado.', 'error');
+      return;
+    }
+
+    const result = choosePaymentCondition(budget, opt.id, {
+      originalValue: financials.originalValue,
+      user,
+      appointmentId,
+      expectedBudgetId: budget.id,
+    });
+    if (!result.ok) {
+      const message = result.errors?.[0] || result.error || 'Não foi possível marcar a condição.';
+      showToast(message, 'error');
+      return;
+    }
+
     const next = {
-      ...budget,
+      ...result.nextBudget,
       status: budget.status === BUDGET_STATUS.APROVADO ? budget.status : BUDGET_STATUS.NEGOCIACAO,
-      paymentOptions: (budget.paymentOptions || []).map((item) => {
-        if (item.id !== opt.id) {
-          return { ...item, accepted: false };
-        }
-        return {
-          ...item,
-          accepted: true,
-          presentToPatient: true,
-          presentationStatus: PAYMENT_PRESENTATION_STATUS.ESCOLHIDA,
-          presentedAt: item.presentedAt || new Date().toISOString(),
-          presentedBy: user?.id || null,
-          presentedByName: user?.name || user?.nome || null,
-          presentationSnapshot: snapshot,
-        };
-      }),
     };
     persist(next);
     logClinicalEvent(appointmentId, 'budget_payment_chosen', {
