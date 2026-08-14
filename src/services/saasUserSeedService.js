@@ -16,6 +16,43 @@ function buildCollaboratorId(authUserId) {
   return `${COLLABORATOR_PREFIX}${authUserId}`;
 }
 
+export function isSaasSyntheticCollaboratorId(id) {
+  return String(id || '').startsWith(COLLABORATOR_PREFIX);
+}
+
+/**
+ * Preserva o id RH canônico. Não cria col-saas-* se já houver collaborator_id
+ * ou colaborador local. Não renomeia/apaga duplicata já existente.
+ */
+export function resolveSaasSeedCollaboratorId({
+  hintedId = '',
+  existingCanonicalId = '',
+  existingId = '',
+  syntheticId = '',
+} = {}) {
+  const hinted = String(hintedId || '').trim();
+  const canonical = String(existingCanonicalId || '').trim();
+  const existing = String(existingId || '').trim();
+  const synthetic = String(syntheticId || '').trim();
+  if (canonical) return canonical;
+  if (existing && !isSaasSyntheticCollaboratorId(existing)) return existing;
+  if (!existing && hinted) return hinted;
+  if (existing) return existing;
+  return synthetic;
+}
+
+function pickExistingCollaborator(rows, { collabId, hintedId, email }) {
+  const list = rows || [];
+  const hinted = String(hintedId || '').trim();
+  const byHint = hinted ? list.find((c) => c.id === hinted) : null;
+  const byEmail = email
+    ? list.find((c) => (c.email || '').toLowerCase() === email)
+    : null;
+  const bySynth = collabId ? list.find((c) => c.id === collabId) : null;
+  const emailCanonical = byEmail && !isSaasSyntheticCollaboratorId(byEmail.id) ? byEmail : null;
+  return byHint || emailCanonical || byEmail || bySynth || null;
+}
+
 /**
  * @param {{ id: string, name: string, email: string, role: string, tenantId: string, authMode: string }} user
  *   Objeto user resolvido pelo AuthContext (resolveSaasUserFromSession).
@@ -49,9 +86,18 @@ export function ensureSaasUserInLocalDb(user) {
   );
 
   const collabId = buildCollaboratorId(authUserId);
-  const existingCollab = (db.collaborators || []).find(
-    (c) => c.id === collabId || ((c.email || '').toLowerCase() === email && email),
-  );
+  const hintedId = String(user.collaboratorId || user.collaborator_id || '').trim();
+  const existingCollab = pickExistingCollaborator(db.collaborators, { collabId, hintedId, email });
+  const existingCanonical = (db.collaborators || []).find((c) => (
+    (hintedId && c.id === hintedId && !isSaasSyntheticCollaboratorId(c.id))
+    || (email && (c.email || '').toLowerCase() === email && !isSaasSyntheticCollaboratorId(c.id))
+  )) || null;
+  const resolvedCollabId = resolveSaasSeedCollaboratorId({
+    hintedId,
+    existingCanonicalId: existingCanonical?.id || '',
+    existingId: existingCollab?.id || '',
+    syntheticId: collabId,
+  });
   const existingAccess = (db.collaboratorAccess || []).find(
     (a) => a.userId === authUserId,
   );
@@ -64,7 +110,8 @@ export function ensureSaasUserInLocalDb(user) {
     || !existingAccess
     || existingUser.name !== fullName
     || existingUser.email !== email
-    || existingMembership.role !== membershipRole;
+    || existingMembership.role !== membershipRole
+    || existingAccess.collaboratorId !== resolvedCollabId;
 
   if (!needsAnyChange) return;
 
@@ -138,16 +185,11 @@ export function ensureSaasUserInLocalDb(user) {
       d.memberships.push(membershipRecord);
     }
 
-    const hintedId = String(user.collaboratorId || user.collaborator_id || '').trim();
-    const cIdx = d.collaborators.findIndex(
-      (c) => c.id === collabId
-        || (hintedId && c.id === hintedId)
-        || ((c.email || '').toLowerCase() === email && email),
-    );
+    const picked = pickExistingCollaborator(d.collaborators, { collabId, hintedId, email });
+    const cIdx = picked ? d.collaborators.findIndex((c) => c.id === picked.id) : -1;
     const keepExistingId = cIdx >= 0 ? d.collaborators[cIdx].id : null;
-    const resolvedCollabId = keepExistingId || hintedId || collabId;
     const collaboratorRecord = {
-      id: resolvedCollabId,
+      id: keepExistingId || resolvedCollabId,
       status: 'ativo',
       apelido: fullName.split(' ')[0] || fullName,
       nomeCompleto: fullName,
@@ -193,7 +235,7 @@ export function ensureSaasUserInLocalDb(user) {
     if (aIdx >= 0) {
       d.collaboratorAccess[aIdx] = {
         ...d.collaboratorAccess[aIdx],
-        collaboratorId: collabId,
+        collaboratorId: resolvedCollabId,
         role: accessRecord.role,
         lastLoginAt: now,
       };

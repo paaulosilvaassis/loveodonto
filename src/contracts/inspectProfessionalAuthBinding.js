@@ -53,6 +53,7 @@ export function inspectProfessionalAuthBinding({
     invitationState,
     identityOk: Boolean(identity.ok),
     identityCode: identity.ok ? null : (identity.code || SIGNER_IDENTITY_ERROR.NO_PERSON),
+    identityAmbiguity: identity.code === SIGNER_IDENTITY_ERROR.AMBIGUOUS ? 'YES' : 'NO',
     linkedPersonIds: identity.linkedPersonIds || [],
     signerSlotMatch: Boolean(identity.ok && (identity.linkedPersonIds || []).includes(requiredPersonId)) ? 'PASS' : 'FAIL',
     canSignElectronically: Boolean(canSign.canSignElectronically),

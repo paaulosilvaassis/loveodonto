@@ -11,6 +11,7 @@ export const SIGNER_IDENTITY_ERROR = {
   NO_PERSON: 'SIGNER_PERSON_UNRESOLVED',
   TENANT_MISMATCH: 'SIGNER_TENANT_MISMATCH',
   CONTEXT_MISMATCH: 'SIGNER_CONTEXT_MISMATCH',
+  AMBIGUOUS: 'SIGNER_IDENTITY_AMBIGUOUS',
 };
 
 export const AUTHENTICATED_IDENTITY_ROLES = new Set([
@@ -53,6 +54,18 @@ function membershipAllowsTenant(db, userId, tenantId) {
   if (mine.has_system_access === false) return false;
   if (mine.status && mine.status !== 'active') return false;
   return true;
+}
+
+function isSaasSyntheticPersonId(personId, userId) {
+  return Boolean(userId) && String(personId || '') === `col-saas-${userId}`;
+}
+
+/** Canonical RH + col-saas-{authUserId} no mesmo usuário = FAIL CLOSED. */
+export function hasDuplicateSignerIdentityAmbiguity(userId, linkedPersonIds = []) {
+  const ids = [...new Set((linkedPersonIds || []).filter(Boolean))];
+  if (ids.length < 2) return false;
+  return ids.some((id) => isSaasSyntheticPersonId(id, userId))
+    && ids.some((id) => !isSaasSyntheticPersonId(id, userId));
 }
 
 /**
@@ -105,6 +118,16 @@ export function resolveAuthenticatedSignerIdentity(user) {
       code: SIGNER_IDENTITY_ERROR.NO_PERSON,
       personId: null,
       linkedPersonIds: [],
+      authenticatedUserId: userId,
+      tenantId,
+    };
+  }
+  if (hasDuplicateSignerIdentityAmbiguity(userId, linkedPersonIds)) {
+    return {
+      ok: false,
+      code: SIGNER_IDENTITY_ERROR.AMBIGUOUS,
+      personId: null,
+      linkedPersonIds,
       authenticatedUserId: userId,
       tenantId,
     };
@@ -222,4 +245,29 @@ export function assertAuthenticatedSignerForStroke(user, {
     );
   }
   return { ok: true, method: 'AUTHENTICATED_ELECTRONIC', identity };
+}
+
+/**
+ * Resolução/guard READ-ONLY. Não grava signature evidence.
+ * decision: ALLOW | DENY | BLOCKED
+ */
+export function decideAuthenticatedProfessionalSignature(user, requiredSigner = {}) {
+  const identity = resolveAuthenticatedSignerIdentity(user);
+  const requiredPersonId = requiredSigner?.personId || null;
+  const identityMatch = Boolean(
+    identity.ok
+    && requiredPersonId
+    && (identity.linkedPersonIds || []).includes(requiredPersonId),
+  );
+  let decision = 'DENY';
+  if (identity.code === SIGNER_IDENTITY_ERROR.AMBIGUOUS) decision = 'BLOCKED';
+  else if (identityMatch) decision = 'ALLOW';
+  return {
+    authenticatedUserId: identity.authenticatedUserId || user?.id || user?.userId || null,
+    linkedPersonIds: identity.linkedPersonIds || [],
+    requiredSignerPersonId: requiredPersonId,
+    identityMatch,
+    decision,
+    code: identity.ok ? null : (identity.code || SIGNER_IDENTITY_ERROR.NO_PERSON),
+  };
 }

@@ -173,6 +173,11 @@ async function fetchSaasAccessBootstrapViaAdminApi(client, session = null) {
         role: normalizeRole(json?.currentUser?.role || json?.access?.role),
         isActive: json?.access?.isActive !== false,
         fullName: String(json?.currentUser?.fullName || json?.currentUser?.full_name || '').trim(),
+        collaboratorId: json?.currentUser?.collaboratorId
+          || json?.access?.collaboratorId
+          || json?.currentUser?.collaborator_id
+          || json?.access?.collaborator_id
+          || null,
       };
     } catch (err) {
       lastErr = err;
@@ -201,6 +206,7 @@ async function fetchSaasAccessBootstrapViaRpc(client) {
         tenantId: row.tenant_id,
         role: normalizeRole(row.role),
         isActive: row.is_active !== false,
+        collaboratorId: row.collaborator_id || row.collaboratorId || null,
       };
     } catch (err) {
       lastError = err;
