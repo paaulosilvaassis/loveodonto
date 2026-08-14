@@ -65,3 +65,20 @@ export {
 } from './projection.js';
 
 export { buildChartVersion } from './versioning.js';
+
+export {
+  SQL_GRANULAR_PERMISSION_PRIMITIVE,
+  ODONTOGRAM_PERMISSION_NAMESPACE,
+  ODONTOGRAM_PERMISSION_ACTIONS,
+  ODONTOGRAM_PERMISSION_KEYS,
+  ODONTOGRAM_PERMISSION_CATALOG_IDS,
+  ODONTOGRAM_OPERATIONS,
+  ODONTOGRAM_OPERATION_PERMISSIONS,
+  ODONTOGRAM_READ_OPERATIONS,
+  ODONTOGRAM_WRITE_OPERATIONS,
+  ODONTOGRAM_LIFECYCLE_OPERATIONS,
+  AUTH_DECISION_CODES,
+  authorizeOdontogramOperation,
+  isOdontogramReadOperation,
+  isOdontogramWriteOperation,
+} from './authorizationContract.js';

@@ -1,4 +1,4 @@
--- 041: Odontogram clinical foundation — Phase OD-1B / OD-1C.1
+-- 041: Odontogram clinical foundation — Phase OD-1B / OD-1C.1 / OD-1D
 -- NÃO EXECUTAR automaticamente em remoto, staging, produção ou banco local.
 -- NÃO usar supabase db push. Sem seed. Sem apply nesta fase.
 -- Runtime permanece DESLIGADO até OD-1D (RLS) e OD-1E (serviços).
@@ -9,6 +9,14 @@
 --   * referenced_event_id é FK estruturada da correção (não payload solto).
 --   * CHECK de linha não prova que o evento referenciado é anterior;
 --     essa prova permanece no domínio/serviço transacional.
+--
+-- OD-1D — autorização fail-closed:
+--   SQL_GRANULAR_PERMISSION_PRIMITIVE: MISSING
+--   O catálogo prontuario_odontograma vive em JS/IndexedDB (view/create/edit).
+--   Não há helper SQL canônico de permissão granular.
+--   Por isso: ZERO policies authenticated e ZERO GRANT de tabela a authenticated/anon.
+--   SELECT direto authenticated permanece negado. Caminho futuro: serviço/RPC (OD-1E).
+--   Não usar membership-only SELECT (exigiria prontuario_odontograma:view no SQL).
 --
 -- Princípios (fonte de verdade clínica):
 --   * O odontograma clínico vivo NÃO é snapshot contratual.
@@ -643,7 +651,9 @@ before delete on public.app_odontogram_chart_versions
 for each row execute function public.app_odontogram_reject_mutation();
 
 -- ===========================================================================
--- RLS fail-closed — SEM policy nesta fase (OD-1D criará as policies definitivas)
+-- RLS fail-closed — OD-1D
+-- SQL_GRANULAR_PERMISSION_PRIMITIVE: MISSING
+-- Sem helper SQL de prontuario_odontograma:view → ZERO policies authenticated.
 -- Sem policy, clientes authenticated/anon permanecem bloqueados.
 -- ===========================================================================
 
@@ -660,6 +670,13 @@ revoke all on table public.app_odontogram_charts from public, anon, authenticate
 revoke all on table public.app_odontogram_tooth_states from public, anon, authenticated;
 revoke all on table public.app_odontogram_events from public, anon, authenticated;
 revoke all on table public.app_odontogram_chart_versions from public, anon, authenticated;
+
+-- service_role: privilégio mínimo para o serviço transacional futuro (OD-1E).
+-- Sem DELETE: eventos append-only, versões imutáveis, charts/dentes com ciclo controlado.
+grant select, insert, update on table public.app_odontogram_charts to service_role;
+grant select, insert, update on table public.app_odontogram_tooth_states to service_role;
+grant select, insert on table public.app_odontogram_events to service_role;
+grant select, insert on table public.app_odontogram_chart_versions to service_role;
 
 -- Intencionalmente SEM create policy.
 -- Intencionalmente SEM grant a anon/authenticated.
