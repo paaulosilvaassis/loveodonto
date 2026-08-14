@@ -12,13 +12,14 @@ import {
 import { ContractTable, ContractStatusBadge, formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
 import ContractSignModal from '../../components/contracts/ContractSignModal.jsx';
 import ContractDetailModal from '../../components/contracts/ContractDetailModal.jsx';
+import { buildContractViewIdentity } from '../../contracts/contractViewIdentity.js';
 import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 
 export default function ContractsPendentesPage() {
   const { user } = useAuth();
   const [refresh, setRefresh] = useState(0);
   const [signContract, setSignContract] = useState(null);
-  const [detailId, setDetailId] = useState(null);
+  const [selectedView, setSelectedView] = useState(null);
   const [toast, setToast] = useState(null);
 
   const contracts = useMemo(() => {
@@ -54,7 +55,7 @@ export default function ContractsPendentesPage() {
             label: 'Ações',
             render: (r) => (
               <div className="ctr-actions">
-                <button type="button" className="button small secondary" onClick={() => setDetailId(r.id)}>
+                <button type="button" className="button small secondary" onClick={() => setSelectedView(buildContractViewIdentity(r))}>
                   Visualizar
                 </button>
                 {r.status === CONTRACT_STATUS.DRAFT && (
@@ -114,9 +115,10 @@ export default function ContractsPendentesPage() {
         }}
       />
       <ContractDetailModal
-        open={!!detailId}
-        onOpenChange={(o) => !o && setDetailId(null)}
-        contractId={detailId}
+        open={Boolean(selectedView?.contractId)}
+        onOpenChange={(o) => { if (!o) setSelectedView(null); }}
+        contractId={selectedView?.contractId}
+        expectedIdentity={selectedView}
       />
     </div>
   );

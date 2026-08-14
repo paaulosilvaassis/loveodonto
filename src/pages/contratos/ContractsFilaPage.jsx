@@ -13,6 +13,7 @@ import {
 } from '../../contracts/operationalContractUi.js';
 import { formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
 import ContractDetailModal from '../../components/contracts/ContractDetailModal.jsx';
+import { buildContractViewIdentity } from '../../contracts/contractViewIdentity.js';
 import {
   sendContractForSignature,
   finalizeGeneratedContract,
@@ -51,7 +52,7 @@ export default function ContractsFilaPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [refresh, setRefresh] = useState(0);
-  const [detailId, setDetailId] = useState(null);
+  const [selectedView, setSelectedView] = useState(null);
   const [toast, setToast] = useState(null);
 
   const rows = useMemo(() => {
@@ -81,11 +82,11 @@ export default function ContractsFilaPage() {
           navigate(`/atendimento-clinico/${row.quoteId}?section=contratos`);
           return;
         }
-        setDetailId(row.id);
+        setSelectedView(buildContractViewIdentity(row));
         return;
       }
       if (key === 'download' || key === 'view' || key === 'view_signature') {
-        setDetailId(row.id);
+        setSelectedView(buildContractViewIdentity(row));
         return;
       }
       if (row.status === 'draft') {
@@ -94,7 +95,7 @@ export default function ContractsFilaPage() {
         showToast('Contrato finalizado.');
         return;
       }
-      setDetailId(row.id);
+      setSelectedView(buildContractViewIdentity(row));
     } catch (e) {
       const msg = String(e?.message || '');
       if (/permiss/i.test(msg)) showToast(formatUxMessage('PERMISSION_DENIED'), 'error');
@@ -290,7 +291,7 @@ export default function ContractsFilaPage() {
                 >
                   {row.cta?.label || 'Abrir'}
                 </button>
-                <button type="button" className="button small secondary" onClick={() => setDetailId(row.id)}>
+                <button type="button" className="button small secondary" onClick={() => setSelectedView(buildContractViewIdentity(row))}>
                   Detalhes
                 </button>
               </footer>
@@ -300,9 +301,10 @@ export default function ContractsFilaPage() {
       </div>
 
       <ContractDetailModal
-        open={Boolean(detailId)}
-        contractId={detailId}
-        onOpenChange={(o) => { if (!o) setDetailId(null); }}
+        open={Boolean(selectedView?.contractId)}
+        contractId={selectedView?.contractId}
+        expectedIdentity={selectedView}
+        onOpenChange={(o) => { if (!o) setSelectedView(null); }}
       />
     </div>
   );

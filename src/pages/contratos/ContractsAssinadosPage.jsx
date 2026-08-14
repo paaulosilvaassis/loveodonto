@@ -6,12 +6,14 @@ import {
   createContractNewVersion,
 } from '../../services/contractModuleService.js';
 import { ContractTable, ContractStatusBadge, formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
+import ContractDetailModal from '../../components/contracts/ContractDetailModal.jsx';
+import { buildContractViewIdentity } from '../../contracts/contractViewIdentity.js';
 import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 
 export default function ContractsAssinadosPage() {
   const { user } = useAuth();
   const [refresh, setRefresh] = useState(0);
-  const [detailId, setDetailId] = useState(null);
+  const [selectedView, setSelectedView] = useState(null);
   const [toast, setToast] = useState(null);
 
   const contracts = useMemo(() => {
@@ -47,7 +49,11 @@ export default function ContractsAssinadosPage() {
             label: 'Ações',
             render: (r) => (
               <div className="ctr-actions">
-                <button type="button" className="button small secondary" onClick={() => setDetailId(r.id)}>
+                <button
+                  type="button"
+                  className="button small secondary"
+                  onClick={() => setSelectedView(buildContractViewIdentity(r))}
+                >
                   Visualizar
                 </button>
                 <button
@@ -72,7 +78,12 @@ export default function ContractsAssinadosPage() {
         rows={rows}
         emptyMessage="Nenhum contrato assinado."
       />
-      <ContractDetailModal open={!!detailId} onOpenChange={(o) => !o && setDetailId(null)} contractId={detailId} />
+      <ContractDetailModal
+        open={Boolean(selectedView?.contractId)}
+        onOpenChange={(o) => { if (!o) setSelectedView(null); }}
+        contractId={selectedView?.contractId}
+        expectedIdentity={selectedView}
+      />
     </div>
   );
 }

@@ -10,12 +10,16 @@ import {
 import { ContractStatusBadge, ContractDocumentPreview } from '../../contracts/ui/ContractUi.jsx';
 import { getContractDetails } from '../../services/contractModuleService.js';
 import { contractHtmlWithSignatures } from '../../services/contractPdfService.js';
+import { matchesContractViewIdentity } from '../../contracts/contractViewIdentity.js';
 
-export default function ContractDetailModal({ open, onOpenChange, contractId, actions }) {
+export default function ContractDetailModal({ open, onOpenChange, contractId, expectedIdentity, actions }) {
   const details = useMemo(() => {
     if (!open || !contractId) return null;
-    return getContractDetails(contractId);
-  }, [open, contractId]);
+    const identity = expectedIdentity?.contractId
+      ? expectedIdentity
+      : { contractId };
+    return getContractDetails(contractId, identity);
+  }, [open, contractId, expectedIdentity]);
 
   const { contract, signatures, events } = details || {};
 
@@ -29,7 +33,12 @@ export default function ContractDetailModal({ open, onOpenChange, contractId, ac
           </ModalTitle>
         </ModalHeader>
         <ModalBody className="space-y-4 max-h-[65vh] overflow-y-auto">
-          {contract && (
+          {open && contractId && !contract && (
+            <p className="ctr-empty" role="alert">
+              Contrato não encontrado ou identidade inconsistente.
+            </p>
+          )}
+          {contract && matchesContractViewIdentity(contract, expectedIdentity || { contractId }) && (
             <ContractDocumentPreview html={contractHtmlWithSignatures(contract.renderedHtml)} />
           )}
           {signatures?.length > 0 && (

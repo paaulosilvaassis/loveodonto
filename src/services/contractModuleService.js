@@ -14,6 +14,7 @@ import {
   SIGNATURE_TYPES,
   SIGNER_ROLES,
 } from '../contracts/contractConstants.js';
+import { matchesContractViewIdentity } from '../contracts/contractViewIdentity.js';
 import {
   createGeneratedContractDraft,
   updateDraftGeneratedContract,
@@ -301,10 +302,14 @@ export function listContractsByStatus(statuses) {
     .sort((a, b) => new Date(b.generatedAt || 0) - new Date(a.generatedAt || 0));
 }
 
-export function getContractDetails(contractId) {
+export function getContractDetails(contractId, expectedIdentity) {
+  if (!contractId) return null;
   const contract = normalizeContract(getGeneratedContract(contractId));
   if (!contract) return null;
   const cid = clinicId();
+  if (contract.clinicId && String(contract.clinicId) !== String(cid)) return null;
+  const identity = expectedIdentity?.contractId ? expectedIdentity : { contractId };
+  if (!matchesContractViewIdentity(contract, identity)) return null;
   const db = loadDb();
   const signatures = (db.contractSignatures || []).filter((s) => s.contractId === contractId);
   const events = (db.contractEvents || [])
