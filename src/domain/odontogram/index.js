@@ -82,3 +82,37 @@ export {
   isOdontogramReadOperation,
   isOdontogramWriteOperation,
 } from './authorizationContract.js';
+
+export {
+  ODONTOGRAM_COMMAND_ERROR_CODES,
+  OdontogramCommandError,
+  TRUSTED_ODONTOGRAM_SERVER_ACTOR_KIND,
+  CREATE_CHART_EXPECTED_ROW_VERSION,
+  VERSION_CREATION_EVENT_TYPES,
+  DATABASE_GENERATED_FIELDS,
+  TRANSACTION_PORT_METHODS,
+  ODONTOGRAM_PERSISTED_EVENT_FIELD_MAP,
+  ODONTOGRAM_CHART_FIELD_MAP,
+  ODONTOGRAM_TOOTH_STATE_FIELD_MAP,
+  ODONTOGRAM_CHART_VERSION_FIELD_MAP,
+  EVENT_TYPE_TO_OPERATION,
+  isCanonicalUuid,
+  isPersistencePatientId,
+  mapDomainEventToSqlRow,
+  mapDomainChartToSqlRow,
+  mapDomainToothStateToSqlRow,
+  mapDomainChartVersionToSqlRow,
+  assertTransactionPort,
+  assertTransaction,
+  assertTrustedOdontogramServerActor,
+  assertOdontogramCommand,
+  buildCanonicalEventDraft,
+  canonicalToothState,
+} from './persistenceContract.js';
+
+export {
+  EVENT_HASH_CONTENT_FIELDS,
+  buildEventHashCandidate,
+  hashOdontogramEvent,
+  verifyOdontogramEventChain,
+} from './eventHashChain.js';
