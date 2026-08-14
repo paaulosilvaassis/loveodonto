@@ -1,8 +1,12 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { EVENT_RULES, validateCanonicalEvent } from '../domain/odontogram/index.js';
 import {
   CHART_STATUSES,
   ODONTOGRAM_CORRECTION_EVENT_TYPES,
+  ODONTOGRAM_EVENT_FIELD_MAP,
   ODONTOGRAM_EVENT_TYPES,
   ODONTOGRAM_SCHEMA_VERSION,
 } from '../domain/odontogram/schemaContract.js';
@@ -28,6 +32,8 @@ describe('OD-1C regras dos 13 tipos de evento', () => {
     expect(correctionTypes).toEqual([...ODONTOGRAM_CORRECTION_EVENT_TYPES]);
     expect(CHART_STATUSES).toEqual(['draft', 'in_review', 'finalized']);
     expect(ODONTOGRAM_SCHEMA_VERSION).toBe('1.0.0');
+    expect(ODONTOGRAM_EVENT_FIELD_MAP.sequence).toBe('event_sequence');
+    expect(ODONTOGRAM_EVENT_FIELD_MAP.referencedEventId).toBe('referenced_event_id');
     for (const type of ODONTOGRAM_EVENT_TYPES) {
       const spec = EVENT_RULES[type];
       expect(['required', 'optional', 'forbidden']).toContain(spec.toothFdi);
@@ -240,5 +246,32 @@ describe('OD-1C regras dos 13 tipos de evento', () => {
     }));
     expect(created.ok).toBe(false);
     expect(created.error.code).toBe('FORBIDDEN_FIELD');
+  });
+
+  it('mapeia todo campo persistível do envelope para coluna SQL canônica', () => {
+    const completed = validateCanonicalEvent(buildEvent({
+      id: 'evt-map',
+      sequence: 1,
+      eventType: 'procedure_completed',
+      toothFdi: '16',
+      appointmentId: 'appt-test-1',
+      plannedProcedureId: 'proc-plan-1',
+      budgetItemId: 'budget-item-test-1',
+      executedProcedureId: 'exec-test-1',
+    }));
+    expect(completed.ok).toBe(true);
+    for (const key of Object.keys(completed.value)) {
+      expect(ODONTOGRAM_EVENT_FIELD_MAP[key], key).toBeTypeOf('string');
+      expect(ODONTOGRAM_EVENT_FIELD_MAP[key].length).toBeGreaterThan(0);
+    }
+    expect(ODONTOGRAM_EVENT_FIELD_MAP.sequence).toBe('event_sequence');
+    expect(ODONTOGRAM_EVENT_FIELD_MAP.referencedEventId).toBe('referenced_event_id');
+
+    const domainDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../domain/odontogram');
+    for (const file of ['eventEngine.js', 'projection.js', 'versioning.js']) {
+      expect(readFileSync(path.join(domainDir, file), 'utf8')).toMatch(/from '\.\/schemaContract\.js'/);
+    }
+    expect(readFileSync(path.join(domainDir, 'projection.js'), 'utf8')).not.toMatch(/CLINICAL_SCHEMA_VERSION/);
+    expect(readFileSync(path.join(domainDir, 'projection.js'), 'utf8')).not.toMatch(/PROJECTED_CHART_STATUSES/);
   });
 });

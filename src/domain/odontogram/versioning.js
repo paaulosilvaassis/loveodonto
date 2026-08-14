@@ -1,5 +1,5 @@
 import { cloneCanonicalJson, hashCanonicalSnapshot } from './canonicalJson.js';
-import { CLINICAL_SCHEMA_VERSION, PROJECTED_CHART_STATUSES } from './projection.js';
+import { CHART_STATUSES, ODONTOGRAM_SCHEMA_VERSION } from './schemaContract.js';
 
 function fail(code, message, details = {}) {
   return Object.freeze({
@@ -70,14 +70,14 @@ export async function buildChartVersion(input) {
   if (!isPlainObject(projection) || !isPlainObject(projection.audit) || !isPlainObject(projection.teeth)) {
     return fail('INVALID_PROJECTION', 'Projeção canônica inválida.');
   }
-  if (projection.schemaVersion !== CLINICAL_SCHEMA_VERSION) {
+  if (projection.schemaVersion !== ODONTOGRAM_SCHEMA_VERSION) {
     return fail('INVALID_SCHEMA_VERSION', 'schemaVersion da projeção é obrigatório e canônico.');
   }
   for (const field of ['chartId', 'tenantId', 'patientId']) {
     const err = opaqueId(projection[field], field);
     if (err) return err;
   }
-  if (!PROJECTED_CHART_STATUSES.includes(projection.status)) {
+  if (!CHART_STATUSES.includes(projection.status)) {
     return fail('INVALID_STATUS', 'status canônico ausente na projeção.');
   }
   const versionErr = positiveInteger(input.versionNumber, 'versionNumber');

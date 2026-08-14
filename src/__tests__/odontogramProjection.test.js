@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CLINICAL_SCHEMA_VERSION,
+  CHART_STATUSES,
   MULTIPLE_CORRECTION_POLICY,
-  PROJECTED_CHART_STATUSES,
+  ODONTOGRAM_SCHEMA_VERSION,
   canonicalizeJson,
   createEmptyProjection,
   projectOdontogramEvents,
 } from '../domain/odontogram/index.js';
-import { CHART_STATUSES, ODONTOGRAM_SCHEMA_VERSION } from '../domain/odontogram/schemaContract.js';
 
 const IDENTITY = {
   tenantId: 'tenant-test-1',
@@ -32,9 +31,8 @@ function created(stage = 'permanent') {
 
 describe('OD-1C projeção de eventos', () => {
   it('usa schema version e statuses do contrato OD-1B, sem catálogo paralelo', () => {
-    expect(CLINICAL_SCHEMA_VERSION).toBe(ODONTOGRAM_SCHEMA_VERSION);
-    expect([...PROJECTED_CHART_STATUSES]).toEqual([...CHART_STATUSES]);
     expect(createEmptyProjection().schemaVersion).toBe(ODONTOGRAM_SCHEMA_VERSION);
+    expect([...CHART_STATUSES]).toEqual(['draft', 'in_review', 'finalized']);
   });
 
   it('repete o stream de forma determinística', () => {

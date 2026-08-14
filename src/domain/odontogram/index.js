@@ -42,6 +42,14 @@ export {
 } from './legacyMappings.js';
 
 export {
+  ODONTOGRAM_SCHEMA_VERSION,
+  ODONTOGRAM_EVENT_TYPES,
+  ODONTOGRAM_CORRECTION_EVENT_TYPES,
+  CHART_STATUSES,
+  ODONTOGRAM_EVENT_FIELD_MAP,
+} from './schemaContract.js';
+
+export {
   CanonicalJsonError,
   canonicalizeJson,
   cloneCanonicalJson,
@@ -52,8 +60,6 @@ export { EVENT_RULES, validateCanonicalEvent } from './eventEngine.js';
 
 export {
   MULTIPLE_CORRECTION_POLICY,
-  CLINICAL_SCHEMA_VERSION,
-  PROJECTED_CHART_STATUSES,
   createEmptyProjection,
   projectOdontogramEvents,
 } from './projection.js';

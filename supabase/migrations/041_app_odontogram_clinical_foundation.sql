@@ -1,8 +1,14 @@
--- 041: Odontogram clinical foundation — Phase OD-1B
+-- 041: Odontogram clinical foundation — Phase OD-1B / OD-1C.1
 -- NÃO EXECUTAR automaticamente em remoto, staging, produção ou banco local.
 -- NÃO usar supabase db push. Sem seed. Sem apply nesta fase.
 -- Runtime permanece DESLIGADO até OD-1D (RLS) e OD-1E (serviços).
 -- Feature flags NÃO são alteradas nesta migration.
+--
+-- OD-1C.1 — replay determinístico:
+--   * event_sequence é a ordem canônica do stream (não occurred_at/created_at/UUID).
+--   * referenced_event_id é FK estruturada da correção (não payload solto).
+--   * CHECK de linha não prova que o evento referenciado é anterior;
+--     essa prova permanece no domínio/serviço transacional.
 --
 -- Princípios (fonte de verdade clínica):
 --   * O odontograma clínico vivo NÃO é snapshot contratual.
@@ -423,6 +429,8 @@ create table if not exists public.app_odontogram_events (
   tenant_id uuid not null references public.tenants(id) on delete restrict,
   chart_id uuid not null,
   patient_id text not null,
+  event_sequence bigint not null,
+  referenced_event_id uuid null,
   appointment_id text null,
   planned_procedure_id text null,
   budget_item_id text null,
@@ -441,8 +449,11 @@ create table if not exists public.app_odontogram_events (
 
   constraint app_odontogram_events_tenant_id_uidx unique (tenant_id, id),
   constraint app_odontogram_events_identity_uidx unique (tenant_id, chart_id, patient_id, id),
+  constraint app_odontogram_events_sequence_uidx unique (tenant_id, chart_id, event_sequence),
   constraint app_odontogram_events_patient_nonempty_chk
     check (length(trim(patient_id)) > 0),
+  constraint app_odontogram_events_sequence_positive_chk
+    check (event_sequence >= 1),
   constraint app_odontogram_events_type_chk
     check (public.app_odontogram_is_valid_event_type(event_type)),
   constraint app_odontogram_events_fdi_chk
@@ -468,6 +479,19 @@ create table if not exists public.app_odontogram_events (
       event_type not in ('condition_corrected', 'condition_removed', 'correction_recorded')
       or length(trim(coalesce(reason, ''))) > 0
     ),
+  constraint app_odontogram_events_referenced_required_chk
+    check (
+      (
+        event_type in ('condition_corrected', 'condition_removed', 'correction_recorded')
+        and referenced_event_id is not null
+      )
+      or (
+        event_type not in ('condition_corrected', 'condition_removed', 'correction_recorded')
+        and referenced_event_id is null
+      )
+    ),
+  constraint app_odontogram_events_referenced_not_self_chk
+    check (referenced_event_id is null or referenced_event_id <> id),
   constraint app_odontogram_events_condition_tooth_chk
     check (
       event_type not in ('condition_recorded', 'condition_corrected')
@@ -504,19 +528,28 @@ create table if not exists public.app_odontogram_events (
   constraint app_odontogram_events_chart_identity_fk
     foreign key (tenant_id, chart_id, patient_id)
     references public.app_odontogram_charts (tenant_id, id, patient_id)
+    on delete restrict,
+  constraint app_odontogram_events_referenced_event_fk
+    foreign key (tenant_id, chart_id, patient_id, referenced_event_id)
+    references public.app_odontogram_events (tenant_id, chart_id, patient_id, id)
     on delete restrict
+    deferrable initially deferred
 );
 
 comment on table public.app_odontogram_events is
-  'OD-1B — eventos clínicos append-only. Não criar evento ao abrir a aba. Não atualizar nem apagar. procedure_completed é conclusão clínica, nunca pagamento. budget_item_id sozinho não conclui procedimento. Receivable/payment não são identidade clínica.';
+  'OD-1B/OD-1C.1 — eventos clínicos append-only. Replay por event_sequence, não por occurred_at. Correção usa referenced_event_id estruturado. Não criar evento ao abrir a aba. Não atualizar nem apagar. procedure_completed é conclusão clínica, nunca pagamento. budget_item_id sozinho não conclui procedimento. Receivable/payment não são identidade clínica.';
 comment on column public.app_odontogram_events.event_type is
   'Catálogo OD-1B. Sem tab_opened/chart_viewed. procedure_completed = conclusão clínica, não financeira.';
+comment on column public.app_odontogram_events.event_sequence is
+  'Ordem canônica de replay (>= 1), UNIQUE (tenant_id, chart_id). Não derivar de occurred_at, created_at ou UUID. O mesmo número pode existir em charts distintos.';
+comment on column public.app_odontogram_events.referenced_event_id is
+  'FK composta (tenant_id, chart_id, patient_id, id) para o evento original da correção. Sem CASCADE/SET NULL. CHECK de linha rejeita self-reference e exige o campo nos tipos de correção, mas NÃO prova que o referenciado ocorreu antes; essa prova permanece no domínio/serviço transacional.';
 comment on column public.app_odontogram_events.budget_item_id is
   'Vínculo opcional textual. NÃO gera procedure_completed sozinho. Sem FK IndexedDB.';
 comment on column public.app_odontogram_events.appointment_id is
   'Vínculo clínico textual opcional. Sem FK para IndexedDB/appointments nesta fundação.';
 comment on column public.app_odontogram_events.payload is
-  'Objeto JSON. Proibido receivable_id/payment_id/paid/amount_paid como identidade.';
+  'Objeto JSON. Proibido receivable_id/payment_id/paid/amount_paid como identidade. Não armazenar referenced_event_id somente no payload.';
 
 create index if not exists app_odontogram_events_tenant_chart_occurred_idx
   on public.app_odontogram_events (tenant_id, chart_id, occurred_at);

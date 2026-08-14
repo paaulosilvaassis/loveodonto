@@ -213,16 +213,18 @@ describe('OD-1A isolamento e determinismo do domínio', () => {
   it('não importa React, IndexedDB, Supabase, Three.js nem módulos clínicos/financeiros', () => {
     const importPattern = /\bfrom\s+['"]([^'"]+)['"]/g;
     const forbidden = /^(react|react-dom|three|@supabase|@supabase\/)/;
-    const forbiddenPath = /(indexedDB|localStorage|budget|finance|contract|supabase|three)/i;
+    const forbiddenPath = /(indexedDB|localStorage|budget|finance|contractService|(?:^|[./])contracts(?:\/|$)|supabase|three)/i;
     for (const file of files) {
       const source = readFileSync(path.join(DOMAIN_DIR, file), 'utf8');
       const specifiers = [...source.matchAll(importPattern)].map((match) => match[1]);
       for (const specifier of specifiers) {
-        expect(forbidden.test(specifier)).toBe(false);
-        expect(forbiddenPath.test(specifier)).toBe(false);
+        expect(forbidden.test(specifier), specifier).toBe(false);
+        expect(forbiddenPath.test(specifier), specifier).toBe(false);
         expect(specifier).not.toMatch(/components|services|pages|\/db\//);
       }
     }
+    const engine = readFileSync(path.join(DOMAIN_DIR, 'eventEngine.js'), 'utf8');
+    expect(engine).toMatch(/from '\.\/schemaContract\.js'/);
   });
 
   it('não usa rede, relógio, random, UUID nem dados reais de paciente', () => {

@@ -1,7 +1,12 @@
 import { getConditionDefinition, isValidConditionCode } from './conditions.js';
 import { cloneCanonicalJson } from './canonicalJson.js';
-import { DENTITION_STAGES, normalizeFdiToothId } from './identifiers.js';
-import { getApplicableSurfaces, SURFACE_CODES } from './surfaces.js';
+import { normalizeFdiToothId } from './identifiers.js';
+import {
+  DENTITION_STAGES,
+  ODONTOGRAM_EVENT_TYPES,
+  SURFACE_CODES,
+} from './schemaContract.js';
+import { getApplicableSurfaces } from './surfaces.js';
 
 const R = Object.freeze({ required: 'required', optional: 'optional', forbidden: 'forbidden' });
 const LINK_FIELDS = Object.freeze([
@@ -155,7 +160,7 @@ function assertProcedureLink(type, linksValue) {
 
 export function validateCanonicalEvent(input) {
   if (!isPlainObject(input)) return fail('INVALID_EVENT', 'Evento deve ser objeto JSON.');
-  if (!EVENT_RULES[input.eventType]) {
+  if (!ODONTOGRAM_EVENT_TYPES.includes(input.eventType) || !EVENT_RULES[input.eventType]) {
     return fail('UNKNOWN_EVENT_TYPE', 'Tipo de evento desconhecido.', { eventType: input.eventType });
   }
   const spec = EVENT_RULES[input.eventType];

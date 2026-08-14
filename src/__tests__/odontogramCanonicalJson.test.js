@@ -82,12 +82,28 @@ describe('OD-1C SHA-256 canônico', () => {
     expect(await hashCanonicalSnapshot(right)).toBe(hash);
   });
 
-  it('muda quando o conteúdo clínico muda e ignora snapshot_hash no conteúdo', async () => {
+  it('muda quando o conteúdo clínico muda', async () => {
     const base = { chartId: 'chart-test-1', teeth: { 16: { conditionCode: 'caries' } } };
     const changed = { chartId: 'chart-test-1', teeth: { 16: { conditionCode: 'restoration' } } };
-    const withHash = { ...base, snapshot_hash: 'x'.repeat(64), snapshotHash: 'y'.repeat(64) };
     expect(await hashCanonicalSnapshot(base)).not.toBe(await hashCanonicalSnapshot(changed));
-    expect(await hashCanonicalSnapshot(base)).toBe(await hashCanonicalSnapshot(withHash));
+  });
+
+  it('rejeita snapshotHash/snapshot_hash na raiz e aninhados, sem mutar o caller', async () => {
+    const clean = { chartId: 'chart-test-1', teeth: { 16: { conditionCode: 'caries' } } };
+    const rootCamel = { ...clean, snapshotHash: 'x'.repeat(64) };
+    const rootSnake = { ...clean, snapshot_hash: 'y'.repeat(64) };
+    const nestedCamel = { chartId: 'chart-test-1', teeth: { 16: { snapshotHash: 'z'.repeat(64) } } };
+    const nestedSnake = { chartId: 'chart-test-1', audit: { snapshot_hash: 'w'.repeat(64) } };
+    const beforeRoot = JSON.stringify(rootCamel);
+    const beforeNested = JSON.stringify(nestedSnake);
+
+    await expect(hashCanonicalSnapshot(clean)).resolves.toMatch(/^[a-f0-9]{64}$/);
+    await expect(hashCanonicalSnapshot(rootCamel)).rejects.toMatchObject({ code: 'HASH_FIELD_FORBIDDEN' });
+    await expect(hashCanonicalSnapshot(rootSnake)).rejects.toMatchObject({ code: 'HASH_FIELD_FORBIDDEN' });
+    await expect(hashCanonicalSnapshot(nestedCamel)).rejects.toMatchObject({ code: 'HASH_FIELD_FORBIDDEN' });
+    await expect(hashCanonicalSnapshot(nestedSnake)).rejects.toMatchObject({ code: 'HASH_FIELD_FORBIDDEN' });
+    expect(JSON.stringify(rootCamel)).toBe(beforeRoot);
+    expect(JSON.stringify(nestedSnake)).toBe(beforeNested);
   });
 });
 

@@ -1,4 +1,4 @@
-const HASH_OMIT_KEYS = Object.freeze(['snapshotHash', 'snapshot_hash']);
+const HASH_FIELD_NAMES = Object.freeze(['snapshotHash', 'snapshot_hash']);
 
 export class CanonicalJsonError extends Error {
   constructor(code, message, details = {}) {
@@ -78,18 +78,29 @@ export function canonicalizeJson(value) {
   return JSON.stringify(canonicalizeNode(value, new Set()));
 }
 
-function omitHashKeys(value) {
-  if (!isPlainObject(value)) return value;
-  const out = {};
-  for (const key of Object.keys(value)) {
-    if (HASH_OMIT_KEYS.includes(key)) continue;
-    out[key] = value[key];
+function assertNoHashFields(value, seen) {
+  if (value === null || typeof value !== 'object') return;
+  if (seen.has(value)) return;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoHashFields(item, seen);
+    return;
   }
-  return out;
+  for (const key of Object.keys(value)) {
+    if (HASH_FIELD_NAMES.includes(key)) {
+      throw new CanonicalJsonError(
+        'HASH_FIELD_FORBIDDEN',
+        'snapshotHash/snapshot_hash não pode fazer parte do conteúdo hasheado.',
+        { key },
+      );
+    }
+    assertNoHashFields(value[key], seen);
+  }
 }
 
 export async function hashCanonicalSnapshot(snapshot) {
-  const canonical = canonicalizeJson(omitHashKeys(snapshot));
+  assertNoHashFields(snapshot, new Set());
+  const canonical = canonicalizeJson(snapshot);
   const subtle = globalThis.crypto?.subtle;
   if (!subtle || typeof TextEncoder === 'undefined') {
     throw new CanonicalJsonError(

@@ -280,3 +280,67 @@ describe('OD-1B schema clínico canônico (estático)', () => {
     expect(sql).toMatch(/Não substitui a checagem otimista do service futuro/i);
   });
 });
+
+describe('OD-1C.1 replay sequence e referência estruturada', () => {
+  it('persiste event_sequence positivo e único por tenant+chart', () => {
+    const sql = readMigration();
+    const events = extractCreateTable(sql, 'app_odontogram_events');
+    expect(events).toMatch(/event_sequence bigint not null/i);
+    expect(events).toMatch(/event_sequence >= 1/);
+    expect(events).toMatch(/unique \(tenant_id, chart_id, event_sequence\)/);
+    expect(events).not.toMatch(/event_sequence bigint null/i);
+    expect(sql).toMatch(/Não derivar de occurred_at, created_at ou UUID/i);
+    expect(sql).toMatch(/Ordem canônica de replay/i);
+  });
+
+  it('referencia correção por FK composta tenant/chart/patient/id, RESTRICT e DEFERRABLE', () => {
+    const sql = readMigration();
+    const events = extractCreateTable(sql, 'app_odontogram_events');
+    expect(events).toMatch(/referenced_event_id uuid null/i);
+    expect(events).not.toMatch(/referenced_event_id uuid not null/i);
+    expect(events).toMatch(
+      /foreign key \(tenant_id, chart_id, patient_id, referenced_event_id\)/,
+    );
+    expect(events).toMatch(
+      /references public\.app_odontogram_events \(tenant_id, chart_id, patient_id, id\)/,
+    );
+    expect(events).toMatch(/on delete restrict/);
+    expect(events).toMatch(/deferrable initially deferred/);
+    expect(events).toMatch(/unique \(tenant_id, chart_id, patient_id, id\)/);
+    expect(sql.match(/unique \(tenant_id, chart_id, patient_id, id\)/g) || []).toHaveLength(1);
+    expect(sql.match(/references[\s\S]{0,200}?on delete cascade/gi) || []).toEqual([]);
+    expect(sql).not.toMatch(/on delete set null/i);
+    expect(sql).toMatch(/NÃO prova que o referenciado ocorreu antes/i);
+    expect(sql).toMatch(/permanece no domínio\/serviço transacional/i);
+  });
+
+  it('exige referenced_event_id só nos tipos de correção e rejeita self-reference', () => {
+    const sql = readMigration();
+    const events = extractCreateTable(sql, 'app_odontogram_events');
+    expect(events).toMatch(
+      /event_type in \('condition_corrected', 'condition_removed', 'correction_recorded'\)/,
+    );
+    expect(events).toMatch(/referenced_event_id is not null/);
+    expect(events).toMatch(
+      /event_type not in \('condition_corrected', 'condition_removed', 'correction_recorded'\)/,
+    );
+    expect(events).toMatch(/referenced_event_id is null/);
+    expect(events).toMatch(/referenced_event_id is null or referenced_event_id <> id/);
+    expect(events).toMatch(/length\(trim\(coalesce\(reason, ''\)\)\) > 0/);
+    expect(events).toMatch(/event_type not in \('condition_recorded', 'condition_corrected'\)/);
+    expect(events).toMatch(/event_type <> 'condition_removed'/);
+    expect(events).toMatch(/event_type <> 'procedure_completed'/);
+  });
+
+  it('preserva append-only, RLS fail-closed e ausência de policy', () => {
+    const sql = readMigration();
+    expect(sql).toMatch(/trg_app_odontogram_events_no_update/);
+    expect(sql).toMatch(/trg_app_odontogram_events_no_delete/);
+    expect(sql).toMatch(/before update on public\.app_odontogram_events/);
+    expect(sql).toMatch(/before delete on public\.app_odontogram_events/);
+    expect(sql.match(/^\s*create policy\b/gim) || []).toEqual([]);
+    expect(sql).toMatch(/alter table public\.app_odontogram_events enable row level security/i);
+    expect(sql).toMatch(/alter table public\.app_odontogram_events force row level security/i);
+    expect(readdirSync(MIGRATIONS_DIR).filter((name) => name.startsWith('042'))).toEqual([]);
+  });
+});

@@ -1,6 +1,11 @@
 import { cloneCanonicalJson } from './canonicalJson.js';
-import { EVENT_RULES, validateCanonicalEvent } from './eventEngine.js';
+import { validateCanonicalEvent } from './eventEngine.js';
 import { getTeethForDentitionStage } from './identifiers.js';
+import {
+  CHART_STATUSES,
+  ODONTOGRAM_CORRECTION_EVENT_TYPES,
+  ODONTOGRAM_SCHEMA_VERSION,
+} from './schemaContract.js';
 
 /**
  * Um evento original pode ser alvo de no máximo uma correção no stream.
@@ -9,12 +14,7 @@ import { getTeethForDentitionStage } from './identifiers.js';
  */
 export const MULTIPLE_CORRECTION_POLICY = 'reject_after_first';
 
-export const CLINICAL_SCHEMA_VERSION = '1.0.0';
-export const PROJECTED_CHART_STATUSES = Object.freeze(['draft', 'in_review', 'finalized']);
-
-function isCorrectionEvent(type) {
-  return EVENT_RULES[type]?.referencedEventId === 'required';
-}
+const [STATUS_DRAFT, STATUS_IN_REVIEW, STATUS_FINALIZED] = CHART_STATUSES;
 
 const LIFECYCLE_EVENTS = Object.freeze({
   chart_created: true,
@@ -37,7 +37,7 @@ function succeed(value) {
 
 export function createEmptyProjection() {
   return {
-    schemaVersion: CLINICAL_SCHEMA_VERSION,
+    schemaVersion: ODONTOGRAM_SCHEMA_VERSION,
     chartId: null,
     tenantId: null,
     patientId: null,
@@ -93,7 +93,7 @@ function assertToothInStage(state, event) {
 }
 
 function applyCorrectionGuard(state, event) {
-  if (!isCorrectionEvent(event.eventType)) return null;
+  if (!ODONTOGRAM_CORRECTION_EVENT_TYPES.includes(event.eventType)) return null;
   const original = state.audit.originalEvents[event.referencedEventId];
   if (!original) {
     return fail('INVALID_REFERENCE', 'Correção deve referenciar evento anterior do mesmo stream.', {
@@ -135,28 +135,28 @@ function applyLifecycle(state, event) {
     state.chartId = event.chartId;
     state.patientId = event.patientId;
     state.dentitionStage = event.payload.dentitionStage;
-    state.status = 'draft';
+    state.status = STATUS_DRAFT;
     return null;
   }
   if (event.eventType === 'chart_submitted_for_review') {
-    if (state.status !== 'draft') {
+    if (state.status !== STATUS_DRAFT) {
       return fail('INVALID_LIFECYCLE', 'chart_submitted_for_review exige status draft.');
     }
-    state.status = 'in_review';
+    state.status = STATUS_IN_REVIEW;
     return null;
   }
   if (event.eventType === 'chart_finalized') {
-    if (state.status !== 'draft' && state.status !== 'in_review') {
+    if (state.status !== STATUS_DRAFT && state.status !== STATUS_IN_REVIEW) {
       return fail('INVALID_LIFECYCLE', 'chart_finalized exige draft ou in_review.');
     }
-    state.status = 'finalized';
+    state.status = STATUS_FINALIZED;
     return null;
   }
   if (event.eventType === 'chart_reopened') {
-    if (state.status !== 'finalized') {
+    if (state.status !== STATUS_FINALIZED) {
       return fail('INVALID_LIFECYCLE', 'chart_reopened exige chart finalizado.');
     }
-    state.status = 'draft';
+    state.status = STATUS_DRAFT;
     return null;
   }
   return fail('UNKNOWN_EVENT_TYPE', 'Tipo de evento desconhecido na projeção.');
@@ -205,7 +205,7 @@ function applyEvent(state, event) {
     const identityErr = assertIdentity(next, event);
     if (identityErr) return identityErr;
   }
-  if (next.status === 'finalized' && event.eventType !== 'chart_reopened') {
+  if (next.status === STATUS_FINALIZED && event.eventType !== 'chart_reopened') {
     return fail('CHART_FINALIZED', 'Chart finalizado não aceita mutação clínica ordinária.');
   }
   const toothErr = event.eventType === 'chart_created' ? null : assertToothInStage(next, event);

@@ -50,6 +50,32 @@ export const ODONTOGRAM_PROCEDURE_EVENT_TYPES = Object.freeze([
   'procedure_cancelled',
 ]);
 
+/**
+ * Mapeamento estável camelCase de domínio → colunas SQL da 041.
+ * O serviço de persistência futuro não deve inventar outro mapa.
+ * sequence → event_sequence; referencedEventId → referenced_event_id.
+ */
+export const ODONTOGRAM_EVENT_FIELD_MAP = Object.freeze({
+  id: 'id',
+  tenantId: 'tenant_id',
+  chartId: 'chart_id',
+  patientId: 'patient_id',
+  actorId: 'actor_id',
+  sequence: 'event_sequence',
+  referencedEventId: 'referenced_event_id',
+  occurredAt: 'occurred_at',
+  eventType: 'event_type',
+  toothFdi: 'tooth_fdi',
+  conditionCode: 'condition_code',
+  surfaces: 'surfaces',
+  reason: 'reason',
+  payload: 'payload',
+  appointmentId: 'appointment_id',
+  budgetItemId: 'budget_item_id',
+  executedProcedureId: 'executed_procedure_id',
+  plannedProcedureId: 'planned_procedure_id',
+});
+
 export {
   CONDITION_CODES,
   DENTITION_STAGES,
