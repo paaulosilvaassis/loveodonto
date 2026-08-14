@@ -235,7 +235,7 @@ end;
 $$;
 
 comment on function public.app_odontogram_protect_mutable_row() is
-  'OD-1B — incrementa row_version; rejeita troca de tenant/paciente/autoria. Não preenche created_by/updated_by a partir de auth.uid().';
+  'OD-1B — incrementa row_version; rejeita troca de tenant/paciente/autoria. Não preenche created_by/updated_by a partir de auth.uid(). Não substitui a checagem otimista do service futuro: o serviço ainda deve enviar row_version esperado e tratar 40001.';
 
 comment on function public.app_odontogram_reject_mutation() is
   'OD-1B — fail-closed: eventos clínicos e versões são append-only (sem UPDATE/DELETE).';
@@ -393,6 +393,8 @@ comment on column public.app_odontogram_tooth_states.tooth_fdi is
   'FDI/ISO 3950 de dois dígitos, restrito ao conjunto permanente+decíduo canônico (não apenas regex).';
 comment on column public.app_odontogram_tooth_states.state is
   'Objeto JSON de projeção. Não confiar no frontend; tenant_id/patient_id vêm do chart via FK composta.';
+comment on column public.app_odontogram_tooth_states.last_event_id is
+  'Ponteiro opcional da projeção vigente para o evento histórico. Nullable: o estado pode nascer antes do ponteiro dentro da mesma transação (FK deferrable). Não é identidade do dente. Serviço transacional virá em fase posterior. Sem ON DELETE CASCADE.';
 
 create unique index if not exists app_odontogram_tooth_states_active_tooth_uq
   on public.app_odontogram_tooth_states (tenant_id, chart_id, tooth_fdi)
@@ -438,6 +440,7 @@ create table if not exists public.app_odontogram_events (
   created_at timestamptz not null default now(),
 
   constraint app_odontogram_events_tenant_id_uidx unique (tenant_id, id),
+  constraint app_odontogram_events_identity_uidx unique (tenant_id, chart_id, patient_id, id),
   constraint app_odontogram_events_patient_nonempty_chk
     check (length(trim(patient_id)) > 0),
   constraint app_odontogram_events_type_chk
@@ -539,8 +542,8 @@ alter table public.app_odontogram_tooth_states
   drop constraint if exists app_odontogram_tooth_states_last_event_fk;
 alter table public.app_odontogram_tooth_states
   add constraint app_odontogram_tooth_states_last_event_fk
-  foreign key (tenant_id, last_event_id)
-  references public.app_odontogram_events (tenant_id, id)
+  foreign key (tenant_id, chart_id, patient_id, last_event_id)
+  references public.app_odontogram_events (tenant_id, chart_id, patient_id, id)
   on delete restrict
   deferrable initially deferred;
 
@@ -566,8 +569,6 @@ create table if not exists public.app_odontogram_chart_versions (
   constraint app_odontogram_chart_versions_tenant_id_uidx unique (tenant_id, id),
   constraint app_odontogram_chart_versions_number_uq
     unique (tenant_id, chart_id, version_number),
-  constraint app_odontogram_chart_versions_hash_uq
-    unique (tenant_id, chart_id, snapshot_hash),
   constraint app_odontogram_chart_versions_patient_nonempty_chk
     check (length(trim(patient_id)) > 0),
   constraint app_odontogram_chart_versions_number_chk
@@ -593,7 +594,10 @@ comment on table public.app_odontogram_chart_versions is
 comment on column public.app_odontogram_chart_versions.snapshot is
   'Objeto JSON do gráfico na versão. Sem binário/DICOM/mesh.';
 comment on column public.app_odontogram_chart_versions.snapshot_hash is
-  'Hash obrigatório da versão. Unicidade segura por chart.';
+  'Hash de conteúdo, não identidade da versão. Obrigatório e não vazio. Versões distintas do mesmo chart podem repetir o hash (reabertura/finalização sem mudança clínica). Identidade da versão = id + version_number.';
+
+create index if not exists app_odontogram_chart_versions_tenant_chart_hash_idx
+  on public.app_odontogram_chart_versions (tenant_id, chart_id, snapshot_hash);
 
 drop trigger if exists trg_app_odontogram_chart_versions_no_update on public.app_odontogram_chart_versions;
 create trigger trg_app_odontogram_chart_versions_no_update

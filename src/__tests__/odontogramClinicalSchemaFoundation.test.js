@@ -141,11 +141,17 @@ describe('OD-1B schema clínico canônico (estático)', () => {
     expect(sql).toMatch(/execute function public\.app_odontogram_reject_mutation\(\)/);
     const versions = extractCreateTable(sql, 'app_odontogram_chart_versions');
     expect(versions).toMatch(/unique \(tenant_id, chart_id, version_number\)/);
-    expect(versions).toMatch(/unique \(tenant_id, chart_id, snapshot_hash\)/);
+    expect(versions).not.toMatch(/unique \(tenant_id, chart_id, snapshot_hash\)/);
+    expect(versions).not.toMatch(/chart_versions_hash_uq/);
+    expect(sql).toMatch(
+      /create index if not exists app_odontogram_chart_versions_tenant_chart_hash_idx\s+on public\.app_odontogram_chart_versions \(tenant_id, chart_id, snapshot_hash\)/i,
+    );
     expect(versions).toMatch(/version_number >= 1/);
     expect(versions).toMatch(/source_row_version >= 1/);
     expect(versions).toMatch(/jsonb_typeof\(snapshot\) = 'object'/);
+    expect(versions).toMatch(/snapshot_hash text not null/);
     expect(versions).toMatch(/length\(trim\(snapshot_hash\)\) > 0/);
+    expect(sql).toMatch(/Hash de conteúdo, não identidade da versão/i);
   });
 
   it('valida superfícies canônicas sem duplicidade e correções com justificativa', () => {
@@ -231,6 +237,46 @@ describe('OD-1B schema clínico canônico (estático)', () => {
     expect(sql).toMatch(/foreign key \(tenant_id, chart_id, patient_id\)/);
     expect(sql).toMatch(/app_odontogram_protect_mutable_row/);
     expect(sql).toMatch(/new\.row_version := old\.row_version \+ 1/);
+    expect(sql).toMatch(/Não substitui a checagem otimista do service futuro/i);
     expect(sql).toMatch(/touch_updated_at\(\)/);
+  });
+
+  it('impede exclusão em cascata e fortalece last_event_id sem torná-lo obrigatório', () => {
+    const sql = readMigration();
+    const fkCascades = sql.match(/references[\s\S]{0,200}?on delete cascade/gi) || [];
+    expect(fkCascades).toEqual([]);
+    const states = extractCreateTable(sql, 'app_odontogram_tooth_states');
+    const events = extractCreateTable(sql, 'app_odontogram_events');
+    const versions = extractCreateTable(sql, 'app_odontogram_chart_versions');
+    expect(states).toMatch(/last_event_id uuid null/);
+    expect(states).not.toMatch(/last_event_id uuid not null/);
+    expect(events).toMatch(/unique \(tenant_id, chart_id, patient_id, id\)/);
+    expect(sql).toMatch(
+      /foreign key \(tenant_id, chart_id, patient_id, last_event_id\)\s+references public\.app_odontogram_events \(tenant_id, chart_id, patient_id, id\)\s+on delete restrict/i,
+    );
+    expect(sql).toMatch(/deferrable initially deferred/);
+    expect(states).toMatch(/on delete restrict/);
+    expect(events).toMatch(/on delete restrict/);
+    expect(versions).toMatch(/on delete restrict/);
+    expect(sql).toMatch(/Ponteiro opcional da projeção vigente para o evento histórico/i);
+    expect(sql).toMatch(/Serviço transacional virá em fase posterior/i);
+  });
+
+  it('prova identidade de versão, append-only e RLS fail-closed do hardening', () => {
+    const sql = readMigration();
+    const versions = extractCreateTable(sql, 'app_odontogram_chart_versions');
+    expect(versions).toMatch(/unique \(tenant_id, chart_id, version_number\)/);
+    expect(sql).not.toMatch(/unique \(tenant_id, chart_id, snapshot_hash\)/);
+    expect(sql).toMatch(/Versões distintas do mesmo chart podem repetir o hash/i);
+    expect(sql).toMatch(/trg_app_odontogram_events_no_update/);
+    expect(sql).toMatch(/trg_app_odontogram_events_no_delete/);
+    expect(sql).toMatch(/trg_app_odontogram_chart_versions_no_update/);
+    expect(sql).toMatch(/trg_app_odontogram_chart_versions_no_delete/);
+    expect(sql.match(/^\s*create policy\b/gim) || []).toEqual([]);
+    for (const table of TABLES) {
+      expect(sql).toMatch(new RegExp(`alter table public\\.${table} enable row level security`, 'i'));
+      expect(sql).toMatch(new RegExp(`alter table public\\.${table} force row level security`, 'i'));
+    }
+    expect(sql).toMatch(/Não substitui a checagem otimista do service futuro/i);
   });
 });
