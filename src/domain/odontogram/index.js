@@ -40,3 +40,22 @@ export {
   mapLegacyV1SurfaceToCanonical,
   mapLegacyV2SurfaceToCanonical,
 } from './legacyMappings.js';
+
+export {
+  CanonicalJsonError,
+  canonicalizeJson,
+  cloneCanonicalJson,
+  hashCanonicalSnapshot,
+} from './canonicalJson.js';
+
+export { EVENT_RULES, validateCanonicalEvent } from './eventEngine.js';
+
+export {
+  MULTIPLE_CORRECTION_POLICY,
+  CLINICAL_SCHEMA_VERSION,
+  PROJECTED_CHART_STATUSES,
+  createEmptyProjection,
+  projectOdontogramEvents,
+} from './projection.js';
+
+export { buildChartVersion } from './versioning.js';
