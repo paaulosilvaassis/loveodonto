@@ -8,6 +8,7 @@ import {
   hasSignedContractForQuote,
   getContractSettings,
   saveContractSettings,
+  finalizeGeneratedContract,
 } from '../services/contractModuleService.js';
 import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
 
@@ -90,7 +91,8 @@ describe('contractModuleService', () => {
       patientId: 'pat-1',
       templateId: tpl.id,
     });
-    const signed = signContractOnScreen(user, draft.id, {
+    const finalized = finalizeGeneratedContract(user, draft.id);
+    const signed = signContractOnScreen(user, finalized.id, {
       signerName: 'Paciente Contrato',
       signerCpf: '52998224725',
       signatureImageDataUrl: 'data:image/png;base64,abc',

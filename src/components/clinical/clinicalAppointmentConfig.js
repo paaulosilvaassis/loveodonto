@@ -4,6 +4,7 @@ import {
   FileCheck,
   FileSignature,
   FileText,
+  PenLine,
   Stethoscope,
 } from 'lucide-react';
 import { BUDGET_STATUS } from '../../services/clinicalService.js';
@@ -16,13 +17,20 @@ import {
 } from './contract/contractAccessUtils.js';
 import { getContractStatusForQuote } from '../../services/contractModuleService.js';
 import { areRequiredApplicableDocumentsSatisfied } from '../../contracts/treatmentDocumentRequirements.js';
+import {
+  evaluateClinicalSignatureReadiness,
+  CLINICAL_SIGNATURE_STEP,
+} from '../../contracts/clinicalSignatureReadiness.js';
 
-/** Etapas do fluxo clínico comercial (header). */
+/** Etapas do fluxo clínico (header). IDs são slugs estáveis — não numerar por índice em rotas. */
 export const CLINICAL_WORKFLOW_STEPS = [
   { id: 'planejamento', label: 'Planejamento' },
   { id: 'orcamento', label: 'Orçamento' },
   { id: 'contrato', label: 'Contrato' },
   { id: 'documentos', label: 'Documentos' },
+  { id: 'assinatura', label: 'Assinatura' },
+  { id: 'dados-clinicos', label: 'Dados Clínicos' },
+  { id: 'observacoes', label: 'Observações' },
 ];
 
 /** Status visual das etapas na navegação lateral. */
@@ -46,6 +54,7 @@ export const CLINICAL_NAV_ITEMS = [
   { id: 'orcamento', label: 'Orçamento', icon: DollarSign },
   { id: 'contratos', label: 'Contrato', icon: FileCheck },
   { id: 'documentos', label: 'Documentos', icon: FileSignature },
+  { id: 'assinatura', label: 'Assinatura', icon: PenLine },
   { id: 'dados-clinicos', label: 'Dados Clínicos', icon: Stethoscope },
   { id: 'observacoes', label: 'Observações', icon: FileText },
 ];
@@ -203,11 +212,13 @@ export function canAccessClinicalSection(sectionId, workflow) {
       return Boolean(workflow.contractAccessible);
     }
     if (sectionId === 'documentos') return Boolean(workflow.budgetApproved || workflow.contractAccessible);
+    if (sectionId === 'assinatura') return Boolean(workflow.budgetApproved || workflow.contractAccessible);
     return true;
   }
   if (sectionId === 'orcamento') return workflow.hasPlanning;
   if (sectionId === 'contratos') return Boolean(workflow.contractAccessible);
   if (sectionId === 'documentos') return Boolean(workflow.budgetApproved || workflow.contractAccessible);
+  if (sectionId === 'assinatura') return Boolean(workflow.budgetApproved || workflow.contractAccessible);
   return true;
 }
 
@@ -224,6 +235,9 @@ export function sectionLockMessage(sectionId, workflow) {
   }
   if (sectionId === 'documentos' && !workflow.budgetApproved && !workflow.contractAccessible) {
     return 'Documentos disponíveis somente após aprovação do orçamento.';
+  }
+  if (sectionId === 'assinatura' && !workflow.budgetApproved && !workflow.contractAccessible) {
+    return 'Assinatura disponível após o contrato e os documentos obrigatórios do tratamento.';
   }
   return null;
 }
@@ -268,6 +282,24 @@ export function getNavStepStatus(stepId, workflow, activeSection) {
       patientId: workflow.patientId,
     });
     if (docsComplete) return STEP_STATUS.COMPLETED;
+    if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
+    return STEP_STATUS.PENDING;
+  }
+
+  if (stepId === 'assinatura') {
+    if (!(workflow.budgetApproved || workflow.contractAccessible)) {
+      return STEP_STATUS.BLOCKED;
+    }
+    const signature = evaluateClinicalSignatureReadiness({
+      appointmentId: workflow.appointmentId,
+      budgetId: workflow.budgetId || workflow.viewBudgetId || workflow.budget?.id || null,
+      patientId: workflow.patientId,
+    });
+    if (signature.step === CLINICAL_SIGNATURE_STEP.SIGNED) return STEP_STATUS.COMPLETED;
+    if (signature.step === CLINICAL_SIGNATURE_STEP.BLOCKED) return STEP_STATUS.BLOCKED;
+    if (signature.step === CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE) {
+      return activeSection === stepId ? STEP_STATUS.IN_PROGRESS : STEP_STATUS.PENDING;
+    }
     if (activeSection === stepId) return STEP_STATUS.IN_PROGRESS;
     return STEP_STATUS.PENDING;
   }

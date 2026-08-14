@@ -1,12 +1,17 @@
 import { CheckCircle2, Circle } from 'lucide-react';
 import { CLINICAL_WORKFLOW_STEPS } from './clinicalAppointmentConfig.js';
 
+function normalizeStepperSection(activeSection) {
+  if (activeSection === 'contratos') return 'contrato';
+  if (activeSection === 'signature') return 'assinatura';
+  return activeSection;
+}
+
 /**
- * Indicador visual do fluxo Planejamento → Orçamento → Contrato → Documentos.
+ * Indicador visual da régua clínica (slugs estáveis; números só na nav).
  */
 export function ClinicalWorkflowStepper({ workflow, activeSection }) {
-  const stepOrder = CLINICAL_WORKFLOW_STEPS.map((s) => s.id);
-  const activeIndex = Math.max(0, stepOrder.indexOf(activeSection === 'observacoes' || activeSection === 'dados-clinicos' ? workflow.phase : activeSection));
+  const normalized = normalizeStepperSection(activeSection);
 
   const completedUntil = (() => {
     if (workflow.budgetApproved) return 2;
@@ -19,7 +24,7 @@ export function ClinicalWorkflowStepper({ workflow, activeSection }) {
     <div className="clinical-workflow-stepper" role="list" aria-label="Progresso do atendimento comercial">
       {CLINICAL_WORKFLOW_STEPS.map((step, index) => {
         const done = index <= completedUntil;
-        const current = step.id === activeSection || (activeSection === 'orcamento' && step.id === 'orcamento');
+        const current = step.id === normalized;
         return (
           <div
             key={step.id}

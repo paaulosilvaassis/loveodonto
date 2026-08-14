@@ -19,6 +19,7 @@ import {
   SIGNATURE_WEBHOOK_EVENTS,
 } from '../contracts/contractConstants.js';
 import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
+import { assertClinicalSignatureReady } from '../contracts/clinicalSignatureReadiness.js';
 import {
   createSignatureRequest,
   sendSignatureEmail,
@@ -184,6 +185,15 @@ export async function sendContractForDigitalSignature(user, contractId, formData
   if (!contract) throw new Error('Contrato não encontrado.');
   if (contract.status !== CONTRACT_STATUS.GENERATED) {
     throw new Error('Somente contratos gerados podem ser enviados para assinatura.');
+  }
+  if (contract.quoteSource === 'clinical_budget') {
+    assertClinicalSignatureReady({
+      appointmentId: contract.quoteId,
+      budgetId: contract.budgetId,
+      patientId: contract.patientId,
+      contractId: contract.id,
+      user,
+    }, { forSend: true });
   }
 
   const readiness = validateContractGeneration({

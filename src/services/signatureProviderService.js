@@ -304,6 +304,16 @@ export function buildSignaturePayload({
 }
 
 export async function createSignatureRequest({ user, contract, formData, settings }) {
+  if (!contract?.id) throw new Error('Contrato ausente.');
+  if (contract.status === CONTRACT_STATUS.DRAFT) {
+    throw new Error('Não é possível assinar contrato em rascunho. Finalize o contrato primeiro.');
+  }
+  if (contract.quoteSource === 'clinical_budget') {
+    const md = contract.metadata || {};
+    if (!md.packageManifestId && !md.packageManifestHash && !md.frozenAt) {
+      throw new Error('Manifest ainda não congelado. Prepare o pacote de assinatura primeiro.');
+    }
+  }
   const provider = getSignatureProvider(settings.signatureProvider);
   const db = loadDb();
   const patientBundle = contract.patientId ? { patientId: contract.patientId } : {};

@@ -27,6 +27,10 @@ import {
 } from '../services/contractModuleService.js';
 import { getGeneratedContract } from '../services/contractService.js';
 import { markBudgetContractGenerated } from '../services/clinicalBudgetLockService.js';
+import { prepareClinicalSignaturePackage } from '../services/clinicalSignaturePackageService.js';
+import { createDocumentRecord } from '../services/documentService.js';
+import { attachTcleDocumentToTreatmentPackage } from '../services/tclePackageAttachmentService.js';
+import { DOCUMENT_CATEGORIES } from '../utils/documentTemplates.js';
 import { createId } from '../services/helpers.js';
 import { createPatientQuick } from '../services/patientService.js';
 import { listAllClinicalBudgetRows } from '../services/clinicalBudgetHubService.js';
@@ -407,6 +411,31 @@ describe('PHASE_10.21L — local functional test execution', () => {
       });
     }
     expect(getGeneratedContract(contractId).status).toBe(CONTRACT_STATUS.GENERATED);
+
+    createDocumentRecord(user, {
+      patientId,
+      appointmentId,
+      category: DOCUMENT_CATEGORIES.CONSENTIMENTOS,
+      templateKey: 'consent_implante',
+      title: 'TCLE Implante TESTE 1021L',
+      content: '<p>TCLE implante teste local 1021L</p>',
+      metadata: { tcleId: 'tcle_implante' },
+    });
+    attachTcleDocumentToTreatmentPackage({
+      user,
+      patientId,
+      appointmentId,
+      budgetId,
+      templateKey: 'consent_implante',
+    });
+    const prepared = await prepareClinicalSignaturePackage({
+      user,
+      appointmentId,
+      budgetId,
+      patientId,
+      contractId,
+    });
+    expect(prepared.ok).toBe(true);
 
     // —— CENÁRIO 6 — gerar link local ——
     metrics.clicks += 1;

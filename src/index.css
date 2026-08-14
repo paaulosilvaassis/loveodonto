@@ -30707,6 +30707,31 @@ a.button {
   margin-bottom: 0.25rem;
 }
 
+.clinical-signature-summary {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.clinical-signature-summary p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #334155;
+}
+
+.clinical-signature-blockers li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+
 .clinical-contract-status-banner {
   display: flex;
   align-items: flex-start;

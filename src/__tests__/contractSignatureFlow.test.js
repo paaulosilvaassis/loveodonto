@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { initDb, resetDb, withDb } from '../db/index.js';
 import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
 import { BUDGET_STATUS } from '../services/clinicalBudgetConstants.js';
+import { prepareClinicalSignaturePackage } from '../services/clinicalSignaturePackageService.js';
 import {
   canSendContractForSignature,
   buildSignatureSendFormDefaults,
@@ -20,6 +21,7 @@ describe('contractSignatureFlow', () => {
       db.tenants = [{ id: 'tenant-1', name: 'Clínica', status: 'active' }];
       db.clinicProfile = {
         id: 'clinic-1',
+        tenant_id: 'tenant-1',
         nomeFantasia: 'Love Odonto',
         razaoSocial: 'Love Odonto LTDA',
         email: 'contato@loveodonto.com',
@@ -81,6 +83,7 @@ describe('contractSignatureFlow', () => {
         quoteSource: 'clinical_budget',
         budgetId: 'budget-1',
         contractNumber: 'CTR-001',
+        tenant_id: 'tenant-1',
         status: CONTRACT_STATUS.GENERATED,
         renderedHtml: '<p>Contrato teste</p>',
         finalContent: '<p>Contrato teste com #pacienteNomeCompleto</p>',
@@ -130,7 +133,15 @@ describe('contractSignatureFlow', () => {
   });
 
   it('sendContractForDigitalSignature cria solicitação e muda status para sent', async () => {
-    const user = { id: 'user-1', tenant_id: 'tenant-1', name: 'Admin' };
+    const user = { id: 'user-1', tenant_id: 'tenant-1', tenantId: 'tenant-1', name: 'Admin' };
+    const prepared = await prepareClinicalSignaturePackage({
+      user,
+      appointmentId: 'apt-1',
+      budgetId: 'budget-1',
+      patientId: 'p1',
+      contractId: 'ctr-1',
+    });
+    expect(prepared.ok).toBe(true);
     const result = await sendContractForDigitalSignature(user, 'ctr-1', {
       patientName: 'Maria Silva',
       patientCpf: '12345678901',

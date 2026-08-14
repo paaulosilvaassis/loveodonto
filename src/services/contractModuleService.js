@@ -335,6 +335,12 @@ export function sendContractForSignature(user, contractId) {
     if (arr[idx].status !== CONTRACT_STATUS.GENERATED) {
       throw new Error('Somente contratos gerados podem ser enviados para assinatura.');
     }
+    if (arr[idx].quoteSource === 'clinical_budget') {
+      const md = arr[idx].metadata || {};
+      if (!md.packageManifestId && !md.packageManifestHash && !md.frozenAt) {
+        throw new Error('Manifest ainda não congelado. Prepare o pacote de assinatura primeiro.');
+      }
+    }
     arr[idx] = {
       ...arr[idx],
       status: CONTRACT_STATUS.SENT,
@@ -396,7 +402,16 @@ export function signContractOnScreen(user, contractId, {
   if (!signatureImageDataUrl) throw new Error('Assinatura é obrigatória.');
   const contract = getGeneratedContract(contractId);
   if (!contract) throw new Error('Contrato não encontrado.');
+  if (contract.status === CONTRACT_STATUS.DRAFT) {
+    throw new Error('Não é possível assinar contrato em rascunho. Finalize o contrato primeiro.');
+  }
   if (contract.status === CONTRACT_STATUS.SIGNED) throw new Error('Contrato já assinado.');
+  if (contract.quoteSource === 'clinical_budget' && contract.status === CONTRACT_STATUS.GENERATED) {
+    const md = contract.metadata || {};
+    if (!md.packageManifestId && !md.packageManifestHash && !md.frozenAt) {
+      throw new Error('Manifest ainda não congelado. Prepare o pacote de assinatura primeiro.');
+    }
+  }
   const now = new Date().toISOString();
   const hash = simpleHash(contract.renderedHtml || contract.finalContent);
   return withDb((db) => {

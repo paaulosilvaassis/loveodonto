@@ -12,6 +12,7 @@ import {
 import SignatureCanvas from './SignatureCanvas.jsx';
 import { signContractOnScreen } from '../../services/contractModuleService.js';
 import { getPatient } from '../../services/patientService.js';
+import { assertClinicalSignatureReady } from '../../contracts/clinicalSignatureReadiness.js';
 
 export default function ContractSignModal({
   open,
@@ -44,6 +45,15 @@ export default function ContractSignModal({
     setBusy(true);
     setError('');
     try {
+      if (contract.quoteSource === 'clinical_budget') {
+        assertClinicalSignatureReady({
+          appointmentId: contract.quoteId,
+          budgetId: contract.budgetId,
+          patientId: contract.patientId,
+          contractId: contract.id,
+          user,
+        }, { forSign: true });
+      }
       const result = signContractOnScreen(user, contract.id, {
         signerName,
         signerCpf,

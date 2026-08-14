@@ -55,6 +55,7 @@ import { ClinicalStepNav } from '../components/clinical/ClinicalStepNav.jsx';
 import { ClinicalStageShell, ClinicalBlock, ClinicalBtn } from '../components/clinical/ClinicalStageShell.jsx';
 import { ClinicalBudgetSection } from '../components/clinical/ClinicalBudgetSection.jsx';
 import { ClinicalContractSection } from '../components/clinical/ClinicalContractSection.jsx';
+import { ClinicalSignatureSection } from '../components/clinical/ClinicalSignatureSection.jsx';
 import {
   CLINICAL_NAV_ITEMS,
   canAccessClinicalSection,
@@ -145,7 +146,9 @@ function ClinicalAppointmentPageContent() {
 
   useEffect(() => {
     if (!sectionParam) return;
-    const normalized = sectionParam === 'contrato' ? 'contratos' : sectionParam;
+    const normalized = sectionParam === 'contrato' ? 'contratos'
+      : sectionParam === 'signature' ? 'assinatura'
+        : sectionParam;
     setActiveSection(normalized);
   }, [sectionParam]);
 
@@ -513,6 +516,21 @@ function ClinicalAppointmentPageContent() {
               />
             ) : (
               <ClinicalSectionLocked message={sectionLockMessage('documentos', workflow)} onGo={() => setActiveSection('orcamento')} />
+            )
+          )}
+          {activeSection === 'assinatura' && (
+            canAccessClinicalSection('assinatura', workflow) ? (
+              <ClinicalSignatureSection
+                appointmentId={appointmentId}
+                patientId={patient?.id}
+                budgetId={viewBudgetId || workflow.budget?.id || null}
+                user={user}
+                professional={professional}
+                onNavigate={setActiveSection}
+                onWorkflowRefresh={bumpWorkflow}
+              />
+            ) : (
+              <ClinicalSectionLocked message={sectionLockMessage('assinatura', workflow)} onGo={() => setActiveSection('documentos')} />
             )
           )}
           {activeSection === 'observacoes' && (

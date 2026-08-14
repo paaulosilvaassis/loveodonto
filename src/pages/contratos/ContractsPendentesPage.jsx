@@ -75,7 +75,7 @@ export default function ContractsPendentesPage() {
                     Finalizar
                   </button>
                 )}
-                {r.status !== CONTRACT_STATUS.SIGNED && (
+                {r.status !== CONTRACT_STATUS.SIGNED && r.status !== CONTRACT_STATUS.DRAFT && (
                   <>
                     <button type="button" className="button small primary" onClick={() => setSignContract(r)}>
                       Assinar agora
