@@ -1,0 +1,38 @@
+{
+  "phase": "PHASE_10_21AF",
+  "projectRef": "uoepkwhqztmsjnzirpev",
+  "method": "mcp_apply_migration_single_sql_039",
+  "migrationName": "app_user_can_access_tenant_text_overload",
+  "migrationFile": "supabase/migrations/039_app_user_can_access_tenant_text_overload.sql",
+  "sha256": "772682012097c12adec50fe2c1782715db8078b0cefa58aca7794fb2b4695a82",
+  "schemaMigrationsVersion": "20260812224439",
+  "applySuccess": true,
+  "foundationMigrationsApplied": false,
+  "probes": {
+    "null_text": false,
+    "empty_text": false,
+    "blank_text": false,
+    "invalid_text": false,
+    "valid_text_unauth": false,
+    "valid_uuid_unauth": false,
+    "text_equals_uuid_unauth": true,
+    "own_tenant_uuid": true,
+    "own_tenant_text": true,
+    "cross_tenant_uuid": false,
+    "cross_tenant_text": false,
+    "own_text_eq_uuid": true,
+    "cross_text_eq_uuid": true,
+    "migration_029_helper_compatibility": "PASS"
+  },
+  "overloadsAfter": ["row_tenant_id text", "row_tenant_id uuid"],
+  "textGrants": ["authenticated", "postgres", "service_role"],
+  "anonExecuteOnText": false,
+  "reconciliation": {
+    "canonicalFileSha256": "aae9c13a656811effb117e2024322be0b713c08669a65c6800318f4333672f2b",
+    "historicalApplySha256": "772682012097c12adec50fe2c1782715db8078b0cefa58aca7794fb2b4695a82",
+    "liveVerification": "unavailable_mcp",
+    "semanticAssessment": "historical_probes_match_current_canonical",
+    "reapplyRequired": false,
+    "reconciledByPhase": "OD-0E/OD-0F"
+  }
+}
