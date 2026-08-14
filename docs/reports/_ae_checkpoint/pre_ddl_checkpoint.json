@@ -1,0 +1,64 @@
+{
+  "phase": "PHASE_10_21AE",
+  "createdAt": "2026-08-12T22:36:27.908Z",
+  "project": {
+    "ref": "uoepkwhqztmsjnzirpev",
+    "name": "love-odonto-prod",
+    "environment": "production"
+  },
+  "method": "schema_metadata_checkpoint_pre_ddl",
+  "note": "Additive migrations; preferred rollback = stop sequence, keep V1, do not drop objects without human decision. No full physical backup API invoked in this runtime.",
+  "authorizedSequence": [
+    "028",
+    "029",
+    "030",
+    "031",
+    "032",
+    "034",
+    "036"
+  ],
+  "skip": {
+    "033": "SKIP_LOCAL_ONLY",
+    "035": "SKIP_STAGING_ONLY"
+  },
+  "checksums": {
+    "028_app_contracts_v2_foundation.sql": "db0a515a6e89bae8b1b6b03e3edf2174d983ce48a09f2ce10c16cbf779cdbc91",
+    "029_app_contracts_v2_rls.sql": "e02207797c2d275f31675b44ce80b5ab8acca72da188dfac10c378e0bfe5e41c",
+    "030_app_contract_ledger.sql": "ad2d20a2e79971a78798fd8f61be42f49ec106b92f824150091597671d0e7722",
+    "031_app_contract_number_sequences.sql": "91107b00f12d313dc51901fa8b3d4364ab5f53908f4f988c99480b6d2b4f88b9",
+    "032_app_signature_sessions_and_challenges.sql": "faa509987ad2bf276d8f441209629aef1dee5d2434d770f9e8dbd85a7dee61ae",
+    "033_app_contract_private_storage_local.sql": "77ca97bf8914643b8e128138a94b9b0d93ed4d6730fdbbc842d0e30899275584",
+    "034_app_signature_delivery_attempts.sql": "3c4dc98836cdc4148f73a9c59d6f3d76f5db1cf76f71e1807d659ac5b480b80c",
+    "035_app_contract_private_storage_staging.sql": "6100e10168b7b7b7894512729f34377ea07af7db9a1e419ebee12546f848b0e9",
+    "036_app_package_manifest_foundation.sql": "026109d37d11315b1a2ffe814efeddb4fc2a0c362fa79dea1694beef60655226"
+  },
+  "precheckRolloutObserved": {
+    "source": "public.feature_flags (read-only)",
+    "contracts_operational_ux_global_enabled": {
+      "scope": "global",
+      "enabled": true
+    },
+    "contracts_operational_ux_enabled": {
+      "scope": "tenant",
+      "scope_ref": "b721c2c9-d924-41ee-8911-dc00c8208326",
+      "enabled": true
+    },
+    "other_contract_tenant_rows": 0,
+    "note": "No PUT performed. Baseline recorded before foundation DDL."
+  },
+  "helpers": {
+    "touch_updated_at": true,
+    "app_user_can_access_tenant": "uuid_only",
+    "app_user_can_access_tenant_text": false,
+    "app_user_is_tenant_admin": "uuid",
+    "app_user_can_read_tenant": false,
+    "blocker": "029 requires app_user_can_access_tenant(text); production lacks it (staging has text+uuid)"
+  },
+  "ddlApplied": false,
+  "gate": "BLOCKED",
+  "v1Health": {
+    "site": "https://loveodonto.com.br/ → expect 200",
+    "railwayHealth": "https://appgestaoodonto-production.up.railway.app/health → saas-admin-api",
+    "rolloutUnauth": "401 Token do app ausente"
+  }
+}

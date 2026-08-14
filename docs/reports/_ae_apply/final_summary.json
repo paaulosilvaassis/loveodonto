@@ -1,0 +1,20 @@
+{
+  "phase": "PHASE_10_21AE",
+  "projectRef": "uoepkwhqztmsjnzirpev",
+  "gate": "READY_FOR_PRODUCTION_TECHNICAL_SMOKE",
+  "prerequisite": "PHASE_10_21AF_039",
+  "results": {
+    "028": "PASS",
+    "029": "PASS",
+    "030": "PASS",
+    "031": "PASS",
+    "032": "PASS",
+    "033": "SKIPPED_LOCAL_ONLY",
+    "034": "PASS",
+    "035": "SKIPPED_STAGING_ONLY",
+    "036": "PASS"
+  },
+  "v2ApproxRows": 0,
+  "rolloutUnchanged": true,
+  "externalCommunication": 0
+}
