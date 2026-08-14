@@ -10,6 +10,8 @@ import {
   evaluateClinicalSignatureReadiness,
   CLINICAL_SIGNATURE_STEP,
 } from '../../contracts/clinicalSignatureReadiness.js';
+import { CLINICAL_SIGNER_ROLE } from '../../contracts/clinicalRequiredSigners.js';
+import { addOptionalWitness } from '../../contracts/clinicalSignatureCeremony.js';
 import { prepareClinicalSignaturePackage } from '../../services/clinicalSignaturePackageService.js';
 import { getPatient } from '../../services/patientService.js';
 import { resolvePatientFullName } from '../../utils/patientIdentity.js';
@@ -24,9 +26,10 @@ export function ClinicalSignatureSection({
   onWorkflowRefresh = null,
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
-  const [signOpen, setSignOpen] = useState(false);
+  const [signTarget, setSignTarget] = useState(null);
   const [sendOpen, setSendOpen] = useState(false);
   const [showPackage, setShowPackage] = useState(true);
+  const [witnessName, setWitnessName] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -79,60 +82,57 @@ export function ClinicalSignatureSection({
   };
 
   const handleBlocker = (blocker) => {
-    if (blocker.action === 'prepare_package') {
-      handlePrepare();
-      return;
-    }
+    if (blocker.action === 'prepare_package') return handlePrepare();
+    if (blocker.action === 'add_witness') return null;
     if (blocker.ctaSection) onNavigate?.(blocker.ctaSection);
   };
 
+  const handleAddWitness = () => {
+    try {
+      addOptionalWitness({
+        user,
+        contractId: readiness.identity?.contractId,
+        patientId,
+        appointmentId,
+        budgetId,
+        name: witnessName,
+      });
+      setWitnessName('');
+      bump();
+      showMsg('Testemunha adicionada. Opcional — não bloqueia a conclusão.');
+    } catch (e) {
+      showMsg(e?.message || 'Não foi possível adicionar testemunha.', 'error');
+    }
+  };
+
   const contract = readiness.contract;
-  const canSign = readiness.canSignNow;
-  const canSend = readiness.canSend;
+  const ceremony = readiness.ceremony;
+  const signers = ceremony?.requiredSigners || [];
+  const canOpenCeremony = readiness.canSignNow;
 
   return (
     <>
       <ClinicalStageShell
-        title="Assinatura"
-        description="Cerimônia de assinatura do pacote documental deste atendimento."
+        title="Assinatura do contrato"
+        description="Cerimônia multi-signer do pacote documental deste atendimento."
         secondaryActions={(
-          <>
-            <ClinicalBtn variant="secondary" icon={FileText} onClick={() => setShowPackage((v) => !v)}>
-              Visualizar pacote
-            </ClinicalBtn>
-            {canSign ? (
-              <ClinicalBtn
-                variant="secondary"
-                icon={PenLine}
-                data-testid="clinical-sign-now-cta"
-                onClick={() => setSignOpen(true)}
-              >
-                Assinar agora
-              </ClinicalBtn>
-            ) : null}
-            {canSend ? (
-              <ClinicalBtn
-                variant="secondary"
-                icon={Send}
-                data-testid="clinical-send-signature-cta"
-                onClick={() => setSendOpen(true)}
-              >
-                Enviar para assinatura
-              </ClinicalBtn>
-            ) : null}
-          </>
+          <ClinicalBtn variant="secondary" icon={FileText} onClick={() => setShowPackage((v) => !v)}>
+            Visualizar pacote
+          </ClinicalBtn>
         )}
       >
-        {toast ? (
-          <div className={`toast ${toast.type}`} role="status">{toast.message}</div>
-        ) : null}
+        {toast ? <div className={`toast ${toast.type}`} role="status">{toast.message}</div> : null}
 
         <div className="clinical-signature-summary" data-testid="clinical-signature-step" data-step={readiness.step}>
           <p><strong>Contrato:</strong> {formatFriendlyContractNumber(contract?.contractNumber, 1)}</p>
           <p><strong>Paciente:</strong> {patientName}</p>
           <p><strong>Status do contrato:</strong> {CONTRACT_STATUS_LABELS[contract?.status] || (contract?.status === CONTRACT_STATUS.GENERATED ? 'Finalizado' : contract?.status || 'Ausente')}</p>
-          <p><strong>Manifest:</strong> {readiness.manifestFrozen ? 'Pronto / congelado' : 'Não congelado'}</p>
+          <p><strong>Manifest:</strong> {readiness.manifestLabel}</p>
           <p><strong>Status:</strong> {readiness.label}</p>
+          {ceremony?.requiredCount ? <p data-testid="clinical-signature-progress"><strong>Progresso:</strong> {ceremony.progressLabel}</p> : null}
+          {readiness.legacySignedBeforeManifest ? (
+            <p className="clinical-signature-legacy">Assinatura anterior ao manifesto/cerimônia multi-signer atual. Evidência histórica preservada.</p>
+          ) : null}
         </div>
 
         {readiness.step !== CLINICAL_SIGNATURE_STEP.SIGNED && readiness.blockers.length > 0 ? (
@@ -149,6 +149,55 @@ export function ClinicalSignatureSection({
           </ul>
         ) : null}
 
+        <div className="clinical-signer-list" data-testid="clinical-signer-list">
+          <h3>Signatários</h3>
+          {signers.map((slot) => (
+            <article key={`${slot.role}-${slot.personId || slot.name}`} className="clinical-signer-card" data-signer-role={slot.role} data-signer-status={slot.status}>
+              <p><strong>{slot.label}</strong> {slot.required ? '' : <span>(opcional)</span>}</p>
+              <p>{slot.name || '—'}</p>
+              {slot.cro ? <p>CRO{slot.uf ? `-${slot.uf}` : ''} {slot.cro}</p> : null}
+              <p>{slot.status === 'signed' ? 'Assinado' : 'Pendente'}</p>
+              {slot.satisfiedBySameProfessional ? (
+                <p>Satisfeito pela mesma assinatura profissional</p>
+              ) : null}
+              {canOpenCeremony && slot.status !== 'signed' && slot.role === CLINICAL_SIGNER_ROLE.PATIENT ? (
+                <>
+                  <ClinicalBtn variant="secondary" icon={PenLine} data-testid="clinical-sign-now-cta" onClick={() => setSignTarget(slot)}>
+                    Assinar agora
+                  </ClinicalBtn>
+                  {readiness.canSend ? (
+                    <ClinicalBtn variant="secondary" icon={Send} data-testid="clinical-send-signature-cta" onClick={() => setSendOpen(true)}>
+                      Enviar para assinatura
+                    </ClinicalBtn>
+                  ) : null}
+                </>
+              ) : null}
+              {canOpenCeremony && slot.status !== 'signed' && slot.role === CLINICAL_SIGNER_ROLE.PROFESSIONAL ? (
+                <ClinicalBtn variant="secondary" icon={PenLine} data-testid="clinical-sign-professional-cta" onClick={() => setSignTarget(slot)}>
+                  Assinar como profissional
+                </ClinicalBtn>
+              ) : null}
+              {canOpenCeremony && slot.status !== 'signed' && slot.role === CLINICAL_SIGNER_ROLE.LEGAL_GUARDIAN ? (
+                <ClinicalBtn variant="secondary" icon={PenLine} onClick={() => setSignTarget(slot)}>
+                  Assinar agora
+                </ClinicalBtn>
+              ) : null}
+            </article>
+          ))}
+          <div className="clinical-signer-card" data-signer-role="WITNESS">
+            <p><strong>Testemunhas</strong> <span>(opcional)</span></p>
+            <input
+              value={witnessName}
+              onChange={(e) => setWitnessName(e.target.value)}
+              placeholder="Nome da testemunha"
+              aria-label="Nome da testemunha"
+            />
+            <ClinicalBtn variant="secondary" onClick={handleAddWitness} data-testid="clinical-add-witness-cta">
+              Adicionar testemunha
+            </ClinicalBtn>
+          </div>
+        </div>
+
         {showPackage ? (
           <ClinicalDocumentPackagePanel
             appointmentId={appointmentId}
@@ -161,21 +210,24 @@ export function ClinicalSignatureSection({
       </ClinicalStageShell>
 
       <ContractSignModal
-        open={signOpen}
-        onOpenChange={setSignOpen}
+        open={Boolean(signTarget)}
+        onOpenChange={(next) => { if (!next) setSignTarget(null); }}
         user={user}
-        contract={canSign ? contract : null}
+        contract={signTarget ? contract : null}
+        signerRole={signTarget?.role}
+        signerPersonId={signTarget?.personId}
+        expectedName={signTarget?.name}
         onSigned={() => {
-          setSignOpen(false);
+          setSignTarget(null);
           bump();
-          showMsg('Contrato assinado.');
+          showMsg('Assinatura registrada.');
         }}
       />
       <SendContractSignatureModal
         open={sendOpen}
         onOpenChange={setSendOpen}
         user={user}
-        contract={canSend ? contract : null}
+        contract={readiness.canSend ? contract : null}
         budget={null}
         professional={professional}
         treatmentName={readiness.package?.treatmentName}

@@ -20,6 +20,9 @@ export default function ContractSignModal({
   user,
   contract,
   onSigned,
+  signerRole = 'PATIENT',
+  signerPersonId = null,
+  expectedName = '',
 }) {
   const [signerName, setSignerName] = useState('');
   const [signerCpf, setSignerCpf] = useState('');
@@ -28,10 +31,13 @@ export default function ContractSignModal({
   const [error, setError] = useState('');
 
   const handleOpen = (next) => {
-    if (next && contract?.patientId) {
-      const p = getPatient(contract.patientId);
-      setSignerName(p?.profile?.full_name || '');
-      setSignerCpf(p?.profile?.cpf || '');
+    if (next) {
+      if (expectedName) setSignerName(expectedName);
+      else if (contract?.patientId) {
+        const p = getPatient(contract.patientId);
+        setSignerName(p?.profile?.full_name || '');
+        setSignerCpf(p?.profile?.cpf || '');
+      }
     }
     if (!next) {
       setError('');
@@ -57,8 +63,11 @@ export default function ContractSignModal({
       const result = signContractOnScreen(user, contract.id, {
         signerName,
         signerCpf,
+        signerRole,
+        signerPersonId: signerPersonId || (signerRole === 'PATIENT' ? contract.patientId : null),
         signatureImageDataUrl: signatureData,
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        packageManifestId: contract.metadata?.packageManifestId || null,
       });
       onSigned?.(result);
       handleOpen(false);

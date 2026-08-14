@@ -8,12 +8,19 @@ import { CONTRACT_STATUS } from './contractConstants.js';
 import { OPERATIONAL_UX_STATUS } from './operationalContractUi.js';
 import { getTreatmentDocumentRequirements } from './treatmentDocumentRequirements.js';
 import { buildDocumentPackageForBudget } from '../services/operationalContractWizardService.js';
+import {
+  evaluateSignatureCeremony,
+  CEREMONY_STATUS,
+  isLegacyClinicalSignature,
+} from './clinicalSignatureCeremony.js';
 
 export const CLINICAL_SIGNATURE_STEP = {
   BLOCKED: 'blocked',
   PREPARING_PACKAGE: 'preparing_package',
   READY_TO_SIGN: 'ready_to_sign',
+  PARTIALLY_SIGNED: 'partially_signed',
   AWAITING_SIGNATURE: 'awaiting_signature',
+  AWAITING_REQUIRED_SIGNERS: 'awaiting_required_signers',
   SIGNED: 'signed',
 };
 
@@ -21,7 +28,9 @@ export const CLINICAL_SIGNATURE_STEP_LABELS = {
   [CLINICAL_SIGNATURE_STEP.BLOCKED]: 'Bloqueado',
   [CLINICAL_SIGNATURE_STEP.PREPARING_PACKAGE]: 'Preparando pacote',
   [CLINICAL_SIGNATURE_STEP.READY_TO_SIGN]: 'Pronto para assinatura',
+  [CLINICAL_SIGNATURE_STEP.PARTIALLY_SIGNED]: 'Assinatura parcial',
   [CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE]: 'Aguardando assinatura',
+  [CLINICAL_SIGNATURE_STEP.AWAITING_REQUIRED_SIGNERS]: 'Aguardando signatários',
   [CLINICAL_SIGNATURE_STEP.SIGNED]: 'Assinado',
 };
 
@@ -146,9 +155,26 @@ export function evaluateClinicalSignatureReadiness({
     });
   }
 
+  const ceremony = evaluateSignatureCeremony({
+    tenantId: expectedTenant,
+    patientId: patientId || docs.patientId,
+    appointmentId,
+    budgetId: budgetId || docs.budgetId,
+    contractId: contract?.id || null,
+  });
+  for (const b of ceremony.blockers || []) blockers.push(b);
+
+  const legacy = isLegacyClinicalSignature(contract);
+  const ceremonyComplete = Boolean(ceremony.allRequiredSatisfied) && !ceremony.rejected;
+  const pendingRequired = (ceremony.requiredSigners || []).some((s) => s.required && s.status !== 'signed');
+
   let step = CLINICAL_SIGNATURE_STEP.BLOCKED;
-  if (SIGNED_STATUSES.has(status)) {
+  if (legacy || (SIGNED_STATUSES.has(status) && ceremonyComplete)) {
     step = CLINICAL_SIGNATURE_STEP.SIGNED;
+  } else if (ceremony.status === CEREMONY_STATUS.PARTIALLY_SIGNED) {
+    step = CLINICAL_SIGNATURE_STEP.PARTIALLY_SIGNED;
+  } else if (ceremony.status === CEREMONY_STATUS.AWAITING_REQUIRED_SIGNERS) {
+    step = CLINICAL_SIGNATURE_STEP.AWAITING_REQUIRED_SIGNERS;
   } else if (AWAITING_STATUSES.has(status) && packageReady) {
     step = CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE;
   } else if (
@@ -157,6 +183,7 @@ export function evaluateClinicalSignatureReadiness({
     && packageReady
     && manifestFrozen
     && docs.requiredApplicableSatisfied
+    && !(ceremony.blockers || []).length
   ) {
     step = CLINICAL_SIGNATURE_STEP.READY_TO_SIGN;
   } else if (contract?.id && FINALIZED_STATUSES.has(status) && !SIGNED_STATUSES.has(status)) {
@@ -164,26 +191,40 @@ export function evaluateClinicalSignatureReadiness({
   }
 
   const signatureReady = step === CLINICAL_SIGNATURE_STEP.READY_TO_SIGN;
-  const canSignNow = signatureReady || step === CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE;
-  const canSend = signatureReady;
+  const inCeremony = [
+    CLINICAL_SIGNATURE_STEP.READY_TO_SIGN,
+    CLINICAL_SIGNATURE_STEP.PARTIALLY_SIGNED,
+    CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE,
+    CLINICAL_SIGNATURE_STEP.AWAITING_REQUIRED_SIGNERS,
+  ].includes(step);
+  const canSignNow = inCeremony && manifestFrozen && pendingRequired && !legacy;
+  const canSend = canSignNow && (ceremony.requiredSigners || []).some((s) => (
+    s.required && s.status !== 'signed' && (s.role === 'PATIENT' || s.role === 'LEGAL_GUARDIAN')
+  ));
+  const manifestLabel = legacy && !manifestFrozen
+    ? 'Assinatura anterior ao manifest atual'
+    : (manifestFrozen ? 'Pronto / congelado' : 'Não congelado');
+
+  let uxStatus = OPERATIONAL_UX_STATUS.WITH_PENDING;
+  if (step === CLINICAL_SIGNATURE_STEP.READY_TO_SIGN) uxStatus = OPERATIONAL_UX_STATUS.READY_TO_SIGN;
+  else if (step === CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE || step === CLINICAL_SIGNATURE_STEP.AWAITING_REQUIRED_SIGNERS) {
+    uxStatus = OPERATIONAL_UX_STATUS.AWAITING_SIGNATURE;
+  } else if (step === CLINICAL_SIGNATURE_STEP.PARTIALLY_SIGNED) uxStatus = OPERATIONAL_UX_STATUS.PARTIALLY_SIGNED;
+  else if (step === CLINICAL_SIGNATURE_STEP.SIGNED) uxStatus = OPERATIONAL_UX_STATUS.SIGNED;
 
   return {
-    ok: signatureReady || step === CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE || step === CLINICAL_SIGNATURE_STEP.SIGNED,
+    ok: inCeremony || step === CLINICAL_SIGNATURE_STEP.SIGNED,
     step,
     label: CLINICAL_SIGNATURE_STEP_LABELS[step],
-    uxStatus: step === CLINICAL_SIGNATURE_STEP.READY_TO_SIGN
-      ? OPERATIONAL_UX_STATUS.READY_TO_SIGN
-      : step === CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE
-        ? OPERATIONAL_UX_STATUS.AWAITING_SIGNATURE
-        : step === CLINICAL_SIGNATURE_STEP.SIGNED
-          ? OPERATIONAL_UX_STATUS.SIGNED
-          : OPERATIONAL_UX_STATUS.WITH_PENDING,
+    uxStatus,
     signatureReady,
     canSignNow,
     canSend,
     contractFinalized: Boolean(contract?.id && FINALIZED_STATUSES.has(status) && status !== CONTRACT_STATUS.DRAFT),
     packageReady,
     manifestFrozen,
+    manifestLabel,
+    legacySignedBeforeManifest: Boolean(legacy && !manifestFrozen),
     documentsSatisfied: Boolean(docs.requiredApplicableSatisfied),
     tcleRequired: Boolean(docs.documents?.tcle?.required),
     tcleApplicable: Boolean(docs.documents?.tcle?.applicable),
@@ -191,6 +232,7 @@ export function evaluateClinicalSignatureReadiness({
     blockers: step === CLINICAL_SIGNATURE_STEP.SIGNED ? [] : uniqueBlockers(blockers),
     contract,
     package: pkg,
+    ceremony,
     identity: {
       tenantId: expectedTenant,
       patientId: patientId || docs.patientId || contract?.patientId || null,

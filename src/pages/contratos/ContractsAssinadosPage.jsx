@@ -9,6 +9,7 @@ import { ContractTable, ContractStatusBadge, formatCtrCurrency } from '../../con
 import ContractDetailModal from '../../components/contracts/ContractDetailModal.jsx';
 import { buildContractViewIdentity } from '../../contracts/contractViewIdentity.js';
 import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
+import { formatCeremonyAdminProgress } from '../../contracts/clinicalSignatureCeremony.js';
 
 export default function ContractsAssinadosPage() {
   const { user } = useAuth();
@@ -32,6 +33,7 @@ export default function ContractsAssinadosPage() {
     patient: c.patientSnapshotJson?.full_name || c.patientId,
     value: formatCtrCurrency(c.totalValueSnapshot),
     signed: c.signedAt ? new Date(c.signedAt).toLocaleDateString('pt-BR') : '—',
+    progress: formatCeremonyAdminProgress(c).label,
   }));
 
   return (
@@ -42,6 +44,7 @@ export default function ContractsAssinadosPage() {
           { key: 'number', label: 'Número' },
           { key: 'patient', label: 'Paciente' },
           { key: 'status', label: 'Status', render: (r) => <ContractStatusBadge status={r.status} /> },
+          { key: 'progress', label: 'Assinaturas' },
           { key: 'value', label: 'Valor' },
           { key: 'signed', label: 'Assinado em' },
           {

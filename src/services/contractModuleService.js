@@ -16,6 +16,14 @@ import {
 } from '../contracts/contractConstants.js';
 import { matchesContractViewIdentity } from '../contracts/contractViewIdentity.js';
 import {
+  evaluateSignatureCeremony,
+  assertSignerAllowed,
+  nextContractStatusAfterStroke,
+  buildCeremonySnapshot,
+  isLegacyClinicalSignature,
+} from '../contracts/clinicalSignatureCeremony.js';
+import { mapLegacySignerRole } from '../contracts/clinicalRequiredSigners.js';
+import {
   createGeneratedContractDraft,
   updateDraftGeneratedContract,
   finalizeGeneratedContract,
@@ -394,9 +402,11 @@ export function signContractOnScreen(user, contractId, {
   signerName,
   signerCpf,
   signerRole = SIGNER_ROLES.PATIENT,
+  signerPersonId = null,
   signatureImageDataUrl,
   ipAddress = '',
   userAgent = '',
+  packageManifestId = null,
 }) {
   if (!signerName?.trim()) throw new Error('Nome do signatário é obrigatório.');
   if (!signatureImageDataUrl) throw new Error('Assinatura é obrigatória.');
@@ -406,11 +416,34 @@ export function signContractOnScreen(user, contractId, {
     throw new Error('Não é possível assinar contrato em rascunho. Finalize o contrato primeiro.');
   }
   if (contract.status === CONTRACT_STATUS.SIGNED) throw new Error('Contrato já assinado.');
-  if (contract.quoteSource === 'clinical_budget' && contract.status === CONTRACT_STATUS.GENERATED) {
+  const tenantId = tenantIdFromUser(user);
+  let rolesSatisfied = [mapLegacySignerRole(signerRole)];
+  let documentTypes = ['CONTRACT_SERVICES'];
+  if (contract.quoteSource === 'clinical_budget') {
     const md = contract.metadata || {};
     if (!md.packageManifestId && !md.packageManifestHash && !md.frozenAt) {
       throw new Error('Manifest ainda não congelado. Prepare o pacote de assinatura primeiro.');
     }
+    if (packageManifestId && md.packageManifestId && packageManifestId !== md.packageManifestId) {
+      throw new Error('Manifest informado não corresponde ao pacote congelado.');
+    }
+    if (isLegacyClinicalSignature(contract)) {
+      throw new Error('Contrato legado já assinado. Não altere a evidência histórica.');
+    }
+    const ceremony = evaluateSignatureCeremony({
+      tenantId,
+      patientId: contract.patientId,
+      appointmentId: contract.quoteId,
+      budgetId: contract.budgetId,
+      contractId: contract.id,
+    });
+    const allowed = assertSignerAllowed(ceremony, {
+      signerRole,
+      signerPersonId,
+      tenantId,
+    });
+    rolesSatisfied = allowed.rolesSatisfied;
+    documentTypes = allowed.slot.documentTypes || documentTypes;
   }
   const now = new Date().toISOString();
   const hash = simpleHash(contract.renderedHtml || contract.finalContent);
@@ -418,29 +451,58 @@ export function signContractOnScreen(user, contractId, {
     if (!Array.isArray(db.contractSignatures)) db.contractSignatures = [];
     const sig = {
       id: createId('csig'),
-      tenant_id: tenantIdFromUser(user),
+      tenant_id: tenantId,
       clinicId: clinicId(),
       contractId,
       signerName: String(signerName).trim(),
       signerCpf: String(signerCpf || '').replace(/\D/g, ''),
-      signerRole,
+      signerRole: mapLegacySignerRole(signerRole),
+      signerPersonId: signerPersonId || null,
+      rolesSatisfied,
       signatureType: SIGNATURE_TYPES.ON_SCREEN,
       signatureImageUrl: signatureImageDataUrl,
       signedAt: now,
       ipAddress: ipAddress || 'local',
       userAgent: userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : ''),
-      evidenceJson: { hash, signedByUserId: user?.id || null },
+      evidenceJson: {
+        hash,
+        signedByUserId: user?.id || null,
+        packageManifestId: contract.metadata?.packageManifestId || null,
+        packageManifestHash: contract.metadata?.packageManifestHash || null,
+        contractVersion: contract.version || 1,
+        documentTypes,
+        rolesSatisfied,
+      },
     };
     db.contractSignatures.push(sig);
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === contractId);
+    let nextStatus = CONTRACT_STATUS.SIGNED;
+    let ceremonySnap = arr[idx].metadata?.signatureCeremony || null;
+    if (arr[idx].quoteSource === 'clinical_budget') {
+      const recount = evaluateSignatureCeremony({
+        tenantId,
+        patientId: arr[idx].patientId,
+        appointmentId: arr[idx].quoteId,
+        budgetId: arr[idx].budgetId,
+        contractId: arr[idx].id,
+      });
+      nextStatus = recount.allRequiredSatisfied
+        ? CONTRACT_STATUS.SIGNED
+        : nextContractStatusAfterStroke(recount, { justSignedRole: signerRole });
+      ceremonySnap = buildCeremonySnapshot(recount);
+    }
     arr[idx] = {
       ...arr[idx],
-      status: CONTRACT_STATUS.SIGNED,
-      signedAt: now,
+      status: nextStatus,
+      signedAt: nextStatus === CONTRACT_STATUS.SIGNED ? now : arr[idx].signedAt || null,
       documentHash: hash,
+      metadata: {
+        ...(arr[idx].metadata || {}),
+        signatureCeremony: ceremonySnap,
+      },
     };
-    registerEvent(user, contractId, 'SIGNED', `Assinado por ${signerName}`, { signatureId: sig.id });
+    registerEvent(user, contractId, 'SIGNED', `Assinado por ${signerName} (${sig.signerRole})`, { signatureId: sig.id, rolesSatisfied });
     return { contract: arr[idx], signature: sig };
   });
 }
@@ -456,9 +518,17 @@ export function signContractViaLink(token, {
   if (!resolved || resolved.expired) throw new Error('Link inválido ou expirado.');
   const { contract, link } = resolved;
   const result = signContractOnScreen(
-    { id: 'public-signer', name: signerName },
+    { id: 'public-signer', name: signerName, tenantId: contract.tenant_id, tenant_id: contract.tenant_id },
     contract.id,
-    { signerName, signerCpf, signatureImageDataUrl, ipAddress, userAgent },
+    {
+      signerName,
+      signerCpf,
+      signerRole: SIGNER_ROLES.PATIENT,
+      signerPersonId: contract.patientId,
+      signatureImageDataUrl,
+      ipAddress,
+      userAgent,
+    },
   );
   withDb((db) => {
     const links = db.contractSignLinks || [];

@@ -56,7 +56,14 @@ describe('contractSignatureFlow', () => {
         cidade: 'Belo Horizonte',
         uf: 'MG',
       }];
-      db.appointments = [{ id: 'apt-1', patientId: 'p1', tenant_id: 'tenant-1' }];
+      db.appointments = [{ id: 'apt-1', patientId: 'p1', tenant_id: 'tenant-1', professionalId: 'col-1' }];
+      db.collaborators = [{
+        id: 'col-1',
+        tenant_id: 'tenant-1',
+        nomeCompleto: 'Dr. RT',
+        conselhoNumero: '99999',
+        conselhoUf: 'MG',
+      }];
       db.clinicalAppointments = [{
         appointmentId: 'apt-1',
         patientId: 'p1',

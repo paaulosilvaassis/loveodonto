@@ -198,6 +198,8 @@ export const DEFAULT_CONTRACT_SETTINGS = {
   allowEditBeforeSign: true,
   requireWitness: false,
   requireResponsibleProfessional: true,
+  requireTechnicalResponsible: false,
+  signingOrder: 'ANY_ORDER',
   pendingAlertDays: 5,
   signatureProvider: 'internal',
   defaultSignatureType: 'electronic_simple',

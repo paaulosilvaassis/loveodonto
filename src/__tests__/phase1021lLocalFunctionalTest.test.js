@@ -23,6 +23,7 @@ import {
   sendContractForSignature,
   getContractBySignToken,
   signContractViaLink,
+  signContractOnScreen,
   finalizeGeneratedContract,
 } from '../services/contractModuleService.js';
 import { getGeneratedContract } from '../services/contractService.js';
@@ -471,9 +472,16 @@ describe('PHASE_10.21L — local functional test execution', () => {
       ipAddress: '127.0.0.1',
       userAgent: 'PHASE_10.21L local test',
     });
-    expect(signed.contract.status).toBe(CONTRACT_STATUS.SIGNED);
+    expect(signed.contract.status).toBe(CONTRACT_STATUS.SIGNED_BY_PATIENT);
     expect(fetchSpy2).not.toHaveBeenCalled();
     fetchSpy2.mockRestore();
+    const dentist = signContractOnScreen(user, contractId, {
+      signerName: 'Dr. Teste Local',
+      signerRole: 'PROFESSIONAL',
+      signerPersonId: 'prof-1021l',
+      signatureImageDataUrl: 'data:image/png;base64,PROF1021L',
+    });
+    expect(dentist.contract.status).toBe(CONTRACT_STATUS.SIGNED);
     metrics.times.signatureMs = Date.now() - tSign;
     mark('scenario8', 'PASS', 'assinatura local sem envio externo');
 

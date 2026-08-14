@@ -88,7 +88,18 @@ function seedScenario({
   withDb((db) => {
     db.tenants = [{ id: tenantId, name: 'Implanprime' }, { id: 'tenant-other-ao', name: 'Outro' }];
     db.clinicProfile = { id: 'clinic-1', tenant_id: tenantId, nomeFantasia: 'Implanprime' };
-    db.clinicDocumentation = { cnpj: '11222333000181', responsavelTecnico: 'Dr AO', croResponsavelTecnico: 'CRO-MG 1' };
+    db.clinicDocumentation = {
+      cnpj: '11222333000181',
+      responsavelTecnico: 'Dra. Juliana de Oliveira Freire',
+      croResponsavelTecnico: 'CRO-MG 27267',
+    };
+    db.collaborators = [{
+      id: 'col-ao',
+      nomeCompleto: 'Juliana de Oliveira Freire',
+      conselhoNumero: '27267',
+      conselhoUf: 'MG',
+      tenant_id: tenantId,
+    }];
     db.clinicAddresses = [{ principal: true, cidade: 'Belo Horizonte', uf: 'MG', logradouro: 'Rua AO', numero: '1' }];
     db.patients = [
       { id: patientId, full_name: 'Paulo Henrique Silva de Assis', tenant_id: tenantId, cpf: '39053344705' },
@@ -317,12 +328,22 @@ describe('PHASE_10.21AO clinical signature step', () => {
     expect(payload).not.toMatch(/IMPLANT_CONSENT|tcle_implante|tcle:/i);
   });
 
-  it('9) assinatura concluída → etapa Assinado', async () => {
+  it('9) paciente sozinho = parcial; paciente+profissional → Assinado', async () => {
     await freezeReadyFluor();
-    const signed = signContractOnScreen(user, CONTRACT_ID, {
+    const partial = signContractOnScreen(user, CONTRACT_ID, {
       signerName: 'Paulo Henrique Silva de Assis',
       signerCpf: '39053344705',
+      signerRole: 'PATIENT',
+      signerPersonId: PATIENT_ID,
       signatureImageDataUrl: 'data:image/png;base64,abc',
+    });
+    expect(partial.contract.status).not.toBe(CONTRACT_STATUS.SIGNED);
+    expect(evalReady().step).toBe(CLINICAL_SIGNATURE_STEP.PARTIALLY_SIGNED);
+    const signed = signContractOnScreen(user, CONTRACT_ID, {
+      signerName: 'Juliana de Oliveira Freire',
+      signerRole: 'PROFESSIONAL',
+      signerPersonId: 'col-ao',
+      signatureImageDataUrl: 'data:image/png;base64,def',
     });
     expect(signed.contract.status).toBe(CONTRACT_STATUS.SIGNED);
     const readiness = evalReady();

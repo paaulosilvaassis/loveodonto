@@ -297,6 +297,12 @@ export function getNavStepStatus(stepId, workflow, activeSection) {
     });
     if (signature.step === CLINICAL_SIGNATURE_STEP.SIGNED) return STEP_STATUS.COMPLETED;
     if (signature.step === CLINICAL_SIGNATURE_STEP.BLOCKED) return STEP_STATUS.BLOCKED;
+    if (
+      signature.step === CLINICAL_SIGNATURE_STEP.PARTIALLY_SIGNED
+      || signature.step === CLINICAL_SIGNATURE_STEP.AWAITING_REQUIRED_SIGNERS
+    ) {
+      return STEP_STATUS.IN_PROGRESS;
+    }
     if (signature.step === CLINICAL_SIGNATURE_STEP.AWAITING_SIGNATURE) {
       return activeSection === stepId ? STEP_STATUS.IN_PROGRESS : STEP_STATUS.PENDING;
     }
