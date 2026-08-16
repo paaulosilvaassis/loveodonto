@@ -44,7 +44,7 @@ export function buildSignatureEmailContent({
     <p style="color:#64748b;font-size:14px">Este link é pessoal, seguro e válido até ${expiryLabel}.</p>
   `.trim();
 
-  return { subject, textBody, htmlBody };
+  return { subject, textBody, htmlBody, patientName, treatmentName, clinicName };
 }
 
 export function resolveClinicEmail(settings = {}) {

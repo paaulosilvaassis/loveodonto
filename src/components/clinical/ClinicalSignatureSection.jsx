@@ -275,10 +275,14 @@ export function ClinicalSignatureSection({
         budget={null}
         professional={professional}
         treatmentName={readiness.package?.treatmentName}
-        onSent={() => {
+        onSent={(result) => {
           setSendOpen(false);
           bump();
-          showMsg('Solicitação registrada. Nenhum envio automático extra.');
+          if (result?.delivery?.simulated) {
+            showMsg('O e-mail não foi enviado.', 'error');
+            return;
+          }
+          showMsg('E-mail de assinatura enviado ao paciente.');
         }}
       />
     </>

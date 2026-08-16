@@ -18,6 +18,7 @@ import {
   resolveRequiredSignatureType,
   sendContractForDigitalSignature,
 } from '../../services/contractSignatureFlowService.js';
+import { PATIENT_EMAIL_REQUIRED_MSG } from '../../services/patientEmail.js';
 import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 
 const FORM_ID = 'send-contract-signature-form';
@@ -48,6 +49,7 @@ export default function SendContractSignatureModal({
       patientId: contract.patientId,
       professional,
       settings,
+      contractId: contract.id,
     });
     setForm({
       ...defaults,
@@ -71,7 +73,11 @@ export default function SendContractSignatureModal({
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!contract?.id || !user) return;
+    if (!contract?.id || !user || busy) return;
+    if (!String(form.patientEmail || '').trim()) {
+      setError(PATIENT_EMAIL_REQUIRED_MSG);
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -91,7 +97,8 @@ export default function SendContractSignatureModal({
         <ModalHeader>
           <ModalTitle>Enviar contrato para assinatura</ModalTitle>
           <ModalDescription>
-            {formatFriendlyContractNumber(contract?.contractNumber, 1)} — o paciente receberá um e-mail com link seguro para assinatura eletrônica.
+            {formatFriendlyContractNumber(contract?.contractNumber, 1)} — informe o e-mail do paciente.
+            O link só é enviado depois que o provedor confirmar o disparo.
           </ModalDescription>
         </ModalHeader>
         <ModalBody>
@@ -125,7 +132,11 @@ export default function SendContractSignatureModal({
                   value={form.patientEmail || ''}
                   onChange={(e) => updateField('patientEmail', e.target.value)}
                   required
+                  aria-required="true"
                 />
+                {!String(form.patientEmail || '').trim() ? (
+                  <span className="block mt-1 text-xs text-[var(--color-error)]">{PATIENT_EMAIL_REQUIRED_MSG}</span>
+                ) : null}
               </label>
               <label className="block text-sm font-medium sm:col-span-2">
                 Telefone / WhatsApp
@@ -200,7 +211,12 @@ export default function SendContractSignatureModal({
           <button type="button" className="button secondary" onClick={() => handleClose(false)} disabled={busy}>
             Cancelar
           </button>
-          <button type="submit" form={FORM_ID} className="button primary" disabled={busy}>
+          <button
+            type="submit"
+            form={FORM_ID}
+            className="button primary"
+            disabled={busy || !String(form.patientEmail || '').trim()}
+          >
             {busy ? 'Enviando…' : 'Enviar para assinatura'}
           </button>
         </ModalFooter>

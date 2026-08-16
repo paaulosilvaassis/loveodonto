@@ -99,6 +99,7 @@ import { createUsersPatchAccessHandler } from './lib/usersPatchAccessApi.js';
 import { createUsersDeleteHandler } from './lib/usersDeleteApi.js';
 import { createCollaboratorAccessToggleHandler } from './lib/collaboratorAccessToggleApi.js';
 import { createContractsGeneratedHandler } from './lib/contractsGeneratedApi.js';
+import { createContractsSignatureInviteEmailHandler } from './lib/contractsSignatureEmailApi.js';
 import { createContractsOperationalRolloutHandlers } from './lib/contractsOperationalRolloutApi.js';
 import { createContractTemplatesV2Handlers } from './lib/contractTemplatesV2Api.js';
 import { createContractsV2Handlers } from './lib/contractsV2Api.js';
@@ -198,6 +199,8 @@ app.get('/health', (_req, res) => {
     features: {
       identityService: true,
       supabaseAuthPublicClient: Boolean(process.env.SUPABASE_ANON_KEY),
+      emailTransactionalConfigured: getEmailConfig().isConfigured,
+      emailTransactionalProvider: getEmailConfig().isConfigured ? getEmailConfig().provider : null,
     },
     contractsV2Storage,
   });
@@ -689,6 +692,7 @@ const handleContractsGenerated = createContractsGeneratedHandler({
   supabase,
   normalizeDatabaseError,
 });
+const handleContractsSignatureInviteEmail = createContractsSignatureInviteEmailHandler();
 
 /** Modelos v2 — flags OFF; sem getService ⇒ storage unavailable se alguém forçar flag. */
 const contractTemplatesV2 = createContractTemplatesV2Handlers({});
@@ -1289,6 +1293,7 @@ app.patch('/internal/app/collaborators/:collaboratorId/access', requireAppUser, 
 
 /** Espelha contrato gerado (IndexedDB â†’ Postgres) quando a migration 006 existir. */
 app.post('/internal/app/contracts/generated', requireAppUser, handleContractsGenerated);
+app.post('/internal/app/contracts/signature-invite-email', requireAppUser, handleContractsSignatureInviteEmail);
 
 /** Contract templates v2 — Phase 10.4 (feature flags OFF por padrão). */
 app.get('/internal/app/contract-templates-v2', requireAppUser, contractTemplatesV2.list);

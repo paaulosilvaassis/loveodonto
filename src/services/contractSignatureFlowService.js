@@ -4,6 +4,7 @@
 import { withDb, loadDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { getPatient } from './patientService.js';
+import { resolvePatientEmail, PATIENT_EMAIL_REQUIRED_MSG } from './patientEmail.js';
 import { formatCivilCpf } from '../utils/patientCpfIdentity.js';
 import { getGeneratedContract } from './contractService.js';
 import {
@@ -62,6 +63,16 @@ const BLOCKED_SEND_STATUSES = new Set([
   CONTRACT_STATUS.CANCELED,
   CONTRACT_STATUS.REFUSED,
   CONTRACT_STATUS.REPLACED,
+  CONTRACT_STATUS.DRAFT,
+  CONTRACT_STATUS.SIGNED_BY_PATIENT,
+]);
+
+const SENDABLE_CONTRACT_STATUSES = new Set([
+  CONTRACT_STATUS.GENERATED,
+  CONTRACT_STATUS.READY_TO_SEND,
+  CONTRACT_STATUS.SENT,
+  CONTRACT_STATUS.VIEWED,
+  CONTRACT_STATUS.SIGNED_BY_CLINIC,
 ]);
 
 /**
@@ -86,7 +97,7 @@ export function resolveBudgetForContractSend(contract, budgetHint = null) {
 export function canSendContractForSignature({ contract, budget }) {
   if (!contract) return false;
   if (BLOCKED_SEND_STATUSES.has(contract.status)) return false;
-  if (contract.status !== CONTRACT_STATUS.GENERATED) return false;
+  if (!SENDABLE_CONTRACT_STATUSES.has(contract.status)) return false;
 
   const resolvedBudget = resolveBudgetForContractSend(contract, budget);
   if (!resolvedBudget) {
@@ -111,6 +122,7 @@ export function buildSignatureSendFormDefaults({
   patientId,
   professional,
   settings,
+  contractId = null,
 }) {
   const bundle = patientId ? getPatient(patientId) : null;
   const profile = bundle?.profile || {};
@@ -130,10 +142,13 @@ export function buildSignatureSendFormDefaults({
     isMinor = age < 18;
   }
 
+  const previous = contractId ? getLatestSignatureRequest(contractId) : null;
+  const previousEmail = previous?.recipients?.patientEmail || '';
+
   return {
     patientName: profile.full_name || '',
     patientCpf: formatCivilCpf(profile.cpf),
-    patientEmail: profile.email || bundle?.patient?.email || '',
+    patientEmail: resolvePatientEmail(bundle) || previousEmail || '',
     patientPhone: mainPhone ? `(${mainPhone.ddd || ''}) ${mainPhone.number || ''}`.trim() : '',
     guardianEmail: isMinor
       ? (profile.guardian_email || profile.legal_guardian_email || '')
@@ -162,6 +177,9 @@ export function resolveRequiredSignatureType({ budget, settings }) {
 }
 
 export async function sendContractForDigitalSignature(user, contractId, formData) {
+  if (!formData?.patientEmail?.trim()) {
+    throw new Error(PATIENT_EMAIL_REQUIRED_MSG);
+  }
   const attachedTcleIds = withDb((db) => {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === contractId);
@@ -180,8 +198,8 @@ export async function sendContractForDigitalSignature(user, contractId, formData
 
   const contract = normalizeContract(getGeneratedContract(contractId));
   if (!contract) throw new Error('Contrato não encontrado.');
-  if (contract.status !== CONTRACT_STATUS.GENERATED) {
-    throw new Error('Somente contratos gerados podem ser enviados para assinatura.');
+  if (!SENDABLE_CONTRACT_STATUSES.has(contract.status)) {
+    throw new Error('Este contrato não pode ser enviado para assinatura remota no status atual.');
   }
   if (contract.quoteSource === 'clinical_budget') {
     assertClinicalSignatureReady({
@@ -215,7 +233,7 @@ export async function sendContractForDigitalSignature(user, contractId, formData
 
   const settings = getContractSettings(user);
   if (!formData.patientEmail?.trim()) {
-    throw new Error('E-mail do paciente é obrigatório.');
+    throw new Error(PATIENT_EMAIL_REQUIRED_MSG);
   }
   if (settings.requireCpfForSignature && !formData.patientCpf?.trim()) {
     throw new Error('CPF do paciente é obrigatório para assinatura.');
@@ -245,21 +263,29 @@ export async function sendContractForDigitalSignature(user, contractId, formData
     expiresAt: request.expiresAt,
   });
 
-  await sendSignatureEmail({ user, request, signUrl, emailContent });
+  const delivery = await sendSignatureEmail({ user, request, signUrl, emailContent });
+  if (!delivery?.ok && delivery?.delivered !== true) {
+    throw new Error('O e-mail de assinatura não foi enviado.');
+  }
+  if (delivery?.simulated === true) {
+    throw new Error('O envio de e-mail ainda não está ativo. O link não foi enviado.');
+  }
 
   registerContractEvent(user, contractId, 'SENT', 'Contrato enviado para assinatura digital', {
     requestId: request.id,
-    provider: request.provider,
+    provider: delivery.provider || request.provider,
     recipientEmail: formData.patientEmail,
     documentHash,
     expiresAt: request.expiresAt,
+    messageId: delivery.messageId || null,
+    reused: Boolean(request && signUrl),
   });
 
   if (contract.patientId) {
     notifyClinicalBudgetUpdated(contract.patientId);
   }
 
-  return { request, signUrl, emailContent };
+  return { request, signUrl, emailContent, delivery };
 }
 
 export function applySignatureCompletion({

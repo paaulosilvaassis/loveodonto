@@ -116,7 +116,7 @@ describe('PHASE_10.21AD — SEND_SIGNATURE_CTA_RELOAD', () => {
     expect(canSendContractForSignature({ contract, budget: workflow.budget })).toBe(true);
   });
 
-  it('contrato SENT não exibe CTA de envio', () => {
+  it('contrato SENT permite reenvio do convite', () => {
     seedEligibleGeneratedContract();
     withDb((db) => {
       const row = (db.generatedContracts || []).find((c) => c.id === CONTRACT);
@@ -124,6 +124,6 @@ describe('PHASE_10.21AD — SEND_SIGNATURE_CTA_RELOAD', () => {
       return db;
     });
     const contract = getContractStatusForQuote(APPT, 'clinical_budget', BUDGET, PATIENT);
-    expect(canSendContractForSignature({ contract, budget: null })).toBe(false);
+    expect(canSendContractForSignature({ contract, budget: null })).toBe(true);
   });
 });

@@ -1,0 +1,99 @@
+/**
+ * Dispara o e-mail de convite de assinatura pela Admin API (Resend/SendGrid).
+ * Nunca trata simulação local como enviado.
+ */
+import { getPlatformAccessToken } from '../auth/saasSessionResolver.js';
+import { assertAdminApiFetchAllowed, buildAdminApiUrl } from '../config/adminApiBase.js';
+
+export const SIGNATURE_INVITE_EMAIL_PATH = '/internal/app/contracts/signature-invite-email';
+
+export const EMAIL_PROVIDER_NOT_CONFIGURED_MSG =
+  'O envio de e-mail de assinatura não está configurado. O link não foi enviado.';
+
+export const EMAIL_PROVIDER_REJECTED_MSG =
+  'O provedor de e-mail recusou o disparo. O link não foi enviado.';
+
+function relativeSignPath(signUrl) {
+  const raw = String(signUrl || '').trim();
+  if (raw.startsWith('/assinatura/')) return raw.split('?')[0];
+  try {
+    const parsed = new URL(raw);
+    if (parsed.pathname.startsWith('/assinatura/')) return parsed.pathname;
+  } catch {
+    /* ignore */
+  }
+  return '';
+}
+
+export async function deliverSignatureInviteEmail({
+  to,
+  patientName,
+  treatmentName,
+  clinicName,
+  signUrl,
+  expiresAt,
+  contractNumber,
+  requestId,
+}) {
+  const email = String(to || '').trim();
+  if (!email.includes('@')) {
+    const err = new Error('Informe o e-mail do paciente para enviar o link de assinatura.');
+    err.code = 'PATIENT_EMAIL_MISSING';
+    throw err;
+  }
+  const signPath = relativeSignPath(signUrl);
+  if (!signPath) {
+    const err = new Error('Link de assinatura inválido.');
+    err.code = 'INVALID_SIGN_PATH';
+    throw err;
+  }
+
+  assertAdminApiFetchAllowed();
+  const token = await getPlatformAccessToken();
+  if (!token) throw new Error('Sessão ausente.');
+
+  let response;
+  try {
+    response = await fetch(buildAdminApiUrl(SIGNATURE_INVITE_EMAIL_PATH), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        to: email,
+        patientName,
+        treatmentName,
+        clinicName,
+        signPath,
+        expiresAt,
+        contractNumber,
+        requestId,
+      }),
+    });
+  } catch (err) {
+    const error = new Error('Não foi possível conectar ao serviço de e-mail.');
+    error.code = 'EMAIL_REQUEST_FAILED';
+    error.cause = err;
+    throw error;
+  }
+
+  const json = await response.json().catch(() => ({}));
+  if (response.status === 503 || json?.code === 'EMAIL_PROVIDER_NOT_CONFIGURED') {
+    const error = new Error(EMAIL_PROVIDER_NOT_CONFIGURED_MSG);
+    error.code = 'EMAIL_PROVIDER_NOT_CONFIGURED';
+    throw error;
+  }
+  if (!response.ok || json?.ok !== true || json?.simulated === true) {
+    const error = new Error(json?.error || EMAIL_PROVIDER_REJECTED_MSG);
+    error.code = json?.code || 'EMAIL_PROVIDER_REJECTED';
+    error.status = response.status;
+    throw error;
+  }
+  return {
+    ok: true,
+    simulated: false,
+    provider: json.provider || null,
+    messageId: json.messageId || null,
+  };
+}

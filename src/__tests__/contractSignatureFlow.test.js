@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { initDb, resetDb, withDb } from '../db/index.js';
 import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
 import { BUDGET_STATUS } from '../services/clinicalBudgetConstants.js';
@@ -11,6 +11,18 @@ import {
 import { buildSignatureEmailContent } from '../services/signatureEmailService.js';
 import { mapWebhookEventToContractStatus } from '../services/signatureProviderService.js';
 import { SIGNATURE_WEBHOOK_EVENTS } from '../contracts/contractConstants.js';
+
+vi.mock('../services/signatureInviteEmailService.js', () => ({
+  deliverSignatureInviteEmail: vi.fn(async () => ({
+    ok: true,
+    simulated: false,
+    provider: 'resend',
+    messageId: 'msg_test',
+  })),
+  SIGNATURE_INVITE_EMAIL_PATH: '/internal/app/contracts/signature-invite-email',
+  EMAIL_PROVIDER_NOT_CONFIGURED_MSG: 'O envio de e-mail de assinatura não está configurado. O link não foi enviado.',
+  EMAIL_PROVIDER_REJECTED_MSG: 'O provedor de e-mail recusou o disparo. O link não foi enviado.',
+}));
 
 describe('contractSignatureFlow', () => {
   beforeEach(async () => {
@@ -120,7 +132,12 @@ describe('contractSignatureFlow', () => {
     expect(canSendContractForSignature({
       contract: { status: CONTRACT_STATUS.SENT },
       budget: approvedBudget,
-    })).toBe(false);
+    })).toBe(true);
+
+    expect(canSendContractForSignature({
+      contract: { status: CONTRACT_STATUS.SIGNED_BY_CLINIC },
+      budget: approvedBudget,
+    })).toBe(true);
 
     expect(canSendContractForSignature({
       contract: { status: CONTRACT_STATUS.GENERATED },

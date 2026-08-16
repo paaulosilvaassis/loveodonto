@@ -12,6 +12,7 @@ import {
 import { buildSignatureEmailContent } from './signatureEmailService.js';
 import { logSignatureAudit } from './contractSignatureAuditService.js';
 import { getGeneratedContract } from './contractService.js';
+import { deliverSignatureInviteEmail } from './signatureInviteEmailService.js';
 
 function simpleHash(text) {
   let h = 5381;
@@ -28,6 +29,37 @@ function clinicId() {
 
 function tenantIdFromUser(user) {
   return user?.tenantId || user?.tenant_id || null;
+}
+
+function isReusableRequest(request, now = Date.now()) {
+  if (!request || !['pending', 'sent'].includes(String(request.status || ''))) return false;
+  if (!request.expiresAt) return true;
+  return new Date(request.expiresAt).getTime() > now;
+}
+
+function preserveContractStatusAfterInvite(currentStatus) {
+  const keep = new Set([
+    CONTRACT_STATUS.SIGNED_BY_CLINIC,
+    CONTRACT_STATUS.SIGNED_BY_PATIENT,
+    CONTRACT_STATUS.SIGNED,
+    CONTRACT_STATUS.COMPLETED,
+  ]);
+  if (keep.has(currentStatus)) return currentStatus;
+  return CONTRACT_STATUS.SENT;
+}
+
+function findReusableSignatureArtifacts(db, contractId) {
+  const requests = db.contractSignatureRequests || [];
+  const reusable = requests
+    .filter((row) => row.contractId === contractId && isReusableRequest(row))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const request = reusable[0] || null;
+  if (!request) return null;
+  const link = (db.contractSignLinks || []).find(
+    (row) => row.requestId === request.id && row.status === 'pending',
+  ) || null;
+  if (!link?.token) return null;
+  return { request, link, signUrl: `/assinatura/${link.token}`, documentHash: request.documentHash, reused: true };
 }
 
 function notImplemented(provider) {
@@ -49,6 +81,26 @@ const internalProvider = {
     const documentHash = simpleHash(contract.renderedHtml || contract.finalContent);
 
     const created = withDb((db) => {
+      const reused = findReusableSignatureArtifacts(db, contract.id);
+      if (reused) {
+        const requests = db.contractSignatureRequests || [];
+        const idx = requests.findIndex((row) => row.id === reused.request.id);
+        if (idx >= 0) {
+          requests[idx] = {
+            ...requests[idx],
+            recipients: {
+              ...(requests[idx].recipients || {}),
+              patientEmail: payload.patientEmail || requests[idx].recipients?.patientEmail,
+              patientPhone: payload.patientPhone || requests[idx].recipients?.patientPhone,
+              patientName: payload.patientName || requests[idx].recipients?.patientName,
+              patientCpf: payload.patientCpf || requests[idx].recipients?.patientCpf,
+            },
+          };
+          reused.request = requests[idx];
+        }
+        return reused;
+      }
+
       const request = {
         id: createId('csreq'),
         tenant_id: tenantIdFromUser(user),
@@ -106,14 +158,13 @@ const internalProvider = {
       if (idx >= 0) {
         arr[idx] = {
           ...arr[idx],
-          status: CONTRACT_STATUS.SENT,
           signatureRequestId: request.id,
           documentHash,
           lockedAt: arr[idx].lockedAt || new Date().toISOString(),
         };
       }
 
-      return { request, link, signUrl: `/assinatura/${token}`, documentHash };
+      return { request, link, signUrl: `/assinatura/${token}`, documentHash, reused: false };
     });
 
     // OPTION_C freeze — somente STAGING_TEST_MODE (bridge oficial, sem segundo motor).
@@ -137,20 +188,32 @@ const internalProvider = {
   },
 
   async sendSignatureEmail({ user, request, signUrl, emailContent }) {
+    const recipient = request.recipients?.patientEmail;
+    const delivery = await deliverSignatureInviteEmail({
+      to: recipient,
+      patientName: request.recipients?.patientName,
+      treatmentName: emailContent?.treatmentName,
+      clinicName: emailContent?.clinicName,
+      signUrl,
+      expiresAt: request.expiresAt,
+      contractNumber: request.contractNumber,
+      requestId: request.id,
+    });
+
     logSignatureAudit({
       contractId: request.contractId,
       requestId: request.id,
       action: 'email_sent',
       user,
       payload: {
-        provider: SIGNATURE_PROVIDERS.INTERNAL,
-        recipientEmail: request.recipients?.patientEmail,
+        provider: delivery.provider || SIGNATURE_PROVIDERS.INTERNAL,
+        recipientEmail: recipient,
         documentHash: request.documentHash,
         metadata: {
-          subject: emailContent.subject,
-          to: request.recipients?.patientEmail,
-          cc: [request.recipients?.guardianEmail, request.recipients?.clinicEmail]
-            .filter(Boolean),
+          subject: emailContent?.subject,
+          to: recipient,
+          messageId: delivery.messageId || null,
+          simulated: false,
         },
       },
     });
@@ -163,10 +226,20 @@ const internalProvider = {
           ...requests[idx],
           status: 'sent',
           sentAt: new Date().toISOString(),
-          lastEmailSubject: emailContent.subject,
+          lastEmailSubject: emailContent?.subject,
+          lastEmailProvider: delivery.provider || null,
+          lastEmailMessageId: delivery.messageId || null,
         };
       }
-      return { delivered: true, simulated: true, signUrl };
+      const arr = db.generatedContracts || [];
+      const cIdx = arr.findIndex((c) => c.id === request.contractId);
+      if (cIdx >= 0) {
+        arr[cIdx] = {
+          ...arr[cIdx],
+          status: preserveContractStatusAfterInvite(arr[cIdx].status),
+        };
+      }
+      return { delivered: true, ok: true, simulated: false, provider: delivery.provider, messageId: delivery.messageId, signUrl };
     });
   },
 

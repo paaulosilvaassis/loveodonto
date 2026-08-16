@@ -499,11 +499,15 @@ export function ClinicalContractSection({
     setSignatureModalOpen(true);
   };
 
-  const handleSignatureSent = () => {
+  const handleSignatureSent = (result) => {
     setHistoryKey((k) => k + 1);
     notifyClinicalBudgetUpdated(patientId);
     onWorkflowRefresh?.();
-    showToast('Contrato enviado para assinatura por e-mail.');
+    if (result?.delivery?.simulated) {
+      showToast('O e-mail não foi enviado. Atualize a tela antes de tentar novamente.', 'error');
+      return;
+    }
+    showToast('E-mail de assinatura enviado ao paciente.');
   };
 
   const handleCancelContract = () => {
