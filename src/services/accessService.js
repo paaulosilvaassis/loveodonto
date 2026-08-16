@@ -6,7 +6,7 @@
 import { loadDb, peekDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { logAction } from './logService.js';
-import { buildPermissionsCatalog } from '../permissions/catalog.js';
+import { buildPermissionsCatalog, findOfficialPermission } from '../permissions/catalog.js';
 import { ROLE_DEFAULT_PERMISSIONS } from '../permissions/roleDefaults.js';
 import { getDefaultTenant } from './tenantService.js';
 
@@ -52,10 +52,10 @@ export function getPermissionsCatalog() {
 }
 
 function findCatalogPermission(moduleKey, actionKey) {
+  const official = findOfficialPermission(moduleKey, actionKey);
+  if (official) return official;
   const fromDb = getPermissionsCatalog();
-  const found = fromDb.find((p) => p.module_key === moduleKey && p.action_key === actionKey);
-  if (found) return found;
-  return buildPermissionsCatalog().find((p) => p.module_key === moduleKey && p.action_key === actionKey);
+  return fromDb.find((p) => p.module_key === moduleKey && p.action_key === actionKey) || null;
 }
 
 /**
@@ -79,7 +79,7 @@ export function can(user, moduleKey, actionKey) {
 
   const rolePerms = getRolePermissionIds(db, u.role);
   const baseAllowed = rolePerms.includes(pid);
-  const useCustomOverrides = u.has_custom_permissions !== false;
+  const useCustomOverrides = u.has_custom_permissions === true;
   const saasOverrides = useCustomOverrides
     && u?.permissionOverrides
     && typeof u.permissionOverrides === 'object'
@@ -127,8 +127,11 @@ function resolveEffectiveUser(db, user) {
 }
 
 function getRolePermissionIds(db, role) {
-  const defaults = ROLE_DEFAULT_PERMISSIONS[role] || [];
-  const fromDb = (db.rolePermissions || []).filter((r) => r.role === role).map((r) => r.permission_id);
+  const roleNorm = String(role || '').trim().toLowerCase();
+  const defaults = ROLE_DEFAULT_PERMISSIONS[roleNorm] || [];
+  const fromDb = (db.rolePermissions || [])
+    .filter((r) => String(r.role || '').trim().toLowerCase() === roleNorm)
+    .map((r) => r.permission_id);
   if (!fromDb.length) return defaults;
   if (!defaults.length) return fromDb;
   return [...new Set([...defaults, ...fromDb])];

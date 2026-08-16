@@ -283,6 +283,29 @@ export function permissionId(moduleKey, actionKey) {
   return `perm-${moduleKey}-${actionKey}`;
 }
 
+let officialCatalogCache = null;
+let officialCatalogByKey = null;
+
+function ensureOfficialCatalogIndex() {
+  if (officialCatalogCache && officialCatalogByKey) return;
+  officialCatalogCache = buildPermissionsCatalog();
+  officialCatalogByKey = new Map(
+    officialCatalogCache.map((perm) => [`${perm.module_key}:${perm.action_key}`, perm]),
+  );
+}
+
+/** Catálogo oficial memoizado (SSOT de pid). Sem clone. */
+export function getOfficialPermissionsCatalog() {
+  ensureOfficialCatalogIndex();
+  return officialCatalogCache;
+}
+
+/** Resolve pid oficial por module_key + action_key. */
+export function findOfficialPermission(moduleKey, actionKey) {
+  ensureOfficialCatalogIndex();
+  return officialCatalogByKey.get(`${moduleKey}:${actionKey}`) || null;
+}
+
 /**
  * Gera lista plana de permissões para o catálogo (id, module_key, module_label, action_key, description).
  * Usa IDs estáveis perm-{module_key}-{action_key} para role_permissions e user_permissions.

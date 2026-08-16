@@ -19,13 +19,22 @@ export function canSeeNavItem(user, item, modules, flags) {
   }
   const roleAllowed = isNavRoleAllowed(user, item.rolesAllowed);
   const moduleAllowed = canAccessRoute(item.route, modules, flags);
-  const permission = resolveRoutePermission(item.route);
-  const permissionAllowed = isRoutePermissionAllowed(user, permission, canByPermission);
+  const routePermission = resolveRoutePermission(item.route);
+  const routeAllowed = isRoutePermissionAllowed(user, routePermission, canByPermission);
+  const extraAllowed = !item.permission
+    || item.permission === routePermission
+    || isRoutePermissionAllowed(user, item.permission, canByPermission);
+  const permissionAllowed = routeAllowed && extraAllowed;
   const isMaster = isPrivilegedUser(user);
   const allowed = isMaster
     ? moduleAllowed
     : moduleAllowed && permissionAllowed;
   return { allowed, roleAllowed, moduleAllowed, permissionAllowed };
+}
+
+/** Atalho de Dashboard usa o mesmo reader da sidebar/guard (rota + permission SSOT). */
+export function canSeeQuickAction(user, action, modules, flags) {
+  return canSeeNavItem(user, action, modules, flags);
 }
 
 /**

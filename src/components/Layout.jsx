@@ -54,6 +54,13 @@ export default function Layout({ children }) {
 
   // Tela de abertura do app (uma vez por sessão, 30 variações por dia do mês)
   const [showOpening, setShowOpening] = useState(() => shouldShowOpening());
+  const [rbacEpoch, setRbacEpoch] = useState(0);
+
+  useEffect(() => {
+    const bump = () => setRbacEpoch((n) => n + 1);
+    window.addEventListener('db:updated', bump);
+    return () => window.removeEventListener('db:updated', bump);
+  }, []);
 
   // Toast global (usado pelo rodapé de importação)
   const [globalToast, setGlobalToast] = useState(null);
@@ -106,14 +113,14 @@ export default function Layout({ children }) {
   // Filtra itens permitidos para o usuário atual
   const visibleItems = useMemo(() => {
     return activeCategory.items.filter((item) => canSeeNavItem(user, item, tenant.modules, tenant.flags).allowed);
-  }, [activeCategory, user, tenant.modules, tenant.flags]);
+  }, [activeCategory, user, tenant.modules, tenant.flags, rbacEpoch]);
 
   const visibleCategories = useMemo(() => {
     return navCategories.filter((category) => {
       const allowedItems = category.items.filter((item) => canSeeNavItem(user, item, tenant.modules, tenant.flags).allowed);
       return allowedItems.length > 0;
     });
-  }, [user, tenant.modules, tenant.flags]);
+  }, [user, tenant.modules, tenant.flags, rbacEpoch]);
 
   useEffect(() => {
     if (!visibleCategories.length) return;

@@ -29,7 +29,9 @@ import { loadDbAsync, loadDb } from '../db/index.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
 import { getTicketsByUser } from '../services/supportTicketService.js';
 import { getNomeUsuario } from '../services/userProfileService.js';
-import { can as canByPermission } from '../permissions/permissions.js';
+import { canSeeQuickAction } from '../navigation/navAccess.js';
+import { DASHBOARD_QUICK_ACTIONS } from '../navigation/dashboardQuickActions.js';
+import { useTenant } from '../tenant/useTenant.js';
 import {
   getDashboardMetrics,
   getDashboardChartData,
@@ -73,6 +75,7 @@ function DashboardChartTooltip({ active, payload, label }) {
 export default function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const tenant = useTenant();
   const clinic = useClinicSummary();
   const kpiGridRef = useRef(null);
   const [db, setDb] = useState(null);
@@ -214,64 +217,21 @@ export default function DashboardPage() {
     );
   }
 
-  const quickActions = [
-    {
-      id: 'pacientes',
-      title: 'Pacientes',
-      icon: Users,
-      route: '/pacientes/busca',
-      gradient: 'linear-gradient(135deg, #6A00FF 0%, #2563EB 100%)',
-    },
-    {
-      id: 'agenda',
-      title: 'Agenda',
-      icon: Calendar,
-      route: '/gestao/agenda',
-      gradient: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)',
-    },
-    {
-      id: 'odontograma',
-      title: 'Odontograma',
-      icon: FileText,
-      route: '/pacientes/busca',
-      gradient: 'linear-gradient(135deg, #EC4899 0%, #6A00FF 100%)',
-    },
-    {
-      id: 'orcamentos',
-      title: 'Orçamentos',
-      icon: Receipt,
-      route: '/gestao/crm',
-      gradient: 'linear-gradient(135deg, #F59E0B 0%, #EC4899 100%)',
-    },
-    {
-      id: 'financeiro',
-      title: 'Financeiro',
-      icon: DollarSign,
-      route: '/financeiro/contas-receber',
-      gradient: 'linear-gradient(135deg, #10B981 0%, #2563EB 100%)',
-    },
-    {
-      id: 'relatorios',
-      title: 'Relatórios',
-      icon: BarChart3,
-      route: '/financeiro/relatorios',
-      gradient: 'linear-gradient(135deg, #8B5CF6 0%, #6A00FF 100%)',
-    },
-  ];
-
-  const quickActionPermissionMap = {
-    pacientes: 'patients:view',
-    agenda: 'agenda:view',
-    odontograma: 'prontuario_atendimento:view',
-    orcamentos: 'pipeline_crm:view',
-    financeiro: 'financeiro_relatorios:view',
-    relatorios: 'relatorios:view',
+  const quickActionChrome = {
+    pacientes: { icon: Users, gradient: 'linear-gradient(135deg, #6A00FF 0%, #2563EB 100%)' },
+    agenda: { icon: Calendar, gradient: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)' },
+    odontograma: { icon: FileText, gradient: 'linear-gradient(135deg, #EC4899 0%, #6A00FF 100%)' },
+    orcamentos: { icon: Receipt, gradient: 'linear-gradient(135deg, #F59E0B 0%, #EC4899 100%)' },
+    financeiro: { icon: DollarSign, gradient: 'linear-gradient(135deg, #10B981 0%, #2563EB 100%)' },
+    relatorios: { icon: BarChart3, gradient: 'linear-gradient(135deg, #8B5CF6 0%, #6A00FF 100%)' },
   };
-  const visibleQuickActions = quickActions.filter((action) => {
-    const permission = quickActionPermissionMap[action.id];
-    if (!permission) return true;
-    return canByPermission(currentUser, permission);
-  });
+  const quickActions = DASHBOARD_QUICK_ACTIONS.map((action) => ({
+    ...action,
+    ...quickActionChrome[action.id],
+  }));
+  const visibleQuickActions = quickActions.filter((action) => (
+    canSeeQuickAction(user, action, tenant.modules, tenant.flags).allowed
+  ));
 
   const formatCurrency = (value) => Number(value || 0).toLocaleString('pt-BR', {
     style: 'currency',
