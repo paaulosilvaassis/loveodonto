@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getInviteRedirectTo as resolveInviteRedirectTo, getEmailConfig } from './email/emailConfig.js';
+import { getInviteRedirectTo as resolveInviteRedirectTo, getEmailConfig, getEmailTransportInventory } from './email/emailConfig.js';
 import { getPasswordResetRedirectTo } from './email/emailConfig.js';
 import { logAccessEmailAudit } from './email/accessEmailAudit.js';
 import { createIdentityService } from './identity/IdentityService.js';
@@ -199,8 +199,11 @@ app.get('/health', (_req, res) => {
     features: {
       identityService: true,
       supabaseAuthPublicClient: Boolean(process.env.SUPABASE_ANON_KEY),
+      authEmailConfigured: getEmailTransportInventory().authEmailConfigured,
+      authEmailTransport: 'supabase_auth_smtp',
       emailTransactionalConfigured: getEmailConfig().isConfigured,
       emailTransactionalProvider: getEmailConfig().isConfigured ? getEmailConfig().provider : null,
+      directSmtpConfigured: getEmailTransportInventory().directSmtpConfigured,
     },
     contractsV2Storage,
   });

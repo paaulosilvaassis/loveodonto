@@ -63,6 +63,8 @@ describe('signature invite email API', () => {
     await handler({ body: { to: 'a@b.com', signPath: '/assinatura/token-1' } }, res);
     expect(res.statusCode).toBe(503);
     expect(res.body.code).toBe('EMAIL_PROVIDER_NOT_CONFIGURED');
+    expect(String(res.body.error || '')).toMatch(/Supabase Auth/i);
+    expect(String(res.body.error || '')).not.toMatch(/EMAIL_API_KEY|Resend/i);
     expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
 
@@ -85,6 +87,18 @@ describe('signature invite email API', () => {
     const arg = sendTransactionalEmail.mock.calls[0][0];
     expect(arg.to).toBe('paciente@example.invalid');
     expect(String(arg.html || '')).toContain('/assinatura/csgn-ok');
+  });
+
+  it('F) rejeição do transporte vira 502 e não delivered', async () => {
+    sendTransactionalEmail.mockRejectedValueOnce(new Error('HTTP 429'));
+    const handler = createContractsSignatureInviteEmailHandler();
+    const res = mockRes();
+    await handler({
+      body: { to: 'paciente@example.invalid', signPath: '/assinatura/csgn-ok' },
+    }, res);
+    expect(res.statusCode).toBe(502);
+    expect(res.body.ok).not.toBe(true);
+    expect(res.body.code).toBe('EMAIL_PROVIDER_REJECTED');
   });
 
   it('escapa HTML do nome do paciente no template', async () => {

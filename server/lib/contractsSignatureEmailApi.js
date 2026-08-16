@@ -1,6 +1,8 @@
 /**
  * POST /internal/app/contracts/signature-invite-email
- * Envia o convite de assinatura via provedor transacional (Resend/SendGrid).
+ * E-mail transacional genérico (HTML do contrato). NÃO usa inviteUserByEmail.
+ * O SMTP do Supabase Auth cobre só templates de autenticação.
+ * Fail-closed se não houver transporte transacional genérico no Railway.
  * Não aceita HTML arbitrário do cliente. Não registra a URL completa em logs.
  */
 import { getEmailConfig } from '../email/emailConfig.js';
@@ -34,7 +36,7 @@ export function createContractsSignatureInviteEmailHandler() {
       const config = getEmailConfig();
       if (!config.isConfigured) {
         return res.status(503).json({
-          error: 'Provedor de e-mail não configurado. Defina EMAIL_API_KEY e EMAIL_FROM_ADDRESS.',
+          error: 'Não há transporte transacional genérico no Railway. O SMTP do Supabase Auth envia apenas e-mails de autenticação e não pode enviar o link de assinatura.',
           code: 'EMAIL_PROVIDER_NOT_CONFIGURED',
         });
       }

@@ -1,5 +1,6 @@
 /**
- * Dispara o e-mail de convite de assinatura pela Admin API (Resend/SendGrid).
+ * Dispara o e-mail de convite de assinatura pela Admin API.
+ * Transporte: e-mail transacional genérico do backend — não usa convite Auth.
  * Nunca trata simulação local como enviado.
  */
 import { getPlatformAccessToken } from '../auth/saasSessionResolver.js';

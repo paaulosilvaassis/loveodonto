@@ -1,9 +1,13 @@
 import { getEmailConfig } from './emailConfig.js';
 
+/**
+ * Overlay HTTP opcional. Não é o SSOT de convites (esse é o SMTP do Supabase Auth).
+ * Fail-closed: nunca retorna delivered sem transporte configurado.
+ */
 export async function sendTransactionalEmail({ to, subject, text, html }) {
   const config = getEmailConfig();
   if (!config.isConfigured) {
-    throw new Error('Provedor de e-mail não configurado (EMAIL_API_KEY / EMAIL_FROM_ADDRESS).');
+    throw new Error('Transporte transacional genérico ausente (EMAIL_API_KEY / EMAIL_FROM_ADDRESS).');
   }
 
   if (config.provider === 'sendgrid') {
