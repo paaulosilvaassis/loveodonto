@@ -463,7 +463,7 @@ describe('PHASE_10.21AM document eligibility SSOT', () => {
     seedScenario();
     const existing = getContractStatusForQuote(APPT_ID, 'clinical_budget', BUDGET_ID, PATIENT_ID);
     expect(existing.contractNumber).toBe('CTR-2026-00001');
-    expect(() => createContractDraft(user, {
+    const reused = createContractDraft(user, {
       quoteSource: 'clinical_budget',
       quoteId: APPT_ID,
       patientId: PATIENT_ID,
@@ -471,7 +471,8 @@ describe('PHASE_10.21AM document eligibility SSOT', () => {
       templateId: loadDb().contractTemplates.find((t) => t.type === 'system_default').id,
       editedHtml: '<p>x</p>',
       skipHashtagValidation: true,
-    })).toThrow(/Já existe contrato ativo/);
+    });
+    expect(reused.id).toBe(existing.id);
     expect((loadDb().generatedContracts || []).filter((c) => c.quoteId === APPT_ID)).toHaveLength(1);
   });
 

@@ -274,7 +274,8 @@ describe('PHASE_10.21AL contract edit state regression', () => {
     const first = createDraftForBudget(budget);
     const again = getContractStatusForQuote(APPT_ID, 'clinical_budget', budget.id, PATIENT_ID);
     expect(again.id).toBe(first.id);
-    expect(() => createDraftForBudget(budget)).toThrow(/Já existe contrato ativo/);
+    const reused = createDraftForBudget(budget);
+    expect(reused.id).toBe(first.id);
     expect((loadDb().generatedContracts || []).filter((c) => c.quoteId === APPT_ID)).toHaveLength(1);
   });
 

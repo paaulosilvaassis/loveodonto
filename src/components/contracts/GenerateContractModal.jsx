@@ -29,6 +29,7 @@ import {
   downloadContractPdfFromElement,
 } from '../../services/contractPdfService.js';
 import { syncGeneratedContractToSaas } from '../../services/contractSaasSyncService.js';
+import { mapContractGenerationUserError } from '../../services/contractGenerationError.js';
 import { ContractReadinessChecklist } from './ContractReadinessChecklist.jsx';
 import { getContractReadinessChecklist } from '../../services/contractValidationService.js';
 import { resolveAttachedTcleIdsFromClinicalDocuments } from '../../services/clinicalTcleAttachmentService.js';
@@ -93,6 +94,7 @@ export default function GenerateContractModal({
   const isEdit = mode === 'edit' || Boolean(contractId);
   const editorRef = useRef(null);
   const printRef = useRef(null);
+  const generateInFlightRef = useRef(false);
   const [templates, setTemplates] = useState([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [htmlBody, setHtmlBody] = useState('');
@@ -226,6 +228,7 @@ export default function GenerateContractModal({
   };
 
   const handleCreateDraft = async () => {
+    if (generateInFlightRef.current || busy) return;
     if (isEdit) {
       setError('Este contrato já existe. Use salvar alterações.');
       return;
@@ -238,8 +241,10 @@ export default function GenerateContractModal({
       setError(`Hashtags desconhecidas: ${unknownTags.join(', ')}`);
       return;
     }
+    generateInFlightRef.current = true;
     setBusy(true);
     setError('');
+    let persistedLocally = false;
     try {
       const row = createContractDraft(user, {
         quoteSource,
@@ -250,6 +255,7 @@ export default function GenerateContractModal({
         editedHtml: htmlBody,
         skipHashtagValidation: flow === 'clinical',
       });
+      persistedLocally = Boolean(row?.id);
       await syncGeneratedContractToSaas(row);
       setDraftContract(row);
       setStep('draft');
@@ -257,8 +263,9 @@ export default function GenerateContractModal({
       window.setTimeout(() => setToast(null), 3000);
       onSuccess?.(row);
     } catch (e) {
-      setError(e?.message || 'Erro ao gerar rascunho.');
+      setError(mapContractGenerationUserError(e, { persistedLocally }));
     } finally {
+      generateInFlightRef.current = false;
       setBusy(false);
     }
   };
@@ -285,7 +292,7 @@ export default function GenerateContractModal({
       window.setTimeout(() => setToast(null), 3000);
       onSuccess?.(updated);
     } catch (e) {
-      setError(e?.message || 'Erro ao salvar alterações.');
+      setError(mapContractGenerationUserError(e));
     } finally {
       setBusy(false);
     }
@@ -311,7 +318,7 @@ export default function GenerateContractModal({
       window.setTimeout(() => setToast(null), 3000);
       onSuccess?.(finalized);
     } catch (e) {
-      setError(e?.message || 'Erro ao finalizar.');
+      setError(mapContractGenerationUserError(e));
     } finally {
       setBusy(false);
     }

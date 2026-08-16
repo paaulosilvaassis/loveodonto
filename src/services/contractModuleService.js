@@ -248,7 +248,8 @@ export function createContractDraft(user, payload) {
       payload.patientId || null,
     );
     if (existing && ![CONTRACT_STATUS.CANCELED, CONTRACT_STATUS.REPLACED, CONTRACT_STATUS.REFUSED].includes(existing.status)) {
-      throw new Error('Já existe contrato ativo para este orçamento. Use Editar contrato.');
+      // ONE_BUDGET → MAX_ONE_ACTIVE_GENERATED_CONTRACT: retry/duplo clique reutiliza o canônico.
+      return getGeneratedContract(existing.id) || existing;
     }
   }
   ensureContractsModuleSeeded();
