@@ -170,8 +170,11 @@ export function getClinicalWorkflowState(appointmentId, viewBudgetId = null) {
     : getBudgetLockContext(appointmentId);
   const hasBudget = Boolean(budget?.id || plannedFromBudget.length);
   const budgetApproved = isBudgetApprovedStatus(budget?.status);
-  const linkedContract = lockCtx?.contract
-    || getContractStatusForQuote(appointmentId, 'clinical_budget', budget?.id || null);
+  const linkedContract = (
+    lockCtx?.contractApplies && lockCtx?.contract
+      ? lockCtx.contract
+      : getContractStatusForQuote(appointmentId, 'clinical_budget', budget?.id || viewBudgetId || null)
+  );
   const hasPersistedContract = Boolean(
     linkedContract
     && !['canceled', 'replaced', 'refused'].includes(String(linkedContract.status || '').toLowerCase()),

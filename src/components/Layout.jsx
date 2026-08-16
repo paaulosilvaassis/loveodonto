@@ -131,13 +131,21 @@ export default function Layout({ children }) {
     }
   }, [visibleCategories, activeCategoryId, user, location.pathname]);
 
+  const accessDeniedPathRef = useRef('');
+
   useEffect(() => {
     const msg = String(location.state?.accessDeniedMessage || '').trim();
-    if (!msg) return;
-    setAccessDeniedMessage(msg);
-    navigate(location.pathname, { replace: true, state: {} });
-    const timer = setTimeout(() => setAccessDeniedMessage(''), 4500);
-    return () => clearTimeout(timer);
+    if (msg) {
+      setAccessDeniedMessage(msg);
+      accessDeniedPathRef.current = location.pathname;
+      navigate(location.pathname, { replace: true, state: {} });
+      const timer = setTimeout(() => setAccessDeniedMessage(''), 4500);
+      return () => clearTimeout(timer);
+    }
+    if (accessDeniedPathRef.current && accessDeniedPathRef.current !== location.pathname) {
+      accessDeniedPathRef.current = '';
+      setAccessDeniedMessage('');
+    }
   }, [location.pathname, location.state, navigate]);
 
   return (

@@ -428,7 +428,7 @@ export const getActiveCategory = (pathname) => {
   
   // Fallback: detecta por prefixo de rota
   if (pathname.startsWith('/gestao/dashboard')) return 'dashboard';
-  if (pathname.startsWith('/gestao-atendimento') || pathname.startsWith('/pacientes') || pathname.startsWith('/gestao/agenda') || pathname.startsWith('/gestao/convenios') || pathname.startsWith('/gestao-comercial/fluxo-do-paciente') || pathname.startsWith('/orcamentos')) return 'gestao-atendimento';
+  if (pathname.startsWith('/gestao-atendimento') || pathname.startsWith('/pacientes') || pathname.startsWith('/gestao/agenda') || pathname.startsWith('/gestao/convenios') || pathname.startsWith('/gestao-comercial/fluxo-do-paciente') || pathname.startsWith('/orcamentos') || pathname.startsWith('/atendimento-clinico')) return 'gestao-atendimento';
   if (pathname.startsWith('/crm')) return 'comercial';
   if (pathname.startsWith('/gestao/contratos') || pathname.startsWith('/admin') || pathname.startsWith('/configuracoes')) return 'administrativo';
   if (pathname.startsWith('/financeiro')) return 'financeiro';

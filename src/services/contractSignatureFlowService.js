@@ -68,21 +68,18 @@ const BLOCKED_SEND_STATUSES = new Set([
  * Resolve orçamento vinculado ao contrato gerado (reload/route-change safe).
  */
 export function resolveBudgetForContractSend(contract, budgetHint = null) {
-  if (budgetHint?.id) return budgetHint;
-  if (!contract) return null;
-  const db = loadDb();
-  const quoteId = contract.quoteId || null;
-  if (quoteId) {
-    const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === quoteId);
-    if (clinical?.budget) return clinical.budget;
-  }
-  if (contract.budgetId) {
+  if (contract?.budgetId) {
+    const db = loadDb();
     for (const ca of db.clinicalAppointments || []) {
       if (ca?.budget?.id === contract.budgetId) return ca.budget;
       const hist = (ca?.budgetHistory || []).find((b) => b?.id === contract.budgetId);
       if (hist) return hist;
     }
   }
+  if (budgetHint?.id && (!contract?.budgetId || budgetHint.id === contract.budgetId)) {
+    return budgetHint;
+  }
+  if (!contract) return budgetHint || null;
   return budgetHint || null;
 }
 

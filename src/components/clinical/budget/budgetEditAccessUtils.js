@@ -51,11 +51,8 @@ export function normalizeBudgetStatus(status) {
  */
 export function isContractLinkedToBudget(contract, budget) {
   if (!contract || !budget?.id) return false;
-  if (contract.budgetId) return contract.budgetId === budget.id;
-  const status = normalizeBudgetStatus(budget.status);
-  return status === BUDGET_STATUS.APROVADO
-    || status === BUDGET_STATUS.CONTRATO_GERADO
-    || status === BUDGET_STATUS.HISTORICO;
+  if (!contract.budgetId) return false;
+  return contract.budgetId === budget.id;
 }
 
 export function isBudgetNegotiationStatus(status) {

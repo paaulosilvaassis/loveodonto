@@ -13,6 +13,7 @@ import {
   CEREMONY_STATUS,
   isLegacyClinicalSignature,
 } from './clinicalSignatureCeremony.js';
+import { assertCeremonyMatchesSelectedBudget } from './resolveContractForSelectedBudget.js';
 
 export const CLINICAL_SIGNATURE_STEP = {
   BLOCKED: 'blocked',
@@ -105,6 +106,18 @@ export function evaluateClinicalSignatureReadiness({
   }
   if (budgetId && contract?.budgetId && contract.budgetId !== budgetId) {
     return failClosed('Contrato não pertence a este orçamento.', { docs, expectedTenant, appointmentId, budgetId, patientId });
+  }
+  if (budgetId && contract?.id && !contract.budgetId) {
+    return failClosed('Contrato não pertence a este orçamento.', { docs, expectedTenant, appointmentId, budgetId, patientId });
+  }
+  if (budgetId && contract?.id) {
+    const ceremonyGuard = assertCeremonyMatchesSelectedBudget({
+      selectedBudgetId: budgetId,
+      selectedContract: contract,
+    });
+    if (!ceremonyGuard.ok) {
+      return failClosed('Contrato não pertence a este orçamento.', { docs, expectedTenant, appointmentId, budgetId, patientId });
+    }
   }
 
   const pkg = buildDocumentPackageForBudget({

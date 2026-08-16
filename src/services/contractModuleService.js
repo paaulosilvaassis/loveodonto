@@ -15,6 +15,7 @@ import {
   SIGNER_ROLES,
 } from '../contracts/contractConstants.js';
 import { matchesContractViewIdentity } from '../contracts/contractViewIdentity.js';
+import { resolveContractForSelectedBudget } from '../contracts/resolveContractForSelectedBudget.js';
 import {
   evaluateSignatureCeremony,
   assertSignerAllowed,
@@ -694,7 +695,7 @@ export function hasSignedContractForQuote(quoteId, quoteSource = 'crm_budget', b
       && c.quoteId === quoteId
       && c.quoteSource === quoteSource
       && c.status === CONTRACT_STATUS.SIGNED
-      && (!budgetId || c.budgetId === budgetId),
+      && (budgetId ? c.budgetId === budgetId : true),
   );
 }
 
@@ -715,35 +716,24 @@ export function getContractStatusForQuote(
   );
 
   if (budgetId) {
-    const exactActive = sortByRecent(
-      contracts.filter(
-        (c) => matchesPatient(c)
-          && c.status !== CONTRACT_STATUS.REPLACED
-          && c.budgetId === budgetId,
-      ),
-    );
-    if (exactActive.length) return normalizeContract(exactActive[0]);
+    const resolved = resolveContractForSelectedBudget({
+      budgetId,
+      appointmentId: quoteId,
+      patientId,
+      clinicId: cid,
+    });
+    if (resolved.ok) return normalizeContract(resolved.contract);
 
+    const quoteContracts = contracts.filter(matchesPatient);
+    const hasScopedBudget = quoteContracts.some((c) => c.budgetId);
     const legacyActive = sortByRecent(
-      contracts.filter(
-        (c) => matchesPatient(c)
-          && c.status !== CONTRACT_STATUS.REPLACED
-          && !c.budgetId,
+      quoteContracts.filter(
+        (c) => c.status !== CONTRACT_STATUS.REPLACED && !c.budgetId,
       ),
     );
-    if (legacyActive.length === 1) return normalizeContract(legacyActive[0]);
-
-    const exactIncludingReplaced = sortByRecent(
-      contracts.filter((c) => matchesPatient(c) && c.budgetId === budgetId),
-    );
-    if (exactIncludingReplaced.length) return normalizeContract(exactIncludingReplaced[0]);
-
-    // Reload-safe: não descartar contrato do mesmo atendimento/quote por budgetId órfão.
-    const quoteActive = sortByRecent(
-      contracts.filter((c) => matchesPatient(c) && c.status !== CONTRACT_STATUS.REPLACED),
-    );
-    if (quoteActive.length) return normalizeContract(quoteActive[0]);
-
+    if (!hasScopedBudget && legacyActive.length === 1) {
+      return normalizeContract(legacyActive[0]);
+    }
     return null;
   }
 

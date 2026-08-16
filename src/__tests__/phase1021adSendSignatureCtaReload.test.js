@@ -98,11 +98,10 @@ describe('PHASE_10.21AD — SEND_SIGNATURE_CTA_RELOAD', () => {
     expect(canSendContractForSignature({ contract, budget: null })).toBe(true);
   });
 
-  it('budgetId órfão no contrato não esconde o contrato do quote', () => {
+  it('budgetId órfão no contrato não é reutilizado como contrato de outro orçamento', () => {
     seedEligibleGeneratedContract({ contractBudgetId: 'budget-orphan-other' });
     const contract = getContractStatusForQuote(APPT, 'clinical_budget', BUDGET, PATIENT);
-    expect(contract?.id).toBe(CONTRACT);
-    expect(canSendContractForSignature({ contract, budget: null })).toBe(true);
+    expect(contract).toBeNull();
   });
 
   it('workflow após reload mantém aba Contratos acessível e CTA elegível', () => {

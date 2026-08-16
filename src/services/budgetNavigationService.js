@@ -10,11 +10,11 @@
  */
 import { loadDb } from '../db/index.js';
 import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
-import { APPOINTMENT_STATUS } from './appointmentService.js';
 import { getLatestApprovedBudget } from './clinicalBudgetApprovedService.js';
 import { getGeneratedContract } from './contractService.js';
 import { getBudgetLockContextForBudget } from './clinicalBudgetLockService.js';
 import { resolveBudgetReadOnlyState } from '../components/clinical/budget/budgetEditAccessUtils.js';
+import { resolveContractForSelectedBudget } from '../contracts/resolveContractForSelectedBudget.js';
 
 export const BUDGET_CONSISTENCY_ALERT =
   'Inconsistência detectada neste orçamento. Revisar vínculo financeiro/contratual.';
@@ -122,8 +122,7 @@ export function getActiveClinicalBudget(appointmentId) {
 }
 
 /**
- * Durante atendimento em andamento, ignora budgetId de orçamento arquivado na URL
- * e usa o orçamento ativo — evita abrir ORC antigo em modo somente leitura por engano.
+ * budgetId explícito na URL é SSOT. Não substituir por orçamento ativo do appointment.
  */
 export function resolveEffectiveViewBudgetId(
   appointmentId,
@@ -131,21 +130,6 @@ export function resolveEffectiveViewBudgetId(
   { forceHistorical = false, appointmentStatus = null } = {},
 ) {
   if (!viewBudgetId) return null;
-  if (forceHistorical) return viewBudgetId;
-
-  const record = findBudgetRecord({ budgetId: viewBudgetId, appointmentId });
-  if (!record?.budget?.id) return viewBudgetId;
-
-  const isLiveSession = appointmentStatus === APPOINTMENT_STATUS.EM_ATENDIMENTO;
-  if (!isLiveSession || !record.isInBudgetHistory) {
-    return viewBudgetId;
-  }
-
-  const active = getActiveBudget(appointmentId);
-  if (active?.id && active.id !== record.budget.id) {
-    return null;
-  }
-
   return viewBudgetId;
 }
 
@@ -196,12 +180,11 @@ export function resolveBudgetForView(appointmentId, budgetId = null) {
 }
 
 function findContractForBudget(appointmentId, budgetId) {
-  const db = loadDb();
-  return (db.generatedContracts || []).find(
-    (contract) => contract.quoteId === appointmentId
-      && contract.quoteSource === 'clinical_budget'
-      && (!contract.budgetId || contract.budgetId === budgetId),
-  ) || null;
+  const resolved = resolveContractForSelectedBudget({
+    budgetId,
+    appointmentId,
+  });
+  return resolved.ok ? resolved.contract : null;
 }
 
 /**

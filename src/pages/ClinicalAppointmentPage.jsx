@@ -123,22 +123,14 @@ function ClinicalAppointmentPageContent() {
     navigate(url, {
       replace: true,
       state: {
-        ...location.state,
         budgetId: nextBudgetId || undefined,
         section: section || location.state?.section,
+        viewMode: location.state?.viewMode,
+        mode: location.state?.mode,
       },
     });
     bumpWorkflow();
   };
-
-  useEffect(() => {
-    if (!appointmentId || !appointment) return;
-    if (appointment.status !== APPOINTMENT_STATUS.EM_ATENDIMENTO) return;
-    if (forceHistoricalView) return;
-    if (!rawViewBudgetId || rawViewBudgetId === viewBudgetId) return;
-    syncViewBudgetId(viewBudgetId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appointmentId, appointment?.status, rawViewBudgetId, viewBudgetId, forceHistoricalView]);
 
   useEffect(() => {
     if (location.state?.section) {

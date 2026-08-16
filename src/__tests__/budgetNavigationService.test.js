@@ -100,12 +100,12 @@ describe('budgetNavigationService', () => {
     expect(historical.budget?.totalValue).toBe(25000);
   });
 
-  it('resolveEffectiveViewBudgetId ignora orçamento arquivado durante atendimento ativo', () => {
+  it('resolveEffectiveViewBudgetId honra budgetId explícito mesmo em atendimento ativo', () => {
     seedApprovedArchivedBudget();
 
     expect(resolveEffectiveViewBudgetId('apt-1', 'budget-approved', {
       appointmentStatus: APPOINTMENT_STATUS.EM_ATENDIMENTO,
-    })).toBeNull();
+    })).toBe('budget-approved');
 
     expect(resolveEffectiveViewBudgetId('apt-1', 'budget-new', {
       appointmentStatus: APPOINTMENT_STATUS.EM_ATENDIMENTO,

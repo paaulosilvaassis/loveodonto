@@ -28,9 +28,13 @@ import { can } from '../../permissions/permissions.js';
 import { loadDb } from '../../db/index.js';
 import { getPatient } from '../../services/patientService.js';
 import {
-  getContractStatusForQuote,
   getContractDetails,
 } from '../../services/contractModuleService.js';
+import {
+  resolveContractForSelectedBudget,
+  NO_CONTRACT_FOR_SELECTED_BUDGET,
+  assertCeremonyMatchesSelectedBudget,
+} from '../../contracts/resolveContractForSelectedBudget.js';
 import SendContractSignatureModal from '../contracts/SendContractSignatureModal.jsx';
 import { canSendContractForSignature, resolveBudgetForContractSend } from '../../services/contractSignatureFlowService.js';
 import { CancelContractSecureModal } from './contract/CancelContractSecureModal.jsx';
@@ -211,18 +215,22 @@ export function ClinicalContractSection({
     return () => window.removeEventListener('db:updated', onDbUpdated);
   }, []);
 
-  const linkedContract = useMemo(() => {
-    if (viewContractId) {
-      const details = getContractDetails(viewContractId);
-      return details?.contract || null;
-    }
-    return getContractStatusForQuote(
-      appointmentId,
-      'clinical_budget',
-      budget?.id || viewBudgetId || null,
-      patientId,
-    );
-  }, [appointmentId, budget?.id, viewBudgetId, patientId, viewContractId, historyKey]);
+  const selectedBudgetId = budget?.id || viewBudgetId || null;
+  const contractResolution = useMemo(() => resolveContractForSelectedBudget({
+    budgetId: selectedBudgetId,
+    appointmentId,
+    patientId,
+    contractId: viewContractId,
+  }), [selectedBudgetId, appointmentId, patientId, viewContractId, historyKey]);
+
+  const linkedContract = contractResolution.ok ? contractResolution.contract : null;
+  const missingSelectedBudgetContract = Boolean(
+    selectedBudgetId && !viewContractId && contractResolution.code === NO_CONTRACT_FOR_SELECTED_BUDGET,
+  );
+  const ceremonyInvariant = assertCeremonyMatchesSelectedBudget({
+    selectedBudgetId,
+    selectedContract: linkedContract,
+  });
 
   const effectiveBudget = useMemo(
     () => resolveBudgetForContractSend(linkedContract, budget) || budget || null,
@@ -484,6 +492,10 @@ export function ClinicalContractSection({
 
   const handleSendSignature = () => {
     if (!linkedContract?.id || !user) return;
+    if (!ceremonyInvariant.ok) {
+      showToast('Contrato não pertence a este orçamento.', 'error');
+      return;
+    }
     setSignatureModalOpen(true);
   };
 
@@ -664,6 +676,15 @@ export function ClinicalContractSection({
                 </div>
               </div>
             ) : null}
+            {missingSelectedBudgetContract ? (
+              <div className="clinical-contract-status-banner tone-warning" role="status" data-testid="no-contract-for-selected-budget">
+                <XCircle size={18} aria-hidden />
+                <div>
+                  <strong>Nenhum contrato deste orçamento</strong>
+                  <span>Este orçamento não possui contrato vinculado. O contrato de outro orçamento não é exibido aqui.</span>
+                </div>
+              </div>
+            ) : (
             <div className={`clinical-contract-status-banner tone-${uiStatus.tone}`}>
               <CheckCircle2 size={18} />
               <div>
@@ -674,6 +695,7 @@ export function ClinicalContractSection({
                 ) : null}
               </div>
             </div>
+            )}
 
             <ContractAccordionSection title="Dados do paciente" icon={User} defaultOpen>
               <InfoGrid rows={[
