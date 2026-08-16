@@ -8,7 +8,7 @@ import { assertAdminApiFetchAllowed, buildAdminApiUrl } from '../config/adminApi
 
 export const SIGNATURE_INVITE_EMAIL_PATH = '/internal/app/contracts/signature-invite-email';
 
-export const SIGNATURE_INVITE_SENT_MSG = 'Link de assinatura enviado para o e-mail informado.';
+export const SIGNATURE_INVITE_SENT_MSG = 'Solicitação de assinatura enviada por e-mail.';
 
 export const EMAIL_PROVIDER_NOT_CONFIGURED_MSG =
   'O envio de e-mail de assinatura não está configurado. O link não foi enviado.';
@@ -90,7 +90,9 @@ export async function deliverSignatureInviteEmail({
       }),
     });
   } catch (err) {
-    const error = new Error('Não foi possível conectar ao serviço de e-mail.');
+    const error = new Error(
+      'Não foi possível conectar à Admin API para enviar o e-mail. O SMTP não foi acionado.',
+    );
     error.code = 'EMAIL_REQUEST_FAILED';
     error.cause = err;
     throw error;

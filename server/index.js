@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { getInviteRedirectTo as resolveInviteRedirectTo, getEmailTransportInventory } from './email/emailConfig.js';
+import { getPublicSmtpVerifyHealth, scheduleSmtpVerifyOnStartup } from './email/smtpVerifyCache.js';
 import { getPasswordResetRedirectTo } from './email/emailConfig.js';
 import { logAccessEmailAudit } from './email/accessEmailAudit.js';
 import { createIdentityService } from './identity/IdentityService.js';
@@ -191,6 +192,8 @@ app.get('/health', (_req, res) => {
   const contractsV2Storage = toPublicStorageBindingPayload(
     resolveContractsV2PrivateStorageBinding(process.env),
   );
+  const inventory = getEmailTransportInventory();
+  const smtpVerify = getPublicSmtpVerifyHealth();
   res.status(200).json({
     ok: true,
     service: 'saas-admin-api',
@@ -199,12 +202,28 @@ app.get('/health', (_req, res) => {
     features: {
       identityService: true,
       supabaseAuthPublicClient: Boolean(process.env.SUPABASE_ANON_KEY),
-      authEmailConfigured: getEmailTransportInventory().authEmailConfigured,
+      authEmailConfigured: inventory.authEmailConfigured,
       authEmailTransport: 'supabase_auth_smtp',
-      directSmtpConfigured: getEmailTransportInventory().directSmtpConfigured,
-      directSmtpProvider: getEmailTransportInventory().directSmtpProvider,
-      emailTransactionalConfigured: getEmailTransportInventory().transactionalConfigured,
-      emailTransactionalProvider: getEmailTransportInventory().transactionalProvider,
+      directSmtpConfigured: inventory.directSmtpConfigured,
+      directSmtpProvider: inventory.directSmtpProvider,
+      directSmtpVerified: smtpVerify.directSmtpVerified,
+      directSmtpVerifyCode: smtpVerify.directSmtpVerifyCode,
+      emailTransactionalConfigured: inventory.transactionalConfigured,
+      emailTransactionalProvider: inventory.transactionalProvider,
+    },
+    smtp: {
+      configured: smtpVerify.directSmtpConfigured,
+      verified: smtpVerify.directSmtpVerified,
+      verifyCode: smtpVerify.directSmtpVerifyCode,
+      verifyErrorCode: smtpVerify.directSmtpVerifyErrorCode,
+      verifyResponseCode: smtpVerify.directSmtpVerifyResponseCode,
+      verifyCommand: smtpVerify.directSmtpVerifyCommand,
+      host: smtpVerify.directSmtpHost,
+      port: smtpVerify.directSmtpPort,
+      secure: smtpVerify.directSmtpSecure,
+      alternatePort: smtpVerify.directSmtpAlternatePort,
+      alternateVerified: smtpVerify.directSmtpAlternateVerified,
+      alternateVerifyCode: smtpVerify.directSmtpAlternateVerifyCode,
     },
     contractsV2Storage,
   });
@@ -1297,6 +1316,15 @@ app.patch('/internal/app/collaborators/:collaboratorId/access', requireAppUser, 
 
 /** Espelha contrato gerado (IndexedDB â†’ Postgres) quando a migration 006 existir. */
 app.post('/internal/app/contracts/generated', requireAppUser, handleContractsGenerated);
+app.get('/internal/app/contracts/signature-invite-email', (_req, res) => {
+  res.set('Allow', 'POST');
+  res.status(405).json({
+    ok: false,
+    code: 'METHOD_NOT_ALLOWED',
+    allow: ['POST'],
+    path: '/internal/app/contracts/signature-invite-email',
+  });
+});
 app.post('/internal/app/contracts/signature-invite-email', requireAppUser, handleContractsSignatureInviteEmail);
 
 /** Contract templates v2 — Phase 10.4 (feature flags OFF por padrão). */
@@ -1467,6 +1495,7 @@ const httpServer = app.listen(PORT, () => {
   if (!inventory.directSmtpConfigured) {
     console.warn('[SaaS Admin API] SMTP direto ausente. Defina SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD e EMAIL_FROM_ADDRESS no Railway para assinatura.');
   }
+  scheduleSmtpVerifyOnStartup();
   if (!hasSupabaseAuthPublicClient()) {
     console.warn(
       '[SaaS Admin API] SUPABASE_ANON_KEY ausente — convites Auth exigem a anon key do mesmo projeto.',
