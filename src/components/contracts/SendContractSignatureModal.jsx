@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ModalRoot,
   ModalContent,
@@ -37,6 +37,7 @@ export default function SendContractSignatureModal({
   const [form, setForm] = useState({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const inFlightRef = useRef(false);
 
   const requiredSignatureType = useMemo(
     () => resolveRequiredSignatureType({ budget, settings }),
@@ -73,11 +74,12 @@ export default function SendContractSignatureModal({
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!contract?.id || !user || busy) return;
+    if (!contract?.id || !user || busy || inFlightRef.current) return;
     if (!String(form.patientEmail || '').trim()) {
       setError(PATIENT_EMAIL_REQUIRED_MSG);
       return;
     }
+    inFlightRef.current = true;
     setBusy(true);
     setError('');
     try {
@@ -87,6 +89,7 @@ export default function SendContractSignatureModal({
     } catch (err) {
       setError(err?.message || 'Não foi possível enviar o contrato para assinatura.');
     } finally {
+      inFlightRef.current = false;
       setBusy(false);
     }
   };

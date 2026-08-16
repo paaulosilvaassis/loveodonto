@@ -1,21 +1,29 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
-vi.mock('../email/emailProvider.js', () => ({
-  sendTransactionalEmail: vi.fn(async () => ({ provider: 'resend', messageId: 're_test' })),
+vi.mock('../email/transactionalEmailService.js', () => ({
+  sendTransactionalEmail: vi.fn(async () => ({
+    provider: 'smtp',
+    messageId: 're_test',
+    acceptedByTransport: true,
+    simulated: false,
+    ok: true,
+  })),
 }));
 
 vi.mock('../email/emailConfig.js', () => ({
   getEmailConfig: vi.fn(() => ({
     isConfigured: true,
-    provider: 'resend',
+    provider: 'smtp',
     fromAddress: 'no-reply@loveodonto.com.br',
     fromName: 'Love Odonto',
-    apiKey: 'present',
+    apiKey: '',
   })),
+  getSmtpConfig: vi.fn(() => ({ isConfigured: true })),
+  isTransactionalEmailConfigured: vi.fn(() => true),
 }));
 
-import { sendTransactionalEmail } from '../email/emailProvider.js';
-import { getEmailConfig } from '../email/emailConfig.js';
+import { sendTransactionalEmail } from '../email/transactionalEmailService.js';
+import { getEmailConfig, isTransactionalEmailConfigured } from '../email/emailConfig.js';
 import { createContractsSignatureInviteEmailHandler } from '../lib/contractsSignatureEmailApi.js';
 
 function mockRes() {
@@ -33,11 +41,12 @@ describe('signature invite email API', () => {
     sendTransactionalEmail.mockClear();
     getEmailConfig.mockReturnValue({
       isConfigured: true,
-      provider: 'resend',
+      provider: 'smtp',
       fromAddress: 'no-reply@loveodonto.com.br',
       fromName: 'Love Odonto',
-      apiKey: 'present',
+      apiKey: '',
     });
+    isTransactionalEmailConfigured.mockReturnValue(true);
   });
 
   it('rejeita e-mail inválido e não chama o provedor', async () => {
@@ -57,13 +66,14 @@ describe('signature invite email API', () => {
   });
 
   it('503 quando provedor não configurado', async () => {
-    getEmailConfig.mockReturnValue({ isConfigured: false, provider: 'resend' });
+    getEmailConfig.mockReturnValue({ isConfigured: false, provider: null });
+    isTransactionalEmailConfigured.mockReturnValue(false);
     const handler = createContractsSignatureInviteEmailHandler();
     const res = mockRes();
     await handler({ body: { to: 'a@b.com', signPath: '/assinatura/token-1' } }, res);
     expect(res.statusCode).toBe(503);
-    expect(res.body.code).toBe('EMAIL_PROVIDER_NOT_CONFIGURED');
-    expect(String(res.body.error || '')).toMatch(/Supabase Auth/i);
+    expect(res.body.code).toBe('SMTP_NOT_CONFIGURED');
+    expect(String(res.body.error || '')).toMatch(/Supabase Auth|SMTP transacional/i);
     expect(String(res.body.error || '')).not.toMatch(/EMAIL_API_KEY|Resend/i);
     expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
@@ -98,7 +108,7 @@ describe('signature invite email API', () => {
     }, res);
     expect(res.statusCode).toBe(502);
     expect(res.body.ok).not.toBe(true);
-    expect(res.body.code).toBe('EMAIL_PROVIDER_REJECTED');
+    expect(['EMAIL_PROVIDER_REJECTED', 'SMTP_SEND_FAILED']).toContain(res.body.code);
   });
 
   it('escapa HTML do nome do paciente no template', async () => {

@@ -99,7 +99,7 @@ describe('PHASE_10.21BM email infrastructure reuse', () => {
     const res = mockRes();
     await handler({ body: { to: 'paciente@example.invalid', signPath: '/assinatura/csgn-ok' } }, res);
     expect(res.statusCode).toBe(503);
-    expect(res.body.code).toBe('EMAIL_PROVIDER_NOT_CONFIGURED');
+    expect(['SMTP_NOT_CONFIGURED', 'EMAIL_PROVIDER_NOT_CONFIGURED']).toContain(res.body.code);
     expect(res.body.ok).not.toBe(true);
     expect(res.body.simulated).not.toBe(true);
   });
@@ -116,7 +116,7 @@ describe('PHASE_10.21BM email infrastructure reuse', () => {
     const audit = readSrc('server/email/emailAuditLog.js');
     const api = readSrc('server/lib/contractsSignatureEmailApi.js');
     expect(audit).toContain('sanitizeForLog');
-    expect(api).toMatch(/message\.slice\(0, 180\)/);
+    expect(api).toContain("console.error('[signature-invite-email]', mapped.code)");
     expect(api).not.toMatch(/process\.env\.EMAIL_API_KEY/);
     expect(api).not.toMatch(/process\.env\.SMTP_PASSWORD/);
   });

@@ -8,11 +8,28 @@ import { assertAdminApiFetchAllowed, buildAdminApiUrl } from '../config/adminApi
 
 export const SIGNATURE_INVITE_EMAIL_PATH = '/internal/app/contracts/signature-invite-email';
 
+export const SIGNATURE_INVITE_SENT_MSG = 'Link de assinatura enviado para o e-mail informado.';
+
 export const EMAIL_PROVIDER_NOT_CONFIGURED_MSG =
   'O envio de e-mail de assinatura não está configurado. O link não foi enviado.';
 
 export const EMAIL_PROVIDER_REJECTED_MSG =
   'O provedor de e-mail recusou o disparo. O link não foi enviado.';
+
+const RAW_SMTP_ERROR = /ECONNREFUSED|EAUTH|ETIMEDOUT|ENOTFOUND|ESOCKET|535 Authentication|Invalid login/i;
+
+function friendlyDeliveryError(json, fallback) {
+  const code = String(json?.code || '');
+  if (code === 'SMTP_NOT_CONFIGURED' || code === 'EMAIL_PROVIDER_NOT_CONFIGURED') {
+    return EMAIL_PROVIDER_NOT_CONFIGURED_MSG;
+  }
+  if (code === 'SMTP_AUTH_FAILED') return 'Não foi possível autenticar no servidor de e-mail. O link não foi enviado.';
+  if (code === 'SMTP_CONNECTION_FAILED') return 'Não foi possível conectar ao servidor de e-mail. O link não foi enviado.';
+  if (code === 'INVALID_RECIPIENT') return 'E-mail do paciente inválido.';
+  const candidate = String(json?.error || fallback || EMAIL_PROVIDER_REJECTED_MSG);
+  if (RAW_SMTP_ERROR.test(candidate)) return EMAIL_PROVIDER_REJECTED_MSG;
+  return candidate;
+}
 
 function relativeSignPath(signUrl) {
   const raw = String(signUrl || '').trim();
@@ -80,13 +97,17 @@ export async function deliverSignatureInviteEmail({
   }
 
   const json = await response.json().catch(() => ({}));
-  if (response.status === 503 || json?.code === 'EMAIL_PROVIDER_NOT_CONFIGURED') {
-    const error = new Error(EMAIL_PROVIDER_NOT_CONFIGURED_MSG);
-    error.code = 'EMAIL_PROVIDER_NOT_CONFIGURED';
+  if (
+    response.status === 503
+    || json?.code === 'EMAIL_PROVIDER_NOT_CONFIGURED'
+    || json?.code === 'SMTP_NOT_CONFIGURED'
+  ) {
+    const error = new Error(friendlyDeliveryError(json, EMAIL_PROVIDER_NOT_CONFIGURED_MSG));
+    error.code = json?.code || 'SMTP_NOT_CONFIGURED';
     throw error;
   }
   if (!response.ok || json?.ok !== true || json?.simulated === true) {
-    const error = new Error(json?.error || EMAIL_PROVIDER_REJECTED_MSG);
+    const error = new Error(friendlyDeliveryError(json, EMAIL_PROVIDER_REJECTED_MSG));
     error.code = json?.code || 'EMAIL_PROVIDER_REJECTED';
     error.status = response.status;
     throw error;

@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getInviteRedirectTo as resolveInviteRedirectTo, getEmailConfig, getEmailTransportInventory } from './email/emailConfig.js';
+import { getInviteRedirectTo as resolveInviteRedirectTo, getEmailTransportInventory } from './email/emailConfig.js';
 import { getPasswordResetRedirectTo } from './email/emailConfig.js';
 import { logAccessEmailAudit } from './email/accessEmailAudit.js';
 import { createIdentityService } from './identity/IdentityService.js';
@@ -201,9 +201,10 @@ app.get('/health', (_req, res) => {
       supabaseAuthPublicClient: Boolean(process.env.SUPABASE_ANON_KEY),
       authEmailConfigured: getEmailTransportInventory().authEmailConfigured,
       authEmailTransport: 'supabase_auth_smtp',
-      emailTransactionalConfigured: getEmailConfig().isConfigured,
-      emailTransactionalProvider: getEmailConfig().isConfigured ? getEmailConfig().provider : null,
       directSmtpConfigured: getEmailTransportInventory().directSmtpConfigured,
+      directSmtpProvider: getEmailTransportInventory().directSmtpProvider,
+      emailTransactionalConfigured: getEmailTransportInventory().transactionalConfigured,
+      emailTransactionalProvider: getEmailTransportInventory().transactionalProvider,
     },
     contractsV2Storage,
   });
@@ -1460,17 +1461,16 @@ app.use('/internal/platform', (req, res) => {
 });
 
 const httpServer = app.listen(PORT, () => {
-  const emailCfg = getEmailConfig();
+  const inventory = getEmailTransportInventory();
   console.log(`[SaaS Admin API] rodando na porta ${PORT}`);
-  console.log(`[SaaS Admin API] e-mail transacional: ${emailCfg.isConfigured ? `sim (${emailCfg.provider})` : 'NÃƒO â€” convites usam SMTP Supabase (entrega limitada)'}`);
-  if (!emailCfg.isConfigured) {
-    console.warn('[SaaS Admin API] Configure EMAIL_API_KEY e EMAIL_FROM_ADDRESS no Railway para entrega confiÃ¡vel.');
-    if (!hasSupabaseAuthPublicClient()) {
-      console.warn(
-        '[SaaS Admin API] SUPABASE_ANON_KEY ausente â€” convites usam SMTP Supabase via resetPasswordForEmail/invite, '
-        + 'mas exigem a anon key do mesmo projeto (VITE_SUPABASE_APP_ANON_KEY na raiz).',
-      );
-    }
+  console.log(`[SaaS Admin API] e-mail transacional: ${inventory.transactionalConfigured ? `sim (${inventory.transactionalProvider})` : 'NÃO — convites usam SMTP Auth'}`);
+  if (!inventory.directSmtpConfigured) {
+    console.warn('[SaaS Admin API] SMTP direto ausente. Defina SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD e EMAIL_FROM_ADDRESS no Railway para assinatura.');
+  }
+  if (!hasSupabaseAuthPublicClient()) {
+    console.warn(
+      '[SaaS Admin API] SUPABASE_ANON_KEY ausente — convites Auth exigem a anon key do mesmo projeto.',
+    );
   }
 
   if (process.env.IDENTITY_HEALTH_ON_STARTUP === '1') {

@@ -8,9 +8,31 @@ function envPresent(name) {
   return Boolean(normalizeText(process.env[name]));
 }
 
+function parsePort(value) {
+  const raw = normalizeText(value);
+  if (!/^\d+$/.test(raw)) return null;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return port;
+}
+
+function parseSecureFlag(value) {
+  const raw = normalizeText(value).toLowerCase();
+  if (raw === 'true' || raw === '1' || raw === 'yes') return true;
+  if (raw === 'false' || raw === '0' || raw === 'no') return false;
+  return null;
+}
+
+function resolveSmtpSecure(port, explicit) {
+  if (explicit !== null) return explicit;
+  if (port === 465) return true;
+  if (port === 587) return false;
+  return null;
+}
+
 /**
  * Overlay HTTP opcional (Resend/SendGrid). NÃO é o SSOT de produção.
- * Produção envia convites/senha via SMTP encapsulado do Supabase Auth.
+ * Convites/senha continuam no SMTP encapsulado do Supabase Auth.
  */
 export function getEmailConfig() {
   const apiKey = normalizeText(process.env.EMAIL_API_KEY);
@@ -27,26 +49,65 @@ export function getEmailConfig() {
 }
 
 /**
+ * SMTP direto do Railway para e-mail transacional da aplicação.
+ * Não imprime secrets. Sem fallback inseguro de porta.
+ */
+export function getSmtpConfig() {
+  const host = normalizeText(process.env.SMTP_HOST);
+  const user = normalizeText(process.env.SMTP_USER || process.env.SMTP_USERNAME);
+  const password = normalizeText(process.env.SMTP_PASSWORD || process.env.SMTP_PASS);
+  const fromAddress = normalizeText(process.env.EMAIL_FROM_ADDRESS);
+  const fromName = normalizeText(process.env.EMAIL_FROM_NAME) || 'Love Odonto';
+  const replyTo = normalizeText(process.env.EMAIL_REPLY_TO);
+  const port = parsePort(process.env.SMTP_PORT);
+  const secure = resolveSmtpSecure(port, parseSecureFlag(process.env.SMTP_SECURE));
+  const isConfigured = Boolean(host && port && user && password && fromAddress && secure !== null);
+  return {
+    host,
+    port,
+    user,
+    password,
+    fromAddress,
+    fromName,
+    replyTo,
+    secure,
+    isConfigured,
+  };
+}
+
+export function isTransactionalEmailConfigured() {
+  return getSmtpConfig().isConfigured || getEmailConfig().isConfigured;
+}
+
+export function getTransactionalEmailProvider() {
+  if (getSmtpConfig().isConfigured) return 'smtp';
+  const overlay = getEmailConfig();
+  return overlay.isConfigured ? overlay.provider : null;
+}
+
+/**
  * Inventário de transporte. Somente PRESENT/ABSENT — nunca valores.
  */
 export function getEmailTransportInventory() {
-  const transactional = getEmailConfig();
-  const smtpHost = envPresent('SMTP_HOST');
-  const smtpUser = envPresent('SMTP_USER') || envPresent('SMTP_USERNAME');
-  const smtpPassword = envPresent('SMTP_PASSWORD') || envPresent('SMTP_PASS');
+  const overlay = getEmailConfig();
+  const smtp = getSmtpConfig();
   return {
     authEmailConfigured: hasSupabaseAuthPublicClient(),
     authEmailTransport: 'supabase_auth_smtp',
-    transactionalConfigured: transactional.isConfigured,
-    transactionalProvider: transactional.isConfigured ? transactional.provider : null,
-    directSmtpConfigured: Boolean(smtpHost && smtpUser && smtpPassword),
+    transactionalConfigured: isTransactionalEmailConfigured(),
+    transactionalProvider: getTransactionalEmailProvider(),
+    directSmtpConfigured: smtp.isConfigured,
+    directSmtpProvider: smtp.isConfigured ? 'smtp' : null,
     env: {
-      SMTP_HOST: smtpHost ? 'PRESENT' : 'ABSENT',
-      SMTP_USER: smtpUser ? 'PRESENT' : 'ABSENT',
-      SMTP_PASSWORD: smtpPassword ? 'PRESENT' : 'ABSENT',
+      SMTP_HOST: envPresent('SMTP_HOST') ? 'PRESENT' : 'ABSENT',
+      SMTP_PORT: envPresent('SMTP_PORT') ? 'PRESENT' : 'ABSENT',
+      SMTP_USER: (envPresent('SMTP_USER') || envPresent('SMTP_USERNAME')) ? 'PRESENT' : 'ABSENT',
+      SMTP_PASSWORD: (envPresent('SMTP_PASSWORD') || envPresent('SMTP_PASS')) ? 'PRESENT' : 'ABSENT',
+      SMTP_SECURE: envPresent('SMTP_SECURE') ? 'PRESENT' : 'ABSENT',
       EMAIL_API_KEY: envPresent('EMAIL_API_KEY') ? 'PRESENT' : 'ABSENT',
       EMAIL_FROM_ADDRESS: envPresent('EMAIL_FROM_ADDRESS') ? 'PRESENT' : 'ABSENT',
       EMAIL_FROM_NAME: envPresent('EMAIL_FROM_NAME') ? 'PRESENT' : 'ABSENT',
+      EMAIL_REPLY_TO: envPresent('EMAIL_REPLY_TO') ? 'PRESENT' : 'ABSENT',
       EMAIL_PROVIDER: envPresent('EMAIL_PROVIDER') ? 'PRESENT' : 'ABSENT',
       RESEND_API_KEY: envPresent('RESEND_API_KEY') ? 'PRESENT' : 'ABSENT',
       SENDGRID_API_KEY: envPresent('SENDGRID_API_KEY') ? 'PRESENT' : 'ABSENT',

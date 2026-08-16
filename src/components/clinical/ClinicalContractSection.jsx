@@ -507,7 +507,7 @@ export function ClinicalContractSection({
       showToast('O e-mail não foi enviado. Atualize a tela antes de tentar novamente.', 'error');
       return;
     }
-    showToast('E-mail de assinatura enviado ao paciente.');
+    showToast('Link de assinatura enviado para o e-mail informado.');
   };
 
   const handleCancelContract = () => {

@@ -282,7 +282,7 @@ export function ClinicalSignatureSection({
             showMsg('O e-mail não foi enviado.', 'error');
             return;
           }
-          showMsg('E-mail de assinatura enviado ao paciente.');
+          showMsg('Link de assinatura enviado para o e-mail informado.');
         }}
       />
     </>
