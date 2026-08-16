@@ -1,10 +1,7 @@
-# Configuração Nixpacks usada pelo Railway quando Root Directory = "server".
-# Pina Node 20 LTS (compatível com Express 4 + @supabase/supabase-js 2.x).
-
+# Não é o builder ativo. railway.json usa DOCKERFILE (server/Dockerfile).
+# Sem [variables]: o Nixpacks copiava env do serviço para `ENV name=$name`
+# e gerava `ENV =$` quando existia variável com nome em branco.
 providers = ["node"]
-
-[variables]
-NIXPACKS_NODE_VERSION = "20"
 
 [phases.setup]
 nixPkgs = ["nodejs_20"]
