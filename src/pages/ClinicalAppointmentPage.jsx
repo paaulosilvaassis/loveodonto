@@ -243,6 +243,20 @@ function ClinicalAppointmentPageContent() {
       return;
     }
     setActiveSection(sectionId);
+    const url = buildClinicalAppointmentUrl({
+      appointmentId,
+      budgetId: viewBudgetId,
+      contractId: viewContractId,
+      section: sectionId,
+    });
+    navigate(url, {
+      replace: true,
+      state: {
+        budgetId: viewBudgetId || undefined,
+        section: sectionId,
+        viewMode: location.state?.viewMode,
+      },
+    });
   };
 
   if (loading) {

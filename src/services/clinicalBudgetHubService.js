@@ -122,11 +122,17 @@ function enrichBudgetRow(baseRow, budget, db) {
   const patientHistory = baseRow.patientId
     ? listPatientBudgetHistory(baseRow.patientId)
     : [];
-  const budgetIndex = patientHistory.findIndex((b) => b.id === budget.id);
-  const friendlyNumber = formatFriendlyBudgetNumber(
-    budget.budgetNumber,
-    budgetIndex >= 0 ? budgetIndex + 1 : 1,
-  );
+  // listPatientBudgetHistory numera em ordem cronológica e só depois reordena
+  // (mais recente primeiro). Usar findIndex nessa lista invertia ORC-001/ORC-002.
+  const historyRow = patientHistory.find((row) => row.id === budget.id);
+  const chronologicalIndex = [...patientHistory]
+    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0))
+    .findIndex((row) => row.id === budget.id);
+  const friendlyNumber = historyRow?.budgetNumber
+    || formatFriendlyBudgetNumber(
+      budget.budgetNumber,
+      chronologicalIndex >= 0 ? chronologicalIndex + 1 : 1,
+    );
 
   return {
     ...baseRow,

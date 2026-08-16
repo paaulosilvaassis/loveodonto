@@ -11,6 +11,7 @@ import { detectPartyModel } from './contractVariableResolver.js';
 import { DEFAULT_CONTRACT_SETTINGS } from './contractConstants.js';
 import { resolvePatientFullName } from '../utils/patientIdentity.js';
 import { resolveAttendingProfessionalCro } from './clinicTechnicalResponsible.js';
+import { resolveContractForSelectedBudget } from './resolveContractForSelectedBudget.js';
 
 export const CLINICAL_SIGNER_ROLE = {
   PATIENT: 'PATIENT',
@@ -180,12 +181,22 @@ export function resolveRequiredSigners({
   const settings = readSettings();
   const blockers = [];
   const expectedTenant = tenantId || db.clinicProfile?.tenant_id || null;
-  const contract = (db.generatedContracts || []).find((c) => {
-    if (contractId) return c.id === contractId;
-    if (budgetId && c.budgetId === budgetId) return true;
-    if (appointmentId && c.quoteId === appointmentId) return true;
-    return false;
-  }) || null;
+  let contract = null;
+  if (contractId) {
+    contract = (db.generatedContracts || []).find((c) => c.id === contractId) || null;
+  } else if (budgetId) {
+    const resolved = resolveContractForSelectedBudget({
+      budgetId,
+      appointmentId,
+      patientId,
+      clinicId: db.clinicProfile?.id || null,
+    });
+    contract = resolved.ok ? resolved.contract : null;
+  } else if (appointmentId) {
+    contract = (db.generatedContracts || []).find((c) => (
+      c.quoteId === appointmentId && (!patientId || c.patientId === patientId)
+    )) || null;
+  }
 
   if (contractId && contract && contract.id !== contractId) {
     return failIdentity('Contrato informado não corresponde ao atendimento.');

@@ -292,8 +292,13 @@ function failClosed(message, ctx) {
     tcleRequired: false,
     tcleApplicable: false,
     packageItems: [],
-    blockers: [{ code: 'IDENTITY', message, ctaLabel: 'Ir para Contrato', ctaSection: 'contratos' }],
-    contract: ctx.docs?.contract || null,
+    blockers: [{
+      code: message.includes('orçamento') ? 'BUDGET_CONTRACT_CONTEXT_MISMATCH' : 'IDENTITY',
+      message,
+      ctaLabel: 'Ir para Contrato',
+      ctaSection: 'contratos',
+    }],
+    contract: null,
     package: null,
     identity: {
       tenantId: ctx.expectedTenant,
