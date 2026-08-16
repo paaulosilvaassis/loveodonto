@@ -21,7 +21,15 @@ const resolveStorageKey = () => {
 };
 
 const STORAGE_KEY = resolveStorageKey();
-const clone = (value) => JSON.parse(JSON.stringify(value));
+let dbCloneCount = 0;
+const clone = (value) => {
+  dbCloneCount += 1;
+  return JSON.parse(JSON.stringify(value));
+};
+export const getDbCloneCount = () => dbCloneCount;
+export const resetDbCloneCount = () => {
+  dbCloneCount = 0;
+};
 const normalizeTenantValue = (value) => {
   if (value === null || value === undefined) return '';
   return String(value).trim();
@@ -369,6 +377,12 @@ export async function initDb() {
 export function loadDbAsync() {
   return initDb().then(() => clone(rt().cachedDb));
 }
+
+/** Leitura sem clone. Só para caminhos read-only (RBAC). Não mutar o retorno. */
+export const peekDb = () => {
+  if (rt().cachedDb !== null) return rt().cachedDb;
+  return loadDb();
+};
 
 export const loadDb = () => {
   if (rt().cachedDb !== null) return clone(rt().cachedDb);

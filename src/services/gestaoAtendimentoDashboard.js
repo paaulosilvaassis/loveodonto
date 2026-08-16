@@ -2,7 +2,7 @@
  * Central Operacional — agregador completo da Gestão de Atendimento.
  */
 
-import { loadDb } from '../db/index.js';
+import { peekDb } from '../db/index.js';
 import { fetchAppointmentsByDate } from './patientFlowService.js';
 import { listCrmBudgets, BUDGET_STATUS } from './crmBudgetService.js';
 import { APPOINTMENT_STATUS } from './appointmentService.js';
@@ -89,12 +89,11 @@ function parseDurationMinutes(apt) {
   return 30;
 }
 
-function getPhoneDigits(apt) {
+function getPhoneDigits(apt, db) {
   const phone = apt.phone || apt.patient?.phones?.[0];
   if (typeof phone === 'string') return phone.replace(/\D/g, '');
   if (phone?.ddd && phone?.number) return `${phone.ddd}${phone.number}`.replace(/\D/g, '');
-  const db = loadDb();
-  const phones = (db.patientPhones || []).filter((p) => p.patient_id === apt.patientId);
+  const phones = (db?.patientPhones || []).filter((p) => p.patient_id === apt.patientId);
   const primary = phones.find((p) => p.is_primary) || phones[0];
   if (primary) return `${primary.ddd || ''}${primary.number || ''}`.replace(/\D/g, '');
   return '';
@@ -177,7 +176,7 @@ function buildTimeline(list) {
   }));
 }
 
-function buildWaiting(list, now = new Date()) {
+function buildWaiting(list, now = new Date(), db) {
   return sortByTime(list.filter((a) => WAITING_STATUSES.has(a.status))).map((apt) => {
     const waitSec = getWaitTimeSeconds(apt.checkInAt || apt.checkedInAt, now);
     const waitMin = Math.floor(waitSec / 60);
@@ -190,7 +189,7 @@ function buildWaiting(list, now = new Date()) {
       isLongWait: waitMin >= 20,
       professionalName: apt.professionalName || '—',
       patientId: apt.patientId,
-      phone: getPhoneDigits(apt),
+      phone: getPhoneDigits(apt, db),
     };
   });
 }
@@ -220,13 +219,13 @@ function buildUpcoming(list, date, limit = 10) {
     }));
 }
 
-function buildPendingConfirmations(list) {
+function buildPendingConfirmations(list, db) {
   return sortByTime(list.filter((a) => PENDING_CONFIRM_STATUSES.has(a.status))).map((apt) => ({
     appointmentId: apt.id,
     startTime: apt.startTime,
     patientName: apt.patientName || 'Paciente',
     professionalName: apt.professionalName || '—',
-    phone: getPhoneDigits(apt),
+    phone: getPhoneDigits(apt, db),
     patientId: apt.patientId,
   }));
 }
@@ -346,7 +345,6 @@ function buildClinicAlerts(ctx) {
 }
 
 export function getFilterOptions() {
-  const db = loadDb();
   const professionals = listCollaborators().map((c) => ({
     id: c.id,
     name: c.apelido || c.nomeCompleto || c.id,
@@ -363,15 +361,15 @@ export function getFilterOptions() {
  * Dashboard operacional completo — 13 seções agregadas.
  */
 export function getOperationalDashboard(date, filters = {}) {
-  const db = loadDb();
+  const db = peekDb();
   const yesterday = isoDateOffset(date, -1);
   const rawToday = fetchAppointmentsByDate(date);
   const rawYesterday = fetchAppointmentsByDate(yesterday);
   const todayList = applyFilters(rawToday, filters);
   const yesterdayList = applyFilters(rawYesterday, filters);
 
-  const waiting = buildWaiting(todayList);
-  const pendingConfirmations = buildPendingConfirmations(todayList);
+  const waiting = buildWaiting(todayList, new Date(), db);
+  const pendingConfirmations = buildPendingConfirmations(todayList, db);
   const noShows = buildNoShows(todayList, db);
   const inProgress = buildInProgress(todayList);
   const upcoming = buildUpcoming(todayList, date);

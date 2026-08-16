@@ -157,6 +157,7 @@ export function createTenantContextHandler(deps) {
       const permissionFields = extractPermissionFieldsFromAppMetadata(
         currentUserAuthMeta?.app_metadata || authMeta,
       );
+      const tenantHasCustom = tenantUser.has_custom_permissions === true;
 
       res.json({
         tenant,
@@ -181,9 +182,9 @@ export function createTenantContextHandler(deps) {
           role: tenantUser.role || tenantUser.role_slug || 'atendimento',
           isActive: tenantUser.is_active ?? true,
           collaboratorId: tenantUser.collaborator_id || null,
-          permissionOverrides: permissionFields.permission_overrides,
-          has_custom_permissions: permissionFields.has_custom_permissions,
-          custom_permissions: permissionFields.custom_permissions,
+          permissionOverrides: tenantHasCustom ? permissionFields.permission_overrides : {},
+          has_custom_permissions: tenantHasCustom,
+          custom_permissions: tenantHasCustom ? permissionFields.custom_permissions : null,
         },
         teamRoster,
       });

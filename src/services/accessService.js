@@ -3,7 +3,7 @@
  * Backend é a fonte da verdade.
  */
 
-import { loadDb, withDb } from '../db/index.js';
+import { loadDb, peekDb, withDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { logAction } from './logService.js';
 import { buildPermissionsCatalog } from '../permissions/catalog.js';
@@ -44,11 +44,18 @@ export { ROLES, ROLE_LABELS, ROLE_ADMIN };
  * Retorna catálogo de permissões (do DB ou build inicial).
  */
 export function getPermissionsCatalog() {
-  const db = loadDb();
+  const db = peekDb();
   if (Array.isArray(db.permissionsCatalog) && db.permissionsCatalog.length > 0) {
     return db.permissionsCatalog;
   }
   return buildPermissionsCatalog();
+}
+
+function findCatalogPermission(moduleKey, actionKey) {
+  const fromDb = getPermissionsCatalog();
+  const found = fromDb.find((p) => p.module_key === moduleKey && p.action_key === actionKey);
+  if (found) return found;
+  return buildPermissionsCatalog().find((p) => p.module_key === moduleKey && p.action_key === actionKey);
 }
 
 /**
@@ -59,29 +66,34 @@ export function getPermissionsCatalog() {
  */
 export function can(user, moduleKey, actionKey) {
   if (!user || !moduleKey || !actionKey) return false;
-  const db = loadDb();
+  const db = peekDb();
   const u = resolveEffectiveUser(db, user);
   const hasAccess = u.has_system_access !== false && u.active !== false;
   if (!hasAccess) return false;
   const roleNorm = String(u.role || '').toLowerCase();
   if (roleNorm === ROLE_ADMIN || roleNorm === 'master' || roleNorm === 'owner' || u.isMaster) return true;
 
-  const catalog = getPermissionsCatalog();
-  const permission = catalog.find((p) => p.module_key === moduleKey && p.action_key === actionKey);
+  const permission = findCatalogPermission(moduleKey, actionKey);
   const pid = permission?.id;
   if (!pid) return false;
 
   const rolePerms = getRolePermissionIds(db, u.role);
   const baseAllowed = rolePerms.includes(pid);
-  const saasOverrides = u?.permissionOverrides && typeof u.permissionOverrides === 'object' && !Array.isArray(u.permissionOverrides)
+  const useCustomOverrides = u.has_custom_permissions !== false;
+  const saasOverrides = useCustomOverrides
+    && u?.permissionOverrides
+    && typeof u.permissionOverrides === 'object'
+    && !Array.isArray(u.permissionOverrides)
     ? u.permissionOverrides
     : null;
   if (saasOverrides && Object.prototype.hasOwnProperty.call(saasOverrides, pid)) {
     const overrideVal = saasOverrides[pid];
     if (typeof overrideVal === 'boolean') return overrideVal;
   }
-  const userOverride = (db.userPermissions || []).find((x) => x.user_id === u.id && x.permission_id === pid);
-  if (userOverride && typeof userOverride.allowed === 'boolean') return userOverride.allowed;
+  if (useCustomOverrides) {
+    const userOverride = (db.userPermissions || []).find((x) => x.user_id === u.id && x.permission_id === pid);
+    if (userOverride && typeof userOverride.allowed === 'boolean') return userOverride.allowed;
+  }
   return baseAllowed;
 }
 
@@ -108,15 +120,18 @@ function resolveEffectiveUser(db, user) {
     role: user.role || dbUser.role,
     isMaster: user.isMaster ?? dbUser.isMaster,
     permissionOverrides: user.permissionOverrides ?? dbUser.permissionOverrides,
+    has_custom_permissions: user.has_custom_permissions ?? dbUser.has_custom_permissions,
     has_system_access: user.has_system_access ?? dbUser.has_system_access,
     active: user.active ?? dbUser.active,
   };
 }
 
 function getRolePermissionIds(db, role) {
+  const defaults = ROLE_DEFAULT_PERMISSIONS[role] || [];
   const fromDb = (db.rolePermissions || []).filter((r) => r.role === role).map((r) => r.permission_id);
-  if (fromDb.length > 0) return fromDb;
-  return ROLE_DEFAULT_PERMISSIONS[role] || [];
+  if (!fromDb.length) return defaults;
+  if (!defaults.length) return fromDb;
+  return [...new Set([...defaults, ...fromDb])];
 }
 
 const LEGACY_ACTION_MAP = { read: 'view', write: 'edit' };
@@ -127,7 +142,7 @@ const LEGACY_ACTION_MAP = { read: 'view', write: 'edit' };
  */
 export function canByPermission(user, permission) {
   if (!user) return false;
-  const db = loadDb();
+  const db = peekDb();
   const u = resolveEffectiveUser(db, user);
   if (u.has_system_access === false || u.active === false) return false;
   const roleNorm = String(u.role || '').toLowerCase();
@@ -143,7 +158,7 @@ export function canByPermission(user, permission) {
  * Retorna permissões padrão do perfil (role).
  */
 export function getRoleDefaultPermissionIds(role) {
-  const db = loadDb();
+  const db = peekDb();
   return getRolePermissionIds(db, role);
 }
 
@@ -266,6 +281,8 @@ export function getUserAccess(userId) {
     has_system_access: u.has_system_access !== false,
     role: u.role || 'atendimento',
     overrides,
+    has_custom_permissions: u.has_custom_permissions === true,
+    custom_permissions: u.custom_permissions || null,
   };
 }
 
@@ -336,6 +353,14 @@ export function updateUserAccess(actor, targetUserId, payload) {
     }
     if (payload.role && ROLES.includes(payload.role)) {
       db.users[userIndex].role = payload.role;
+    }
+    if (typeof payload.has_custom_permissions === 'boolean') {
+      db.users[userIndex].has_custom_permissions = payload.has_custom_permissions;
+    }
+    if (payload.has_custom_permissions === false) {
+      db.users[userIndex].custom_permissions = undefined;
+    } else if (payload.custom_permissions && typeof payload.custom_permissions === 'object') {
+      db.users[userIndex].custom_permissions = payload.custom_permissions;
     }
 
     if (payload.overrides && typeof payload.overrides === 'object') {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDownRight,
@@ -96,11 +96,33 @@ export default function GestaoAtendimentoPage() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [toast, setToast] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [dashboard, setDashboard] = useState(null);
+  const [dashboardError, setDashboardError] = useState('');
+  const [dashboardLoading, setDashboardLoading] = useState(true);
 
-  const dashboard = useMemo(
-    () => getOperationalDashboard(selectedDate, filters),
-    [selectedDate, filters, refreshKey]
-  );
+  useEffect(() => {
+    let cancelled = false;
+    setDashboardLoading(true);
+    const timer = window.setTimeout(() => {
+      try {
+        const next = getOperationalDashboard(selectedDate, filters);
+        if (cancelled) return;
+        setDashboard(next);
+        setDashboardError('');
+        setLastUpdate(new Date());
+      } catch (err) {
+        if (cancelled) return;
+        setDashboardError(err?.message || 'Não foi possível carregar a visão operacional.');
+        setDashboard(null);
+      } finally {
+        if (!cancelled) setDashboardLoading(false);
+      }
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [selectedDate, filters, refreshKey]);
 
   const refresh = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -191,6 +213,16 @@ export default function GestaoAtendimentoPage() {
         Última atualização: {lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
         {isToday && ' · atualização automática a cada 30s'}
       </p>
+
+      {dashboardLoading && !dashboard && (
+        <p className="op-empty">Carregando visão operacional…</p>
+      )}
+      {dashboardError && !dashboard && (
+        <p className="op-empty" role="alert">{dashboardError}</p>
+      )}
+
+      {dashboard && (
+      <>
 
       {showFilters && (
         <div className="op-filters">
@@ -464,6 +496,8 @@ export default function GestaoAtendimentoPage() {
           </section>
         </aside>
       </div>
+      </>
+      )}
     </div>
   );
 }

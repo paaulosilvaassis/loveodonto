@@ -195,10 +195,14 @@ function buildResolvedUser(supaSession, bootstrap) {
     ? supaSession.user.app_metadata
     : {};
   const rawOverrides = authMeta.permission_overrides;
-  const permissionOverrides = rawOverrides && typeof rawOverrides === 'object' && !Array.isArray(rawOverrides)
+  const tenantAllowsCustom = bootstrap.has_custom_permissions === true;
+  const permissionOverrides = tenantAllowsCustom
+    && rawOverrides
+    && typeof rawOverrides === 'object'
+    && !Array.isArray(rawOverrides)
     ? rawOverrides
     : {};
-  const hasCustomPermissions = authMeta.has_custom_permissions === true;
+  const hasCustomPermissions = tenantAllowsCustom;
   const customPermissions = hasCustomPermissions
     && authMeta.custom_permissions
     && typeof authMeta.custom_permissions === 'object'

@@ -6,10 +6,7 @@ import { useTenant } from '../tenant/useTenant.js';
 import { useClinicSummary } from '../hooks/useClinicSummary.js';
 import { useClinicLogo } from '../hooks/useClinicLogo.js';
 import { navCategories, getActiveCategory, getActiveItem } from '../navigation/navCategories.js';
-import { resolveRoutePermission } from '../navigation/routePermissionMap.js';
-import { canAccessRoute } from '../tenant/tenantAccess.js';
-import { can as canByPermission } from '../permissions/permissions.js';
-import { isPrivilegedUser, isRoutePermissionAllowed } from '../utils/rbacHelpers.js';
+import { canSeeNavItem, resolveCategoryLandingRoute } from '../navigation/navAccess.js';
 import { logAction } from '../services/logService.js';
 import PatientQuickCreateModal from './PatientQuickCreateModal.jsx';
 import OpeningScreen, { shouldShowOpening } from './OpeningScreen.jsx';
@@ -31,27 +28,6 @@ const readLocal = (key, fallback) => {
 
 const writeLocal = (key, value) => {
   localStorage.setItem(key, JSON.stringify(value));
-};
-
-const isAllowed = (user, allowedRoles) => {
-  if (!user) return false;
-  if (!allowedRoles || allowedRoles.length === 0) return true;
-  if (allowedRoles.includes('*')) return true;
-  if (user.role === 'master' || user.role === 'admin' || user.role === 'owner') return true;
-  return allowedRoles.includes(user.role);
-};
-
-const canSeeNavItem = (user, item, modules, flags) => {
-  if (!user) return { allowed: false, roleAllowed: false, moduleAllowed: false, permissionAllowed: false };
-  const roleAllowed = isAllowed(user, item.rolesAllowed);
-  const moduleAllowed = canAccessRoute(item.route, modules, flags);
-  const permission = resolveRoutePermission(item.route);
-  const permissionAllowed = isRoutePermissionAllowed(user, permission, canByPermission);
-  const isMaster = isPrivilegedUser(user);
-  const allowed = isMaster
-    ? moduleAllowed
-    : moduleAllowed && permissionAllowed;
-  return { allowed, roleAllowed, moduleAllowed, permissionAllowed };
 };
 
 export default function Layout({ children }) {
@@ -113,8 +89,7 @@ export default function Layout({ children }) {
     // Verifica se a rota atual pertence à nova categoria
     const activeItem = getActiveItem(location.pathname, categoryId);
     if (!activeItem) {
-      // Redireciona para a rota padrão da categoria
-      navigate(category.defaultRoute);
+      navigate(resolveCategoryLandingRoute(category, user, tenant.modules, tenant.flags));
     }
 
     logAction('navigation:category_click', { categoryId, categoryLabel: category.label });

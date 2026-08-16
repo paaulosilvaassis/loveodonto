@@ -178,6 +178,7 @@ async function fetchSaasAccessBootstrapViaAdminApi(client, session = null) {
           || json?.currentUser?.collaborator_id
           || json?.access?.collaborator_id
           || null,
+        has_custom_permissions: json?.currentUser?.has_custom_permissions === true,
       };
     } catch (err) {
       lastErr = err;
