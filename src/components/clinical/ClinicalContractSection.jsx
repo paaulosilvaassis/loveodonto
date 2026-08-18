@@ -579,13 +579,32 @@ export function ClinicalContractSection({
           </div>
         ) : (
           <div className="clinical-contract-v2">
-            {budget?.id ? (
+            {(effectiveBudget?.id || budget?.id) ? (
               <ClinicalDocumentPackagePanel
                 appointmentId={appointmentId}
-                budgetId={budget.id}
+                budgetId={effectiveBudget?.id || budget.id}
                 patientId={patientId}
-                contractStatus={linkedContract?.status || null}
+                user={user}
                 compact
+                toast={showToast}
+                onRefresh={() => {
+                  setHistoryKey((k) => k + 1);
+                  onWorkflowRefresh?.();
+                }}
+                onOpenCeremony={(actionKey) => {
+                  if (actionKey === 'send' || actionKey === 'resend' || actionKey === 'sign_now') {
+                    handleSendSignature();
+                    return;
+                  }
+                  if (actionKey === 'review' && !linkedContract) {
+                    openCreateContract();
+                    return;
+                  }
+                  handleViewPdf();
+                }}
+                onViewDocument={handleViewPdf}
+                onDownloadPdf={handleDownloadPdf}
+                onNavigateProntuario={(href) => navigate(href)}
               />
             ) : null}
             {contractReadiness && !linkedContract ? (

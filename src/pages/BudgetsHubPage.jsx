@@ -21,8 +21,6 @@ import {
 } from '../services/clinicalBudgetHubService.js';
 import { openExistingBudget } from '../services/budgetNavigationService.js';
 import { buildFinanceNavigationUrl } from '../services/patientFinancialSummaryService.js';
-import { validateBudgetContractGeneration } from '../services/operationalContractWizardService.js';
-import { formatUxMessage } from '../contracts/operationalUxMessages.js';
 import {
   fetchContractsOperationalRolloutFromServer,
   getServerOperationalUxSnapshot,
@@ -146,31 +144,13 @@ export default function BudgetsHubPage() {
   };
 
   const handleGenerateContract = (row) => {
-    if (!operationalUxEnabled) {
-      openExistingBudgetRow(row, 'contratos');
-      return;
-    }
     const patientId = resolveRowPatientId(row);
-    const check = validateBudgetContractGeneration({
-      patientId,
-      budgetId: row.id,
-      appointmentId: row.appointmentId,
-      allowExisting: Boolean(row.contractId),
-    });
-    if (check.duplicateBlocked && !row.contractId) {
-      showToast(check.errors[0] || formatUxMessage('CONTRACT_ALREADY_EXISTS'), 'error');
-      return;
-    }
-    if (!row.contractId && !check.ok) {
-      showToast(check.errors[0] || formatUxMessage('BUDGET_INCOMPLETE'), 'error');
-      return;
-    }
     recordContractsRolloutMetric(
       row.contractId ? 'contract_continue_clicked' : 'contract_generate_clicked',
       user,
     );
-    recordContractsRolloutMetric('wizard_opened', user);
-    setWizardRow(row);
+    openExistingBudgetRow(row, 'contratos');
+    if (!patientId) return;
   };
 
   const cardHandlers = {

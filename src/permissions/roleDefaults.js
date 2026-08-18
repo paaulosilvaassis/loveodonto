@@ -55,6 +55,13 @@ export const ROLE_DEFAULT_PERMISSIONS = {
     p('patients', 'view'), p('patients', 'edit'),
     p('prontuario_atendimento', 'view'), p('prontuario_atendimento', 'create'), p('prontuario_atendimento', 'edit'),
     p('prontuario_documentos', 'view'),
+    p('prontuario_contratos', 'view'),
+    p('prontuario_contratos', 'create'),
+    p('prontuario_contratos', 'send'),
+    p('admin_contratos', 'view'),
+    p('admin_contratos', 'generate'),
+    p('admin_contratos', 'print'),
+    p('admin_contratos', 'export_pdf'),
   ],
   dentista: [
     p('dashboard', 'view'),

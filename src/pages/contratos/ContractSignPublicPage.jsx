@@ -20,6 +20,10 @@ import {
   PublicSigningDocumentCta,
 } from '../../components/contracts/public/PublicSigningSummarySections.jsx';
 import { PublicPackageManifestDocuments } from '../../components/contracts/public/PublicPackageManifestDocuments.jsx';
+import {
+  buildLegalPackageCeremonyFromContract,
+  ceremonyIncludesLgpd,
+} from '../../contracts/legalPackageCeremony.js';
 import { UX_MESSAGES, formatUxMessage } from '../../contracts/operationalUxMessages.js';
 import { recordContractsRolloutMetric } from '../../services/contractsOperationalRolloutService.js';
 import { isStagingTestModeEnabled } from '../../domain/contracts/staging/staging-browser-test-mode.ts';
@@ -39,7 +43,15 @@ export default function ContractSignPublicPage() {
   );
   const [stagingPackage, setStagingPackage] = useState(null);
   const [signGate, setSignGate] = useState({ canSign: true, hasManifest: false });
-  const hasPackage = Boolean(stagingPackage?.publicDocs?.length);
+  const operationalDocs = useMemo(
+    () => buildLegalPackageCeremonyFromContract(resolved?.contract),
+    [resolved],
+  );
+  const ceremonyDocs = stagingPackage?.publicDocs?.length
+    ? stagingPackage.publicDocs
+    : operationalDocs;
+  const hasPackage = ceremonyDocs.length > 0;
+  const lgpdInCeremony = ceremonyIncludesLgpd(ceremonyDocs);
 
   useEffect(() => {
     if (token && resolved && !resolved.expired) {
@@ -151,7 +163,7 @@ export default function ContractSignPublicPage() {
 
   const handlePackageChange = async (docId, next) => {
     setPackageState((prev) => ({ ...prev, [docId]: next }));
-    if (next?.accepted && token) {
+    if (next?.accepted && token && stagingPackage?.publicDocs?.length) {
       try {
         await recordStagingPackageAcceptance({
           token,
@@ -168,12 +180,22 @@ export default function ContractSignPublicPage() {
   const handleSign = async () => {
     setError('');
     if (hasPackage) {
-      const gate = evaluateStagingPackageSignGate(token);
-      setSignGate(gate);
-      if (!gate.canSign) {
-        setError('Visualize e aceite Contrato, TCLE e LGPD obrigatórios antes de assinar.');
-        setPhase('package');
-        return;
+      if (stagingPackage?.publicDocs?.length) {
+        const gate = evaluateStagingPackageSignGate(token);
+        setSignGate(gate);
+        if (!gate.canSign) {
+          setError('Visualize e aceite Contrato, TCLE e LGPD obrigatórios antes de assinar.');
+          setPhase('package');
+          return;
+        }
+      } else {
+        const requiredIds = ceremonyDocs.filter((d) => d.required !== false).map((d) => d.id);
+        const accepted = requiredIds.every((id) => packageState[id]?.accepted);
+        if (!accepted) {
+          setError('Visualize e aceite Contrato, TCLE e LGPD obrigatórios antes de assinar.');
+          setPhase('package');
+          return;
+        }
       }
     } else if (!requiredOk) {
       setError('Marque os consentimentos obrigatórios, incluindo o aviso de privacidade, para continuar.');
@@ -334,12 +356,14 @@ export default function ContractSignPublicPage() {
       ) : null}
 
       {phase === 'package' && hasPackage ? (
-        <PublicPackageManifestDocuments
-          documents={stagingPackage.publicDocs}
-          initialState={packageState}
-          onChange={handlePackageChange}
-          onReadyToSign={() => setPhase('sign')}
-        />
+        <div data-testid="public-legal-ceremony" data-lgpd={lgpdInCeremony ? 'true' : 'false'}>
+          <PublicPackageManifestDocuments
+            documents={ceremonyDocs}
+            initialState={packageState}
+            onChange={handlePackageChange}
+            onReadyToSign={() => setPhase('sign')}
+          />
+        </div>
       ) : null}
 
       {phase === 'document' || showPreview ? (

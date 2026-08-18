@@ -28,6 +28,7 @@ import { processApprovedBudgetFinance } from '../../services/clinicalBudgetFinan
 import { BudgetPaymentConditions } from './budget/BudgetPaymentConditions.jsx';
 import { BudgetSummaryPanel } from './budget/BudgetSummaryPanel.jsx';
 import { BudgetPremiumHeader } from './budget/BudgetPremiumHeader.jsx';
+import { BudgetLegalPackageSection } from './budget/BudgetLegalPackageSection.jsx';
 import { BudgetCommercialFunnel } from './budget/BudgetCommercialFunnel.jsx';
 import { BudgetProceduresDetailModal } from './budget/BudgetProceduresDetailModal.jsx';
 import { BudgetApprovalModal } from './budget/BudgetApprovalModal.jsx';
@@ -691,6 +692,16 @@ export function ClinicalBudgetSection({
             </ClinicalBtn>
           ) : null}
         </div>
+      ) : null}
+
+      {isApprovedView ? (
+        <BudgetLegalPackageSection
+          appointmentId={appointmentId}
+          budgetId={budget?.id || null}
+          patientId={patient?.id || null}
+          user={user}
+          onOpenPackage={onNavigateToContract}
+        />
       ) : null}
 
       {canFinishAppointment ? (

@@ -13,6 +13,7 @@ Estes documentos **detalham** módulos referenciados nas Constituições. Regras
 | **Agenda** | [agenda.md](./agenda.md) |
 | **CRM** | [CRM.md](./CRM.md) · [CRM_CLINICO.md](./CRM_CLINICO.md) |
 | **Prontuário** | [prontuario.md](./prontuario.md) |
+| **Contratos e Consentimentos** | [Arquitetura Phase 10](../platform/PHASE_10_CONTRACTS_ARCHITECTURE.md) |
 | **RH / Colaboradores** | [collaborators.md](./collaborators.md) |
 | **Dados da Clínica** | [clinic-profile.md](./clinic-profile.md) |
 | **Chat Inteligente / Comercial** | [marketing-chat-inteligente-arquitetura-loveodonto.md](./marketing-chat-inteligente-arquitetura-loveodonto.md) |
@@ -26,7 +27,7 @@ Estes documentos **detalham** módulos referenciados nas Constituições. Regras
 
 ## Módulos pendentes de documentação dedicada
 
-Financeiro · Orçamentos · Contratos · Convênios · Odontograma · Dashboard · Permissões UI · Estoque
+Financeiro · Orçamentos · Convênios · Odontograma · Dashboard · Permissões UI · Estoque
 
 Roadmap: [`../roadmap/README.md`](../roadmap/README.md)
 

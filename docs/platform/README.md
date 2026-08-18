@@ -14,6 +14,9 @@ Documentos técnicos transversais ao Love Odonto V2: console SaaS, navegação, 
 | [navigation.md](./navigation.md) | Rotas e estrutura de navegação |
 | [PRECIFICACAO-NATIVO.md](./PRECIFICACAO-NATIVO.md) | Modelo de precificação nativo |
 | [PRECIFICACAO-INTEGRACAO-MINIMA.md](./PRECIFICACAO-INTEGRACAO-MINIMA.md) | Integração mínima de precificação |
+| [PHASE_10_CONTRACTS_ARCHITECTURE.md](./PHASE_10_CONTRACTS_ARCHITECTURE.md) | Arquitetura-alvo do módulo Contratos e Consentimentos |
+
+Wave A (produto): [`../reports/PHASE_10_WAVE_A_COMPLETE.md`](../reports/PHASE_10_WAVE_A_COMPLETE.md)
 
 ### Repository V3 (Phase 5.15)
 

@@ -131,7 +131,7 @@ export function BudgetHubCard({
             data-testid="budget-generate-contract"
             onClick={() => onGenerateContract?.(row)}
           >
-            <FileSignature size={14} /> Gerar contrato
+            <FileSignature size={14} /> Gerar contrato e consentimentos
           </button>
         ) : null}
         {showContinue ? (
@@ -141,7 +141,7 @@ export function BudgetHubCard({
             data-testid="budget-continue-contract"
             onClick={() => onGenerateContract?.(row)}
           >
-            <FileSignature size={14} /> {contractAction.label || 'Continuar contrato'}
+            <FileSignature size={14} /> Abrir pacote jurídico
           </button>
         ) : null}
         <button
@@ -158,12 +158,12 @@ export function BudgetHubCard({
             data-testid="budget-view-contract"
             onClick={() => onContract(row)}
           >
-            <FileSignature size={14} /> Ver contrato
+            <FileSignature size={14} /> Abrir pacote jurídico
           </button>
         ) : null}
         {!showGenerate && !showContinue && !showView && row.contractId ? (
           <button type="button" className="bhub-btn" onClick={() => onContract(row)}>
-            <FileSignature size={14} /> Ver contrato
+            <FileSignature size={14} /> Abrir pacote jurídico
           </button>
         ) : null}
         <button type="button" className="bhub-btn" onClick={() => onPrint(row)}>

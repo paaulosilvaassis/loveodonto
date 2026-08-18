@@ -160,6 +160,7 @@ export default function PatientBudgetsContractsTab({ patientId, patientName = ''
             appointmentId={treatmentDocRow.appointmentId}
             budgetId={treatmentDocRow.id}
             patientId={patientId}
+            user={user}
             contractStatus={treatmentDocRow.contractStatus}
             onOpenContracts={() => openExistingBudgetRow(treatmentDocRow, 'contratos')}
           />

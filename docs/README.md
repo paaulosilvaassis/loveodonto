@@ -82,6 +82,7 @@ graph TD
 | [navigation.md](./platform/navigation.md) | Navegação e rotas |
 | [PRECIFICACAO-NATIVO.md](./platform/PRECIFICACAO-NATIVO.md) | Precificação nativa |
 | [PRECIFICACAO-INTEGRACAO-MINIMA.md](./platform/PRECIFICACAO-INTEGRACAO-MINIMA.md) | Integração mínima precificação |
+| [PHASE_10_CONTRACTS_ARCHITECTURE.md](./platform/PHASE_10_CONTRACTS_ARCHITECTURE.md) | Arquitetura-alvo Contratos e Consentimentos |
 
 > Console dedicado: `console/docs/` (billing, arquitetura console).
 
@@ -103,6 +104,7 @@ graph TD
 | Agenda | [agenda.md](./modules/agenda.md) |
 | CRM | [CRM.md](./modules/CRM.md) · [CRM_CLINICO.md](./modules/CRM_CLINICO.md) |
 | Prontuário | [prontuario.md](./modules/prontuario.md) |
+| Contratos e Consentimentos | [PHASE_10_CONTRACTS_ARCHITECTURE.md](./platform/PHASE_10_CONTRACTS_ARCHITECTURE.md) |
 | RH / Colaboradores | [collaborators.md](./modules/collaborators.md) |
 | Clínica | [clinic-profile.md](./modules/clinic-profile.md) |
 | Chat Inteligente | [marketing-chat-inteligente-*.md](./modules/) |

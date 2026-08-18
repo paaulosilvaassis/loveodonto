@@ -71,7 +71,7 @@ export function BudgetHubListView({
                 data-testid="budget-generate-contract"
                 onClick={() => onGenerateContract?.(row)}
               >
-                <FileSignature size={12} /> Gerar contrato
+                <FileSignature size={12} /> Gerar contrato e consentimentos
               </button>
             ) : null}
             {showContinue ? (
@@ -91,7 +91,7 @@ export function BudgetHubListView({
                 data-testid="budget-view-contract"
                 onClick={() => onContract(row)}
               >
-                Ver contrato
+                Abrir pacote jurídico
               </button>
             ) : null}
             <button type="button" className="bhub-btn bhub-btn--sm" onClick={() => onOpen(row)}>Abrir</button>

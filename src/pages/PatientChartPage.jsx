@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Section } from '../components/Section.jsx';
 import { SectionCard } from '../components/SectionCard.jsx';
 import { Tabs } from '../components/Tabs.jsx';
@@ -30,6 +30,7 @@ import {
   buildFinanceNavigationUrl,
 } from '../services/patientFinancialSummaryService.js';
 import { ClinicalGuideModal } from '../components/clinical/guide/ClinicalGuideModal.jsx';
+import PatientLegalPackagesTab from '../components/prontuario/PatientLegalPackagesTab.jsx';
 
 const TAB_CONFIG = [
   { value: 'careCentral', label: 'Visão Geral' },
@@ -37,6 +38,7 @@ const TAB_CONFIG = [
   { value: 'anamnesisClinical', label: 'Anamnese Clínica' },
   { value: 'anamnesisAtm', label: 'Anamnese ATM' },
   { value: 'odontogram', label: 'Situação Bucal Atual' },
+  { value: 'legalPackages', label: 'Contratos e consentimentos' },
   { value: 'files', label: 'Arquivos e Documentos' },
   { value: 'confidential', label: 'Documentos Confidenciais' },
   { value: 'albums', label: 'Álbuns de Fotografias' },
@@ -127,6 +129,7 @@ const canEditFiles = (user) =>
 export default function PatientChartPage() {
   const { patientId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [patient, setPatient] = useState(null);
   const [activeTab, setActiveTab] = useState('careCentral');
@@ -153,6 +156,13 @@ export default function PatientChartPage() {
   useEffect(() => {
     setPatient(getPatient(patientId));
   }, [patientId]);
+
+  useEffect(() => {
+    const tab = String(searchParams.get('tab') || '').toLowerCase();
+    if (tab === 'contratos' || tab === 'consentimentos' || tab === 'legalpackages') {
+      setActiveTab('legalPackages');
+    }
+  }, [searchParams]);
 
   // Carrega dados dos formulários (Anamnese Clínica, ATM, Situação Bucal) assim que há patientId.
   // Não depende de permissão/pendências, para as abas nunca ficarem vazias.
@@ -411,10 +421,10 @@ export default function PatientChartPage() {
           <SectionCard>
             <SectionHeaderActions
               title={tabTitle}
-              isEditing={activeTab !== 'careCentral' && editingTab === activeTab}
-              onEdit={activeTab === 'careCentral' ? undefined : startEdit}
-              onCancel={activeTab === 'careCentral' ? undefined : cancelEdit}
-              onSave={activeTab === 'careCentral' ? undefined : saveEdit}
+              isEditing={activeTab !== 'careCentral' && activeTab !== 'legalPackages' && editingTab === activeTab}
+              onEdit={activeTab === 'careCentral' || activeTab === 'legalPackages' ? undefined : startEdit}
+              onCancel={activeTab === 'careCentral' || activeTab === 'legalPackages' ? undefined : cancelEdit}
+              onSave={activeTab === 'careCentral' || activeTab === 'legalPackages' ? undefined : saveEdit}
             />
             {status.error ? <div className="alert error">{status.error}</div> : null}
             {status.success ? <div className="alert success">{status.success}</div> : null}
@@ -607,6 +617,31 @@ export default function PatientChartPage() {
                   </div>
                 </div>
               </div>
+            ) : null}
+
+            {activeTab === 'legalPackages' ? (
+              <PatientLegalPackagesTab
+                patientId={patientId}
+                user={user}
+                onViewDocument={(doc) => {
+                  const html = doc?.snapshotHtml;
+                  if (!html) return;
+                  const viewWindow = window.open('', '_blank');
+                  if (viewWindow) {
+                    viewWindow.document.write(html);
+                    viewWindow.document.close();
+                  }
+                }}
+                onDownloadPdf={(doc) => {
+                  const html = doc?.snapshotHtml;
+                  if (!html) return;
+                  const viewWindow = window.open('', '_blank');
+                  if (viewWindow) {
+                    viewWindow.document.write(html);
+                    viewWindow.document.close();
+                  }
+                }}
+              />
             ) : null}
 
             {activeTab === 'files' ? (

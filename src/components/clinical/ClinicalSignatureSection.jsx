@@ -203,6 +203,7 @@ export function ClinicalSignatureSection({
             appointmentId={appointmentId}
             budgetId={budgetId || readiness.identity?.budgetId}
             patientId={patientId}
+            user={user}
             contractStatus={contract?.status || null}
             compact
           />
