@@ -19,6 +19,7 @@ export const CEREMONY_STATUS = {
   PARTIALLY_SIGNED: 'partially_signed',
   AWAITING_REQUIRED_SIGNERS: 'awaiting_required_signers',
   SIGNED: 'signed',
+  COMPLETED: 'signed',
   LEGACY_SIGNED: 'legacy_signed',
 };
 
@@ -164,17 +165,25 @@ export function nextContractStatusAfterStroke(ceremony, { justSignedRole } = {})
 }
 
 export function buildCeremonySnapshot(ceremony, extra = {}) {
+  const allRequiredSatisfied = Boolean(ceremony.allRequiredSatisfied);
+  const status = allRequiredSatisfied ? CEREMONY_STATUS.SIGNED : ceremony.status;
   return {
     version: CEREMONY_VERSION,
-    status: ceremony.status,
+    status,
     requiredCount: ceremony.requiredCount,
     satisfiedCount: ceremony.satisfiedCount,
+    allRequiredSatisfied,
+    completedAt: allRequiredSatisfied
+      ? (extra.completedAt || ceremony.completedAt || new Date().toISOString())
+      : extra.completedAt || null,
     signingOrder: ceremony.signingOrder,
     dentistRtDeduped: Boolean(ceremony.dentistRtDeduped),
     witnesses: ceremony.requiredSigners
       .filter((s) => s.role === CLINICAL_SIGNER_ROLE.WITNESS)
       .map((s) => ({ personId: s.personId, name: s.name })),
     ...extra,
+    status,
+    allRequiredSatisfied,
   };
 }
 

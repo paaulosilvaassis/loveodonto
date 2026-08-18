@@ -4,6 +4,7 @@ import SignatureCanvas from '../../components/contracts/SignatureCanvas.jsx';
 import {
   getContractBySignToken,
   markContractViewed,
+  recordSignLinkFirstView,
   signContractViaLink,
 } from '../../services/contractModuleService.js';
 import { ContractDocumentPreview } from '../../contracts/ui/ContractUi.jsx';
@@ -29,6 +30,9 @@ import {
   recordStagingPackageAcceptance,
 } from '../../domain/contracts/staging/stagingClinicalPackageManifestBridge.js';
 import { withDb } from '../../db/index.js';
+import { fetchSigningClientContext } from '../../services/signingClientContextService.js';
+import { collectPresentedConsents } from '../../contracts/remoteSignatureEvidence.js';
+import { getPatient } from '../../services/patientService.js';
 
 export default function ContractSignPublicPage() {
   const { token } = useParams();
@@ -80,6 +84,27 @@ export default function ContractSignPublicPage() {
   const [error, setError] = useState('');
   const [showPreview, setShowPreview] = useState(false);
   const [evidenceHtml, setEvidenceHtml] = useState('');
+  const [consentTimes, setConsentTimes] = useState({});
+  const [clientContext, setClientContext] = useState(null);
+
+  useEffect(() => {
+    if (!token || !resolved || resolved.expired || resolved.replay) return;
+    recordSignLinkFirstView(token, {
+      human: true,
+      visibilityState: typeof document !== 'undefined' ? document.visibilityState : 'visible',
+      webdriver: typeof navigator !== 'undefined' ? Boolean(navigator.webdriver) : false,
+      prefetch: typeof document !== 'undefined' && document.prerendering === true,
+    });
+  }, [token, resolved]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ctx = await fetchSigningClientContext();
+      if (!cancelled && ctx) setClientContext(ctx);
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   if (!resolved) {
     return (
@@ -99,7 +124,19 @@ export default function ContractSignPublicPage() {
     );
   }
 
+  if (resolved.replay) {
+    return (
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-replay">
+        <h1>Este documento já foi assinado</h1>
+        <p>O link de assinatura já foi utilizado e não pode ser reutilizado.</p>
+      </div>
+    );
+  }
+
   const { contract } = resolved;
+  const registeredSignerName = contract.patientId
+    ? (getPatient(contract.patientId)?.profile?.full_name || '')
+    : '';
 
   if (done) {
     return (
@@ -181,12 +218,23 @@ export default function ContractSignPublicPage() {
       return;
     }
     try {
+      let observed = clientContext;
+      if (!observed) {
+        observed = await fetchSigningClientContext();
+        if (observed) setClientContext(observed);
+      }
       markContractViewed({ id: 'public' }, contract.id);
       signContractViaLink(token, {
         signerName,
         signerCpf,
         signatureImageDataUrl: signatureData,
-        consentAcceptances: consentMap,
+        typedSignerName: signerName,
+        presentedConsents: collectPresentedConsents(summary.privacy),
+        acceptanceMap: consentMap,
+        acceptedAtById: consentTimes,
+        requireConsent: !hasPackage,
+        observedClientContext: observed,
+        privacy: summary.privacy,
       });
 
       if (hasPackage && stagingPackage) {
@@ -364,7 +412,13 @@ export default function ContractSignPublicPage() {
           <PublicSigningPrivacySection
             privacy={summary.privacy}
             acceptance={consentMap}
-            onChange={(id, checked) => setConsentMap((prev) => ({ ...prev, [id]: checked }))}
+            onChange={(id, checked) => {
+              setConsentMap((prev) => ({ ...prev, [id]: checked }));
+              setConsentTimes((prev) => ({
+                ...prev,
+                [id]: checked ? new Date().toISOString() : null,
+              }));
+            }}
           />
           <div className="ctr-public-sign-actions">
             <button type="button" className="button secondary" onClick={() => setPhase('summary')}>
@@ -385,9 +439,20 @@ export default function ContractSignPublicPage() {
       {phase === 'sign' ? (
         <div className="ctr-public-sign-form">
           {error && <p className="text-sm text-[var(--color-error)]" role="alert">{error}</p>}
+          {registeredSignerName ? (
+            <p className="ctr-public-summary-note" data-testid="public-sign-canonical-identity">
+              Você está assinando como <strong>{registeredSignerName}</strong>.
+              Digite seu nome para confirmar. Diferenças de acento, espaços e maiúsculas são aceitas;
+              o nome cadastrado permanece a identidade canônica.
+            </p>
+          ) : null}
           <label>
             Nome completo
-            <input value={signerName} onChange={(e) => setSignerName(e.target.value)} />
+            <input
+              value={signerName}
+              onChange={(e) => setSignerName(e.target.value)}
+              autoComplete="name"
+            />
           </label>
           <label>
             CPF

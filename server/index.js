@@ -101,6 +101,7 @@ import { createUsersDeleteHandler } from './lib/usersDeleteApi.js';
 import { createCollaboratorAccessToggleHandler } from './lib/collaboratorAccessToggleApi.js';
 import { createContractsGeneratedHandler } from './lib/contractsGeneratedApi.js';
 import { createContractsSignatureInviteEmailHandler } from './lib/contractsSignatureEmailApi.js';
+import { createSigningClientContextHandler } from './lib/signingClientContextApi.js';
 import { createContractsOperationalRolloutHandlers } from './lib/contractsOperationalRolloutApi.js';
 import { createContractTemplatesV2Handlers } from './lib/contractTemplatesV2Api.js';
 import { createContractsV2Handlers } from './lib/contractsV2Api.js';
@@ -717,6 +718,7 @@ const handleContractsGenerated = createContractsGeneratedHandler({
   normalizeDatabaseError,
 });
 const handleContractsSignatureInviteEmail = createContractsSignatureInviteEmailHandler();
+const handleSigningClientContext = createSigningClientContextHandler();
 
 /** Modelos v2 — flags OFF; sem getService ⇒ storage unavailable se alguém forçar flag. */
 const contractTemplatesV2 = createContractTemplatesV2Handlers({});
@@ -1327,6 +1329,7 @@ app.get('/internal/app/contracts/signature-invite-email', (_req, res) => {
   });
 });
 app.post('/internal/app/contracts/signature-invite-email', requireAppUser, handleContractsSignatureInviteEmail);
+app.get('/internal/app/contracts/signing-client-context', handleSigningClientContext);
 
 /** Contract templates v2 — Phase 10.4 (feature flags OFF por padrão). */
 app.get('/internal/app/contract-templates-v2', requireAppUser, contractTemplatesV2.list);

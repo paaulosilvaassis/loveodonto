@@ -35,6 +35,7 @@ import {
 import { notifyClinicalBudgetUpdated } from './clinicalBudgetApprovedService.js';
 import { validateContractGeneration } from './contractValidationService.js';
 import { mergeContractAttachedTcleIds } from './clinicalTcleAttachmentService.js';
+import { coerceInternalSignatureType } from '../contracts/internalSignatureClassification.js';
 
 const APPROVED_BUDGET_STATUSES = new Set([
   BUDGET_STATUS.APROVADO,
@@ -158,7 +159,10 @@ export function buildSignatureSendFormDefaults({
     technicalEmail: settings.technicalResponsibleEmail || professional?.email || '',
     clinicEmail: resolveClinicEmail(settings) || clinic.email || '',
     linkExpiryDays: settings.signLinkExpiryDays || 7,
-    signatureType: settings.defaultSignatureType || LEGAL_SIGNATURE_TYPES.SIMPLE,
+    signatureType: coerceInternalSignatureType(
+      settings.defaultSignatureType || LEGAL_SIGNATURE_TYPES.SIMPLE,
+      settings,
+    ),
     professional,
   };
 }
@@ -167,15 +171,18 @@ export function resolveRequiredSignatureType({ budget, settings }) {
   const total = Number(budget?.totalValue || 0);
   const hasFinancing = Boolean(budget?.financingId);
   if (settings.financingRequireAdvancedSignature && hasFinancing) {
-    return LEGAL_SIGNATURE_TYPES.ADVANCED;
+    return coerceInternalSignatureType(LEGAL_SIGNATURE_TYPES.ADVANCED, settings);
   }
   if (settings.highValueRequireAdvancedSignature && total >= Number(settings.highValueThreshold || 0)) {
-    return LEGAL_SIGNATURE_TYPES.ADVANCED;
+    return coerceInternalSignatureType(LEGAL_SIGNATURE_TYPES.ADVANCED, settings);
   }
   if (settings.requireIcpCertificate) {
-    return LEGAL_SIGNATURE_TYPES.QUALIFIED;
+    return coerceInternalSignatureType(LEGAL_SIGNATURE_TYPES.QUALIFIED, settings);
   }
-  return settings.defaultSignatureType || LEGAL_SIGNATURE_TYPES.SIMPLE;
+  return coerceInternalSignatureType(
+    settings.defaultSignatureType || LEGAL_SIGNATURE_TYPES.SIMPLE,
+    settings,
+  );
 }
 
 export async function sendContractForDigitalSignature(user, contractId, formData) {
@@ -241,10 +248,13 @@ export async function sendContractForDigitalSignature(user, contractId, formData
     throw new Error('CPF do paciente é obrigatório para assinatura.');
   }
 
-  const signatureType = formData.signatureType || resolveRequiredSignatureType({
-    budget: formData.budget,
+  const signatureType = coerceInternalSignatureType(
+    formData.signatureType || resolveRequiredSignatureType({
+      budget: formData.budget,
+      settings,
+    }),
     settings,
-  });
+  );
 
   const { request, signUrl, documentHash } = await createSignatureRequest({
     user,

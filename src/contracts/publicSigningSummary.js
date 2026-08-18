@@ -206,6 +206,7 @@ export function defaultPrivacyBlock(requiredTerms = []) {
     const item = {
       id: t.id || t.code,
       code: t.code || t.id,
+      version: t.version || t.code || t.id || '1',
       label: t.label || t.code || 'Consentimento',
       required: Boolean(t.required),
     };
@@ -217,12 +218,14 @@ export function defaultPrivacyBlock(requiredTerms = []) {
     required.push({
       id: 'lgpd_notice',
       code: 'LGPD_NOTICE_ACKNOWLEDGED',
+      version: 'lgpd_notice.v1',
       label: 'Declaro que li e compreendi o aviso de privacidade (LGPD) aplicável a este documento.',
       required: true,
     });
     optional.push({
       id: 'image_use_optional',
       code: 'IMAGE_USE_OPTIONAL',
+      version: 'image_use.v1',
       label: 'Autorizo o uso de imagem para fins educativos ou de divulgação (opcional).',
       required: false,
     });

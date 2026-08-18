@@ -10,7 +10,9 @@ function tenantIdFromUser(user) {
 }
 
 /**
- * Registra evento na trilha jurídica de assinatura.
+ * Registra evento na trilha jurídica de assinatura (append-only).
+ * request_created é idempotente por requestId.
+ * email_sent é idempotente por requestId+messageId; resend com novo messageId gera novo evento.
  */
 export function logSignatureAudit({
   contractId,
@@ -18,8 +20,12 @@ export function logSignatureAudit({
   action,
   user = null,
   payload = {},
+  idempotencyKey = null,
 }) {
   if (!contractId || !action) return null;
+
+  const derivedKey = idempotencyKey
+    || deriveAuditIdempotencyKey({ action, requestId, payload });
 
   const entry = {
     id: createId('csaud'),
@@ -39,14 +45,30 @@ export function logSignatureAudit({
     externalId: payload.externalId || '',
     certificateUrl: payload.certificateUrl || '',
     metadata: payload.metadata || {},
+    idempotencyKey: derivedKey || null,
     createdAt: new Date().toISOString(),
   };
 
   return withDb((db) => {
     if (!Array.isArray(db.contractSignatureAudits)) db.contractSignatureAudits = [];
+    if (derivedKey) {
+      const existing = db.contractSignatureAudits.find((row) => row.idempotencyKey === derivedKey);
+      if (existing) return existing;
+    }
     db.contractSignatureAudits.push(entry);
     return entry;
   });
+}
+
+function deriveAuditIdempotencyKey({ action, requestId, payload }) {
+  if (!requestId) return null;
+  if (action === 'request_created') return `request_created:${requestId}`;
+  if (action === 'email_sent') {
+    const messageId = payload?.metadata?.messageId || payload?.externalId || '';
+    if (!messageId) return null;
+    return `email_sent:${requestId}:${messageId}`;
+  }
+  return null;
 }
 
 export function listSignatureAudits(contractId) {

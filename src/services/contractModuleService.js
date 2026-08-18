@@ -22,12 +22,25 @@ import {
   nextContractStatusAfterStroke,
   buildCeremonySnapshot,
   isLegacyClinicalSignature,
+  CEREMONY_STATUS,
 } from '../contracts/clinicalSignatureCeremony.js';
-import { mapLegacySignerRole } from '../contracts/clinicalRequiredSigners.js';
+import { mapLegacySignerRole, CLINICAL_SIGNER_ROLE } from '../contracts/clinicalRequiredSigners.js';
 import {
   assertAuthenticatedSignerForStroke,
-  isOperatorCollectedRole,
 } from '../contracts/authenticatedSignerIdentity.js';
+import {
+  AUTH_METHOD,
+  SIGNATURE_METHOD,
+  SIGNING_CHANNEL,
+  assertRequiredConsentsAccepted,
+  buildConsentAcceptances,
+  collectPresentedConsents,
+  computeEvidenceHash,
+  isLikelyHumanDocumentView,
+  namesDiverge,
+} from '../contracts/remoteSignatureEvidence.js';
+import { resolveEvidenceClientIp } from '../contracts/signingClientIp.js';
+import { maybeGenerateFinalSignedArtifact } from './finalSignedContractArtifactService.js';
 import {
   createGeneratedContractDraft,
   updateDraftGeneratedContract,
@@ -383,15 +396,58 @@ export function sendContractForSignature(user, contractId) {
   });
 }
 
-export function getContractBySignToken(token) {
+export function getContractBySignToken(token, claims = {}) {
   const db = loadDb();
-  const link = (db.contractSignLinks || []).find((l) => l.token === token && l.status === 'pending');
+  const link = (db.contractSignLinks || []).find((row) => row.token === token);
   if (!link) return null;
+  if (claims.claimedContractId && link.contractId !== claims.claimedContractId) return null;
+  if (claims.claimedSignerRole && link.signerRole) {
+    if (mapLegacySignerRole(link.signerRole) !== mapLegacySignerRole(claims.claimedSignerRole)) {
+      return null;
+    }
+  }
+  if (link.status === 'signed' || link.status === 'consumed') {
+    return { replay: true, link };
+  }
+  if (link.status !== 'pending') return null;
   if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
     return { expired: true, link };
   }
   const contract = getGeneratedContract(link.contractId);
   return { contract: normalizeContract(contract), link };
+}
+
+/**
+ * First-view idempotente do link público. Não consome o token.
+ * Prefetch/bot não deve chamar isto (ver isLikelyHumanDocumentView).
+ */
+export function recordSignLinkFirstView(token, {
+  human = true,
+  visibilityState,
+  webdriver,
+  prefetch = false,
+} = {}) {
+  if (!human || !isLikelyHumanDocumentView({ visibilityState, webdriver, prefetch })) {
+    return null;
+  }
+  const resolved = getContractBySignToken(token);
+  if (!resolved || resolved.expired || resolved.replay || !resolved.link) return resolved;
+  return withDb((db) => {
+    const links = db.contractSignLinks || [];
+    const idx = links.findIndex((row) => row.token === token);
+    if (idx < 0) return null;
+    const link = links[idx];
+    if (link.status !== 'pending') return link;
+    if (link.viewedAt) return link;
+    const viewedAt = new Date().toISOString();
+    links[idx] = { ...link, viewedAt };
+    const arr = db.generatedContracts || [];
+    const cIdx = arr.findIndex((row) => row.id === link.contractId);
+    if (cIdx >= 0 && arr[cIdx].status === CONTRACT_STATUS.SENT) {
+      arr[cIdx] = { ...arr[cIdx], status: CONTRACT_STATUS.VIEWED };
+    }
+    return links[idx];
+  });
 }
 
 export function markContractViewed(user, contractId) {
@@ -407,6 +463,19 @@ export function markContractViewed(user, contractId) {
   });
 }
 
+function resolveRegisteredSignerName({ signerRole, signerPersonId, contract }) {
+  const role = mapLegacySignerRole(signerRole);
+  if (role === CLINICAL_SIGNER_ROLE.PATIENT || role === CLINICAL_SIGNER_ROLE.LEGAL_GUARDIAN) {
+    const bundle = contract?.patientId ? getPatient(contract.patientId) : null;
+    return bundle?.profile?.full_name
+      || contract?.patientSnapshotJson?.full_name
+      || contract?.patientSnapshotJson?.name
+      || '';
+  }
+  const col = (loadDb().collaborators || []).find((row) => row.id === signerPersonId);
+  return col?.nomeCompleto || col?.name || '';
+}
+
 export function signContractOnScreen(user, contractId, {
   signerName,
   signerCpf,
@@ -419,6 +488,14 @@ export function signContractOnScreen(user, contractId, {
   expectedAppointmentId = null,
   expectedBudgetId = null,
   expectedPatientId = null,
+  signingChannel = null,
+  observedClientContext = null,
+  consentAcceptances = null,
+  presentedConsents = null,
+  acceptanceMap = null,
+  acceptedAtById = null,
+  requireConsent = false,
+  typedSignerName = null,
 }) {
   if (!signerName?.trim()) throw new Error('Nome do signatário é obrigatório.');
   if (!signatureImageDataUrl) throw new Error('Assinatura é obrigatória.');
@@ -429,6 +506,8 @@ export function signContractOnScreen(user, contractId, {
   }
   if (contract.status === CONTRACT_STATUS.SIGNED) throw new Error('Contrato já assinado.');
   const tenantId = tenantIdFromUser(user);
+  const channel = signingChannel
+    || (user?.publicSignLink ? SIGNING_CHANNEL.PUBLIC_SIGN_LINK : SIGNING_CHANNEL.CLINIC_APP);
   const identityGate = assertAuthenticatedSignerForStroke(user, {
     signerRole,
     signerPersonId,
@@ -437,7 +516,24 @@ export function signContractOnScreen(user, contractId, {
     expectedBudgetId,
     expectedPatientId,
     contract,
+    signingChannel: channel,
   });
+  const presented = presentedConsents || [];
+  const map = acceptanceMap || {};
+  assertRequiredConsentsAccepted({
+    presentedConsents: presented,
+    acceptanceMap: map,
+    requireConsent,
+  });
+  const now = new Date().toISOString();
+  const consents = Array.isArray(consentAcceptances)
+    ? consentAcceptances
+    : buildConsentAcceptances({
+      presentedConsents: presented,
+      acceptanceMap: map,
+      acceptedAtById: acceptedAtById || {},
+      acceptedAt: now,
+    });
   let rolesSatisfied = [mapLegacySignerRole(signerRole)];
   let documentTypes = ['CONTRACT_SERVICES'];
   if (contract.quoteSource === 'clinical_budget') {
@@ -466,16 +562,38 @@ export function signContractOnScreen(user, contractId, {
     rolesSatisfied = allowed.rolesSatisfied;
     documentTypes = allowed.slot.documentTypes || documentTypes;
   }
-  const now = new Date().toISOString();
   const hash = simpleHash(contract.renderedHtml || contract.finalContent);
-  return withDb((db) => {
+  const registeredSignerName = resolveRegisteredSignerName({ signerRole, signerPersonId, contract });
+  const typedName = String(typedSignerName || signerName).trim();
+  const clientIp = resolveEvidenceClientIp({
+    observedClientContext,
+    fallbackIp: ipAddress,
+  });
+  const remote = identityGate.method === SIGNATURE_METHOD.REMOTE_ON_SCREEN;
+  const operatorCollected = identityGate.method === SIGNATURE_METHOD.OPERATOR_COLLECTED_PRESENCE;
+  const evidenceFields = {
+    contractId,
+    documentHash: hash,
+    contractVersion: contract.version || 1,
+    signerPersonId: signerPersonId || null,
+    signerRole: mapLegacySignerRole(signerRole),
+    signedAt: now,
+    signatureMethod: identityGate.method,
+    signingChannel: identityGate.signingChannel || channel,
+    authMethod: identityGate.authMethod || (remote ? AUTH_METHOD.ON_SCREEN_LINK : null),
+    registeredSignerName,
+    typedSignerName: typedName,
+    consentAcceptances: consents,
+    clientIp: clientIp.ip,
+  };
+  const result = withDb((db) => {
     if (!Array.isArray(db.contractSignatures)) db.contractSignatures = [];
     const sig = {
       id: createId('csig'),
       tenant_id: tenantId,
       clinicId: clinicId(),
       contractId,
-      signerName: String(signerName).trim(),
+      signerName: typedName,
       signerCpf: String(signerCpf || '').replace(/\D/g, ''),
       signerRole: mapLegacySignerRole(signerRole),
       signerPersonId: signerPersonId || null,
@@ -483,17 +601,27 @@ export function signContractOnScreen(user, contractId, {
       signatureType: SIGNATURE_TYPES.ON_SCREEN,
       signatureImageUrl: signatureImageDataUrl,
       signedAt: now,
-      ipAddress: ipAddress || 'local',
+      ipAddress: clientIp.ip,
       userAgent: userAgent || (typeof navigator !== 'undefined' ? navigator.userAgent : ''),
       evidenceJson: {
         hash,
-        signedByUserId: user?.id || null,
-        operatorUserId: isOperatorCollectedRole(signerRole) ? (user?.id || null) : null,
-        operatorPersonId: isOperatorCollectedRole(signerRole)
+        documentHash: hash,
+        evidenceHash: computeEvidenceHash(evidenceFields),
+        signedByUserId: identityGate.identity?.authenticatedUserId || null,
+        operatorUserId: operatorCollected ? (user?.id || null) : null,
+        operatorPersonId: operatorCollected
           ? (identityGate.identity?.personId || null)
           : null,
         signatureMethod: identityGate.method,
-        authenticatedPersonId: identityGate.identity?.personId || null,
+        signingChannel: identityGate.signingChannel || channel,
+        authMethod: identityGate.authMethod || null,
+        authenticatedPersonId: identityGate.identity?.personId || signerPersonId || null,
+        registeredSignerName,
+        typedSignerName: typedName,
+        namesDiverged: namesDiverge(registeredSignerName, typedName),
+        consentAcceptances: consents,
+        clientIp: clientIp.ip,
+        clientIpSource: clientIp.source,
         packageManifestId: contract.metadata?.packageManifestId || null,
         packageManifestHash: contract.metadata?.packageManifestHash || null,
         contractVersion: contract.version || 1,
@@ -517,7 +645,12 @@ export function signContractOnScreen(user, contractId, {
       nextStatus = recount.allRequiredSatisfied
         ? CONTRACT_STATUS.SIGNED
         : nextContractStatusAfterStroke(recount, { justSignedRole: signerRole });
-      ceremonySnap = buildCeremonySnapshot(recount);
+      ceremonySnap = buildCeremonySnapshot(
+        recount.allRequiredSatisfied
+          ? { ...recount, status: CEREMONY_STATUS.SIGNED, allRequiredSatisfied: true }
+          : recount,
+        { completedAt: recount.allRequiredSatisfied ? now : null },
+      );
     }
     arr[idx] = {
       ...arr[idx],
@@ -529,9 +662,55 @@ export function signContractOnScreen(user, contractId, {
         signatureCeremony: ceremonySnap,
       },
     };
-    registerEvent(user, contractId, 'SIGNED', `Assinado por ${signerName} (${sig.signerRole})`, { signatureId: sig.id, rolesSatisfied });
+    registerEvent(user, contractId, 'SIGNED', `Assinado por ${typedName} (${sig.signerRole})`, { signatureId: sig.id, rolesSatisfied });
     return { contract: arr[idx], signature: sig };
   });
+
+  if (result.contract?.quoteSource === 'clinical_budget') {
+    const recount = evaluateSignatureCeremony({
+      tenantId,
+      patientId: result.contract.patientId,
+      appointmentId: result.contract.quoteId,
+      budgetId: result.contract.budgetId,
+      contractId: result.contract.id,
+    });
+    const ceremonySnap = buildCeremonySnapshot(recount, {
+      completedAt: recount.allRequiredSatisfied ? result.signature.signedAt : null,
+    });
+    const nextStatus = recount.allRequiredSatisfied
+      ? CONTRACT_STATUS.SIGNED
+      : result.contract.status;
+    withDb((db) => {
+      const arr = db.generatedContracts || [];
+      const idx = arr.findIndex((row) => row.id === contractId);
+      if (idx < 0) return db;
+      arr[idx] = {
+        ...arr[idx],
+        status: nextStatus,
+        signedAt: nextStatus === CONTRACT_STATUS.SIGNED
+          ? (arr[idx].signedAt || result.signature.signedAt)
+          : arr[idx].signedAt,
+        metadata: {
+          ...(arr[idx].metadata || {}),
+          signatureCeremony: ceremonySnap,
+        },
+      };
+      result.contract = arr[idx];
+      return db;
+    });
+  }
+
+  if (result.contract?.status === CONTRACT_STATUS.SIGNED) {
+    const signatures = (loadDb().contractSignatures || []).filter((row) => row.contractId === contractId);
+    const artifact = maybeGenerateFinalSignedArtifact({
+      contract: result.contract,
+      signatures,
+      ceremony: result.contract.metadata?.signatureCeremony,
+    });
+    result.finalArtifact = artifact;
+    if (artifact?.contract) result.contract = artifact.contract;
+  }
+  return result;
 }
 
 export function signContractViaLink(token, {
@@ -540,12 +719,33 @@ export function signContractViaLink(token, {
   signatureImageDataUrl,
   ipAddress = '',
   userAgent = '',
+  consentAcceptances = null,
+  presentedConsents = null,
+  privacy = null,
+  acceptanceMap = null,
+  acceptedAtById = null,
+  requireConsent = false,
+  observedClientContext = null,
+  typedSignerName = null,
 }) {
   const resolved = getContractBySignToken(token);
-  if (!resolved || resolved.expired) throw new Error('Link inválido ou expirado.');
+  if (!resolved || resolved.expired || resolved.replay) throw new Error('Link inválido ou expirado.');
   const { contract, link } = resolved;
+  const map = acceptanceMap
+    || (consentAcceptances && !Array.isArray(consentAcceptances) ? consentAcceptances : {})
+    || {};
+  const presented = presentedConsents
+    || collectPresentedConsents(privacy)
+    || [];
+  const arrayAcceptances = Array.isArray(consentAcceptances) ? consentAcceptances : null;
   const result = signContractOnScreen(
-    { id: 'public-signer', name: signerName, tenantId: contract.tenant_id, tenant_id: contract.tenant_id },
+    {
+      id: null,
+      name: signerName,
+      tenantId: contract.tenant_id,
+      tenant_id: contract.tenant_id,
+      publicSignLink: true,
+    },
     contract.id,
     {
       signerName,
@@ -555,6 +755,14 @@ export function signContractViaLink(token, {
       signatureImageDataUrl,
       ipAddress,
       userAgent,
+      signingChannel: SIGNING_CHANNEL.PUBLIC_SIGN_LINK,
+      observedClientContext,
+      consentAcceptances: arrayAcceptances,
+      presentedConsents: presented,
+      acceptanceMap: arrayAcceptances ? null : map,
+      acceptedAtById,
+      requireConsent,
+      typedSignerName: typedSignerName || signerName,
     },
   );
   withDb((db) => {
@@ -579,13 +787,17 @@ export function signContractViaLink(token, {
     contractId: contract.id,
     requestId: link.requestId || null,
     action: 'signed_via_link',
-    user: { id: 'public-signer', name: signerName },
+    user: { id: null, name: signerName },
     payload: {
       signerCpf,
-      authMethod: 'on_screen_link',
+      authMethod: AUTH_METHOD.ON_SCREEN_LINK,
       documentHash: result.contract?.documentHash,
-      ipAddress,
+      ipAddress: result.signature?.ipAddress,
       platform: 'internal',
+      metadata: {
+        signatureMethod: SIGNATURE_METHOD.REMOTE_ON_SCREEN,
+        signingChannel: SIGNING_CHANNEL.PUBLIC_SIGN_LINK,
+      },
     },
   });
 

@@ -4,6 +4,11 @@
  */
 import { loadDb } from '../db/index.js';
 import { CLINICAL_SIGNER_ROLE, mapLegacySignerRole } from './clinicalRequiredSigners.js';
+import {
+  AUTH_METHOD,
+  SIGNATURE_METHOD,
+  SIGNING_CHANNEL,
+} from './remoteSignatureEvidence.js';
 
 export const SIGNER_IDENTITY_ERROR = {
   MISMATCH: 'SIGNER_IDENTITY_MISMATCH',
@@ -159,6 +164,11 @@ export function isOperatorCollectedRole(signerRole) {
   return OPERATOR_COLLECTED_ROLES.has(mapLegacySignerRole(signerRole));
 }
 
+export function isPublicSignLinkActor(user, signingChannel = null) {
+  return Boolean(user?.publicSignLink)
+    || signingChannel === SIGNING_CHANNEL.PUBLIC_SIGN_LINK;
+}
+
 export function canAuthenticatedUserSignSlot(user, slot) {
   const role = mapLegacySignerRole(slot?.role);
   if (slot?.status === 'signed') {
@@ -167,7 +177,7 @@ export function canAuthenticatedUserSignSlot(user, slot) {
   if (isOperatorCollectedRole(role)) {
     return {
       canSignElectronically: true,
-      method: 'OPERATOR_COLLECTED_PRESENCE',
+      method: SIGNATURE_METHOD.OPERATOR_COLLECTED_PRESENCE,
       waitingLabel: null,
     };
   }
@@ -182,14 +192,14 @@ export function canAuthenticatedUserSignSlot(user, slot) {
     return {
       canSignElectronically: false,
       code: identity.ok ? SIGNER_IDENTITY_ERROR.MISMATCH : identity.code,
-      method: 'AUTHENTICATED_ELECTRONIC',
+      method: SIGNATURE_METHOD.AUTHENTICATED_ELECTRONIC,
       waitingLabel,
       identity,
     };
   }
   return {
     canSignElectronically: true,
-    method: 'AUTHENTICATED_ELECTRONIC',
+    method: SIGNATURE_METHOD.AUTHENTICATED_ELECTRONIC,
     waitingLabel: null,
     identity,
   };
@@ -203,6 +213,7 @@ export function assertAuthenticatedSignerForStroke(user, {
   expectedBudgetId = null,
   expectedPatientId = null,
   contract = null,
+  signingChannel = null,
 } = {}) {
   const role = mapLegacySignerRole(signerRole);
   if (expectedAppointmentId && contract?.quoteId && contract.quoteId !== expectedAppointmentId) {
@@ -219,10 +230,25 @@ export function assertAuthenticatedSignerForStroke(user, {
   }
 
   if (isOperatorCollectedRole(role)) {
+    if (isPublicSignLinkActor(user, signingChannel)) {
+      return {
+        ok: true,
+        method: SIGNATURE_METHOD.REMOTE_ON_SCREEN,
+        signingChannel: SIGNING_CHANNEL.PUBLIC_SIGN_LINK,
+        authMethod: AUTH_METHOD.ON_SCREEN_LINK,
+        identity: {
+          authenticatedUserId: null,
+          personId: signerPersonId || null,
+          linkedPersonIds: signerPersonId ? [signerPersonId] : [],
+        },
+      };
+    }
     const identity = resolveAuthenticatedSignerIdentity(user);
     return {
       ok: true,
-      method: 'OPERATOR_COLLECTED_PRESENCE',
+      method: SIGNATURE_METHOD.OPERATOR_COLLECTED_PRESENCE,
+      signingChannel: SIGNING_CHANNEL.CLINIC_APP,
+      authMethod: AUTH_METHOD.OPERATOR_PRESENCE,
       identity: identity.ok ? identity : { authenticatedUserId: user?.id || null, linkedPersonIds: [] },
     };
   }
@@ -244,7 +270,13 @@ export function assertAuthenticatedSignerForStroke(user, {
       'A identidade autenticada não corresponde ao signatário exigido.',
     );
   }
-  return { ok: true, method: 'AUTHENTICATED_ELECTRONIC', identity };
+  return {
+    ok: true,
+    method: SIGNATURE_METHOD.AUTHENTICATED_ELECTRONIC,
+    signingChannel: SIGNING_CHANNEL.CLINIC_APP,
+    authMethod: AUTH_METHOD.AUTHENTICATED_SESSION,
+    identity,
+  };
 }
 
 /**
