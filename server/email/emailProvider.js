@@ -77,9 +77,9 @@ export async function sendHttpTransactionalEmail({ to, subject, text, html }) {
  * Primário: Resend. SMTP só se Resend estiver ausente.
  * Falha Resend NÃO cai para SMTP.
  */
-export async function sendTransactionalEmail({ to, subject, text, html, replyTo } = {}) {
+export async function sendTransactionalEmail({ to, subject, text, html, replyTo, fromName } = {}) {
   if (getResendConfig().isConfigured) {
-    return sendResendEmail({ to, subject, text, html, replyTo });
+    return sendResendEmail({ to, subject, text, html, replyTo, fromName });
   }
   if (getSmtpConfig().isConfigured) {
     return sendSmtpEmail({ to, subject, text, html, replyTo });

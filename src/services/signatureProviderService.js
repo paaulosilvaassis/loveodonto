@@ -194,6 +194,7 @@ const internalProvider = {
       patientName: request.recipients?.patientName,
       treatmentName: emailContent?.treatmentName,
       clinicName: emailContent?.clinicName,
+      clinicIdentity: emailContent?.clinicIdentity,
       signUrl,
       expiresAt: request.expiresAt,
       contractNumber: request.contractNumber,

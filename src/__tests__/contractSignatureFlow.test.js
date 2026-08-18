@@ -196,10 +196,13 @@ describe('contractSignatureFlow', () => {
       clinicName: 'Love Odonto',
       signUrl: 'https://app/assinatura/token',
       expiresAt: '2026-06-23T12:00:00.000Z',
+      contractNumber: 'CTR-2026-00003',
     });
-    expect(email.subject).toContain('Love Odonto');
+    expect(email.subject).toBe('Assinatura de contrato — Love Odonto');
     expect(email.textBody).toContain('Maria');
-    expect(email.htmlBody).toContain('Assinar contrato');
+    expect(email.htmlBody).toContain('REVISAR E ASSINAR CONTRATO');
+    expect(email.htmlBody).toContain('Implantes');
+    expect(email.htmlBody).toContain('https://app/assinatura/token');
   });
 
   it('mapWebhookEventToContractStatus mapeia eventos', () => {

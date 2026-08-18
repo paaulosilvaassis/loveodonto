@@ -40,7 +40,7 @@ function resolveFetch() {
   return fetch;
 }
 
-export async function sendResendEmail({ to, subject, text, html, replyTo } = {}) {
+export async function sendResendEmail({ to, subject, text, html, replyTo, fromName } = {}) {
   const cfg = getResendConfig();
   if (!cfg.isConfigured) {
     throw new ResendTransportError(
@@ -62,8 +62,9 @@ export async function sendResendEmail({ to, subject, text, html, replyTo } = {})
     );
   }
 
+  const displayName = String(fromName || '').replace(/[<>\r\n"]/g, '').trim().slice(0, 78) || cfg.fromName;
   const payload = {
-    from: `${cfg.fromName} <${fromAddress}>`,
+    from: `${displayName} <${fromAddress}>`,
     to: [recipient],
     subject,
     text,

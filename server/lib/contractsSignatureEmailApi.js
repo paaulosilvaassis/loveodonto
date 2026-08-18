@@ -7,6 +7,7 @@
 import { isTransactionalEmailConfigured } from '../email/emailConfig.js';
 import { sendTransactionalEmail } from '../email/transactionalEmailService.js';
 import { buildSignatureInviteEmail } from '../email/buildSignatureInviteEmail.js';
+import { sanitizeClinicIdentity } from '../email/signatureInviteClinicIdentity.js';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SIGN_PATH_RE = /^\/assinatura\/[A-Za-z0-9_-]+$/;
@@ -63,10 +64,15 @@ export function createContractsSignatureInviteEmailHandler() {
       inFlight.add(flightKey);
 
       const signUrl = `${appOrigin()}${signPath}`;
+      const clinicIdentity = sanitizeClinicIdentity(req.body?.clinicIdentity || {
+        name: normalizeText(req.body?.clinicName),
+        email: normalizeText(req.body?.clinicEmail),
+      });
       const template = buildSignatureInviteEmail({
-        patientName: normalizeText(req.body?.patientName) || 'paciente',
-        treatmentName: normalizeText(req.body?.treatmentName) || '',
-        clinicName: normalizeText(req.body?.clinicName) || 'Clínica',
+        patientName: normalizeText(req.body?.patientName),
+        treatmentName: normalizeText(req.body?.treatmentName),
+        clinicName: clinicIdentity.name,
+        clinicIdentity,
         signUrl,
         expiresAt: normalizeText(req.body?.expiresAt) || null,
         contractNumber: normalizeText(req.body?.contractNumber) || '',
@@ -77,6 +83,8 @@ export function createContractsSignatureInviteEmailHandler() {
         subject: template.subject,
         text: template.text,
         html: template.html,
+        fromName: template.fromName,
+        replyTo: template.replyTo,
       });
 
       return res.json({

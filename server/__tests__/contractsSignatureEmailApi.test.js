@@ -98,7 +98,7 @@ describe('signature invite email API', () => {
     expect(arg.to).toBe('paciente@example.invalid');
     expect(String(arg.html || '')).toContain('/assinatura/csgn-ok');
     expect(String(arg.subject || '')).toMatch(/Assinatura de contrato/i);
-    expect(String(arg.html || '')).toContain('Revisar e assinar documento');
+    expect(String(arg.html || '')).toContain('REVISAR E ASSINAR CONTRATO');
     expect(String(arg.html || '')).toContain('CTR-2026-00003');
     expect(res.body.delivered).toBe(false);
   });

@@ -27,6 +27,7 @@ import {
   mapWebhookEventToContractStatus,
 } from './signatureProviderService.js';
 import { buildSignatureEmailContent, resolveClinicEmail } from './signatureEmailService.js';
+import { resolveClinicEmailIdentity } from './clinicEmailIdentity.js';
 import {
   logSignatureAudit,
   getLatestSignatureRequest,
@@ -149,6 +150,7 @@ export function buildSignatureSendFormDefaults({
     patientName: profile.full_name || '',
     patientCpf: formatCivilCpf(profile.cpf),
     patientEmail: resolvePatientEmail(bundle) || previousEmail || '',
+    patientEmailOnFile: Boolean(resolvePatientEmail(bundle)),
     patientPhone: mainPhone ? `(${mainPhone.ddd || ''}) ${mainPhone.number || ''}`.trim() : '',
     guardianEmail: isMinor
       ? (profile.guardian_email || profile.legal_guardian_email || '')
@@ -251,24 +253,26 @@ export async function sendContractForDigitalSignature(user, contractId, formData
     settings: { ...settings, signLinkExpiryDays: formData.linkExpiryDays },
   });
 
-  const db = loadDb();
-  const clinicName = db.clinicProfile?.nomeFantasia || db.clinicProfile?.razaoSocial || 'Clínica';
+  const clinicIdentity = resolveClinicEmailIdentity();
+  const clinicName = clinicIdentity.name;
   const emailContent = buildSignatureEmailContent({
     patientName: formData.patientName,
-    treatmentName: formData.treatmentName || contract.title || 'Tratamento odontológico',
+    treatmentName: formData.treatmentName,
     clinicName,
+    clinicIdentity,
     signUrl: (typeof window !== 'undefined' && window.location?.origin)
       ? `${window.location.origin}${signUrl}`
       : signUrl,
     expiresAt: request.expiresAt,
+    contractNumber: contract.contractNumber,
   });
 
   const delivery = await sendSignatureEmail({ user, request, signUrl, emailContent });
-  if (!delivery?.ok && delivery?.delivered !== true) {
+  if (!delivery?.ok || delivery?.simulated === true) {
     throw new Error('O e-mail de assinatura não foi enviado.');
   }
-  if (delivery?.simulated === true) {
-    throw new Error('O envio de e-mail ainda não está ativo. O link não foi enviado.');
+  if (delivery?.acceptedByTransport === false) {
+    throw new Error('O provedor de e-mail não aceitou o disparo. O link não foi enviado.');
   }
 
   registerContractEvent(user, contractId, 'SENT', 'Contrato enviado para assinatura digital', {
