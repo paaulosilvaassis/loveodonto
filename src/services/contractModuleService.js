@@ -139,10 +139,13 @@ function buildSnapshots({ quoteSource, quoteId, patientId, currentUser, budgetId
     professionalSnapshotJson: {
       name: currentUser?.name,
       cro: currentUser?.cro || currentUser?.registroProfissional || currentUser?.conselhoNumero || '',
+      conselhoUf: currentUser?.conselhoUf || currentUser?.croUf || '',
       userId: currentUser?.id,
     },
     clinicalSnapshotJson: {
       procedimentos: ctx['#procedimentos'],
+      procedures: ctx.__meta?.procedureRows || [],
+      planName: ctx.__meta?.planName || '',
       dentes: ctx['#dentes'],
       observacoes: ctx['#orcamentoObservacoes'],
     },

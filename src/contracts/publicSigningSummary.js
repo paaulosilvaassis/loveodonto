@@ -1,7 +1,18 @@
 /**
  * Resumo clínico/comercial para assinatura pública — somente snapshot congelado.
- * Phase 10.16 / C1. Não recalcula valores.
+ * Phase 10.16 / C1 / 10.21BS. Não recalcula valores.
  */
+
+import {
+  looksLikeHtml,
+  looksLikeEscapedHtml,
+  textFromHtmlFragment,
+} from './legacyProcedureHtmlParser.js';
+import {
+  collectStructuredProcedureRows,
+  formatProfessionalCroLabel,
+  resolveTreatmentDisplayName,
+} from './procedureSnapshotRows.js';
 
 function asArray(value) {
   if (Array.isArray(value)) return value;
@@ -13,6 +24,56 @@ function formatMoney(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return null;
   return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function withMoney(row) {
+  return {
+    ...row,
+    unitValueFormatted: formatMoney(row.unitValue),
+    totalFormatted: formatMoney(row.totalValue),
+  };
+}
+
+function sanitizePlainText(value) {
+  if (value == null || value === '') return null;
+  const text = String(value);
+  if (looksLikeHtml(text) || looksLikeEscapedHtml(text)) {
+    return textFromHtmlFragment(text) || null;
+  }
+  return text;
+}
+
+function buildTreatmentBlock({
+  title,
+  planName,
+  clinical,
+  professional,
+}) {
+  const collected = collectStructuredProcedureRows(clinical);
+  const procedureRows = collected.rows.map(withMoney);
+  const professionalName = professional?.name
+    || professional?.nomeCompleto
+    || collected.professionalNameFromHtml
+    || null;
+  const professionalCro = formatProfessionalCroLabel(professional);
+
+  return {
+    name: resolveTreatmentDisplayName({
+      title,
+      planName: planName || clinical?.planName || clinical?.treatmentName,
+      procedureName: procedureRows[0]?.name,
+    }),
+    procedureRows,
+    procedures: procedureRows.map((row) => row.name),
+    proceduresFallback: Boolean(collected.fallback && !procedureRows.length),
+    proceduresSource: collected.source,
+    teethRegions: asArray(clinical?.dentes).map((d) => (
+      typeof d === 'string' ? d : d?.tooth || d?.region || String(d)
+    )).filter(Boolean),
+    notes: sanitizePlainText(clinical?.observacoes),
+    professionalName,
+    professionalCro: professionalCro || null,
+  };
 }
 
 /**
@@ -32,8 +93,6 @@ export function buildPublicSigningSummaryFromV1Contract(contract) {
   const clinical = contract.clinicalSnapshotJson || {};
   const financial = contract.financialSnapshotJson || {};
   const professional = contract.professionalSnapshotJson || {};
-  const procedimentos = asArray(clinical.procedimentos);
-  const dentes = asArray(clinical.dentes);
   const parcelas = asArray(financial.parcelas);
   const financings = asArray(financial.financiamentos);
 
@@ -62,18 +121,12 @@ export function buildPublicSigningSummaryFromV1Contract(contract) {
     .sort()[0] || null;
 
   return {
-    treatment: {
-      name: contract.title || contract.contractNumber || 'Tratamento odontológico',
-      procedures: procedimentos.length
-        ? procedimentos.map((p) => (typeof p === 'string' ? p : p?.name || p?.procedureName || String(p)))
-        : [],
-      teethRegions: dentes.length
-        ? dentes.map((d) => (typeof d === 'string' ? d : d?.tooth || d?.region || String(d)))
-        : [],
-      quantity: procedimentos.length || null,
-      notes: clinical.observacoes || null,
-      professionalName: professional.name || null,
-    },
+    treatment: buildTreatmentBlock({
+      title: contract.title,
+      planName: clinical.planName || clinical.treatmentName,
+      clinical,
+      professional,
+    }),
     financial: {
       total: formatMoney(total),
       totalRaw: total,
@@ -98,26 +151,36 @@ export function buildPublicSigningSummaryFromV2Session(session = {}) {
   const treatment = session.treatmentSummary || session.treatment || null;
   const financial = session.financialSummary || session.financial || null;
   const privacy = session.privacySummary || defaultPrivacyBlock(session.requiredTerms);
+  const items = asArray(treatment?.procedures || treatment?.items || treatment?.procedureRows);
 
   return {
     treatment: treatment
-      ? {
-          name: treatment.name || treatment.summary || session.documentTitle || 'Tratamento odontológico',
-          procedures: asArray(treatment.procedures || treatment.items).map((p) => (
-            typeof p === 'string' ? p : p?.procedureName || p?.name || String(p)
-          )),
-          teethRegions: asArray(treatment.teeth || treatment.teethRegions || treatment.regions),
-          quantity: treatment.quantity ?? (asArray(treatment.procedures || treatment.items).length || null),
-          notes: treatment.notes || treatment.observations || null,
-          professionalName: treatment.professionalName || treatment.professional || null,
-        }
+      ? buildTreatmentBlock({
+          title: treatment.name || treatment.summary || session.documentTitle,
+          planName: treatment.planName || treatment.name,
+          clinical: {
+            procedures: items,
+            procedimentos: items,
+            dentes: treatment.teeth || treatment.teethRegions || treatment.regions,
+            observacoes: treatment.notes || treatment.observations,
+            planName: treatment.planName,
+          },
+          professional: {
+            name: treatment.professionalName || treatment.professional,
+            cro: treatment.professionalCro || treatment.cro,
+            conselhoUf: treatment.conselhoUf,
+          },
+        })
       : {
-          name: session.documentTitle || 'Documento para assinatura',
+          name: resolveTreatmentDisplayName({ title: session.documentTitle }),
+          procedureRows: [],
           procedures: [],
+          proceduresFallback: true,
+          proceduresSource: 'empty',
           teethRegions: [],
-          quantity: null,
           notes: null,
           professionalName: null,
+          professionalCro: null,
         },
     financial: financial
       ? {

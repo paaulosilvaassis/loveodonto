@@ -416,7 +416,7 @@ export function resolveContractVariables(params) {
 
   const missing = validateResolvedVariables(map, meta);
 
-  return { map, meta, missing, party };
+  return { map, meta, missing, party, procedures, planName };
 }
 
 export function validateResolvedVariables(map, meta = {}) {

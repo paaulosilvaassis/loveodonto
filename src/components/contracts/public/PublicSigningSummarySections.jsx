@@ -4,6 +4,10 @@
 
 import React from 'react';
 import { resetConsentAcceptanceMap } from '../../../contracts/publicSigningSummary.js';
+import {
+  PublicSigningProceduresList,
+  PublicSigningProfessionalBlock,
+} from './PublicSigningProceduresList.jsx';
 
 function MoneyRow({ label, value }) {
   if (value == null || value === '') return null;
@@ -35,32 +39,25 @@ export function PublicSigningStepIndicator({ current = 1, total = 4 }) {
 
 export function PublicSigningTreatmentSection({ treatment }) {
   if (!treatment) return null;
+  const rowsHaveRegion = (treatment.procedureRows || []).some((row) => row.toothRegion);
   return (
     <section className="ctr-public-summary-card" data-testid="public-sign-treatment">
       <h2>Resumo do seu tratamento</h2>
       {treatment.name ? <p className="ctr-public-summary-lead">{treatment.name}</p> : null}
-      {treatment.procedures?.length ? (
-        <div>
-          <h3>Procedimentos</h3>
-          <ul>
-            {treatment.procedures.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {treatment.teethRegions?.length ? (
+      <PublicSigningProceduresList
+        rows={treatment.procedureRows || []}
+        fallback={treatment.proceduresFallback}
+      />
+      {!rowsHaveRegion && treatment.teethRegions?.length ? (
         <p><strong>Dentes/regiões:</strong> {treatment.teethRegions.join(', ')}</p>
-      ) : null}
-      {treatment.quantity != null ? (
-        <p><strong>Quantidade:</strong> {treatment.quantity}</p>
       ) : null}
       {treatment.notes ? (
         <p><strong>Observações:</strong> {treatment.notes}</p>
       ) : null}
-      {treatment.professionalName ? (
-        <p><strong>Profissional responsável:</strong> {treatment.professionalName}</p>
-      ) : null}
+      <PublicSigningProfessionalBlock
+        name={treatment.professionalName}
+        cro={treatment.professionalCro}
+      />
     </section>
   );
 }

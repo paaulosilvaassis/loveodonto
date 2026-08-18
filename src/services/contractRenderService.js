@@ -5,13 +5,14 @@ import {
   resolveContractVariables,
   applyContractHashtags,
 } from '../contracts/contractVariableResolver.js';
+import { freezeProcedureRows } from '../contracts/procedureSnapshotRows.js';
 
 export { applyContractHashtags as applyHashtags };
 export { resolveContractVariables, validateResolvedVariables, findUnresolvedTagsInHtml } from '../contracts/contractVariableResolver.js';
 
 /** @deprecated Use resolveContractVariables — mantido para compatibilidade */
 export function buildContractContext(params) {
-  const { map, meta } = resolveContractVariables(params);
+  const { map, meta, procedures, planName } = resolveContractVariables(params);
   return {
     ...map,
     __meta: {
@@ -20,6 +21,8 @@ export function buildContractContext(params) {
       partyModel: meta.partyModel,
       treatmentTypes: meta.treatmentTypes,
       missing: meta.missing,
+      procedureRows: freezeProcedureRows(procedures || []),
+      planName: planName || '',
     },
   };
 }

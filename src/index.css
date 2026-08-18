@@ -12049,6 +12049,34 @@ a.button {
   font-size: 1.02rem;
 }
 .ctr-public-summary-note { margin: 0.75rem 0 0; color: #64748b; font-size: 0.9rem; }
+.ctr-public-proc-table-wrap { overflow-x: auto; }
+.ctr-public-proc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.ctr-public-proc-table th,
+.ctr-public-proc-table td {
+  text-align: left;
+  padding: 0.45rem 0.4rem;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+  word-break: break-word;
+}
+.ctr-public-proc-table th { color: #475569; font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.02em; }
+.ctr-public-proc-cards { display: none; }
+.ctr-public-proc-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.7rem 0.8rem;
+  background: #fff;
+}
+.ctr-public-proc-card h4 { margin: 0 0 0.45rem; font-size: 1.02rem; }
+.ctr-public-proc-card p { margin: 0.2rem 0; font-size: 0.95rem; }
+.ctr-public-proc-card span { color: #64748b; }
+.ctr-public-professional { margin-top: 0.9rem; }
+.ctr-public-professional-name { margin: 0; font-weight: 650; }
+.ctr-public-professional-cro { margin: 0.15rem 0 0; color: #475569; }
 .ctr-public-lgpd {
   margin: 0 0 1rem;
   padding: 0.85rem;
@@ -12388,6 +12416,8 @@ a.button {
 .ctr-fila-empty p { margin: 0; }
 
 @media (max-width: 640px) {
+  .ctr-public-proc-table-wrap { display: none; }
+  .ctr-public-proc-cards { display: grid; gap: 0.65rem; }
   .ctr-public-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ctr-fila-filters { grid-template-columns: 1fr 1fr; }
   .ctr-public-sign--v2ux .button,
