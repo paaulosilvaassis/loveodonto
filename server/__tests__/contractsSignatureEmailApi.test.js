@@ -72,9 +72,9 @@ describe('signature invite email API', () => {
     const res = mockRes();
     await handler({ body: { to: 'a@b.com', signPath: '/assinatura/token-1' } }, res);
     expect(res.statusCode).toBe(503);
-    expect(res.body.code).toBe('SMTP_NOT_CONFIGURED');
-    expect(String(res.body.error || '')).toMatch(/Supabase Auth|SMTP transacional/i);
-    expect(String(res.body.error || '')).not.toMatch(/EMAIL_API_KEY|Resend/i);
+    expect(['RESEND_NOT_CONFIGURED', 'SMTP_NOT_CONFIGURED']).toContain(res.body.code);
+    expect(String(res.body.error || '')).toMatch(/Supabase Auth|não está configurado/i);
+    expect(String(res.body.error || '')).not.toMatch(/EMAIL_API_KEY|RESEND_API_KEY/i);
     expect(sendTransactionalEmail).not.toHaveBeenCalled();
   });
 
@@ -97,6 +97,10 @@ describe('signature invite email API', () => {
     const arg = sendTransactionalEmail.mock.calls[0][0];
     expect(arg.to).toBe('paciente@example.invalid');
     expect(String(arg.html || '')).toContain('/assinatura/csgn-ok');
+    expect(String(arg.subject || '')).toMatch(/Assinatura de contrato/i);
+    expect(String(arg.html || '')).toContain('Revisar e assinar documento');
+    expect(String(arg.html || '')).toContain('CTR-2026-00003');
+    expect(res.body.delivered).toBe(false);
   });
 
   it('F) rejeição do transporte vira 502 e não delivered', async () => {

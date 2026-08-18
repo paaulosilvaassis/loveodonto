@@ -46,6 +46,7 @@ function stubSmtpEnv({ complete = true } = {}) {
   vi.stubEnv('EMAIL_FROM_NAME', complete ? 'Love Odonto' : '');
   vi.stubEnv('EMAIL_API_KEY', '');
   vi.stubEnv('EMAIL_PROVIDER', '');
+  vi.stubEnv('RESEND_API_KEY', '');
 }
 
 describe('PHASE_10.21BN direct SMTP transactional email', () => {
@@ -88,7 +89,7 @@ describe('PHASE_10.21BN direct SMTP transactional email', () => {
       subject: 'x',
       text: 'x',
       html: '<p>x</p>',
-    })).rejects.toMatchObject({ code: 'SMTP_NOT_CONFIGURED' });
+    })).rejects.toMatchObject({ code: 'RESEND_NOT_CONFIGURED' });
   });
 
   it('E) SMTP success → provider accepted', async () => {

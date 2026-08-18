@@ -93,25 +93,28 @@ describe('PHASE_10.21BM email infrastructure reuse', () => {
       subject: 'x',
       text: 'x',
       html: '<p>x</p>',
-    })).rejects.toThrow(/ausente|não configurado/i);
+    })).rejects.toThrow(/ausente|não está configurado|não configurado/i);
 
     const handler = createContractsSignatureInviteEmailHandler();
     const res = mockRes();
     await handler({ body: { to: 'paciente@example.invalid', signPath: '/assinatura/csgn-ok' } }, res);
     expect(res.statusCode).toBe(503);
-    expect(['SMTP_NOT_CONFIGURED', 'EMAIL_PROVIDER_NOT_CONFIGURED']).toContain(res.body.code);
+    expect(['RESEND_NOT_CONFIGURED', 'SMTP_NOT_CONFIGURED', 'EMAIL_PROVIDER_NOT_CONFIGURED']).toContain(res.body.code);
     expect(res.body.ok).not.toBe(true);
     expect(res.body.simulated).not.toBe(true);
   });
 
   it('M) inventário e logs não expõem secrets', () => {
     vi.stubEnv('EMAIL_API_KEY', 're_secret_should_not_leak');
+    vi.stubEnv('RESEND_API_KEY', 're_bq_secret_should_not_leak');
     vi.stubEnv('SMTP_PASSWORD', 'smtp_secret_should_not_leak');
     const inventory = getEmailTransportInventory();
     const dumped = JSON.stringify(inventory);
     expect(dumped).not.toContain('re_secret_should_not_leak');
+    expect(dumped).not.toContain('re_bq_secret_should_not_leak');
     expect(dumped).not.toContain('smtp_secret_should_not_leak');
     expect(inventory.env.EMAIL_API_KEY).toBe('PRESENT');
+    expect(inventory.env.RESEND_API_KEY).toBe('PRESENT');
     expect(inventory.env.SMTP_PASSWORD).toBe('PRESENT');
     const audit = readSrc('server/email/emailAuditLog.js');
     const api = readSrc('server/lib/contractsSignatureEmailApi.js');

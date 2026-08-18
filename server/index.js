@@ -208,6 +208,7 @@ app.get('/health', (_req, res) => {
       directSmtpProvider: inventory.directSmtpProvider,
       directSmtpVerified: smtpVerify.directSmtpVerified,
       directSmtpVerifyCode: smtpVerify.directSmtpVerifyCode,
+      resendConfigured: inventory.resendConfigured,
       emailTransactionalConfigured: inventory.transactionalConfigured,
       emailTransactionalProvider: inventory.transactionalProvider,
     },

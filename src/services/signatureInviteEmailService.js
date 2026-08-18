@@ -20,11 +20,14 @@ const RAW_SMTP_ERROR = /ECONNREFUSED|EAUTH|ETIMEDOUT|ENOTFOUND|ESOCKET|535 Authe
 
 function friendlyDeliveryError(json, fallback) {
   const code = String(json?.code || '');
-  if (code === 'SMTP_NOT_CONFIGURED' || code === 'EMAIL_PROVIDER_NOT_CONFIGURED') {
+  if (code === 'SMTP_NOT_CONFIGURED' || code === 'EMAIL_PROVIDER_NOT_CONFIGURED' || code === 'RESEND_NOT_CONFIGURED') {
     return EMAIL_PROVIDER_NOT_CONFIGURED_MSG;
   }
   if (code === 'SMTP_AUTH_FAILED') return 'Não foi possível autenticar no servidor de e-mail. O link não foi enviado.';
   if (code === 'SMTP_CONNECTION_FAILED') return 'Não foi possível conectar ao servidor de e-mail. O link não foi enviado.';
+  if (code === 'RESEND_REQUEST_FAILED' || code === 'RESEND_REJECTED' || code === 'RESEND_INVALID_RESPONSE') {
+    return EMAIL_PROVIDER_REJECTED_MSG;
+  }
   if (code === 'INVALID_RECIPIENT') return 'E-mail do paciente inválido.';
   const candidate = String(json?.error || fallback || EMAIL_PROVIDER_REJECTED_MSG);
   if (RAW_SMTP_ERROR.test(candidate)) return EMAIL_PROVIDER_REJECTED_MSG;
@@ -91,7 +94,7 @@ export async function deliverSignatureInviteEmail({
     });
   } catch (err) {
     const error = new Error(
-      'Não foi possível conectar à Admin API para enviar o e-mail. O SMTP não foi acionado.',
+      'Não foi possível conectar à Admin API para enviar o e-mail.',
     );
     error.code = 'EMAIL_REQUEST_FAILED';
     error.cause = err;
@@ -103,6 +106,7 @@ export async function deliverSignatureInviteEmail({
     response.status === 503
     || json?.code === 'EMAIL_PROVIDER_NOT_CONFIGURED'
     || json?.code === 'SMTP_NOT_CONFIGURED'
+    || json?.code === 'RESEND_NOT_CONFIGURED'
   ) {
     const error = new Error(friendlyDeliveryError(json, EMAIL_PROVIDER_NOT_CONFIGURED_MSG));
     error.code = json?.code || 'SMTP_NOT_CONFIGURED';

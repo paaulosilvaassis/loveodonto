@@ -1,7 +1,7 @@
 /**
  * POST /internal/app/contracts/signature-invite-email
  * E-mail transacional genérico (HTML do contrato). NÃO usa inviteUserByEmail.
- * Preferência: SMTP direto no Railway. Auth SMTP não envia este template.
+ * Preferência: Resend HTTPS. SMTP legado só se Resend estiver ausente.
  * Fail-closed. Não aceita HTML arbitrário. Não registra URL completa em logs.
  */
 import { isTransactionalEmailConfigured } from '../email/emailConfig.js';
@@ -23,14 +23,16 @@ function appOrigin() {
 
 function publicError(err) {
   const code = String(err?.code || '');
-  const message = String(err?.message || 'O servidor de e-mail recusou o disparo. O link não foi enviado.');
+  const message = String(err?.message || 'O provedor de e-mail recusou o disparo. O link não foi enviado.');
   if (code === 'INVALID_RECIPIENT') return { status: 400, code, error: message };
-  if (code === 'SMTP_NOT_CONFIGURED') return { status: 503, code, error: message };
-  if (code.startsWith('SMTP_')) return { status: 502, code, error: message };
+  if (code === 'RESEND_NOT_CONFIGURED' || code === 'SMTP_NOT_CONFIGURED' || code === 'EMAIL_PROVIDER_NOT_CONFIGURED') {
+    return { status: 503, code, error: message };
+  }
+  if (code.startsWith('RESEND_') || code.startsWith('SMTP_')) return { status: 502, code, error: message };
   return {
     status: 502,
-    code: 'SMTP_SEND_FAILED',
-    error: 'O servidor de e-mail recusou o disparo. O link não foi enviado.',
+    code: 'EMAIL_PROVIDER_REJECTED',
+    error: 'O provedor de e-mail recusou o disparo. O link não foi enviado.',
   };
 }
 
@@ -48,8 +50,8 @@ export function createContractsSignatureInviteEmailHandler() {
       }
       if (!isTransactionalEmailConfigured()) {
         return res.status(503).json({
-          error: 'SMTP transacional não configurado. O SMTP do Supabase Auth envia apenas e-mails de autenticação e não pode enviar o link de assinatura.',
-          code: 'SMTP_NOT_CONFIGURED',
+          error: 'O envio de e-mail de assinatura não está configurado. O SMTP do Supabase Auth envia apenas e-mails de autenticação e não pode enviar o link de assinatura.',
+          code: 'RESEND_NOT_CONFIGURED',
         });
       }
       if (inFlight.has(flightKey)) {
@@ -63,7 +65,7 @@ export function createContractsSignatureInviteEmailHandler() {
       const signUrl = `${appOrigin()}${signPath}`;
       const template = buildSignatureInviteEmail({
         patientName: normalizeText(req.body?.patientName) || 'paciente',
-        treatmentName: normalizeText(req.body?.treatmentName) || 'tratamento odontológico',
+        treatmentName: normalizeText(req.body?.treatmentName) || '',
         clinicName: normalizeText(req.body?.clinicName) || 'Clínica',
         signUrl,
         expiresAt: normalizeText(req.body?.expiresAt) || null,
@@ -81,6 +83,7 @@ export function createContractsSignatureInviteEmailHandler() {
         ok: true,
         simulated: false,
         acceptedByTransport: delivery.acceptedByTransport === true,
+        delivered: false,
         provider: delivery.provider,
         messageId: delivery.messageId || null,
       });

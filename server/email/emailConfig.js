@@ -30,9 +30,16 @@ function resolveSmtpSecure(port, explicit) {
   return null;
 }
 
+const REPLY_TO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const RESEND_FROM_DOMAIN = 'mail.loveodonto.com.br';
+export const RESEND_FROM_ADDRESS = `noreply@${RESEND_FROM_DOMAIN}`;
+export const RESEND_FROM_NAME = 'Love Odonto';
+
 /**
- * Overlay HTTP opcional (Resend/SendGrid). NÃO é o SSOT de produção.
+ * Overlay HTTP legado (EMAIL_API_KEY / SendGrid).
  * Convites/senha continuam no SMTP encapsulado do Supabase Auth.
+ * Transporte transacional de produção = RESEND_API_KEY.
  */
 export function getEmailConfig() {
   const apiKey = normalizeText(process.env.EMAIL_API_KEY);
@@ -42,9 +49,28 @@ export function getEmailConfig() {
   return {
     provider: isConfigured ? (requested || 'resend') : null,
     apiKey,
-    fromName: normalizeText(process.env.EMAIL_FROM_NAME) || 'Love Odonto',
+    fromName: normalizeText(process.env.EMAIL_FROM_NAME) || RESEND_FROM_NAME,
     fromAddress,
     isConfigured,
+  };
+}
+
+/**
+ * Resend HTTPS. Configurado somente pela presença de RESEND_API_KEY.
+ * From fixo no domínio verificado. Nunca onboarding@resend.dev.
+ */
+export function getResendConfig() {
+  const apiKey = normalizeText(process.env.RESEND_API_KEY);
+  const fromName = normalizeText(process.env.EMAIL_FROM_NAME) || RESEND_FROM_NAME;
+  const replyToRaw = normalizeText(process.env.EMAIL_REPLY_TO);
+  const replyTo = REPLY_TO_RE.test(replyToRaw) ? replyToRaw : '';
+  return {
+    apiKey,
+    fromName,
+    fromAddress: RESEND_FROM_ADDRESS,
+    fromDomain: RESEND_FROM_DOMAIN,
+    replyTo,
+    isConfigured: Boolean(apiKey),
   };
 }
 
@@ -76,10 +102,11 @@ export function getSmtpConfig() {
 }
 
 export function isTransactionalEmailConfigured() {
-  return getSmtpConfig().isConfigured || getEmailConfig().isConfigured;
+  return getResendConfig().isConfigured || getSmtpConfig().isConfigured || getEmailConfig().isConfigured;
 }
 
 export function getTransactionalEmailProvider() {
+  if (getResendConfig().isConfigured) return 'resend';
   if (getSmtpConfig().isConfigured) return 'smtp';
   const overlay = getEmailConfig();
   return overlay.isConfigured ? overlay.provider : null;
@@ -89,13 +116,14 @@ export function getTransactionalEmailProvider() {
  * Inventário de transporte. Somente PRESENT/ABSENT — nunca valores.
  */
 export function getEmailTransportInventory() {
-  const overlay = getEmailConfig();
   const smtp = getSmtpConfig();
+  const resend = getResendConfig();
   return {
     authEmailConfigured: hasSupabaseAuthPublicClient(),
     authEmailTransport: 'supabase_auth_smtp',
     transactionalConfigured: isTransactionalEmailConfigured(),
     transactionalProvider: getTransactionalEmailProvider(),
+    resendConfigured: resend.isConfigured,
     directSmtpConfigured: smtp.isConfigured,
     directSmtpProvider: smtp.isConfigured ? 'smtp' : null,
     env: {

@@ -1,9 +1,10 @@
-import { getEmailConfig, getSmtpConfig } from './emailConfig.js';
+import { getEmailConfig, getResendConfig, getSmtpConfig } from './emailConfig.js';
 import { sendSmtpEmail, SmtpTransportError } from './smtpMailer.js';
+import { sendResendEmail, ResendTransportError } from './resendMailer.js';
 
 /**
- * Overlay HTTP opcional. Não é o SSOT de convites (esse é o SMTP do Supabase Auth).
- * Preferência transacional: SMTP direto. Fail-closed sem transporte.
+ * Overlay HTTP legado (EMAIL_API_KEY). Não é o SSOT quando RESEND_API_KEY existe.
+ * Auth (convite/senha) permanece no SMTP encapsulado do Supabase Auth.
  */
 export async function sendHttpTransactionalEmail({ to, subject, text, html }) {
   const config = getEmailConfig();
@@ -36,7 +37,7 @@ export async function sendHttpTransactionalEmail({ to, subject, text, html }) {
     }
     return {
       ok: true,
-      delivered: true,
+      delivered: false,
       acceptedByTransport: true,
       simulated: false,
       provider: 'sendgrid',
@@ -64,7 +65,7 @@ export async function sendHttpTransactionalEmail({ to, subject, text, html }) {
   }
   return {
     ok: true,
-    delivered: true,
+    delivered: false,
     acceptedByTransport: true,
     simulated: false,
     provider: 'resend',
@@ -72,17 +73,24 @@ export async function sendHttpTransactionalEmail({ to, subject, text, html }) {
   };
 }
 
+/**
+ * Primário: Resend. SMTP só se Resend estiver ausente.
+ * Falha Resend NÃO cai para SMTP.
+ */
 export async function sendTransactionalEmail({ to, subject, text, html, replyTo } = {}) {
+  if (getResendConfig().isConfigured) {
+    return sendResendEmail({ to, subject, text, html, replyTo });
+  }
   if (getSmtpConfig().isConfigured) {
     return sendSmtpEmail({ to, subject, text, html, replyTo });
   }
   if (getEmailConfig().isConfigured) {
     return sendHttpTransactionalEmail({ to, subject, text, html });
   }
-  throw new SmtpTransportError(
-    'SMTP_NOT_CONFIGURED',
-    'SMTP transacional não configurado. O link não foi enviado.',
+  throw new ResendTransportError(
+    'RESEND_NOT_CONFIGURED',
+    'O envio de e-mail de assinatura não está configurado. O link não foi enviado.',
   );
 }
 
-export { SmtpTransportError };
+export { SmtpTransportError, ResendTransportError };
