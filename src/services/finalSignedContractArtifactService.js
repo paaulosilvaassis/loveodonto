@@ -8,6 +8,7 @@ import { withDb, loadDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { addFile } from './patientFilesService.js';
 import { isImmutablePilotContract, readEvidenceDocumentHash } from '../contracts/remoteSignatureEvidence.js';
+import { requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
 
 function stripTags(html) {
   return String(html || '')
@@ -55,7 +56,7 @@ export function generateFinalSignedPdfDataUrl({ contract, signatures = [], cerem
   const documentHash = contract.documentHash
     || readEvidenceDocumentHash(signatures[0]?.evidenceJson)
     || '';
-  const version = contract.version || 1;
+  const version = requirePersistedContractVersion(contract);
 
   pdf.setFontSize(14);
   pdf.text('Contrato assinado', 16, 18);
@@ -193,7 +194,7 @@ export function maybeGenerateFinalSignedArtifact({ contract, signatures, ceremon
   const live = (loadDb().generatedContracts || []).find((row) => row.id === contract.id) || contract;
   const frozenHtml = live.renderedHtml || live.finalContent || '';
   const documentHash = live.documentHash || '';
-  const version = live.version || 1;
+  const version = requirePersistedContractVersion(live);
 
   try {
     const dataUrl = generateFinalSignedPdfDataUrl({

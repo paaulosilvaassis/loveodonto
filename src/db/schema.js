@@ -339,6 +339,8 @@ export const defaultDbState = () => ({
   contractBlocks: [],
   /** Contratos gerados (snapshot imutável após finalização) */
   generatedContracts: [],
+  /** Manifestos clínicos congelados para assinatura (não é backfill de contratos legados) */
+  clinicalPackageManifests: [],
   /** Auditoria de ações em contratos e modelos */
   contractAuditLogs: [],
   /** Contador sequencial por clínica para número de contrato (ex.: { \"clinic-1\": 12 }) */

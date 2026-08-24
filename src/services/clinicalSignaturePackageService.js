@@ -17,6 +17,7 @@ import {
   CLINICAL_SIGNATURE_STEP,
 } from '../contracts/clinicalSignatureReadiness.js';
 import { DOCUMENT_APPLICABILITY } from '../contracts/treatmentDocumentRequirements.js';
+import { requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
 
 function tenantIdFromUser(user) {
   return String(user?.tenantId || user?.tenant_id || loadDb().clinicProfile?.tenant_id || '').trim();
@@ -59,7 +60,7 @@ function buildClinicalFreezeDocuments({ contract, readiness }) {
       contentMimeType: 'text/html',
       sourceKind: 'CONTRACT_VERSION',
       sourceId: contract.id,
-      documentVersion: String(contract.templateVersion || contract.version || '1'),
+      documentVersion: String(requirePersistedContractVersion(contract)),
     },
     {
       operationalType: 'LGPD',
@@ -147,6 +148,11 @@ export async function prepareClinicalSignaturePackage({
         user,
       }),
     };
+  }
+  try {
+    requirePersistedContractVersion(contract);
+  } catch (e) {
+    return { ok: false, error: e.message || 'Versão do contrato não está persistida.', readiness };
   }
 
   const freeze = createPackageManifestFreezeService({

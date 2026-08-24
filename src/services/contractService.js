@@ -15,6 +15,10 @@ import { validateContractGeneration } from './contractValidationService.js';
 import { mergeContractAttachedTcleIds } from './clinicalTcleAttachmentService.js';
 import { getPatient } from './patientService.js';
 import { BUDGET_LOCK_ERROR } from './clinicalBudgetLockService.js';
+import {
+  INITIAL_GENERATED_CONTRACT_VERSION,
+  requirePersistedContractVersion,
+} from '../contracts/generatedContractVersion.js';
 
 const NON_EDITABLE_CONTRACT_STATUSES = new Set([
   'generated', 'sent', 'viewed', 'signed_by_patient', 'signed_by_clinic',
@@ -391,6 +395,7 @@ export function createGeneratedContractDraft(user, payload) {
       budgetId: budgetId || null,
       templateId,
       templateVersion: Number(tpl.version || 1),
+      version: INITIAL_GENERATED_CONTRACT_VERSION,
       contractNumber,
       finalContent: merged,
       renderedHtml: rendered,
@@ -452,6 +457,7 @@ export function finalizeGeneratedContract(user, contractId) {
     const c = arr[idx];
     if (c.status === 'canceled') throw new Error('Contrato cancelado.');
     if (c.status === 'generated') throw new Error('Contrato já finalizado.');
+    requirePersistedContractVersion(c);
 
     const attachedTcleIds = mergeContractAttachedTcleIds(c, {
       patientId: c.patientId,

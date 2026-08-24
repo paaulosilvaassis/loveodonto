@@ -40,6 +40,7 @@ import {
   namesDiverge,
 } from '../contracts/remoteSignatureEvidence.js';
 import { resolveEvidenceClientIp } from '../contracts/signingClientIp.js';
+import { readPersistedContractVersion, requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
 import { maybeGenerateFinalSignedArtifact } from './finalSignedContractArtifactService.js';
 import {
   createGeneratedContractDraft,
@@ -574,7 +575,7 @@ export function signContractOnScreen(user, contractId, {
   const evidenceFields = {
     contractId,
     documentHash: hash,
-    contractVersion: contract.version || 1,
+    contractVersion: requirePersistedContractVersion(contract),
     signerPersonId: signerPersonId || null,
     signerRole: mapLegacySignerRole(signerRole),
     signedAt: now,
@@ -624,7 +625,7 @@ export function signContractOnScreen(user, contractId, {
         clientIpSource: clientIp.source,
         packageManifestId: contract.metadata?.packageManifestId || null,
         packageManifestHash: contract.metadata?.packageManifestHash || null,
-        contractVersion: contract.version || 1,
+        contractVersion: requirePersistedContractVersion(contract),
         documentTypes,
         rolesSatisfied,
       },
@@ -895,7 +896,7 @@ export function createContractNewVersion(user, contractId) {
       arr[dIdx] = {
         ...arr[dIdx],
         parentContractId: contractId,
-        version: Number(original.version || 1) + 1,
+        version: (readPersistedContractVersion(original) ?? 1) + 1,
       };
     }
     registerEvent(user, contractId, 'REPLACED', 'Nova versão criada', { newContractId: draft.id });
