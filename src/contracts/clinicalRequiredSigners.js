@@ -309,7 +309,10 @@ export function resolveRequiredSigners({
         code: 'PROFESSIONAL_MISSING',
         message: 'Defina o profissional clínico responsável pelo atendimento.',
         ctaLabel: 'Definir profissional clínico',
-        ctaHref: '/admin/colaboradores?tab=profissional',
+        ctaHref: appointmentId
+          ? `/atendimento-clinico/${encodeURIComponent(appointmentId)}?section=contratos`
+          : null,
+        ctaAction: 'assign_clinical_professional',
       });
     } else if (professionalRequired && !dentist.cro) {
       blockers.push({

@@ -65,8 +65,11 @@ import {
 } from '../../contracts/contractPrerequisitesResolution.js';
 import {
   evaluateClinicalProfessionalReadinessGate,
+  formatCollaboratorDisplayName,
   resolveClinicalProfessionalIdentity,
 } from '../../contracts/clinicalProfessionalIdentity.js';
+import { SelectClinicalProfessionalModal } from './SelectClinicalProfessionalModal.jsx';
+import { assignClinicalProfessionalToAppointment } from '../../contracts/clinicalProfessionalAssignment.js';
 import { getBudgetLockContext, getBudgetLockContextForBudget } from '../../services/clinicalBudgetLockService.js';
 import { generateProfessionalContractPdf } from './contract/generateProfessionalContractPdf.js';
 import { buildFinancialSection } from './contract/clinicalContractSchedule.js';
@@ -209,6 +212,8 @@ export function ClinicalContractSection({
   const [finalizeError, setFinalizeError] = useState('');
   const [toast, setToast] = useState(null);
   const [historyKey, setHistoryKey] = useState(0);
+  const [assignProfessionalOpen, setAssignProfessionalOpen] = useState(false);
+  const [assignProfessionalBusy, setAssignProfessionalBusy] = useState(false);
 
   // Após reload/HMR, writes no IndexedDB disparam db:updated — reavalia CTA sem state efêmero.
   useEffect(() => {
@@ -350,12 +355,22 @@ export function ClinicalContractSection({
   const clinicDoc = db.clinicDocumentation || {};
   const clinicPhone = (db.clinicPhones || []).find((p) => p.principal) || db.clinicPhones?.[0];
 
-  const professionalName =
-    professional?.nomeCompleto || professional?.name || professional?.apelido || '—';
-  const professionalCro = professional?.conselhoNumero || professional?.cro || '—';
-  const professionalSpecialty = Array.isArray(professional?.especialidades)
-    ? professional.especialidades.join(', ')
-    : (professional?.especialidade || '—');
+  const clinical = clinicalIdentity.clinicalProfessional;
+  const professionalName = clinical
+    ? formatCollaboratorDisplayName({
+      nomeCompleto: clinical.displayName,
+      rhCategoria: 'Corpo Clínico',
+    }, { fallback: clinical.displayName })
+    : '—';
+  const professionalCro = clinical
+    ? (clinical.registrationDisplay || [clinical.council, clinical.councilUf, clinical.registration].filter(Boolean).join(' ') || '—')
+    : '—';
+  const professionalSpecialty = clinical?.displayName
+    ? (db.collaborators || []).find((c) => c.id === clinical.collaboratorId)
+    : null;
+  const professionalSpecialtyLabel = Array.isArray(professionalSpecialty?.especialidades)
+    ? professionalSpecialty.especialidades.join(', ')
+    : (professionalSpecialty?.especialidade || professionalSpecialty?.cargo || '—');
 
   const guardianName =
     fullPatient?.profile?.guardian_full_name
@@ -386,6 +401,13 @@ export function ClinicalContractSection({
 
   const handleResolvePrerequisite = useCallback((card) => {
     const destination = card?.destination;
+    if (
+      destination?.action === 'assign_clinical_professional'
+      || destination?.mode === 'assign_clinical_modal'
+    ) {
+      setAssignProfessionalOpen(true);
+      return;
+    }
     if (!destination?.href) {
       showToast('Não foi possível abrir o destino de correção.', 'error');
       return;
@@ -422,6 +444,20 @@ export function ClinicalContractSection({
       },
     });
   }, [navigate, patientId, appointmentId, budget?.id]);
+
+  const handleAssignClinicalProfessional = async (collaboratorId) => {
+    setAssignProfessionalBusy(true);
+    try {
+      assignClinicalProfessionalToAppointment(user, appointmentId, collaboratorId);
+      showToast('Profissional clínico definido para este atendimento.');
+      onWorkflowRefresh?.();
+    } catch (err) {
+      showToast(err?.message || 'Não foi possível definir o profissional clínico.', 'error');
+      throw err;
+    } finally {
+      setAssignProfessionalBusy(false);
+    }
+  };
 
   const openCreateContract = () => {
     if (!contractAccessible) {
@@ -756,7 +792,7 @@ export function ClinicalContractSection({
               <InfoGrid rows={[
                 { label: 'Nome', value: professionalName },
                 { label: 'CRO', value: professionalCro },
-                { label: 'Especialidade', value: professionalSpecialty },
+                { label: 'Especialidade', value: professionalSpecialtyLabel },
               ]} />
             </ContractAccordionSection>
 
@@ -857,6 +893,14 @@ export function ClinicalContractSection({
           </div>
         )}
       </ClinicalStageShell>
+
+      <SelectClinicalProfessionalModal
+        open={assignProfessionalOpen}
+        onOpenChange={setAssignProfessionalOpen}
+        tenantId={user?.tenantId || user?.tenant_id}
+        busy={assignProfessionalBusy}
+        onConfirm={handleAssignClinicalProfessional}
+      />
 
       <GenerateContractModal
         open={contractModalOpen}

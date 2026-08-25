@@ -437,15 +437,28 @@ export function buildPrerequisiteDestination(groupKey, {
         action: 'assign_clinical_professional',
       }
       : meta;
+    if (missingClinical) {
+      const href = appointmentId
+        ? `/atendimento-clinico/${encodeURIComponent(appointmentId)}?section=contratos`
+        : null;
+      return {
+        ...destinationBase(destMeta, ctx),
+        professionalId: null,
+        href,
+        mode: appointmentId ? 'assign_clinical_modal' : 'blocked',
+        focus: 'profissional-clinico',
+        reason: appointmentId ? null : 'appointmentId ausente',
+      };
+    }
     const params = new URLSearchParams({ tab: 'profissional' });
-    if (!missingClinical && professionalId) params.set('collaboratorId', professionalId);
+    if (professionalId) params.set('collaboratorId', professionalId);
     if (returnUrl) params.set('returnTo', returnUrl);
     if (patientId) params.set('patientId', patientId);
     if (appointmentId) params.set('appointmentId', appointmentId);
     if (budgetId) params.set('budgetId', budgetId);
     return {
       ...destinationBase(destMeta, ctx),
-      professionalId: missingClinical ? null : (professionalId || null),
+      professionalId: professionalId || null,
       href: `/admin/colaboradores?${params.toString()}`,
       mode: 'navigate',
       focus: 'profissional',
@@ -630,9 +643,12 @@ export function listUnactionableBlockingCards(resolution) {
     if (!card.isBlocking) return false;
     if (card.explicitlyNonActionable) return false;
     const dest = card.destination;
-    const hasAction = Boolean(dest?.href)
-      && dest.mode !== 'blocked'
-      && Boolean(dest.action);
+    const hasAction = dest?.mode === 'assign_clinical_modal'
+      || (
+        Boolean(dest?.href)
+        && dest.mode !== 'blocked'
+        && Boolean(dest.action)
+      );
     return !hasAction;
   });
 }

@@ -103,7 +103,10 @@ export function ContractReadinessChecklist({
                       </li>
                     ))}
                   </ul>
-                  {card.destination?.href && card.destination.mode !== 'blocked' ? (
+                  {(
+                    card.destination?.mode === 'assign_clinical_modal'
+                    || (card.destination?.href && card.destination.mode !== 'blocked')
+                  ) ? (
                     <button
                       type="button"
                       className="button secondary contract-readiness-card__cta"

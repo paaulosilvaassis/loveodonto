@@ -495,7 +495,10 @@ function ClinicalAppointmentPageContent() {
                 budget={workflow.budget}
                 appointment={appointment}
                 professional={professional}
-                onWorkflowRefresh={bumpWorkflow}
+                onWorkflowRefresh={() => {
+                  bumpWorkflow();
+                  loadAppointmentData();
+                }}
               />
             ) : (
               <ClinicalSectionLocked message={sectionLockMessage('contratos', workflow)} onGo={() => setActiveSection('orcamento')} />

@@ -27,6 +27,7 @@ export const PROFESSIONAL_READINESS_GATE = {
   OK: 'ok',
   MISSING_CLINICAL: 'missing_clinical',
   MISSING_REGISTRATION: 'missing_registration',
+  BLOCKED_CLINICAL_PROFESSIONAL_NOT_ASSIGNED: 'missing_clinical',
 };
 
 const SUPPORT_CATEGORY = 'Apoio Clínico';
