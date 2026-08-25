@@ -5,6 +5,9 @@ import { defineConfig } from 'vitest/config';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  esbuild: {
+    jsx: 'automatic',
+  },
   resolve: {
     alias: {
       'lucide-react': path.resolve(__dirname, 'src/__tests__/mocks/lucide-react.js'),

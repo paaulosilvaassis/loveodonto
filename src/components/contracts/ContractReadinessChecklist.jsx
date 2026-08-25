@@ -1,5 +1,6 @@
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { buildContractPrerequisiteResolutionCards } from '../../contracts/contractPrerequisitesResolution.js';
+import { isClinicalProfessionalAssignmentCta } from '../../contracts/clinicalProfessionalAssignmentCta.js';
 
 /**
  * Central de resolução de pendências do contrato.
@@ -10,6 +11,7 @@ export function ContractReadinessChecklist({
   className = '',
   resolutionContext = null,
   onResolve = null,
+  onAssignClinicalProfessional = null,
 }) {
   if (!checklist) return null;
 
@@ -21,6 +23,8 @@ export function ContractReadinessChecklist({
       budgetId: resolutionContext.budgetId,
       contractId: resolutionContext.contractId,
       professionalId: resolutionContext.professionalId,
+      clinicalProfessionalName: resolutionContext.clinicalProfessionalName,
+      clinicalProfessionalCro: resolutionContext.clinicalProfessionalCro,
     })
     : null;
 
@@ -104,19 +108,26 @@ export function ContractReadinessChecklist({
                     ))}
                   </ul>
                   {(
-                    card.destination?.mode === 'assign_clinical_modal'
+                    isClinicalProfessionalAssignmentCta(card)
+                    || card.destination?.mode === 'assign_clinical_modal'
                     || (card.destination?.href && card.destination.mode !== 'blocked')
                   ) ? (
                     <button
                       type="button"
                       className="button secondary contract-readiness-card__cta"
                       data-testid={`contract-prereq-cta-${card.group}`}
-                      data-action={card.destination.action}
-                      data-patient-id={card.destination.patientId || ''}
-                      data-appointment-id={card.destination.appointmentId || ''}
-                      data-budget-id={card.destination.budgetId || ''}
-                      data-professional-id={card.destination.professionalId || ''}
-                      onClick={() => onResolve?.(card)}
+                      data-action={card.destination?.action || ''}
+                      data-patient-id={card.destination?.patientId || ''}
+                      data-appointment-id={card.destination?.appointmentId || ''}
+                      data-budget-id={card.destination?.budgetId || ''}
+                      data-professional-id={card.destination?.professionalId || ''}
+                      onClick={() => {
+                        if (isClinicalProfessionalAssignmentCta(card) && onAssignClinicalProfessional) {
+                          onAssignClinicalProfessional();
+                          return;
+                        }
+                        onResolve?.(card);
+                      }}
                     >
                       {card.destination.ctaLabel}
                     </button>

@@ -3,6 +3,12 @@
  * Não altera o validator (getContractReadinessChecklist) — mapeia pendências → CTAs oficiais.
  */
 
+import {
+  ASSIGN_CLINICAL_PROFESSIONAL_ACTION,
+  ASSIGN_CLINICAL_PROFESSIONAL_LABEL,
+  ASSIGN_CLINICAL_PROFESSIONAL_MODE,
+  isMissingClinicalProfessionalItem,
+} from './clinicalProfessionalAssignmentCta.js';
 import { buildClinicalAppointmentUrl } from '../services/budgetNavigationService.js';
 
 export const UNKNOWN_BLOCKER_FAILSAFE =
@@ -426,26 +432,17 @@ export function buildPrerequisiteDestination(groupKey, {
   }
 
   if (groupKey === 'profissional') {
-    const missingClinical = (items || []).some((item) => (
-      item?.tag === PROFESSIONAL_GATE_TAGS.MISSING_CLINICAL
-      || item?.tag === PROFESSIONAL_GATE_TAGS.MISSING
-    ));
-    const destMeta = missingClinical
-      ? {
-        ...meta,
-        ctaLabel: 'Definir profissional clínico',
-        action: 'assign_clinical_professional',
-      }
-      : meta;
+    const missingClinical = (items || []).some(isMissingClinicalProfessionalItem);
     if (missingClinical) {
-      const href = appointmentId
-        ? `/atendimento-clinico/${encodeURIComponent(appointmentId)}?section=contratos`
-        : null;
       return {
-        ...destinationBase(destMeta, ctx),
+        ...destinationBase({
+          ...meta,
+          ctaLabel: ASSIGN_CLINICAL_PROFESSIONAL_LABEL,
+          action: ASSIGN_CLINICAL_PROFESSIONAL_ACTION,
+        }, ctx),
         professionalId: null,
-        href,
-        mode: appointmentId ? 'assign_clinical_modal' : 'blocked',
+        href: null,
+        mode: ASSIGN_CLINICAL_PROFESSIONAL_MODE,
         focus: 'profissional-clinico',
         reason: appointmentId ? null : 'appointmentId ausente',
       };
@@ -457,7 +454,7 @@ export function buildPrerequisiteDestination(groupKey, {
     if (appointmentId) params.set('appointmentId', appointmentId);
     if (budgetId) params.set('budgetId', budgetId);
     return {
-      ...destinationBase(destMeta, ctx),
+      ...destinationBase(meta, ctx),
       professionalId: professionalId || null,
       href: `/admin/colaboradores?${params.toString()}`,
       mode: 'navigate',
@@ -544,6 +541,8 @@ export function buildContractPrerequisiteResolutionCards({
   budgetId = null,
   contractId = null,
   professionalId = null,
+  clinicalProfessionalName = '',
+  clinicalProfessionalCro = '',
 } = {}) {
   if (!checklist) return { cards: [], canGenerate: false, returnUrl: '' };
 
@@ -581,6 +580,23 @@ export function buildContractPrerequisiteResolutionCards({
     if (!isTcleRelevant) continue;
     if (key === 'lgpd' && !items.length) continue;
 
+    if (!items.length && key === 'profissional') {
+      const assignedName = String(clinicalProfessionalName || '').trim();
+      if (assignedName) {
+        const cro = String(clinicalProfessionalCro || '').trim();
+        cards.push({
+          group: key,
+          title: meta.title,
+          status: 'complete',
+          completeLabel: cro ? `${assignedName} · ${cro}` : assignedName,
+          isBlocking: false,
+          items: [],
+          destination: null,
+          explicitlyNonActionable: false,
+        });
+      }
+      continue;
+    }
     if (!items.length && !['clinica', 'paciente', 'tcle'].includes(key)) continue;
     if (!items.length && key === 'tcle' && requiredTcles.length === 0) continue;
 
@@ -643,7 +659,8 @@ export function listUnactionableBlockingCards(resolution) {
     if (!card.isBlocking) return false;
     if (card.explicitlyNonActionable) return false;
     const dest = card.destination;
-    const hasAction = dest?.mode === 'assign_clinical_modal'
+    const hasAction = dest?.mode === ASSIGN_CLINICAL_PROFESSIONAL_MODE
+      || dest?.action === ASSIGN_CLINICAL_PROFESSIONAL_ACTION
       || (
         Boolean(dest?.href)
         && dest.mode !== 'blocked'

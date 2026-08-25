@@ -532,6 +532,35 @@ export const updateAppointment = (user, appointmentId, payload) => {
   return updated;
 };
 
+/**
+ * Writer oficial do vínculo clínico do atendimento.
+ * Não altera professionalId (operador/origem) nem dentistId da agenda.
+ */
+export const setAppointmentClinicalProfessional = (user, appointmentId, clinicalProfessionalId) => {
+  if (!user?.id) throw new Error('Sessão inválida.');
+  const apptId = String(appointmentId || '').trim();
+  const chosenId = String(clinicalProfessionalId || '').trim();
+  if (!apptId) throw new Error('Atendimento não informado.');
+  if (!chosenId) throw new Error('Selecione o profissional clínico.');
+
+  return withDb((db) => {
+    const index = (db.appointments || []).findIndex((row) => row.id === apptId);
+    if (index < 0) throw new Error('Atendimento não encontrado.');
+    const current = db.appointments[index];
+    db.appointments[index] = {
+      ...current,
+      clinicalProfessionalId: chosenId,
+    };
+    logAction('clinical:assign-professional', {
+      appointmentId: apptId,
+      clinicalProfessionalId: chosenId,
+      operatorId: current.professionalId || null,
+      userId: user.id,
+    });
+    return db.appointments[index];
+  });
+};
+
 export const cancelAppointment = (user, appointmentId, reason = '') => {
   requirePermission(user, 'agenda:write');
   const updated = updateAppointment(user, appointmentId, {

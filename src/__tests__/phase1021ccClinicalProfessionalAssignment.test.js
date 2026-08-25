@@ -221,7 +221,8 @@ describe('PHASE_10.21CC clinical professional assignment', () => {
     expect(professional?.items[0]?.tag).toBe(PROFESSIONAL_GATE_TAGS.MISSING_CLINICAL);
     expect(professional?.destination?.mode).toBe('assign_clinical_modal');
     expect(professional?.destination?.action).toBe('assign_clinical_professional');
-    expect(professional?.destination?.href).not.toContain('/admin/colaboradores');
+    expect(String(professional?.destination?.href || '')).not.toContain('/admin/colaboradores');
+    expect(professional?.destination?.href).toBeNull();
   });
 
   it('B) seletor: Paulo administrativo não aparece; Juliana aparece', () => {
@@ -344,7 +345,8 @@ describe('PHASE_10.21CC clinical professional assignment', () => {
 
   it('CTA do contrato abre modal no atendimento, não Dados da Equipe', () => {
     const section = readSrc('src/components/clinical/ClinicalContractSection.jsx');
-    expect(section).toContain('assign_clinical_professional');
+    expect(section).toContain('openClinicalProfessionalSelector');
+    expect(section).toContain('onAssignClinicalProfessional');
     expect(section).toContain('setAssignProfessionalOpen(true)');
     expect(section).toContain('SelectClinicalProfessionalModal');
     expect(section).toContain('assignClinicalProfessionalToAppointment');

@@ -3,8 +3,8 @@
  * SSOT: appointment.clinicalProfessionalId
  * Não sobrescreve appointment.professionalId (operador/origem da agenda).
  */
-import { loadDb, withDb } from '../db/index.js';
-import { logAction } from '../services/logService.js';
+import { loadDb } from '../db/index.js';
+import { setAppointmentClinicalProfessional } from '../services/appointmentService.js';
 import { normalizeTenantId } from '../services/tenantIsolation.js';
 import {
   classifyCollaboratorRole,
@@ -86,30 +86,17 @@ export function assignClinicalProfessionalToAppointment(user, appointmentId, col
     throw new Error('Profissional clínico inválido para este atendimento.');
   }
 
-  return withDb((db) => {
-    const expected = normalizeTenantId(tenantId || db.clinicProfile?.tenant_id);
-    const index = (db.appointments || []).findIndex((row) => row.id === apptId);
-    if (index < 0) throw new Error('Atendimento não encontrado.');
-    const current = db.appointments[index];
-    const apptTenant = normalizeTenantId(current.tenant_id || current.tenantId);
-    if (expected && apptTenant && apptTenant !== expected) {
-      throw new Error('Atendimento não pertence a esta clínica.');
-    }
-    const scoped = findTenantScopedCollaborator(db.collaborators || [], chosenId, expected);
-    if (!scoped || !isEligibleClinicalProfessional(scoped, expected)) {
-      throw new Error('Profissional clínico inválido para este atendimento.');
-    }
-    const operatorId = current.professionalId || null;
-    db.appointments[index] = {
-      ...current,
-      [CLINICAL_PROFESSIONAL_SSOT_FIELD]: chosenId,
-    };
-    logAction('clinical:assign-professional', {
-      appointmentId: apptId,
-      clinicalProfessionalId: chosenId,
-      operatorId,
-      userId: user.id,
-    });
-    return db.appointments[index];
-  });
+  const expected = normalizeTenantId(tenantId);
+  const database = loadDb();
+  const current = (database.appointments || []).find((row) => row.id === apptId);
+  if (!current) throw new Error('Atendimento não encontrado.');
+  const apptTenant = normalizeTenantId(current.tenant_id || current.tenantId);
+  if (expected && apptTenant && apptTenant !== expected) {
+    throw new Error('Atendimento não pertence a esta clínica.');
+  }
+  const scoped = findTenantScopedCollaborator(database.collaborators || [], chosenId, expected);
+  if (!scoped || !isEligibleClinicalProfessional(scoped, expected)) {
+    throw new Error('Profissional clínico inválido para este atendimento.');
+  }
+  return setAppointmentClinicalProfessional(user, apptId, chosenId);
 }

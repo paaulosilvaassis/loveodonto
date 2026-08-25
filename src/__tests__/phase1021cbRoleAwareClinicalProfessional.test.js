@@ -266,8 +266,8 @@ describe('PHASE_10.21CB role-aware clinical professional', () => {
     expect(professional?.destination?.ctaLabel).toBe('Definir profissional clínico');
     expect(professional?.destination?.action).toBe('assign_clinical_professional');
     expect(professional?.destination?.mode).toBe('assign_clinical_modal');
-    expect(professional?.destination?.href).not.toContain('/admin/colaboradores');
-    expect(professional?.destination?.href).not.toContain('collaboratorId=col-admin-cb');
+    expect(String(professional?.destination?.href || '')).not.toContain('/admin/colaboradores');
+    expect(professional?.destination?.href).toBeNull();
     expect(professional?.destination?.professionalId).toBeNull();
   });
 

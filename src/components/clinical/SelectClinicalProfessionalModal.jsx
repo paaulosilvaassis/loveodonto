@@ -10,6 +10,13 @@ import {
 } from '../ui/Modal.jsx';
 import { listEligibleClinicalProfessionals } from '../../contracts/clinicalProfessionalAssignment.js';
 
+function croLabel(row) {
+  if (row.registrationDisplay) return row.registrationDisplay;
+  const parts = [row.council || 'CRO', row.councilUf, row.registration].filter(Boolean);
+  if (parts.length < 2) return parts.join(' ');
+  return `${parts[0]}-${parts[1]} ${parts[2] || ''}`.trim();
+}
+
 export function SelectClinicalProfessionalModal({
   open,
   onOpenChange,
@@ -54,7 +61,7 @@ export function SelectClinicalProfessionalModal({
           <ModalHeader>
             <ModalTitle>Selecionar profissional clínico</ModalTitle>
             <ModalDescription>
-              Escolha o cirurgião-dentista responsável por este atendimento. O operador administrativo não aparece nesta lista.
+              Selecione o cirurgião-dentista responsável por este atendimento.
             </ModalDescription>
           </ModalHeader>
           <ModalBody>
@@ -66,24 +73,21 @@ export function SelectClinicalProfessionalModal({
             ) : (
               <ul className="clinical-professional-picker" data-testid="select-clinical-professional-list">
                 {options.map((row) => (
-                  <li key={row.collaboratorId}>
-                    <label>
-                      <input
-                        type="radio"
-                        name="clinicalProfessionalId"
-                        value={row.collaboratorId}
-                        checked={selectedId === row.collaboratorId}
-                        onChange={() => setSelectedId(row.collaboratorId)}
-                        disabled={busy}
-                      />
-                      <span>
-                        <strong>{row.name}</strong>
-                        <em>{[row.category, row.specialty].filter(Boolean).join(' · ')}</em>
-                        <small>
-                          {[row.council, row.councilUf, row.registration].filter(Boolean).join(' ')}
-                        </small>
-                      </span>
-                    </label>
+                  <li key={row.collaboratorId} className={selectedId === row.collaboratorId ? 'is-selected' : ''}>
+                    <div>
+                      <strong>{row.name}</strong>
+                      <em>{row.specialty || row.category}</em>
+                      <small>{croLabel(row)}</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="button secondary"
+                      data-testid={`select-clinical-professional-option-${row.collaboratorId}`}
+                      disabled={busy}
+                      onClick={() => setSelectedId(row.collaboratorId)}
+                    >
+                      Selecionar
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -99,7 +103,7 @@ export function SelectClinicalProfessionalModal({
               data-testid="select-clinical-professional-confirm"
               disabled={busy || !selectedId}
             >
-              Confirmar
+              Confirmar profissional
             </button>
           </ModalFooter>
         </form>

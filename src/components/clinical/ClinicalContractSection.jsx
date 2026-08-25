@@ -70,6 +70,10 @@ import {
 } from '../../contracts/clinicalProfessionalIdentity.js';
 import { SelectClinicalProfessionalModal } from './SelectClinicalProfessionalModal.jsx';
 import { assignClinicalProfessionalToAppointment } from '../../contracts/clinicalProfessionalAssignment.js';
+import {
+  shouldOpenClinicalProfessionalSelector,
+  isForbiddenAdminRedirectForClinicalAssignment,
+} from '../../contracts/clinicalProfessionalAssignmentCta.js';
 import { getBudgetLockContext, getBudgetLockContextForBudget } from '../../services/clinicalBudgetLockService.js';
 import { generateProfessionalContractPdf } from './contract/generateProfessionalContractPdf.js';
 import { buildFinancialSection } from './contract/clinicalContractSchedule.js';
@@ -388,6 +392,8 @@ export function ClinicalContractSection({
     budgetId: effectiveBudget?.id || budget?.id || viewBudgetId || null,
     contractId: linkedContract?.id || viewContractId || null,
     professionalId: professionalReadinessGate.ctaCollaboratorId || null,
+    clinicalProfessionalName: clinicalIdentity.displayName || '',
+    clinicalProfessionalCro: clinicalIdentity.registrationDisplay || '',
   }), [
     patientId,
     appointmentId,
@@ -397,15 +403,25 @@ export function ClinicalContractSection({
     linkedContract?.id,
     viewContractId,
     professionalReadinessGate.ctaCollaboratorId,
+    clinicalIdentity.clinicalProfessional,
   ]);
 
+  const openClinicalProfessionalSelector = useCallback(() => {
+    setAssignProfessionalOpen(true);
+  }, []);
+
   const handleResolvePrerequisite = useCallback((card) => {
+    if (shouldOpenClinicalProfessionalSelector(card, {
+      hasAssignedClinicalProfessional: Boolean(clinicalIdentity.clinicalProfessional),
+    })) {
+      openClinicalProfessionalSelector();
+      return;
+    }
     const destination = card?.destination;
-    if (
-      destination?.action === 'assign_clinical_professional'
-      || destination?.mode === 'assign_clinical_modal'
-    ) {
-      setAssignProfessionalOpen(true);
+    if (isForbiddenAdminRedirectForClinicalAssignment(destination?.href)
+      && card?.group === 'profissional'
+      && !clinicalIdentity.clinicalProfessional) {
+      openClinicalProfessionalSelector();
       return;
     }
     if (!destination?.href) {
@@ -430,6 +446,15 @@ export function ClinicalContractSection({
       showToast('URL de retorno inválida.', 'error');
       return;
     }
+    if (
+      isForbiddenAdminRedirectForClinicalAssignment(destination.href)
+      && shouldOpenClinicalProfessionalSelector(card, {
+        hasAssignedClinicalProfessional: Boolean(clinicalIdentity.clinicalProfessional),
+      })
+    ) {
+      openClinicalProfessionalSelector();
+      return;
+    }
     navigate(destination.href, {
       state: {
         returnTo: destination.returnUrl || undefined,
@@ -443,7 +468,14 @@ export function ClinicalContractSection({
         docTemplate: destination.templateKey || undefined,
       },
     });
-  }, [navigate, patientId, appointmentId, budget?.id]);
+  }, [
+    navigate,
+    patientId,
+    appointmentId,
+    budget?.id,
+    clinicalIdentity.clinicalProfessional,
+    openClinicalProfessionalSelector,
+  ]);
 
   const handleAssignClinicalProfessional = async (collaboratorId) => {
     setAssignProfessionalBusy(true);
@@ -721,6 +753,7 @@ export function ClinicalContractSection({
                 checklist={contractReadiness}
                 className="clinical-contract-readiness"
                 resolutionContext={resolutionContext}
+                onAssignClinicalProfessional={openClinicalProfessionalSelector}
                 onResolve={handleResolvePrerequisite}
               />
             ) : null}
