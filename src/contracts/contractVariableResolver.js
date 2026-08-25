@@ -14,7 +14,8 @@ import { PARTY_MODEL } from './contractQualificationTemplates.js';
 import { detectTreatmentType, detectAllTreatmentTypes } from '../components/clinical/contract/detectTreatmentType.js';
 import { buildInstallmentSchedule } from '../components/clinical/contract/clinicalContractSchedule.js';
 import { getAcceptedOption, calcPlannedValue, calcOptionFinalValue } from '../components/clinical/budget/budgetUtils.js';
-import { resolveClinicTechnicalResponsible, resolveAttendingProfessionalCro } from './clinicTechnicalResponsible.js';
+import { resolveClinicTechnicalResponsible } from './clinicTechnicalResponsible.js';
+import { resolveClinicalProfessionalIdentity } from './clinicalProfessionalIdentity.js';
 
 const EMPTY_MARKERS = new Set(['', '—', '-', '________________', 'N/A', 'n/a']);
 
@@ -292,8 +293,17 @@ export function resolveContractVariables(params) {
 
   const depNome = String(profile.dependent_full_name || pacNome).trim();
 
-  const profName = String(currentUser?.name || currentUser?.nomeCompleto || '').trim();
-  const profCro = resolveAttendingProfessionalCro(currentUser || {});
+  const clinicalIdentity = resolveClinicalProfessionalIdentity({
+    appointmentId: quoteId,
+    tenantId: clinic.tenant_id || clinic.tenantId || currentUser?.tenantId || currentUser?.tenant_id,
+  });
+  const clinicalProfessional = clinicalIdentity.clinicalProfessional;
+  const profName = String(clinicalProfessional?.displayName || '').trim();
+  const profCro = String(
+    clinicalProfessional?.registrationDisplay
+    || clinicalProfessional?.registration
+    || '',
+  ).trim();
   const { name: respTecnico, cro: respTecnicoCro } = resolveClinicTechnicalResponsible(doc, clinic);
 
   const budgetNumberRaw = clinicalBudget?.budgetNumber || crmBudget?.code || '';

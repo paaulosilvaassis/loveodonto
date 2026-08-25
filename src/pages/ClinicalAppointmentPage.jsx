@@ -4,6 +4,7 @@ import { useAuth } from '../auth/useAuth.js';
 import { loadDb } from '../db/index.js';
 import { createId } from '../services/helpers.js';
 import { getAppointmentDetails, APPOINTMENT_STATUS } from '../services/appointmentService.js';
+import { formatCollaboratorDisplayName } from '../contracts/clinicalProfessionalIdentity.js';
 import { 
   saveClinicalEvolution, 
   addProcedure, 
@@ -407,7 +408,7 @@ function ClinicalAppointmentPageContent() {
             </h1>
             <div className="clinical-appointment-header-meta">
               <span className="clinical-header-chip">
-                Dr(a). {professional?.nomeCompleto || professional?.name || 'Profissional'}
+                {formatCollaboratorDisplayName(professional, { fallback: 'Profissional' })}
               </span>
               <span className="clinical-header-chip">
                 {formatDateShort(appointment?.date)} Â· {appointment?.startTime ? formatTime(appointment.startTime) : 'â€”'}

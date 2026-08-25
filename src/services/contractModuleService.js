@@ -25,6 +25,7 @@ import {
   CEREMONY_STATUS,
 } from '../contracts/clinicalSignatureCeremony.js';
 import { mapLegacySignerRole, CLINICAL_SIGNER_ROLE } from '../contracts/clinicalRequiredSigners.js';
+import { resolveClinicalProfessionalIdentity } from '../contracts/clinicalProfessionalIdentity.js';
 import {
   assertAuthenticatedSignerForStroke,
 } from '../contracts/authenticatedSignerIdentity.js';
@@ -138,6 +139,11 @@ function buildSnapshots({ quoteSource, quoteId, patientId, currentUser, budgetId
     budgetId,
     appointmentId: quoteId,
   });
+  const clinicalIdentity = resolveClinicalProfessionalIdentity({
+    appointmentId: quoteId,
+    tenantId: currentUser?.tenantId || currentUser?.tenant_id || clinic.tenant_id,
+  });
+  const clinicalProfessional = clinicalIdentity.clinicalProfessional;
   return {
     patientSnapshotJson: {
       id: patientId,
@@ -151,10 +157,11 @@ function buildSnapshots({ quoteSource, quoteId, patientId, currentUser, budgetId
       endereco: db.clinicAddresses?.[0] || null,
     },
     professionalSnapshotJson: {
-      name: currentUser?.name,
-      cro: currentUser?.cro || currentUser?.registroProfissional || currentUser?.conselhoNumero || '',
-      conselhoUf: currentUser?.conselhoUf || currentUser?.croUf || '',
-      userId: currentUser?.id,
+      name: clinicalProfessional?.displayName || '',
+      cro: clinicalProfessional?.registrationDisplay || clinicalProfessional?.registration || '',
+      conselhoUf: clinicalProfessional?.councilUf || '',
+      collaboratorId: clinicalProfessional?.collaboratorId || null,
+      userId: null,
     },
     clinicalSnapshotJson: {
       procedimentos: ctx['#procedimentos'],

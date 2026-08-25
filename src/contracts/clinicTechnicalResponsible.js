@@ -1,6 +1,8 @@
 /**
  * Responsável técnico da clínica (CRO) — fonte: cadastro da clínica, nunca o dentista do atendimento.
  */
+import { parseProfessionalCouncilRegistration } from './clinicalProfessionalIdentity.js';
+
 export function resolveClinicTechnicalResponsible(docs = {}, clinic = {}) {
   const name = String(
     docs.responsavelTecnico
@@ -18,11 +20,6 @@ export function resolveClinicTechnicalResponsible(docs = {}, clinic = {}) {
 }
 
 export function resolveAttendingProfessionalCro(source = {}) {
-  return String(
-    source.cro
-    || source.registroProfissional
-    || source.conselhoNumero
-    || source.conselho_numero
-    || '',
-  ).trim();
+  const parsed = parseProfessionalCouncilRegistration(source || {});
+  return parsed.raw || parsed.registration || '';
 }

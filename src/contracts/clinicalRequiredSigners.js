@@ -11,7 +11,9 @@ import { detectPartyModel } from './contractVariableResolver.js';
 import { DEFAULT_CONTRACT_SETTINGS } from './contractConstants.js';
 import { resolvePatientFullName } from '../utils/patientIdentity.js';
 import { resolveAttendingProfessionalCro } from './clinicTechnicalResponsible.js';
+import { resolveClinicalProfessionalIdentity } from './clinicalProfessionalIdentity.js';
 import { resolveContractForSelectedBudget } from './resolveContractForSelectedBudget.js';
+import { normalizeTenantId } from '../services/tenantIsolation.js';
 
 export const CLINICAL_SIGNER_ROLE = {
   PATIENT: 'PATIENT',
@@ -65,23 +67,26 @@ function profileOf(patientId) {
   return { ...row, ...(bundle?.profile || {}) };
 }
 
-function treatingDentist(appointmentId) {
-  const db = loadDb();
-  const appt = (db.appointments || []).find((a) => a.id === appointmentId) || null;
-  const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === appointmentId) || null;
-  const professionalId = appt?.professionalId || clinical?.professionalId || clinical?.budget?.professionalId || null;
-  const col = professionalId
-    ? (db.collaborators || []).find((c) => c.id === professionalId)
-    : null;
-  const cro = resolveAttendingProfessionalCro(col);
-  const uf = col?.conselhoUf || col?.croUf || col?.uf || '';
+function treatingDentist(appointmentId, tenantId) {
+  const identity = resolveClinicalProfessionalIdentity({ appointmentId, tenantId });
+  const clinical = identity.clinicalProfessional;
+  if (!clinical) {
+    return {
+      personId: null,
+      name: '',
+      cro: '',
+      uf: '',
+      tenantId: identity.tenantId || tenantId || null,
+      source: identity.source,
+    };
+  }
   return {
-    personId: professionalId || null,
-    name: normalizeName(col?.nomeCompleto || col?.name || ''),
-    cro: String(cro || '').trim(),
-    uf: String(uf || '').trim(),
-    tenantId: col?.tenant_id || appt?.tenant_id || null,
-    source: 'appointment.professionalId',
+    personId: clinical.collaboratorId,
+    name: normalizeName(clinical.displayName),
+    cro: String(clinical.registration || clinical.registrationDisplay || '').trim(),
+    uf: String(clinical.councilUf || '').trim(),
+    tenantId: clinical.tenantId || identity.tenantId || tenantId || null,
+    source: clinical.source,
   };
 }
 
@@ -90,9 +95,12 @@ function technicalResponsible() {
   const doc = db.clinicDocumentation || {};
   const name = normalizeName(doc.responsavelTecnico || doc.responsavel_tecnico || '');
   const cro = String(doc.croResponsavelTecnico || doc.conselhoRegionalNumero || '').trim();
+  const expectedTenant = normalizeTenantId(db.clinicProfile?.tenant_id || db.clinicProfile?.tenantId);
   const collaborators = db.collaborators || [];
   const croNorm = normalizeCro(cro);
   const linked = collaborators.find((c) => {
+    const rowTenant = normalizeTenantId(c.tenant_id || c.tenantId);
+    if (expectedTenant && rowTenant && rowTenant !== expectedTenant) return false;
     const cCro = normalizeCro(resolveAttendingProfessionalCro(c));
     return croNorm && cCro && cCro === croNorm;
   }) || null;
@@ -226,7 +234,7 @@ export function resolveRequiredSigners({
   const scopedRules = documentType && rules[documentType] ? { [documentType]: rules[documentType] } : rules;
   const requiredRoles = unionRequiredRoles(scopedRules);
   const signingOrder = overrides.signingOrder || settings.signingOrder || CLINICAL_SIGNING_ORDER.ANY_ORDER;
-  const dentist = treatingDentist(appointmentId || contract?.quoteId);
+  const dentist = treatingDentist(appointmentId || contract?.quoteId, expectedTenant);
   const rt = technicalResponsible();
   const mergeDentistRt = sameProfessionalPerson(dentist, rt);
 
@@ -299,16 +307,20 @@ export function resolveRequiredSigners({
     if (professionalRequired && !dentist.personId) {
       blockers.push({
         code: 'PROFESSIONAL_MISSING',
-        message: 'Profissional responsável pelo tratamento não identificado.',
-        ctaLabel: 'Completar cadastro profissional',
-        ctaHref: '/equipe',
+        message: 'Defina o profissional clínico responsável pelo atendimento.',
+        ctaLabel: 'Definir profissional clínico',
+        ctaHref: '/admin/colaboradores?tab=profissional',
       });
     } else if (professionalRequired && !dentist.cro) {
       blockers.push({
         code: 'PROFESSIONAL_CRO_MISSING',
-        message: 'Profissional sem CRO.',
-        ctaLabel: 'Completar cadastro profissional',
-        ctaHref: '/equipe',
+        message: dentist.name
+          ? `Registro profissional de ${dentist.name} não informado.`
+          : 'Registro profissional de profissional clínico não informado.',
+        ctaLabel: 'Corrigir dados do profissional',
+        ctaHref: dentist.personId
+          ? `/admin/colaboradores?tab=profissional&collaboratorId=${encodeURIComponent(dentist.personId)}`
+          : '/admin/colaboradores?tab=profissional',
       });
     }
     const rtRequired = requiredRoles.has(CLINICAL_SIGNER_ROLE.CLINIC_REPRESENTATIVE);

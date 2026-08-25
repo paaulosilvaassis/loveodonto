@@ -112,8 +112,8 @@ describe('contractVariableResolver', () => {
 
     expect(map['#responsavelTecnicoNome']).toBe('');
     expect(map['#responsavelTecnicoCRO']).toBe('');
-    expect(map['#dentistaNomeCompleto']).toBe('Dr. Juliana');
-    expect(map['#dentistaConselhoNumero']).toBe('CRO-MG 88888');
+    expect(map['#dentistaNomeCompleto']).toBe('');
+    expect(map['#dentistaConselhoNumero']).toBe('');
     expect(missing.some((m) => m.tag === '#responsavelTecnicoNome')).toBe(true);
     expect(missing.some((m) => m.tag === '#responsavelTecnicoCRO')).toBe(true);
   });

@@ -223,6 +223,12 @@ function hasTag(groups, tag) {
  * sem inventar regras novas no validator.
  * pendingCriticalFields NÃO desliga canGenerate — só explica o campo e oferece CTA.
  */
+export const PROFESSIONAL_GATE_TAGS = {
+  MISSING_CLINICAL: 'professional:missing-clinical',
+  MISSING_CRO: 'professional:cro',
+  MISSING: 'professional:missing',
+};
+
 export function enrichContractReadinessChecklist(checklist, extras = {}) {
   if (!checklist) return null;
   const groups = cloneGroups(checklist.groups);
@@ -230,8 +236,12 @@ export function enrichContractReadinessChecklist(checklist, extras = {}) {
     pendingCriticalFields = [],
     professionalId,
     professionalCro = '',
+    requiresProfessionalRegistration,
+    clinicalProfessionalName = '',
+    professionalGate = null,
   } = extras;
-  const hasProfessionalGate = Object.prototype.hasOwnProperty.call(extras, 'professionalId');
+  const hasProfessionalGate = Object.prototype.hasOwnProperty.call(extras, 'professionalId')
+    || Object.prototype.hasOwnProperty.call(extras, 'professionalGate');
 
   for (const field of pendingCriticalFields) {
     const tag = PATIENT_FIELD_TO_TAG[field] || `patient:${field}`;
@@ -248,25 +258,52 @@ export function enrichContractReadinessChecklist(checklist, extras = {}) {
     });
   }
 
-  if (hasProfessionalGate && !professionalId) {
-    if (!hasTag(groups, 'professional:missing')) {
-      groups.profissional = groups.profissional || [];
-      groups.profissional.push({
-        tag: 'professional:missing',
-        label: 'Profissional responsável não definido no atendimento',
-        group: 'profissional',
-        critical: true,
-      });
-    }
-  } else if (hasProfessionalGate && !String(professionalCro || '').trim()) {
-    if (!hasTag(groups, 'professional:cro')) {
-      groups.profissional = groups.profissional || [];
-      groups.profissional.push({
-        tag: 'professional:cro',
-        label: 'CRO do profissional responsável não informado',
-        group: 'profissional',
-        critical: true,
-      });
+  if (hasProfessionalGate) {
+    const namedCroLabel = clinicalProfessionalName
+      ? `Registro profissional de ${clinicalProfessionalName} não informado.`
+      : 'Registro profissional de profissional clínico não informado.';
+    if (professionalGate === 'missing_clinical') {
+      if (!hasTag(groups, PROFESSIONAL_GATE_TAGS.MISSING_CLINICAL)) {
+        groups.profissional = groups.profissional || [];
+        groups.profissional.push({
+          tag: PROFESSIONAL_GATE_TAGS.MISSING_CLINICAL,
+          label: 'Defina o profissional clínico responsável pelo atendimento.',
+          group: 'profissional',
+          critical: true,
+        });
+      }
+    } else if (professionalGate === 'missing_registration') {
+      if (!hasTag(groups, PROFESSIONAL_GATE_TAGS.MISSING_CRO)) {
+        groups.profissional = groups.profissional || [];
+        groups.profissional.push({
+          tag: PROFESSIONAL_GATE_TAGS.MISSING_CRO,
+          label: namedCroLabel,
+          group: 'profissional',
+          critical: true,
+        });
+      }
+    } else if (professionalGate !== 'ok' && requiresProfessionalRegistration !== false) {
+      if (!professionalId) {
+        if (!hasTag(groups, PROFESSIONAL_GATE_TAGS.MISSING)) {
+          groups.profissional = groups.profissional || [];
+          groups.profissional.push({
+            tag: PROFESSIONAL_GATE_TAGS.MISSING,
+            label: 'Defina o profissional clínico responsável pelo atendimento.',
+            group: 'profissional',
+            critical: true,
+          });
+        }
+      } else if (!String(professionalCro || '').trim()) {
+        if (!hasTag(groups, PROFESSIONAL_GATE_TAGS.MISSING_CRO)) {
+          groups.profissional = groups.profissional || [];
+          groups.profissional.push({
+            tag: PROFESSIONAL_GATE_TAGS.MISSING_CRO,
+            label: namedCroLabel,
+            group: 'profissional',
+            critical: true,
+          });
+        }
+      }
     }
   }
 
@@ -389,14 +426,26 @@ export function buildPrerequisiteDestination(groupKey, {
   }
 
   if (groupKey === 'profissional') {
+    const missingClinical = (items || []).some((item) => (
+      item?.tag === PROFESSIONAL_GATE_TAGS.MISSING_CLINICAL
+      || item?.tag === PROFESSIONAL_GATE_TAGS.MISSING
+    ));
+    const destMeta = missingClinical
+      ? {
+        ...meta,
+        ctaLabel: 'Definir profissional clínico',
+        action: 'assign_clinical_professional',
+      }
+      : meta;
     const params = new URLSearchParams({ tab: 'profissional' });
-    if (professionalId) params.set('collaboratorId', professionalId);
+    if (!missingClinical && professionalId) params.set('collaboratorId', professionalId);
     if (returnUrl) params.set('returnTo', returnUrl);
     if (patientId) params.set('patientId', patientId);
     if (appointmentId) params.set('appointmentId', appointmentId);
     if (budgetId) params.set('budgetId', budgetId);
     return {
-      ...destinationBase(meta, ctx),
+      ...destinationBase(destMeta, ctx),
+      professionalId: missingClinical ? null : (professionalId || null),
       href: `/admin/colaboradores?${params.toString()}`,
       mode: 'navigate',
       focus: 'profissional',

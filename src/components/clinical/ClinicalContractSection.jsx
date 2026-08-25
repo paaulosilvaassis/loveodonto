@@ -63,7 +63,10 @@ import {
   enrichContractReadinessChecklist,
   isSafeClinicalReturnUrl,
 } from '../../contracts/contractPrerequisitesResolution.js';
-import { resolveAttendingProfessionalCro } from '../../contracts/clinicTechnicalResponsible.js';
+import {
+  evaluateClinicalProfessionalReadinessGate,
+  resolveClinicalProfessionalIdentity,
+} from '../../contracts/clinicalProfessionalIdentity.js';
 import { getBudgetLockContext, getBudgetLockContextForBudget } from '../../services/clinicalBudgetLockService.js';
 import { generateProfessionalContractPdf } from './contract/generateProfessionalContractPdf.js';
 import { buildFinancialSection } from './contract/clinicalContractSchedule.js';
@@ -285,6 +288,22 @@ export function ClinicalContractSection({
     [patientId, appointmentId, historyKey],
   );
 
+  const clinicalIdentity = useMemo(
+    () => resolveClinicalProfessionalIdentity({
+      appointmentId,
+      appointment,
+      tenantId: user?.tenantId || user?.tenant_id || db.clinicProfile?.tenant_id,
+    }),
+    [appointmentId, appointment, user?.tenantId, user?.tenant_id, historyKey],
+  );
+
+  const professionalReadinessGate = useMemo(
+    () => evaluateClinicalProfessionalReadinessGate(clinicalIdentity, {
+      requireClinicalProfessional: true,
+    }),
+    [clinicalIdentity],
+  );
+
   const contractReadiness = useMemo(
     () => {
       if (!patientId || !appointmentId || !(effectiveBudget || budget)) return null;
@@ -296,10 +315,14 @@ export function ClinicalContractSection({
         contractNumber: linkedContract?.contractNumber,
         attachedTcleIds,
       });
+      const clinical = clinicalIdentity.clinicalProfessional;
       return enrichContractReadinessChecklist(base, {
         pendingCriticalFields,
-        professionalId: appointment?.professionalId || professional?.id || null,
-        professionalCro: resolveAttendingProfessionalCro(professional || {}),
+        professionalId: professionalReadinessGate.ctaCollaboratorId,
+        professionalCro: clinical?.registration || '',
+        requiresProfessionalRegistration: Boolean(clinical?.requiresProfessionalRegistration),
+        clinicalProfessionalName: clinical?.displayName || '',
+        professionalGate: professionalReadinessGate.code,
       });
     },
     [
@@ -312,8 +335,8 @@ export function ClinicalContractSection({
       attachedTcleIds,
       historyKey,
       pendingCriticalFields,
-      appointment?.professionalId,
-      professional,
+      clinicalIdentity,
+      professionalReadinessGate,
     ],
   );
 
@@ -349,7 +372,7 @@ export function ClinicalContractSection({
     appointmentId: appointmentId || null,
     budgetId: effectiveBudget?.id || budget?.id || viewBudgetId || null,
     contractId: linkedContract?.id || viewContractId || null,
-    professionalId: appointment?.professionalId || professional?.id || null,
+    professionalId: professionalReadinessGate.ctaCollaboratorId || null,
   }), [
     patientId,
     appointmentId,
@@ -358,8 +381,7 @@ export function ClinicalContractSection({
     viewBudgetId,
     linkedContract?.id,
     viewContractId,
-    appointment?.professionalId,
-    professional?.id,
+    professionalReadinessGate.ctaCollaboratorId,
   ]);
 
   const handleResolvePrerequisite = useCallback((card) => {
