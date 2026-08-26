@@ -76,15 +76,26 @@ function buildClinicalFreezeDocuments({ contract, readiness }) {
 
   if (readiness.tcleRequired && readiness.tcleApplicable) {
     const requiredTcle = readiness.package?.items?.find((i) => i.documentType === 'TCLE');
-    const tcleId = (readiness.identity && contract.metadata?.attachedTcleIds?.[0])
-      || requiredTcle?.id
-      || 'tcle';
     const records = listDocumentRecords({
       patientId: contract.patientId,
       appointmentId: contract.quoteId,
       category: DOCUMENT_CATEGORIES.CONSENTIMENTOS,
     }).filter((row) => row.metadata?.applicability !== DOCUMENT_APPLICABILITY.NOT_APPLICABLE_TO_CURRENT_TREATMENT);
     const rec = records[0];
+    const tcleId = String(
+      contract.metadata?.attachedTcleIds?.[0]
+      || rec?.metadata?.tcleId
+      || '',
+    ).trim();
+    if (!tcleId) {
+      const err = new Error('TCLE obrigatório sem identificador/versão documental.');
+      err.code = 'PACKAGE_DOCUMENT_VERSION_MISSING';
+      throw err;
+    }
+    const recVersion = rec?.documentVersion || rec?.version || rec?.metadata?.documentVersion;
+    const tcleDocumentVersion = recVersion != null && String(recVersion).trim()
+      ? String(recVersion).trim()
+      : `${tcleId}_v1`;
     const presentedText = String(rec?.content || rec?.contentHtml || rec?.html || `TCLE ${tcleId}`);
     docs.splice(1, 0, {
       operationalType: 'TCLE',
@@ -96,7 +107,7 @@ function buildClinicalFreezeDocuments({ contract, readiness }) {
       contentMimeType: 'text/html',
       sourceKind: 'DOCUMENT_RECORD',
       sourceId: rec?.id || tcleId,
-      documentVersion: `${tcleId}_v1`,
+      documentVersion: tcleDocumentVersion,
     });
   }
 
@@ -149,10 +160,17 @@ export async function prepareClinicalSignaturePackage({
       }),
     };
   }
+  let freezeDocuments;
   try {
     requirePersistedContractVersion(contract);
+    freezeDocuments = buildClinicalFreezeDocuments({ contract, readiness });
   } catch (e) {
-    return { ok: false, error: e.message || 'Versão do contrato não está persistida.', readiness };
+    return {
+      ok: false,
+      error: e.message || 'Versão documental não está persistida.',
+      errorCode: e.code || null,
+      readiness,
+    };
   }
 
   const freeze = createPackageManifestFreezeService({
@@ -166,7 +184,7 @@ export async function prepareClinicalSignaturePackage({
     primaryContractId: contract.id,
     primaryContractVersionId: contract.id,
     idempotencyKey: `freeze_clinical_${contract.id}_${contract.budgetId || contract.quoteId}`,
-    documents: buildClinicalFreezeDocuments({ contract, readiness }),
+    documents: freezeDocuments,
   });
   if (!frozen.ok) {
     return {

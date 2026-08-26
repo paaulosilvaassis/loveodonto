@@ -37,6 +37,7 @@ describe('PHASE_10.21AB staging clinical package manifest bridge', () => {
         quoteSource: 'clinical_budget',
         budgetId: 'budget-ab',
         templateVersion: 1,
+        version: 1,
         contractNumber: 'CTR-2026-00042',
         finalContent: '<p>Contrato AB</p>',
         renderedHtml: '<p>Contrato AB · R$ 1.000,00</p>',
@@ -52,7 +53,7 @@ describe('PHASE_10.21AB staging clinical package manifest bridge', () => {
   });
 
   it('freeze creates CONTRACT+TCLE+LGPD with real LGPD version hash', async () => {
-    const contract = { id: 'gctr-ab', patientId: 'patient-ab', quoteId: 'appt-ab', budgetId: 'budget-ab', renderedHtml: '<p>Contrato AB</p>', finalContent: '<p>Contrato AB</p>', templateVersion: 1, metadata: { attachedTcleIds: ['tcle_implante'] } };
+    const contract = { id: 'gctr-ab', patientId: 'patient-ab', quoteId: 'appt-ab', budgetId: 'budget-ab', renderedHtml: '<p>Contrato AB</p>', finalContent: '<p>Contrato AB</p>', templateVersion: 1, version: 1, metadata: { attachedTcleIds: ['tcle_implante'] } };
     const result = await freezeStagingClinicalPackageOnSend({
       user,
       contract,
@@ -80,7 +81,7 @@ describe('PHASE_10.21AB staging clinical package manifest bridge', () => {
   });
 
   it('sign gate blocks until all required acceptances; idempotent accept', async () => {
-    const contract = { id: 'gctr-ab', patientId: 'patient-ab', quoteId: 'appt-ab', budgetId: 'budget-ab', renderedHtml: '<p>C</p>', finalContent: '<p>C</p>', templateVersion: 1, metadata: { attachedTcleIds: ['tcle_implante'] } };
+    const contract = { id: 'gctr-ab', patientId: 'patient-ab', quoteId: 'appt-ab', budgetId: 'budget-ab', renderedHtml: '<p>C</p>', finalContent: '<p>C</p>', templateVersion: 1, version: 1, metadata: { attachedTcleIds: ['tcle_implante'] } };
     await freezeStagingClinicalPackageOnSend({
       user,
       contract,

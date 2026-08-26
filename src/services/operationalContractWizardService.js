@@ -13,6 +13,7 @@ import { formatUxMessage } from '../contracts/operationalUxMessages.js';
 import { formatCurrencyBRL } from '../utils/currency.js';
 import { resolveWizardFinancialDisplay } from './operationalContractWizardSupport.js';
 import { getTreatmentDocumentRequirements } from '../contracts/treatmentDocumentRequirements.js';
+import { readPersistedContractVersion } from '../contracts/generatedContractVersion.js';
 
 export {
   listWizardFinalizePrerequisites,
@@ -126,7 +127,11 @@ export function buildDocumentPackageForBudget({
       label: 'Contrato de prestação de serviços',
       required: true,
       ready: Boolean(contract?.renderedHtml || contract?.status),
-      version: contract?.templateVersion || contract?.version || '1',
+      // DISPLAY_ONLY — não alimenta freezePackageForSignature.
+      version: (() => {
+        const persisted = readPersistedContractVersion(contract);
+        return persisted != null ? String(persisted) : null;
+      })(),
       hash: contract?.documentHash || null,
     },
     {

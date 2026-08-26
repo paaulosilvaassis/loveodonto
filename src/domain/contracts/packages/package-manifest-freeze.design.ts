@@ -26,7 +26,8 @@ export interface FreezePackageDocumentInput {
   contentMimeType: string;
   sourceKind: 'CONTRACT_VERSION' | 'DOCUMENT_RECORD' | 'CLINIC_POLICY' | 'INLINE_SNAPSHOT';
   sourceId: string;
-  documentVersion: string;
+  /** Versão documental real. Ausência é fail-closed — sem fallback para '1'. */
+  documentVersion: string | number;
 }
 
 export interface FreezePackageForSignatureInput {

@@ -16,6 +16,7 @@ import {
   hashPresentedTextContentV1,
 } from './package-manifest-hash.js';
 import { resolveLgpdPresentedContent } from './package-manifest-lgpd.js';
+import { requireFreezeDocumentVersion, PACKAGE_DOCUMENT_VERSION_MISSING } from './package-manifest-document-version.js';
 import type { PackageManifestRepository } from './package-manifest.repository.js';
 import {
   buildInlineSnapshotKey,
@@ -137,15 +138,16 @@ export function createPackageManifestFreezeService(
       const manifestId = newId();
       const docs: PackageManifestDocument[] = [];
 
+      try {
       for (const [idx, raw] of input.documents.entries()) {
         let presentedText = raw.presentedText;
-        let documentVersion = raw.documentVersion;
+        let documentVersion: unknown = raw.documentVersion;
         let sourceKind = raw.sourceKind;
         let sourceId = raw.sourceId;
 
         if (String(raw.operationalType || '').toUpperCase() === 'LGPD' && !presentedText) {
           const lgpd = resolveLgpdPresentedContent({
-            version: raw.documentVersion,
+            version: typeof raw.documentVersion === 'string' ? raw.documentVersion : undefined,
             presentedText: raw.presentedText,
           });
           presentedText = lgpd.presentedText;
@@ -155,6 +157,7 @@ export function createPackageManifestFreezeService(
         }
 
         requirePresentedContent({ ...raw, presentedText });
+        const frozenDocumentVersion = requireFreezeDocumentVersion(documentVersion);
 
         const mapped = mapOperationalDocumentTypeToContractDocumentType(
           raw.operationalType,
@@ -184,7 +187,7 @@ export function createPackageManifestFreezeService(
           documentType: mapped.documentType,
           sourceKind,
           sourceId,
-          documentVersion: String(documentVersion || '1'),
+          documentVersion: frozenDocumentVersion,
           title: String(raw.title || mapped.defaultAcceptanceLabel).trim(),
           required,
           displayOrder: Number(raw.displayOrder) || idx + 1,
@@ -198,6 +201,18 @@ export function createPackageManifestFreezeService(
           acceptanceLabel: mapped.defaultAcceptanceLabel,
           createdAt: now,
         });
+      }
+      } catch (err) {
+        const code = (err as { code?: string })?.code;
+        if (code === PACKAGE_DOCUMENT_VERSION_MISSING) {
+          return {
+            ok: false,
+            duplicate: false,
+            errorCode: PACKAGE_DOCUMENT_VERSION_MISSING,
+            errorMessage: (err as Error).message || 'documentVersion ausente.',
+          };
+        }
+        throw err;
       }
 
       const draft: PackageManifest = {

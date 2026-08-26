@@ -19,6 +19,7 @@ import { buildPublicPackageDocumentsFromManifest } from '../../../components/con
 import { getTemplateByKey } from '../../../utils/documentTemplates.js';
 import { getPatient } from '../../../services/patientService.js';
 import { addFile } from '../../../services/patientFilesService.js';
+import { requirePersistedContractVersion } from '../../../contracts/generatedContractVersion.js';
 
 const STORE_KEY = 'stagingPackageManifestBridge';
 
@@ -56,7 +57,7 @@ function buildFreezeDocuments(contract) {
       contentMimeType: 'text/html',
       sourceKind: 'CONTRACT_VERSION',
       sourceId: contract.id,
-      documentVersion: String(contract.templateVersion || '1'),
+      documentVersion: String(requirePersistedContractVersion(contract)),
     },
     {
       operationalType: 'TCLE',
@@ -113,6 +114,17 @@ export async function freezeStagingClinicalPackageOnSend({ user, contract, reque
   const snapshots = new Map();
   const freeze = createPackageManifestFreezeService({ manifests, envelopes, snapshots });
 
+  let documents;
+  try {
+    documents = buildFreezeDocuments(contract);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err?.message || err?.code || 'freeze_failed',
+      errorCode: err?.code || null,
+    };
+  }
+
   const frozen = await freeze.freezePackageForSignature({
     tenantId,
     actorUserId: user?.id || 'staging-actor',
@@ -120,7 +132,7 @@ export async function freezeStagingClinicalPackageOnSend({ user, contract, reque
     primaryContractId: contract.id,
     primaryContractVersionId: contract.id,
     idempotencyKey: `freeze_${contract.id}_${link.token}`,
-    documents: buildFreezeDocuments(contract),
+    documents,
   });
 
   if (!frozen.ok) {
