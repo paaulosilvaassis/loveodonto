@@ -9,10 +9,25 @@ import {
   CONTRACT_STATUS,
   SIGNATURE_WEBHOOK_EVENTS,
 } from '../contracts/contractConstants.js';
-import { buildSignatureEmailContent } from './signatureEmailService.js';
+import { CLINICAL_SIGNER_ROLE, mapLegacySignerRole } from '../contracts/clinicalRequiredSigners.js';
 import { logSignatureAudit } from './contractSignatureAuditService.js';
 import { getGeneratedContract } from './contractService.js';
 import { deliverSignatureInviteEmail } from './signatureInviteEmailService.js';
+import { assertFrozenDocumentIntegrityBeforeSignature } from '../contracts/assertFrozenDocumentIntegrityBeforeSignature.js';
+import { readPersistedContractVersion } from '../contracts/generatedContractVersion.js';
+
+export const SIGNATURE_DELIVERY_STATE = {
+  REQUEST_CREATED: 'REQUEST_CREATED',
+  LINK_CREATED: 'LINK_CREATED',
+  DELIVERY_REQUESTED: 'DELIVERY_REQUESTED',
+  PROVIDER_ACCEPTED: 'PROVIDER_ACCEPTED',
+  DELIVERY_FAILED: 'DELIVERY_FAILED',
+  DELIVERED: 'DELIVERED',
+  BOUNCED: 'BOUNCED',
+  EXPIRED: 'EXPIRED',
+};
+
+export const REMOTE_SIGNATURE_METHOD = 'REMOTE_LINK';
 
 function simpleHash(text) {
   let h = 5381;
@@ -31,10 +46,21 @@ function tenantIdFromUser(user) {
   return user?.tenantId || user?.tenant_id || null;
 }
 
+function isPatientSlotRequest(request) {
+  const role = mapLegacySignerRole(request?.signerRole || CLINICAL_SIGNER_ROLE.PATIENT);
+  return role === CLINICAL_SIGNER_ROLE.PATIENT;
+}
+
 function isReusableRequest(request, now = Date.now()) {
   if (!request || !['pending', 'sent'].includes(String(request.status || ''))) return false;
+  if (!isPatientSlotRequest(request)) return false;
   if (!request.expiresAt) return true;
   return new Date(request.expiresAt).getTime() > now;
+}
+
+function isLinkExpired(link, now = Date.now()) {
+  if (!link?.expiresAt) return false;
+  return new Date(link.expiresAt).getTime() <= now;
 }
 
 function preserveContractStatusAfterInvite(currentStatus) {
@@ -48,18 +74,55 @@ function preserveContractStatusAfterInvite(currentStatus) {
   return CONTRACT_STATUS.SENT;
 }
 
-function findReusableSignatureArtifacts(db, contractId) {
+function findReusableSignatureArtifacts(db, contractId, now = Date.now()) {
   const requests = db.contractSignatureRequests || [];
   const reusable = requests
-    .filter((row) => row.contractId === contractId && isReusableRequest(row))
+    .filter((row) => row.contractId === contractId && isReusableRequest(row, now))
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const request = reusable[0] || null;
   if (!request) return null;
   const link = (db.contractSignLinks || []).find(
-    (row) => row.requestId === request.id && row.status === 'pending',
+    (row) => row.requestId === request.id && row.status === 'pending' && !isLinkExpired(row, now),
   ) || null;
   if (!link?.token) return null;
   return { request, link, signUrl: `/assinatura/${link.token}`, documentHash: request.documentHash, reused: true };
+}
+
+function findRotatablePatientArtifacts(db, contractId, now = Date.now()) {
+  const requests = (db.contractSignatureRequests || [])
+    .filter((row) => row.contractId === contractId && isPatientSlotRequest(row))
+    .filter((row) => !['cancelled', 'completed', 'revoked'].includes(String(row.status || '')))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  const request = requests[0] || null;
+  if (!request) return null;
+  const link = (db.contractSignLinks || []).find((row) => row.requestId === request.id) || null;
+  const expired = !isReusableRequest(request, now) || isLinkExpired(link, now);
+  if (!expired) return null;
+  return { request, link };
+}
+
+function bindPatientLink(link, contract) {
+  return {
+    ...link,
+    signerRole: CLINICAL_SIGNER_ROLE.PATIENT,
+    signerPersonId: contract.patientId || null,
+    tenant_id: link.tenant_id || contract.tenant_id || null,
+    contractId: contract.id,
+  };
+}
+
+export function getActivePatientSignatureInvite(contractId) {
+  const db = loadDb();
+  const reused = findReusableSignatureArtifacts(db, contractId);
+  if (!reused) return null;
+  return {
+    request: reused.request,
+    link: reused.link,
+    signUrl: reused.signUrl,
+    deliveryStatus: reused.request.deliveryStatus || (
+      reused.request.status === 'sent' ? SIGNATURE_DELIVERY_STATE.PROVIDER_ACCEPTED : SIGNATURE_DELIVERY_STATE.LINK_CREATED
+    ),
+  };
 }
 
 function notImplemented(provider) {
@@ -88,6 +151,8 @@ const internalProvider = {
         if (idx >= 0) {
           requests[idx] = {
             ...requests[idx],
+            signerRole: CLINICAL_SIGNER_ROLE.PATIENT,
+            signerPersonId: contract.patientId || requests[idx].signerPersonId || null,
             recipients: {
               ...(requests[idx].recipients || {}),
               patientEmail: payload.patientEmail || requests[idx].recipients?.patientEmail,
@@ -101,6 +166,71 @@ const internalProvider = {
         return reused;
       }
 
+      const rotatable = findRotatablePatientArtifacts(db, contract.id);
+      if (rotatable?.request) {
+        const requests = db.contractSignatureRequests || [];
+        const rIdx = requests.findIndex((row) => row.id === rotatable.request.id);
+        const links = db.contractSignLinks || [];
+        if (rotatable.link) {
+          const lIdx = links.findIndex((row) => row.id === rotatable.link.id);
+          if (lIdx >= 0 && links[lIdx].status === 'pending') {
+            links[lIdx] = { ...links[lIdx], status: 'expired' };
+          }
+        }
+        const rotatedLink = bindPatientLink({
+          id: createId('clnk'),
+          tenant_id: tenantIdFromUser(user) || contract.tenant_id || null,
+          clinicId: clinicId(),
+          contractId: contract.id,
+          requestId: rotatable.request.id,
+          token,
+          expiresAt,
+          status: 'pending',
+          createdBy: user?.id || null,
+          createdAt: new Date().toISOString(),
+          viewedAt: null,
+          signedAt: null,
+        }, contract);
+        links.push(rotatedLink);
+        const nextRequest = {
+          ...rotatable.request,
+          externalId: token,
+          status: 'pending',
+          expiresAt,
+          signerRole: CLINICAL_SIGNER_ROLE.PATIENT,
+          signerPersonId: contract.patientId || null,
+          deliveryStatus: SIGNATURE_DELIVERY_STATE.LINK_CREATED,
+          sentAt: null,
+          recipients: {
+            ...(rotatable.request.recipients || {}),
+            patientEmail: payload.patientEmail || rotatable.request.recipients?.patientEmail,
+            patientPhone: payload.patientPhone || rotatable.request.recipients?.patientPhone,
+            patientName: payload.patientName || rotatable.request.recipients?.patientName,
+            patientCpf: payload.patientCpf || rotatable.request.recipients?.patientCpf,
+          },
+        };
+        if (rIdx >= 0) requests[rIdx] = nextRequest;
+        logSignatureAudit({
+          contractId: contract.id,
+          requestId: nextRequest.id,
+          action: 'challenge_rotated',
+          user,
+          payload: {
+            provider: SIGNATURE_PROVIDERS.INTERNAL,
+            documentHash,
+            metadata: { reason: 'expired_link' },
+          },
+        });
+        return {
+          request: nextRequest,
+          link: rotatedLink,
+          signUrl: `/assinatura/${token}`,
+          documentHash: nextRequest.documentHash || documentHash,
+          reused: true,
+          rotated: true,
+        };
+      }
+
       const request = {
         id: createId('csreq'),
         tenant_id: tenantIdFromUser(user),
@@ -110,6 +240,9 @@ const internalProvider = {
         externalId: token,
         status: 'pending',
         signatureType: payload.signatureType,
+        signerRole: CLINICAL_SIGNER_ROLE.PATIENT,
+        signerPersonId: contract.patientId || null,
+        deliveryStatus: SIGNATURE_DELIVERY_STATE.REQUEST_CREATED,
         documentHash,
         contractNumber: contract.contractNumber,
         budgetId: contract.budgetId || null,
@@ -137,7 +270,7 @@ const internalProvider = {
       db.contractSignatureRequests.push(request);
 
       if (!Array.isArray(db.contractSignLinks)) db.contractSignLinks = [];
-      const link = {
+      const link = bindPatientLink({
         id: createId('clnk'),
         tenant_id: tenantIdFromUser(user),
         clinicId: clinicId(),
@@ -150,8 +283,9 @@ const internalProvider = {
         createdAt: new Date().toISOString(),
         viewedAt: null,
         signedAt: null,
-      };
+      }, contract);
       db.contractSignLinks.push(link);
+      request.deliveryStatus = SIGNATURE_DELIVERY_STATE.LINK_CREATED;
 
       const arr = db.generatedContracts || [];
       const idx = arr.findIndex((c) => c.id === contract.id);
@@ -189,17 +323,45 @@ const internalProvider = {
 
   async sendSignatureEmail({ user, request, signUrl, emailContent }) {
     const recipient = request.recipients?.patientEmail;
-    const delivery = await deliverSignatureInviteEmail({
-      to: recipient,
-      patientName: request.recipients?.patientName,
-      treatmentName: emailContent?.treatmentName,
-      clinicName: emailContent?.clinicName,
-      clinicIdentity: emailContent?.clinicIdentity,
-      signUrl,
-      expiresAt: request.expiresAt,
-      contractNumber: request.contractNumber,
-      requestId: request.id,
+    withDb((db) => {
+      const requests = db.contractSignatureRequests || [];
+      const idx = requests.findIndex((r) => r.id === request.id);
+      if (idx >= 0) {
+        requests[idx] = {
+          ...requests[idx],
+          deliveryStatus: SIGNATURE_DELIVERY_STATE.DELIVERY_REQUESTED,
+        };
+      }
+      return db;
     });
+
+    let delivery;
+    try {
+      delivery = await deliverSignatureInviteEmail({
+        to: recipient,
+        patientName: request.recipients?.patientName,
+        treatmentName: emailContent?.treatmentName,
+        clinicName: emailContent?.clinicName,
+        clinicIdentity: emailContent?.clinicIdentity,
+        signUrl,
+        expiresAt: request.expiresAt,
+        contractNumber: request.contractNumber || emailContent?.contractNumber,
+        requestId: request.id,
+      });
+    } catch (err) {
+      withDb((db) => {
+        const requests = db.contractSignatureRequests || [];
+        const idx = requests.findIndex((r) => r.id === request.id);
+        if (idx >= 0) {
+          requests[idx] = {
+            ...requests[idx],
+            deliveryStatus: SIGNATURE_DELIVERY_STATE.DELIVERY_FAILED,
+          };
+        }
+        return db;
+      });
+      throw err;
+    }
 
     logSignatureAudit({
       contractId: request.contractId,
@@ -215,6 +377,8 @@ const internalProvider = {
           to: recipient,
           messageId: delivery.messageId || null,
           simulated: false,
+          acceptedByTransport: delivery.acceptedByTransport === true,
+          delivered: false,
         },
       },
     });
@@ -230,6 +394,7 @@ const internalProvider = {
           lastEmailSubject: emailContent?.subject,
           lastEmailProvider: delivery.provider || null,
           lastEmailMessageId: delivery.messageId || null,
+          deliveryStatus: SIGNATURE_DELIVERY_STATE.PROVIDER_ACCEPTED,
         };
       }
       const arr = db.generatedContracts || [];
@@ -240,7 +405,16 @@ const internalProvider = {
           status: preserveContractStatusAfterInvite(arr[cIdx].status),
         };
       }
-      return { delivered: true, ok: true, simulated: false, provider: delivery.provider, messageId: delivery.messageId, signUrl };
+      return {
+        delivered: false,
+        acceptedByTransport: delivery.acceptedByTransport !== false && delivery.simulated !== true,
+        ok: true,
+        simulated: false,
+        provider: delivery.provider,
+        messageId: delivery.messageId,
+        signUrl,
+        deliveryStatus: SIGNATURE_DELIVERY_STATE.PROVIDER_ACCEPTED,
+      };
     });
   },
 
@@ -377,15 +551,63 @@ export function buildSignaturePayload({
   };
 }
 
+function persistPatientRemoteRequestBindings({ requestId, contract, frozen, reused }) {
+  if (!requestId || !frozen) return;
+  withDb((db) => {
+    const requests = db.contractSignatureRequests || [];
+    const idx = requests.findIndex((row) => row.id === requestId);
+    if (idx < 0) return db;
+    const row = requests[idx];
+    const role = mapLegacySignerRole(row.signerRole || CLINICAL_SIGNER_ROLE.PATIENT);
+    if (role !== CLINICAL_SIGNER_ROLE.PATIENT) {
+      const err = new Error('Solicitação remota não pode ser criada para papel PROFESSIONAL.');
+      err.code = 'REMOTE_REQUEST_ROLE_NOT_PATIENT';
+      throw err;
+    }
+    const bindings = {
+      signerRole: CLINICAL_SIGNER_ROLE.PATIENT,
+      signerPersonId: contract.patientId || row.signerPersonId || null,
+      tenant_id: row.tenant_id || contract.tenant_id || null,
+      packageManifestId: frozen.manifestId,
+      packageManifestHash: frozen.manifestHash,
+      contractVersion: frozen.contractVersion,
+    };
+    if (reused) {
+      if (row.packageManifestId && row.packageManifestId !== bindings.packageManifestId) {
+        const err = new Error('Manifest informado não corresponde ao pacote congelado.');
+        err.code = 'FROZEN_MANIFEST_ID_MISMATCH';
+        throw err;
+      }
+      if (row.packageManifestHash && row.packageManifestHash !== bindings.packageManifestHash) {
+        const err = new Error('Hash do manifesto congelado não confere.');
+        err.code = 'FROZEN_MANIFEST_HASH_MISMATCH';
+        throw err;
+      }
+      if (row.contractVersion != null && Number(row.contractVersion) !== Number(bindings.contractVersion)) {
+        const err = new Error('Versão documental do manifesto não corresponde à versão persistida do contrato.');
+        err.code = 'FROZEN_DOCUMENT_VERSION_MISMATCH';
+        throw err;
+      }
+      return db;
+    }
+    requests[idx] = { ...row, ...bindings };
+    return db;
+  });
+}
+
 export async function createSignatureRequest({ user, contract, formData, settings }) {
   if (!contract?.id) throw new Error('Contrato ausente.');
   if (contract.status === CONTRACT_STATUS.DRAFT) {
     throw new Error('Não é possível assinar contrato em rascunho. Finalize o contrato primeiro.');
   }
+  let frozenIntegrity = null;
   if (contract.quoteSource === 'clinical_budget') {
     const md = contract.metadata || {};
     if (!md.packageManifestId && !md.packageManifestHash && !md.frozenAt) {
       throw new Error('Manifest ainda não congelado. Prepare o pacote de assinatura primeiro.');
+    }
+    if (readPersistedContractVersion(contract) != null) {
+      frozenIntegrity = await assertFrozenDocumentIntegrityBeforeSignature({ contract });
     }
   }
   const provider = getSignatureProvider(settings.signatureProvider);
@@ -401,6 +623,22 @@ export async function createSignatureRequest({ user, contract, formData, setting
   });
 
   const result = await provider.createSignatureRequest({ user, contract, payload, settings });
+  persistPatientRemoteRequestBindings({
+    requestId: result.request?.id,
+    contract,
+    frozen: frozenIntegrity,
+    reused: Boolean(result.reused),
+  });
+  if (frozenIntegrity && result.request) {
+    result.request = {
+      ...result.request,
+      signerRole: CLINICAL_SIGNER_ROLE.PATIENT,
+      signerPersonId: contract.patientId || result.request.signerPersonId || null,
+      packageManifestId: frozenIntegrity.manifestId,
+      packageManifestHash: frozenIntegrity.manifestHash,
+      contractVersion: frozenIntegrity.contractVersion,
+    };
+  }
 
   logSignatureAudit({
     contractId: contract.id,
