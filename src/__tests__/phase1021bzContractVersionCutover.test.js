@@ -121,7 +121,7 @@ describe('PHASE_10.21BZ real writer cutover', () => {
     const contractDoc = (frozen?.documents || []).find((d) => d.documentType === 'SERVICE_CONTRACT' || d.documentKey === 'contract');
     expect(String(contractDoc?.documentVersion)).toBe('1');
 
-    const signed = signContractOnScreen(user, draft.id, {
+    const signed = await signContractOnScreen(user, draft.id, {
       signerName: 'Paciente BZ',
       signerCpf: '52998224725',
       signerRole: 'PATIENT',

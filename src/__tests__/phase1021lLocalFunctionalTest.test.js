@@ -468,7 +468,7 @@ describe('PHASE_10.21L — local functional test execution', () => {
     const tSign = Date.now();
     metrics.clicks += 1;
     const fetchSpy2 = vi.spyOn(globalThis, 'fetch');
-    const signed = signContractViaLink(signToken, {
+    const signed = await signContractViaLink(signToken, {
       signerName: PATIENT_NAME,
       signerCpf: FAKE_CPF,
       signatureImageDataUrl: 'data:image/png;base64,TESTE1021L',
@@ -478,7 +478,7 @@ describe('PHASE_10.21L — local functional test execution', () => {
     expect(signed.contract.status).toBe(CONTRACT_STATUS.SIGNED_BY_PATIENT);
     expect(fetchSpy2).not.toHaveBeenCalled();
     fetchSpy2.mockRestore();
-    const dentist = signContractOnScreen(user, contractId, {
+    const dentist = await signContractOnScreen(user, contractId, {
       signerName: 'Dr. Teste Local',
       signerRole: 'PROFESSIONAL',
       signerPersonId: 'prof-1021l',

@@ -120,6 +120,7 @@ function seed({ withEmail = true } = {}) {
         status: CONTRACT_STATUS.GENERATED,
         clinicId: 'clinic-b721c2c9',
         tenant_id: TENANT,
+        version: 1,
         renderedHtml: '<p>Contrato CTR-2026-00003</p>',
         finalContent: '<p>Contrato CTR-2026-00003</p>',
         metadata: { attachedTcleIds: [] },
@@ -142,7 +143,7 @@ async function freezeAndSignJuliana() {
     contractId: CTR3,
   });
   expect(prepared.ok).toBe(true);
-  signContractOnScreen(julianaUser, CTR3, {
+  return signContractOnScreen(julianaUser, CTR3, {
     signerName: 'Juliana de Oliveira Freire',
     signerRole: CLINICAL_SIGNER_ROLE.PROFESSIONAL,
     signerPersonId: JULIANA_COL,

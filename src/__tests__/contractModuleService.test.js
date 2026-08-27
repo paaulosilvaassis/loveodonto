@@ -83,7 +83,7 @@ describe('contractModuleService', () => {
     expect(isContractEditable(row)).toBe(true);
   });
 
-  it('bloqueia edição após assinatura e vincula orçamento', () => {
+  it('bloqueia edição após assinatura e vincula orçamento', async () => {
     const tpl = withDb((db) => db.contractTemplates.find((t) => t.type === 'system_default'));
     const draft = createContractDraft(user, {
       quoteSource: 'crm_budget',
@@ -92,7 +92,7 @@ describe('contractModuleService', () => {
       templateId: tpl.id,
     });
     const finalized = finalizeGeneratedContract(user, draft.id);
-    const signed = signContractOnScreen(user, finalized.id, {
+    const signed = await signContractOnScreen(user, finalized.id, {
       signerName: 'Paciente Contrato',
       signerCpf: '52998224725',
       signatureImageDataUrl: 'data:image/png;base64,abc',

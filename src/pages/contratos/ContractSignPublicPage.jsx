@@ -224,7 +224,7 @@ export default function ContractSignPublicPage() {
         if (observed) setClientContext(observed);
       }
       markContractViewed({ id: 'public' }, contract.id);
-      signContractViaLink(token, {
+      await signContractViaLink(token, {
         signerName,
         signerCpf,
         signatureImageDataUrl: signatureData,

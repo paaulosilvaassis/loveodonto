@@ -42,6 +42,7 @@ import {
 } from '../contracts/remoteSignatureEvidence.js';
 import { resolveEvidenceClientIp } from '../contracts/signingClientIp.js';
 import { readPersistedContractVersion, requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
+import { assertFrozenDocumentIntegrityBeforeSignature } from '../contracts/assertFrozenDocumentIntegrityBeforeSignature.js';
 import { maybeGenerateFinalSignedArtifact } from './finalSignedContractArtifactService.js';
 import {
   createGeneratedContractDraft,
@@ -484,7 +485,7 @@ function resolveRegisteredSignerName({ signerRole, signerPersonId, contract }) {
   return col?.nomeCompleto || col?.name || '';
 }
 
-export function signContractOnScreen(user, contractId, {
+export async function signContractOnScreen(user, contractId, {
   signerName,
   signerCpf,
   signerRole = SIGNER_ROLES.PATIENT,
@@ -544,14 +545,12 @@ export function signContractOnScreen(user, contractId, {
     });
   let rolesSatisfied = [mapLegacySignerRole(signerRole)];
   let documentTypes = ['CONTRACT_SERVICES'];
+  let frozenIntegrity = null;
   if (contract.quoteSource === 'clinical_budget') {
-    const md = contract.metadata || {};
-    if (!md.packageManifestId && !md.packageManifestHash && !md.frozenAt) {
-      throw new Error('Manifest ainda não congelado. Prepare o pacote de assinatura primeiro.');
-    }
-    if (packageManifestId && md.packageManifestId && packageManifestId !== md.packageManifestId) {
-      throw new Error('Manifest informado não corresponde ao pacote congelado.');
-    }
+    frozenIntegrity = await assertFrozenDocumentIntegrityBeforeSignature({
+      contract,
+      packageManifestId,
+    });
     if (isLegacyClinicalSignature(contract)) {
       throw new Error('Contrato legado já assinado. Não altere a evidência histórica.');
     }
@@ -632,6 +631,7 @@ export function signContractOnScreen(user, contractId, {
         clientIpSource: clientIp.source,
         packageManifestId: contract.metadata?.packageManifestId || null,
         packageManifestHash: contract.metadata?.packageManifestHash || null,
+        frozenContentSha256: frozenIntegrity?.frozenContentSha256 || null,
         contractVersion: requirePersistedContractVersion(contract),
         documentTypes,
         rolesSatisfied,
@@ -721,7 +721,7 @@ export function signContractOnScreen(user, contractId, {
   return result;
 }
 
-export function signContractViaLink(token, {
+export async function signContractViaLink(token, {
   signerName,
   signerCpf,
   signatureImageDataUrl,
@@ -746,7 +746,7 @@ export function signContractViaLink(token, {
     || collectPresentedConsents(privacy)
     || [];
   const arrayAcceptances = Array.isArray(consentAcceptances) ? consentAcceptances : null;
-  const result = signContractOnScreen(
+  const result = await signContractOnScreen(
     {
       id: null,
       name: signerName,

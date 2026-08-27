@@ -183,7 +183,7 @@ async function sendInvite() {
   });
 }
 
-function signPatient(token, extra = {}) {
+async function signPatient(token, extra = {}) {
   const presented = privacyPresented();
   const acceptanceMap = resetConsentAcceptanceMap(defaultPrivacyBlock());
   acceptanceMap.lgpd_notice = true;
@@ -219,7 +219,7 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     await freezeAndSignJuliana();
     const sent = await sendInvite();
     const token = sent.signUrl.replace('/assinatura/', '');
-    const signed = signPatient(token);
+    const signed = await signPatient(token);
     const consents = signed.signature.evidenceJson.consentAcceptances;
     expect(consents.find((c) => c.id === 'lgpd_notice')).toMatchObject({
       accepted: true,
@@ -236,13 +236,13 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     const sent = await sendInvite();
     const token = sent.signUrl.replace('/assinatura/', '');
     const presented = privacyPresented();
-    expect(() => signContractViaLink(token, {
+    await expect(signContractViaLink(token, {
       signerName: 'Paulo Henrique Silva de Assis',
       signatureImageDataUrl: 'data:image/png;base64,x',
       presentedConsents: presented,
       acceptanceMap: resetConsentAcceptanceMap(defaultPrivacyBlock()),
       requireConsent: true,
-    })).toThrow(/consentimentos obrigatórios/i);
+    })).rejects.toThrow(/consentimentos obrigatórios/i);
     expect((loadDb().contractSignatures || []).filter((s) => s.signerRole === 'PATIENT')).toHaveLength(0);
   });
 
@@ -253,7 +253,7 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     expect(sent.request.signatureType).toBe(LEGAL_SIGNATURE_TYPES.SIMPLE);
     expect(sent.request.signatureType).not.toBe(LEGAL_SIGNATURE_TYPES.QUALIFIED);
     const token = sent.signUrl.replace('/assinatura/', '');
-    const signed = signPatient(token);
+    const signed = await signPatient(token);
     expect(signed.signature.evidenceJson.signatureMethod).toBe(SIGNATURE_METHOD.REMOTE_ON_SCREEN);
     expect(signed.signature.evidenceJson.signatureMethod).not.toBe('OPERATOR_COLLECTED_PRESENCE');
     expect(signed.signature.evidenceJson.signedByUserId).toBeNull();
@@ -268,7 +268,7 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     await freezeAndSignJuliana();
     const sent = await sendInvite();
     const token = sent.signUrl.replace('/assinatura/', '');
-    const signed = signPatient(token, {
+    const signed = await signPatient(token, {
       observedClientContext: { ip: '203.0.113.50', source: 'trusted-proxy' },
     });
     expect(signed.signature.ipAddress).toBe('203.0.113.50');
@@ -306,7 +306,7 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     await freezeAndSignJuliana();
     const sent = await sendInvite();
     const token = sent.signUrl.replace('/assinatura/', '');
-    const signed = signPatient(token, {
+    const signed = await signPatient(token, {
       signerName: 'Paulo Henrique Silva Assis',
       typedSignerName: 'Paulo Henrique Silva Assis',
     });
@@ -320,7 +320,7 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     seed();
     await freezeAndSignJuliana();
     const sent = await sendInvite();
-    const signed = signPatient(sent.signUrl.replace('/assinatura/', ''));
+    const signed = await signPatient(sent.signUrl.replace('/assinatura/', ''));
     const ceremony = evaluateSignatureCeremony({
       tenantId: TENANT,
       patientId: PATIENT,
@@ -342,8 +342,8 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     await freezeAndSignJuliana();
     const sent = await sendInvite();
     const token = sent.signUrl.replace('/assinatura/', '');
-    signPatient(token);
-    expect(() => signPatient(token, { stroke: 'data:image/png;base64,replay' })).toThrow(/inválido|expirado/i);
+    await signPatient(token);
+    await expect(signPatient(token, { stroke: 'data:image/png;base64,replay' })).rejects.toThrow(/inválido|expirado/i);
     expect(getContractBySignToken(token).replay).toBe(true);
     expect((loadDb().contractSignatures || []).filter((s) => s.contractId === CTR)).toHaveLength(2);
   });
@@ -380,7 +380,7 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     seed({ frozenHtml: '<p>HTML congelado BU v1</p>' });
     await freezeAndSignJuliana();
     const sent = await sendInvite();
-    const signed = signPatient(sent.signUrl.replace('/assinatura/', ''));
+    const signed = await signPatient(sent.signUrl.replace('/assinatura/', ''));
     expect(signed.finalArtifact?.ok).toBe(true);
     expect(signed.contract.pdfUrl).toMatch(/^data:application\/pdf/);
     expect(signed.contract.metadata.finalArtifactDocumentHash).toBe(signed.contract.documentHash);
@@ -397,7 +397,7 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     await freezeAndSignJuliana();
     const sent = await sendInvite();
     const token = sent.signUrl.replace('/assinatura/', '');
-    signPatient(token);
+    await signPatient(token);
     const before = (loadDb().contractSignatures || []).filter((s) => s.contractId === CTR);
     withDb((db) => {
       const idx = db.generatedContracts.findIndex((c) => c.id === CTR);
@@ -425,7 +425,7 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     const beforeSnap = JSON.stringify(loadDb().generatedContracts[0].financialSnapshotJson);
     await freezeAndSignJuliana();
     const sent = await sendInvite();
-    signPatient(sent.signUrl.replace('/assinatura/', ''));
+    await signPatient(sent.signUrl.replace('/assinatura/', ''));
     expect(JSON.stringify(loadDb().clinicalAppointments[0].budget)).toBe(beforeBudget);
     expect(JSON.stringify(loadDb().generatedContracts.find((c) => c.id === CTR).financialSnapshotJson)).toBe(beforeSnap);
   });
@@ -433,12 +433,12 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
   it('S) Juliana stroke não é duplicado', async () => {
     seed();
     const first = await freezeAndSignJuliana();
-    expect(() => signContractOnScreen(julianaUser, CTR, {
+    await expect(signContractOnScreen(julianaUser, CTR, {
       signerName: 'Juliana de Oliveira Freire',
       signerRole: CLINICAL_SIGNER_ROLE.PROFESSIONAL,
       signerPersonId: JULIANA_COL,
       signatureImageDataUrl: 'data:image/png;base64,dup',
-    })).toThrow(/já assinou/i);
+    })).rejects.toThrow(/já assinou/i);
     const juliana = (loadDb().contractSignatures || []).filter((s) => s.signerRole === 'PROFESSIONAL');
     expect(juliana).toHaveLength(1);
     expect(juliana[0].id).toBe(first.signature.id);

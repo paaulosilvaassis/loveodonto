@@ -146,7 +146,7 @@ async function freeze(actor = pauloAdmin) {
   return prepared;
 }
 
-function signAs(actor, { role, personId, name }) {
+async function signAs(actor, { role, personId, name }) {
   return signContractOnScreen(actor, CONTRACT_ID, {
     signerName: name,
     signerRole: role,
@@ -155,9 +155,9 @@ function signAs(actor, { role, personId, name }) {
   });
 }
 
-function denyProfessional(actor, personId = JULIANA) {
+async function denyProfessional(actor, personId = JULIANA) {
   try {
-    signAs(actor, { role: 'PROFESSIONAL', personId, name: 'Juliana de Oliveira Freire' });
+    await signAs(actor, { role: 'PROFESSIONAL', personId, name: 'Juliana de Oliveira Freire' });
     throw new Error('expected deny');
   } catch (error) {
     expect(error).toBeInstanceOf(SignerIdentityError);
@@ -175,20 +175,20 @@ describe('PHASE_10.21BA signer identity enforcement', () => {
   it('A Paulo/admin tenta assinar como Juliana → DENY', async () => {
     seed();
     await freeze();
-    denyProfessional(pauloAdmin);
+    await denyProfessional(pauloAdmin);
     expect(loadDb().contractSignatures).toHaveLength(0);
   });
 
   it('B master tenta assinar como Juliana → DENY', async () => {
     seed();
     await freeze();
-    denyProfessional(pauloMaster);
+    await denyProfessional(pauloMaster);
   });
 
   it('C Juliana autenticada assina como Juliana → ALLOW', async () => {
     seed();
     await freeze();
-    const signed = signAs(julianaUser, { role: 'PROFESSIONAL', personId: JULIANA, name: 'Juliana de Oliveira Freire' });
+    const signed = await signAs(julianaUser, { role: 'PROFESSIONAL', personId: JULIANA, name: 'Juliana de Oliveira Freire' });
     expect(signed.signature.signerPersonId).toBe(JULIANA);
     expect(signed.signature.signerRole).toBe('PROFESSIONAL');
     expect(signed.signature.evidenceJson.signatureMethod).toBe('AUTHENTICATED_ELECTRONIC');
@@ -198,14 +198,14 @@ describe('PHASE_10.21BA signer identity enforcement', () => {
   it('D outro dentista tenta assinar como Juliana → DENY', async () => {
     seed();
     await freeze();
-    denyProfessional(otherDentistUser);
+    await denyProfessional(otherDentistUser);
   });
 
   it('E profissional = RT → uma assinatura autenticada satisfaz ambos', async () => {
     seed({ requireRt: true });
     await freeze();
-    signAs(pauloAdmin, { role: 'PATIENT', personId: PATIENT_ID, name: 'Paulo Henrique Silva de Assis' });
-    const done = signAs(julianaUser, { role: 'PROFESSIONAL', personId: JULIANA, name: 'Juliana de Oliveira Freire' });
+    await signAs(pauloAdmin, { role: 'PATIENT', personId: PATIENT_ID, name: 'Paulo Henrique Silva de Assis' });
+    const done = await signAs(julianaUser, { role: 'PROFESSIONAL', personId: JULIANA, name: 'Juliana de Oliveira Freire' });
     expect(done.signature.rolesSatisfied).toEqual(expect.arrayContaining([
       CLINICAL_SIGNER_ROLE.PROFESSIONAL,
       CLINICAL_SIGNER_ROLE.CLINIC_REPRESENTATIVE,
@@ -216,12 +216,12 @@ describe('PHASE_10.21BA signer identity enforcement', () => {
   it('F profissional ≠ RT → profissional não assina pelo RT', async () => {
     seed({ dentistId: OTHER_DENTIST, requireRt: true });
     await freeze();
-    expect(() => signAs(otherDentistUser, {
+    await expect(signAs(otherDentistUser, {
       role: 'CLINIC_REPRESENTATIVE',
       personId: JULIANA,
       name: 'Juliana de Oliveira Freire',
-    })).toThrow(SignerIdentityError);
-    const asSelf = signAs(otherDentistUser, {
+    })).rejects.toBeInstanceOf(SignerIdentityError);
+    const asSelf = await signAs(otherDentistUser, {
       role: 'PROFESSIONAL',
       personId: OTHER_DENTIST,
       name: 'Outro Dentista',
@@ -251,14 +251,14 @@ describe('PHASE_10.21BA signer identity enforcement', () => {
     seed();
     await freeze();
     const spoofed = { ...pauloAdmin, collaboratorId: JULIANA, collaborator_id: JULIANA };
-    denyProfessional(spoofed);
+    await denyProfessional(spoofed);
     expect(resolveAuthenticatedSignerIdentity(spoofed).ok).toBe(false);
   });
 
   it('I assinatura presencial do paciente mantém signer=PATIENT e registra operador', async () => {
     seed();
     await freeze();
-    const signed = signAs(pauloAdmin, { role: 'PATIENT', personId: PATIENT_ID, name: 'Paulo Henrique Silva de Assis' });
+    const signed = await signAs(pauloAdmin, { role: 'PATIENT', personId: PATIENT_ID, name: 'Paulo Henrique Silva de Assis' });
     expect(signed.signature.signerPersonId).toBe(PATIENT_ID);
     expect(signed.signature.signerRole).toBe('PATIENT');
     expect(signed.signature.evidenceJson.signatureMethod).toBe('OPERATOR_COLLECTED_PRESENCE');
@@ -271,7 +271,7 @@ describe('PHASE_10.21BA signer identity enforcement', () => {
     seed();
     await freeze();
     try {
-      signContractOnScreen(otherTenantUser, CONTRACT_ID, {
+      await signContractOnScreen(otherTenantUser, CONTRACT_ID, {
         signerName: 'Juliana de Oliveira Freire',
         signerRole: 'PROFESSIONAL',
         signerPersonId: JULIANA,
@@ -301,7 +301,7 @@ describe('PHASE_10.21BA signer identity enforcement', () => {
     });
     await freeze();
     try {
-      signContractOnScreen(julianaUser, CONTRACT_ID, {
+      await signContractOnScreen(julianaUser, CONTRACT_ID, {
         signerName: 'Juliana de Oliveira Freire',
         signerRole: 'PROFESSIONAL',
         signerPersonId: JULIANA,

@@ -201,7 +201,7 @@ describe('PHASE_10.21AO clinical signature step', () => {
     await initDb();
   });
 
-  it('1) DRAFT → Assinatura bloqueada e sign recusado', () => {
+  it('1) DRAFT → Assinatura bloqueada e sign recusado', async () => {
     seedScenario({ contractStatus: CONTRACT_STATUS.DRAFT });
     const readiness = evalReady();
     expect(readiness.signatureReady).toBe(false);
@@ -210,10 +210,10 @@ describe('PHASE_10.21AO clinical signature step', () => {
     expect(readiness.step).toBe(CLINICAL_SIGNATURE_STEP.BLOCKED);
     expect(readiness.blockers.some((b) => b.code === 'CONTRACT_NOT_FINALIZED')).toBe(true);
     expect(readiness.blockers.find((b) => b.code === 'CONTRACT_NOT_FINALIZED').ctaSection).toBe('contratos');
-    expect(() => signContractOnScreen(user, CONTRACT_ID, {
+    await expect(signContractOnScreen(user, CONTRACT_ID, {
       signerName: 'Paulo',
       signatureImageDataUrl: 'data:image/png;base64,abc',
-    })).toThrow(/rascunho/i);
+    })).rejects.toThrow(/rascunho/i);
   });
 
   it('2) Finalized sem package → bloqueada', () => {
@@ -335,7 +335,7 @@ describe('PHASE_10.21AO clinical signature step', () => {
 
   it('9) paciente sozinho = parcial; paciente+profissional → Assinado', async () => {
     await freezeReadyFluor();
-    const partial = signContractOnScreen(user, CONTRACT_ID, {
+    const partial = await signContractOnScreen(user, CONTRACT_ID, {
       signerName: 'Paulo Henrique Silva de Assis',
       signerCpf: '39053344705',
       signerRole: 'PATIENT',
@@ -344,7 +344,7 @@ describe('PHASE_10.21AO clinical signature step', () => {
     });
     expect(partial.contract.status).not.toBe(CONTRACT_STATUS.SIGNED);
     expect(evalReady().step).toBe(CLINICAL_SIGNATURE_STEP.PARTIALLY_SIGNED);
-    const signed = signContractOnScreen(dentistUser, CONTRACT_ID, {
+    const signed = await signContractOnScreen(dentistUser, CONTRACT_ID, {
       signerName: 'Juliana de Oliveira Freire',
       signerRole: 'PROFESSIONAL',
       signerPersonId: 'col-ao',
@@ -532,10 +532,10 @@ describe('PHASE_10.21AO clinical signature step', () => {
 
     seedScenario({ contractStatus: CONTRACT_STATUS.GENERATED });
     expect(() => sendContractForSignature(user, CONTRACT_ID)).toThrow(/congelado|pacote/i);
-    expect(() => signContractOnScreen(user, CONTRACT_ID, {
+    await expect(signContractOnScreen(user, CONTRACT_ID, {
       signerName: 'Paulo',
       signatureImageDataUrl: 'data:image/png;base64,abc',
-    })).toThrow(/congelado|pacote/i);
+    })).rejects.toThrow(/congelado|pacote/i);
   });
 
   it('seção Assinatura não dispara envio/assinatura no mount', () => {

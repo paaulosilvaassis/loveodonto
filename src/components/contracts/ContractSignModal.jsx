@@ -63,7 +63,7 @@ export default function ContractSignModal({
           user,
         }, { forSign: true });
       }
-      const result = signContractOnScreen(user, contract.id, {
+      const result = await signContractOnScreen(user, contract.id, {
         signerName,
         signerCpf,
         signerRole,

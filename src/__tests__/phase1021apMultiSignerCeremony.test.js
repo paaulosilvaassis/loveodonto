@@ -164,7 +164,7 @@ async function freeze() {
   return prepared;
 }
 
-function signPatient() {
+async function signPatient() {
   return signContractOnScreen(user, CONTRACT_ID, {
     signerName: 'Paulo Henrique Silva de Assis',
     signerCpf: '39053344705',
@@ -174,7 +174,7 @@ function signPatient() {
   });
 }
 
-function signDentist(personId = DENTIST_ID, actor = dentistUser) {
+async function signDentist(personId = DENTIST_ID, actor = dentistUser) {
   return signContractOnScreen(actor, CONTRACT_ID, {
     signerName: 'Juliana de Oliveira Freire',
     signerRole: 'PROFESSIONAL',
@@ -193,7 +193,7 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
   it('A patient only required → signed após paciente', async () => {
     seed({ settings: { requireResponsibleProfessional: false } });
     await freeze();
-    const signed = signPatient();
+    const signed = await signPatient();
     expect(signed.contract.status).toBe(CONTRACT_STATUS.SIGNED);
     expect(evaluateClinicalSignatureReadiness({
       appointmentId: APPT_ID, budgetId: BUDGET_ID, patientId: PATIENT_ID, user,
@@ -203,7 +203,7 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
   it('B patient + dentist → paciente sozinho = PARTIAL', async () => {
     seed();
     await freeze();
-    const partial = signPatient();
+    const partial = await signPatient();
     expect(partial.contract.status).not.toBe(CONTRACT_STATUS.SIGNED);
     expect(evaluateClinicalSignatureReadiness({
       appointmentId: APPT_ID, budgetId: BUDGET_ID, patientId: PATIENT_ID, user,
@@ -213,8 +213,8 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
   it('C patient + dentist → ambos = SIGNED', async () => {
     seed();
     await freeze();
-    signPatient();
-    const done = signDentist();
+    await signPatient();
+    const done = await signDentist();
     expect(done.contract.status).toBe(CONTRACT_STATUS.SIGNED);
   });
 
@@ -282,8 +282,8 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
     const dentist = resolved.requiredSigners.find((s) => s.role === CLINICAL_SIGNER_ROLE.PROFESSIONAL);
     expect(dentist.dedupedRoles).toContain(CLINICAL_SIGNER_ROLE.PROFESSIONAL);
     expect(dentist.dedupedRoles).toContain(CLINICAL_SIGNER_ROLE.CLINIC_REPRESENTATIVE);
-    signPatient();
-    const done = signDentist();
+    await signPatient();
+    const done = await signDentist();
     expect(done.signature.rolesSatisfied).toContain(CLINICAL_SIGNER_ROLE.PROFESSIONAL);
     expect(done.contract.status).toBe(CONTRACT_STATUS.SIGNED);
   });
@@ -294,8 +294,8 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
     addOptionalWitness({
       user, contractId: CONTRACT_ID, patientId: PATIENT_ID, appointmentId: APPT_ID, budgetId: BUDGET_ID, name: 'Testemunha Um',
     });
-    signPatient();
-    const done = signDentist();
+    await signPatient();
+    const done = await signDentist();
     expect(done.contract.status).toBe(CONTRACT_STATUS.SIGNED);
   });
 
@@ -310,25 +310,25 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
   it('L one required signer missing → não SIGNED', async () => {
     seed();
     await freeze();
-    signPatient();
+    await signPatient();
     expect(loadDb().generatedContracts[0].status).not.toBe(CONTRACT_STATUS.SIGNED);
   });
 
-  it('M manifest not frozen → cannot sign', () => {
+  it('M manifest not frozen → cannot sign', async () => {
     seed();
-    expect(() => signPatient()).toThrow(/congelado|manifest/i);
+    await expect(signPatient()).rejects.toThrow(/congelado|manifest/i);
   });
 
   it('N wrong manifest → reject', async () => {
     seed();
     await freeze();
-    expect(() => signContractOnScreen(user, CONTRACT_ID, {
+    await expect(signContractOnScreen(user, CONTRACT_ID, {
       signerName: 'Paulo Henrique Silva de Assis',
       signerRole: 'PATIENT',
       signerPersonId: PATIENT_ID,
       packageManifestId: 'man-errado',
       signatureImageDataUrl: 'data:image/png;base64,x',
-    })).toThrow(/manifest/i);
+    })).rejects.toThrow(/manifest/i);
   });
 
   it('O/P wrong patient / tenant → reject', () => {
@@ -346,14 +346,14 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
   it('Q wrong dentist → reject', async () => {
     seed();
     await freeze();
-    signPatient();
-    expect(() => signDentist(OTHER_DENTIST)).toThrow(/signatário/i);
+    await signPatient();
+    await expect(signDentist(OTHER_DENTIST)).rejects.toThrow(/signatário/i);
   });
 
   it('R refresh mantém progresso', async () => {
     seed();
     await freeze();
-    signPatient();
+    await signPatient();
     const a = evaluateSignatureCeremony({
       tenantId: TENANT, patientId: PATIENT_ID, appointmentId: APPT_ID, budgetId: BUDGET_ID, contractId: CONTRACT_ID,
     });
@@ -369,7 +369,7 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
     await freeze();
     const sent = sendContractForSignature(user, CONTRACT_ID);
     expect(sent.contract.patientId).toBe(PATIENT_ID);
-    const signed = signPatient();
+    const signed = await signPatient();
     expect(signed.signature.signerPersonId).toBe(PATIENT_ID);
     expect(signed.signature.signerRole).toBe('PATIENT');
   });
@@ -398,12 +398,12 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
   it('V documentos possuem evidência própria', async () => {
     seed();
     await freeze();
-    const signed = signPatient();
+    const signed = await signPatient();
     expect(signed.signature.evidenceJson.documentTypes).toEqual(expect.arrayContaining(['CONTRACT_SERVICES', 'LGPD']));
     expect(signed.signature.evidenceJson.packageManifestId).toBeTruthy();
   });
 
-  it('W contrato histórico já assinado permanece intacto', () => {
+  it('W contrato histórico já assinado permanece intacto', async () => {
     seed({
       contractStatus: CONTRACT_STATUS.SIGNED,
       metadata: {},
@@ -415,14 +415,14 @@ describe('PHASE_10.21AP multi-signer clinical ceremony', () => {
     expect(readiness.step).toBe(CLINICAL_SIGNATURE_STEP.SIGNED);
     expect(readiness.legacySignedBeforeManifest).toBe(true);
     expect(readiness.manifestLabel).toMatch(/anterior ao manifest/i);
-    expect(() => signPatient()).toThrow(/legado|já assinado/i);
+    await expect(signPatient()).rejects.toThrow(/legado|já assinado/i);
     expect(JSON.stringify(loadDb().generatedContracts[0])).toBe(before);
   });
 
   it('X UI não mostra Concluído prematuramente', async () => {
     seed();
     await freeze();
-    signPatient();
+    await signPatient();
     const workflow = getClinicalWorkflowState(APPT_ID, BUDGET_ID);
     expect(getNavStepStatus('assinatura', workflow, 'assinatura')).not.toBe(STEP_STATUS.COMPLETED);
     const html = renderToStaticMarkup(React.createElement(ClinicalSignatureSection, {
