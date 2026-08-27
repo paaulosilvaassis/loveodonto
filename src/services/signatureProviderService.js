@@ -356,6 +356,8 @@ const internalProvider = {
           requests[idx] = {
             ...requests[idx],
             deliveryStatus: SIGNATURE_DELIVERY_STATE.DELIVERY_FAILED,
+            lastDeliveryErrorCode: err?.code || 'EMAIL_REQUEST_FAILED',
+            sentAt: requests[idx].sentAt || null,
           };
         }
         return db;
@@ -394,6 +396,7 @@ const internalProvider = {
           lastEmailSubject: emailContent?.subject,
           lastEmailProvider: delivery.provider || null,
           lastEmailMessageId: delivery.messageId || null,
+          lastDeliveryErrorCode: null,
           deliveryStatus: SIGNATURE_DELIVERY_STATE.PROVIDER_ACCEPTED,
         };
       }

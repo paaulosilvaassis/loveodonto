@@ -46,6 +46,24 @@ function relativeSignPath(signUrl) {
   return '';
 }
 
+/** Distingue falha de rede/CORS/timeout de resposta HTTP da Admin API. */
+export function classifySignatureInviteNetworkError(err) {
+  const name = String(err?.name || '');
+  const message = String(err?.message || '');
+  if (name === 'AbortError' || /aborted|timeout|timed out/i.test(message)) {
+    return {
+      code: 'EMAIL_REQUEST_TIMEOUT',
+      networkError: name || 'AbortError',
+      httpStatus: null,
+    };
+  }
+  return {
+    code: 'EMAIL_REQUEST_FAILED',
+    networkError: name || 'TypeError',
+    httpStatus: null,
+  };
+}
+
 export async function deliverSignatureInviteEmail({
   to,
   patientName,
@@ -95,10 +113,13 @@ export async function deliverSignatureInviteEmail({
       }),
     });
   } catch (err) {
+    const classified = classifySignatureInviteNetworkError(err);
     const error = new Error(
       'Não foi possível conectar à Admin API para enviar o e-mail.',
     );
-    error.code = 'EMAIL_REQUEST_FAILED';
+    error.code = classified.code;
+    error.networkError = classified.networkError;
+    error.httpStatus = classified.httpStatus;
     error.cause = err;
     throw error;
   }
@@ -112,12 +133,16 @@ export async function deliverSignatureInviteEmail({
   ) {
     const error = new Error(friendlyDeliveryError(json, EMAIL_PROVIDER_NOT_CONFIGURED_MSG));
     error.code = json?.code || 'SMTP_NOT_CONFIGURED';
+    error.httpStatus = response.status;
+    error.networkError = null;
     throw error;
   }
   if (!response.ok || json?.ok !== true || json?.simulated === true) {
     const error = new Error(friendlyDeliveryError(json, EMAIL_PROVIDER_REJECTED_MSG));
     error.code = json?.code || 'EMAIL_PROVIDER_REJECTED';
     error.status = response.status;
+    error.httpStatus = response.status;
+    error.networkError = null;
     throw error;
   }
   return {
