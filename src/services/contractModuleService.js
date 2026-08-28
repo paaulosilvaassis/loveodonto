@@ -41,9 +41,14 @@ import {
   namesDiverge,
 } from '../contracts/remoteSignatureEvidence.js';
 import { resolveEvidenceClientIp } from '../contracts/signingClientIp.js';
-import { readPersistedContractVersion, requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
+import { requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
 import { assertFrozenDocumentIntegrityBeforeSignature } from '../contracts/assertFrozenDocumentIntegrityBeforeSignature.js';
 import { assertRemoteSignatureBinding } from '../contracts/remoteSignatureBinding.js';
+import {
+  assertContractSignable,
+  assertInPlaceReissueBlocked,
+  isContractSignable,
+} from '../contracts/contractLifecycleGuard.js';
 import { maybeGenerateFinalSignedArtifact } from './finalSignedContractArtifactService.js';
 import {
   createGeneratedContractDraft,
@@ -424,6 +429,7 @@ export function getContractBySignToken(token, claims = {}) {
     return { expired: true, link };
   }
   const contract = getGeneratedContract(link.contractId);
+  if (!isContractSignable(contract)) return null;
   return { contract: normalizeContract(contract), link };
 }
 
@@ -513,10 +519,7 @@ export async function signContractOnScreen(user, contractId, {
   if (!signatureImageDataUrl) throw new Error('Assinatura é obrigatória.');
   const contract = getGeneratedContract(contractId);
   if (!contract) throw new Error('Contrato não encontrado.');
-  if (contract.status === CONTRACT_STATUS.DRAFT) {
-    throw new Error('Não é possível assinar contrato em rascunho. Finalize o contrato primeiro.');
-  }
-  if (contract.status === CONTRACT_STATUS.SIGNED) throw new Error('Contrato já assinado.');
+  assertContractSignable(contract);
   const tenantId = tenantIdFromUser(user);
   const channel = signingChannel
     || (user?.publicSignLink ? SIGNING_CHANNEL.PUBLIC_SIGN_LINK : SIGNING_CHANNEL.CLINIC_APP);
@@ -846,6 +849,9 @@ export async function signContractViaLink(token, {
 
 export function uploadSignedContractAttachment(user, contractId, { fileName, fileDataUrl, fileType = 'application/pdf' }) {
   if (!fileDataUrl) throw new Error('Arquivo é obrigatório.');
+  const contract = getGeneratedContract(contractId);
+  if (!contract) throw new Error('Contrato não encontrado.');
+  assertContractSignable(contract);
   const now = new Date().toISOString();
   return withDb((db) => {
     if (!Array.isArray(db.contractAttachments)) db.contractAttachments = [];
@@ -892,41 +898,10 @@ export function uploadSignedContractAttachment(user, contractId, { fileName, fil
   });
 }
 
-export function createContractNewVersion(user, contractId) {
+export function createContractNewVersion(_user, contractId) {
   const original = getGeneratedContract(contractId);
   if (!original) throw new Error('Contrato não encontrado.');
-  if (original.status !== CONTRACT_STATUS.SIGNED) {
-    throw new Error('Somente contratos assinados podem gerar nova versão.');
-  }
-  const draft = createContractDraft(user, {
-    quoteSource: original.quoteSource,
-    quoteId: original.quoteId,
-    patientId: original.patientId,
-    budgetId: original.budgetId || null,
-    templateId: original.templateId,
-    editedHtml: original.finalContent,
-  });
-  return withDb((db) => {
-    const arr = db.generatedContracts || [];
-    const oIdx = arr.findIndex((c) => c.id === contractId);
-    if (oIdx >= 0) {
-      arr[oIdx] = {
-        ...arr[oIdx],
-        status: CONTRACT_STATUS.REPLACED,
-        replacedById: draft.id,
-      };
-    }
-    const dIdx = arr.findIndex((c) => c.id === draft.id);
-    if (dIdx >= 0) {
-      arr[dIdx] = {
-        ...arr[dIdx],
-        parentContractId: contractId,
-        version: (readPersistedContractVersion(original) ?? 1) + 1,
-      };
-    }
-    registerEvent(user, contractId, 'REPLACED', 'Nova versão criada', { newContractId: draft.id });
-    return arr[dIdx >= 0 ? dIdx : 0] || draft;
-  });
+  assertInPlaceReissueBlocked(original);
 }
 
 export function hasSignedContractForQuote(quoteId, quoteSource = 'crm_budget', budgetId = null) {

@@ -3,6 +3,7 @@ import { can } from '../permissions/permissions.js';
 import { verifyPassword } from './userAuthService.js';
 import { cancelGeneratedContract } from './contractService.js';
 import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
+import { normalizeContractLifecycleStatus } from '../contracts/contractLifecycleGuard.js';
 import { logClinicalEvent } from './clinicalService.js';
 import { createId } from './helpers.js';
 
@@ -54,10 +55,11 @@ export async function cancelContractSecure(user, contractId, payload = {}) {
   const db = loadDb();
   const contract = (db.generatedContracts || []).find((c) => c.id === contractId);
   if (!contract) throw new Error('Contrato não encontrado.');
-  if (contract.status === CONTRACT_STATUS.SIGNED) {
+  const normalized = normalizeContractLifecycleStatus(contract.status);
+  if (normalized === 'signed' || normalized === 'voided' || normalized === 'superseded') {
     throw new Error('Contrato assinado não pode ser cancelado por este fluxo.');
   }
-  if (contract.status === CONTRACT_STATUS.CANCELED) {
+  if (normalized === 'cancelled') {
     throw new Error('Contrato já está cancelado.');
   }
 

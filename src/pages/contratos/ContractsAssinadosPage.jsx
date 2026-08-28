@@ -1,10 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useAuth } from '../../auth/useAuth.js';
 import { CONTRACT_STATUS } from '../../contracts/contractConstants.js';
-import {
-  listContractsByStatus,
-  createContractNewVersion,
-} from '../../services/contractModuleService.js';
+import { listContractsByStatus } from '../../services/contractModuleService.js';
 import { ContractTable, ContractStatusBadge, formatCtrCurrency } from '../../contracts/ui/ContractUi.jsx';
 import ContractDetailModal from '../../components/contracts/ContractDetailModal.jsx';
 import { buildContractViewIdentity } from '../../contracts/contractViewIdentity.js';
@@ -12,20 +8,11 @@ import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 import { formatCeremonyAdminProgress } from '../../contracts/clinicalSignatureCeremony.js';
 
 export default function ContractsAssinadosPage() {
-  const { user } = useAuth();
-  const [refresh, setRefresh] = useState(0);
   const [selectedView, setSelectedView] = useState(null);
-  const [toast, setToast] = useState(null);
-
-  const contracts = useMemo(() => {
-    void refresh;
-    return listContractsByStatus([CONTRACT_STATUS.SIGNED]);
-  }, [refresh]);
-
-  const showToast = (message, type = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
-  };
+  const contracts = useMemo(
+    () => listContractsByStatus([CONTRACT_STATUS.SIGNED]),
+    [],
+  );
 
   const rows = contracts.map((c, index) => ({
     ...c,
@@ -38,7 +25,6 @@ export default function ContractsAssinadosPage() {
 
   return (
     <div className="ctr-page">
-      {toast && <div className={`toast ${toast.type}`} role="status">{toast.message}</div>}
       <ContractTable
         columns={[
           { key: 'number', label: 'Número' },
@@ -59,21 +45,10 @@ export default function ContractsAssinadosPage() {
                 >
                   Visualizar
                 </button>
-                <button
-                  type="button"
-                  className="button small secondary"
-                  onClick={() => {
-                    try {
-                      createContractNewVersion(user, r.id);
-                      setRefresh((x) => x + 1);
-                      showToast('Nova versão criada em rascunho.');
-                    } catch (e) {
-                      showToast(e?.message || 'Erro.', 'error');
-                    }
-                  }}
-                >
-                  Nova versão
-                </button>
+                <p className="ctr-signed-immutable-note" data-testid="signed-contract-immutable-note">
+                  Contratos assinados não podem ser alterados. A reemissão
+                  jurídica será feita por um novo contrato.
+                </p>
               </div>
             ),
           },

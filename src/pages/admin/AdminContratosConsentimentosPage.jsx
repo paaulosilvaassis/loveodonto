@@ -13,7 +13,6 @@ import {
   duplicateClinicTemplate,
   restoreSystemDefaultTemplate,
   listGeneratedContracts,
-  cancelGeneratedContract,
   listContractAuditLogs,
 } from '../../services/contractService.js';
 import { findUnknownHashtags } from '../../contracts/hashtagRegistry.js';
@@ -289,19 +288,11 @@ export default function AdminContratosConsentimentosPage() {
                     <td className="p-2">{c.quoteSource}</td>
                     <td className="p-2">{c.status}</td>
                     <td className="p-2">
-                      {c.status !== 'canceled' && can(user, 'admin_contratos:cancel') && (
-                        <button
-                          type="button"
-                          className="text-xs text-[var(--color-error)]"
-                          onClick={() => {
-                            cancelGeneratedContract(user, c.id);
-                            bump();
-                            showToast('Contrato cancelado.');
-                          }}
-                        >
-                          Cancelar
-                        </button>
-                      )}
+                      {c.status !== 'canceled' && can(user, 'admin_contratos:cancel') ? (
+                        <span className="text-xs text-[var(--color-text-muted)]">
+                          Cancelamento apenas pelo fluxo clínico com motivo.
+                        </span>
+                      ) : null}
                     </td>
                   </tr>
                 ))}

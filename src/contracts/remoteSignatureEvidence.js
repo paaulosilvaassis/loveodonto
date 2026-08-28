@@ -22,10 +22,14 @@ export const AUTH_METHOD = {
 
 export const IMMUTABLE_PILOT_CONTRACT_IDS = new Set([
   'gctr-5e4a7739-2b8d-4346-8d17-ccd0ce9fbb6a',
+  'gctr-930c24bc-f658-4354-81e3-8eea61335361',
+  'gctr-87ca1983-f43c-41ec-ae22-699d5120a39d',
 ]);
 
 export const IMMUTABLE_PILOT_CONTRACT_NUMBERS = new Set([
   'CTR-2026-00003',
+  'CTR-2026-00004',
+  'CTR-2026-00005',
 ]);
 
 export function isImmutablePilotContract(contract) {

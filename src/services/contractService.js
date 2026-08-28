@@ -15,6 +15,15 @@ import { validateContractGeneration } from './contractValidationService.js';
 import { mergeContractAttachedTcleIds } from './clinicalTcleAttachmentService.js';
 import { getPatient } from './patientService.js';
 import { BUDGET_LOCK_ERROR } from './clinicalBudgetLockService.js';
+import { can } from '../permissions/permissions.js';
+import { isImmutablePilotContract } from '../contracts/remoteSignatureEvidence.js';
+import {
+  CANCEL_NOT_ALLOWED,
+  PILOT_IMMUTABLE,
+  createLifecycleError,
+  isCancelableLifecycleStatus,
+  normalizeContractLifecycleStatus,
+} from '../contracts/contractLifecycleGuard.js';
 import {
   INITIAL_GENERATED_CONTRACT_VERSION,
   requirePersistedContractVersion,
@@ -500,28 +509,88 @@ export function finalizeGeneratedContract(user, contractId) {
   });
 }
 
+function canCancelContractActor(user) {
+  return Boolean(
+    user?.role === 'admin'
+    || user?.isMaster
+    || can(user, 'admin_contratos:cancel'),
+  );
+}
+
+function revokePendingRemoteAccess(db, contractId, now) {
+  const requests = db.contractSignatureRequests || [];
+  for (let i = 0; i < requests.length; i += 1) {
+    const row = requests[i];
+    if (row.contractId !== contractId) continue;
+    if (!['pending', 'sent'].includes(String(row.status || ''))) continue;
+    requests[i] = {
+      ...row,
+      status: 'revoked',
+      revokedAt: now,
+      previousStatus: row.status,
+      revokeReason: 'contract_cancelled',
+    };
+  }
+  const links = db.contractSignLinks || [];
+  for (let i = 0; i < links.length; i += 1) {
+    const link = links[i];
+    if (link.contractId !== contractId) continue;
+    if (String(link.status || '') !== 'pending') continue;
+    links[i] = {
+      ...link,
+      status: 'revoked',
+      revokedAt: now,
+    };
+  }
+}
+
+function assertGeneratedContractCancelAllowed(user, current, contractId) {
+  if (!current) throw new Error('Contrato não encontrado.');
+  if (!canCancelContractActor(user)) {
+    throw createLifecycleError(CANCEL_NOT_ALLOWED, 'Somente administradores podem cancelar contratos.');
+  }
+  if (isImmutablePilotContract(current)) {
+    throw createLifecycleError(PILOT_IMMUTABLE, 'Contrato piloto histórico não pode ser alterado.', {
+      contractId,
+      normalizedStatus: normalizeContractLifecycleStatus(current.status),
+    });
+  }
+  const normalized = normalizeContractLifecycleStatus(current.status);
+  if (normalized === 'signed' || normalized === 'voided' || normalized === 'superseded') {
+    throw createLifecycleError(
+      CANCEL_NOT_ALLOWED,
+      'Contrato assinado não pode ser cancelado por este fluxo.',
+      { contractId, normalizedStatus: normalized },
+    );
+  }
+  if (normalized === 'cancelled') throw new Error('Contrato já está cancelado.');
+  if (!isCancelableLifecycleStatus(current.status)) {
+    throw createLifecycleError(
+      CANCEL_NOT_ALLOWED,
+      'Contrato não pode ser cancelado neste estado.',
+      { contractId, normalizedStatus: normalized },
+    );
+  }
+}
+
 export function cancelGeneratedContract(user, contractId, meta = {}) {
   return withDb((db) => {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === contractId);
     if (idx < 0) throw new Error('Contrato não encontrado.');
-    const current = arr[idx];
-    if (current.status === 'signed') {
-      throw new Error('Contrato assinado não pode ser cancelado por este fluxo.');
-    }
-    if (current.status === 'canceled') {
-      throw new Error('Contrato já está cancelado.');
-    }
+    assertGeneratedContractCancelAllowed(user, arr[idx], contractId);
+    const now = new Date().toISOString();
+    revokePendingRemoteAccess(db, contractId, now);
     arr[idx] = {
       ...arr[idx],
       status: 'canceled',
-      canceledAt: new Date().toISOString(),
+      canceledAt: now,
       cancelReason: meta.reason || arr[idx].cancelReason || null,
       canceledBy: meta.canceledBy || user?.id || null,
       canceledByName: meta.canceledByName || null,
       cancelFinancialAction: meta.financialAction || null,
     };
-    audit(user, contractId, 'CANCEL', meta);
+    audit(user, contractId, 'CANCEL', { ...meta, remoteAccessRevoked: true });
     return arr[idx];
   });
 }

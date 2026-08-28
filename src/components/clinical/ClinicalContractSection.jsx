@@ -48,6 +48,7 @@ import {
   CONTRACT_STATUS,
   CONTRACT_STATUS_LABELS,
 } from '../../contracts/contractConstants.js';
+import { normalizeContractLifecycleStatus } from '../../contracts/contractLifecycleGuard.js';
 import { formatCurrencyBRL } from '../../utils/currency.js';
 import { formatCnpj } from '../../utils/validators.js';
 import { formatCivilCpf } from '../../utils/patientCpfIdentity.js';
@@ -660,8 +661,9 @@ export function ClinicalContractSection({
   const canGenerate = contractAccessible
     && !linkedContract
     && (contractReadiness?.canGenerate ?? false);
+  const lifecycleStatus = normalizeContractLifecycleStatus(linkedContract?.status);
   const canEdit = linkedContract?.status === CONTRACT_STATUS.DRAFT;
-  const isCanceled = linkedContract?.status === CONTRACT_STATUS.CANCELED;
+  const isCanceled = lifecycleStatus === 'cancelled';
   const canFinalize = canShowFinalizeClinicalContractCta(linkedContract)
     && canFinalizeClinicalContract(user)
     && !isCanceled;
@@ -670,7 +672,9 @@ export function ClinicalContractSection({
   const canSend = canSendContractForSignature({ contract: linkedContract, budget: effectiveBudget });
   const canCancel = canCancelAsAdmin
     && linkedContract
-    && ![CONTRACT_STATUS.SIGNED, CONTRACT_STATUS.CANCELED].includes(linkedContract.status);
+    && (lifecycleStatus === 'draft'
+      || lifecycleStatus === 'generated'
+      || lifecycleStatus === 'partially_signed');
 
   return (
     <>

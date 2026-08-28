@@ -1,7 +1,7 @@
 /**
- * Artefato PDF final da cerimônia — PHASE_10.21BU.
- * Deriva do HTML/versão/hash assinados. Falha não invalida strokes.
- * Nunca gera retroativo para o piloto CTR-2026-00003.
+ * Artefato PDF final da cerimônia — PHASE_10.21BU / 10.23C.
+ * Idempotente por identidade do contrato. Não sobrescreve artefato existente.
+ * Pilotos históricos: skip extra; sem backfill.
  */
 import { jsPDF } from 'jspdf';
 import { withDb, loadDb } from '../db/index.js';
@@ -9,6 +9,7 @@ import { createId } from './helpers.js';
 import { addFile } from './patientFilesService.js';
 import { isImmutablePilotContract, readEvidenceDocumentHash } from '../contracts/remoteSignatureEvidence.js';
 import { requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
+import { contractHasFinalSignedArtifact } from '../contracts/contractLifecycleGuard.js';
 import {
   assertArtifactCryptoFields,
   decodePdfDataUrlToBytes,
@@ -121,7 +122,7 @@ function persistArtifactRecord({
     const idx = arr.findIndex((row) => row.id === contract.id);
     if (idx < 0) throw new Error('Contrato não encontrado.');
     const current = arr[idx];
-    if (current.metadata?.finalArtifactStatus === 'generated' && current.pdfUrl) {
+    if (contractHasFinalSignedArtifact(current, db.contractAttachments)) {
       return { contract: current, alreadyGenerated: true };
     }
     assertArtifactCryptoFields({
@@ -189,7 +190,7 @@ function markArtifactFailed(contractId, error) {
     const idx = arr.findIndex((row) => row.id === contractId);
     if (idx < 0) return db;
     const current = arr[idx];
-    if (current.metadata?.finalArtifactStatus === 'generated') return db;
+    if (contractHasFinalSignedArtifact(current, db.contractAttachments)) return db;
     arr[idx] = {
       ...current,
       metadata: {
@@ -205,18 +206,18 @@ function markArtifactFailed(contractId, error) {
 
 export async function maybeGenerateFinalSignedArtifact({ contract, signatures, ceremony }) {
   if (!contract) return { skipped: true, reason: 'missing_contract' };
-  if (isImmutablePilotContract(contract)) {
+  const live = (loadDb().generatedContracts || []).find((row) => row.id === contract.id) || contract;
+  const attachments = loadDb().contractAttachments || [];
+  if (contractHasFinalSignedArtifact(live, attachments)) {
+    return { skipped: true, reason: 'already_generated', contract: live };
+  }
+  if (isImmutablePilotContract(live)) {
     return { skipped: true, reason: 'immutable_pilot' };
   }
-  if (String(contract.status || '').toLowerCase() !== 'signed'
-    && String(contract.status || '').toLowerCase() !== 'completed') {
+  if (String(live.status || '').toLowerCase() !== 'signed'
+    && String(live.status || '').toLowerCase() !== 'completed') {
     return { skipped: true, reason: 'ceremony_incomplete' };
   }
-  if (contract.metadata?.finalArtifactStatus === 'generated' && contract.pdfUrl) {
-    return { skipped: true, reason: 'already_generated', contract };
-  }
-
-  const live = (loadDb().generatedContracts || []).find((row) => row.id === contract.id) || contract;
   const frozenHtml = live.renderedHtml || live.finalContent || '';
   const documentHash = live.documentHash || '';
   const version = requirePersistedContractVersion(live);
