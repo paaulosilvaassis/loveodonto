@@ -6,6 +6,12 @@
 
 export const DEV_ADMIN_API_ORIGIN = 'http://127.0.0.1:3001';
 
+/** Origens do app em produção: fetch same-origin via rewrite Vercel → Railway. */
+export const PUBLIC_APP_ORIGINS = Object.freeze([
+  'https://loveodonto.com.br',
+  'https://www.loveodonto.com.br',
+]);
+
 /** Mensagem padrão quando a Admin API local (:3001) não está acessível. */
 export const DEV_BACKEND_NOT_RUNNING_MSG =
   'Admin API local indisponível (porta 3001). Na raiz do projeto, rode npm run dev para subir o app e o backend juntos.';
@@ -114,12 +120,28 @@ export function assertAdminApiFetchAllowed() {
   }
 }
 
-export function buildAdminApiUrl(path) {
+/**
+ * No domínio público, POST cross-origin para *.up.railway.app falha no browser
+ * (TypeError / Failed to fetch) mesmo com GET e preflight OK.
+ * O rewrite da Vercel encaminha /internal/app para a Admin API.
+ */
+export function shouldUseSameOriginAdminApi(origin) {
+  if (!import.meta.env.PROD) return false;
+  const raw = String(
+    origin
+    ?? (typeof window === 'undefined' ? '' : window.location?.origin)
+    ?? '',
+  ).replace(/\/+$/, '');
+  return PUBLIC_APP_ORIGINS.includes(raw);
+}
+
+export function buildAdminApiUrl(path, origin) {
   const normalizedPath = String(path || '').trim();
   const suffix = normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`;
 
   if (import.meta.env.PROD) {
     assertAdminApiFetchAllowed();
+    if (shouldUseSameOriginAdminApi(origin)) return suffix;
     const base = getConfiguredAdminApiBaseUrl();
     return `${base}${suffix}`;
   }

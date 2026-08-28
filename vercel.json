@@ -1,5 +1,13 @@
 {
   "rewrites": [
+    {
+      "source": "/internal/app/:path*",
+      "destination": "https://appgestaoodonto-production.up.railway.app/internal/app/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://appgestaoodonto-production.up.railway.app/health"
+    },
     { "source": "/:path*", "destination": "/index.html" }
   ]
 }

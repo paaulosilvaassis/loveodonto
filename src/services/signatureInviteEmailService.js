@@ -92,6 +92,28 @@ export async function deliverSignatureInviteEmail({
   const token = await getPlatformAccessToken();
   if (!token) throw new Error('Sessão ausente.');
 
+  let payload;
+  try {
+    payload = JSON.stringify({
+      to: email,
+      patientName,
+      treatmentName,
+      clinicName,
+      clinicIdentity,
+      signPath,
+      expiresAt,
+      contractNumber,
+      requestId,
+    });
+  } catch (err) {
+    const error = new Error('Não foi possível montar o pedido de e-mail.');
+    error.code = 'EMAIL_PAYLOAD_INVALID';
+    error.httpStatus = null;
+    error.networkError = null;
+    error.cause = err;
+    throw error;
+  }
+
   let response;
   try {
     response = await fetch(buildAdminApiUrl(SIGNATURE_INVITE_EMAIL_PATH), {
@@ -100,17 +122,7 @@ export async function deliverSignatureInviteEmail({
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        to: email,
-        patientName,
-        treatmentName,
-        clinicName,
-        clinicIdentity,
-        signPath,
-        expiresAt,
-        contractNumber,
-        requestId,
-      }),
+      body: payload,
     });
   } catch (err) {
     const classified = classifySignatureInviteNetworkError(err);

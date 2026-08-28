@@ -34,7 +34,7 @@ import { prepareClinicalSignaturePackage } from '../services/clinicalSignaturePa
 import { signContractOnScreen } from '../services/contractModuleService.js';
 import { sendContractForDigitalSignature } from '../services/contractSignatureFlowService.js';
 import { SIGNATURE_DELIVERY_STATE } from '../services/signatureProviderService.js';
-import { buildAdminApiUrl } from '../config/adminApiBase.js';
+import { buildAdminApiUrl, shouldUseSameOriginAdminApi } from '../config/adminApiBase.js';
 import {
   SIGNATURE_INVITE_EMAIL_PATH,
   classifySignatureInviteNetworkError,
@@ -182,7 +182,14 @@ describe('PHASE_10.21CL.1 email delivery recovery', () => {
     vi.stubEnv('DEV', false);
     vi.stubEnv('VITE_APP_ADMIN_API_BASE_URL', LIVE_API);
     expect(SIGNATURE_INVITE_EMAIL_PATH).toBe('/internal/app/contracts/signature-invite-email');
-    expect(buildAdminApiUrl(SIGNATURE_INVITE_EMAIL_PATH)).toBe(`${LIVE_API}${SIGNATURE_INVITE_EMAIL_PATH}`);
+    expect(buildAdminApiUrl(SIGNATURE_INVITE_EMAIL_PATH, 'http://localhost:3000'))
+      .toBe(`${LIVE_API}${SIGNATURE_INVITE_EMAIL_PATH}`);
+    expect(shouldUseSameOriginAdminApi('https://loveodonto.com.br')).toBe(true);
+    expect(buildAdminApiUrl(SIGNATURE_INVITE_EMAIL_PATH, 'https://loveodonto.com.br'))
+      .toBe(SIGNATURE_INVITE_EMAIL_PATH);
+    expect(readSrc('vercel.json')).toContain(
+      '"destination": "https://appgestaoodonto-production.up.railway.app/internal/app/:path*"',
+    );
   });
 
   it('2-4 POST canônico; rede ≠ HTTP', async () => {
