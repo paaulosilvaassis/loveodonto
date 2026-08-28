@@ -25,6 +25,13 @@ import {
   normalizeContractLifecycleStatus,
 } from '../contracts/contractLifecycleGuard.js';
 import {
+  LIFECYCLE_ACTIONS,
+  assertContractStatusMutation,
+  assertContractTransition,
+  isTerminalContractState,
+  resolveCancelOrAbortAction,
+} from '../contracts/lifecycle/index.js';
+import {
   INITIAL_GENERATED_CONTRACT_VERSION,
   requirePersistedContractVersion,
 } from '../contracts/generatedContractVersion.js';
@@ -36,8 +43,11 @@ const NON_EDITABLE_CONTRACT_STATUSES = new Set([
 
 function assertContractMutationAllowed(contract, { allowDraft = false } = {}) {
   if (!contract) throw new Error('Contrato não encontrado.');
-  if (contract.status === 'canceled') throw new Error(BUDGET_LOCK_ERROR);
-  if (allowDraft && contract.status === 'draft') return;
+  const normalized = normalizeContractLifecycleStatus(contract.status);
+  if (normalized === 'cancelled' || isTerminalContractState(contract.status)) {
+    throw new Error(BUDGET_LOCK_ERROR);
+  }
+  if (allowDraft && normalized === 'draft') return;
   if (NON_EDITABLE_CONTRACT_STATUSES.has(contract.status)) {
     throw new Error(BUDGET_LOCK_ERROR);
   }
@@ -464,8 +474,13 @@ export function finalizeGeneratedContract(user, contractId) {
     const idx = arr.findIndex((c) => c.id === contractId);
     if (idx < 0) throw new Error('Contrato não encontrado.');
     const c = arr[idx];
-    if (c.status === 'canceled') throw new Error('Contrato cancelado.');
-    if (c.status === 'generated') throw new Error('Contrato já finalizado.');
+    const normalized = normalizeContractLifecycleStatus(c.status);
+    if (normalized === 'cancelled') throw new Error('Contrato cancelado.');
+    if (normalized === 'generated') throw new Error('Contrato já finalizado.');
+    assertContractStatusMutation(c, 'generated', {
+      action: LIFECYCLE_ACTIONS.GENERATE,
+      contractId,
+    });
     requirePersistedContractVersion(c);
 
     const attachedTcleIds = mergeContractAttachedTcleIds(c, {
@@ -579,6 +594,12 @@ export function cancelGeneratedContract(user, contractId, meta = {}) {
     const idx = arr.findIndex((c) => c.id === contractId);
     if (idx < 0) throw new Error('Contrato não encontrado.');
     assertGeneratedContractCancelAllowed(user, arr[idx], contractId);
+    const signatureCount = (db.contractSignatures || []).filter((row) => row.contractId === contractId).length;
+    const lifecycleAction = resolveCancelOrAbortAction({
+      status: arr[idx].status,
+      signatureCount,
+    });
+    assertContractTransition(arr[idx].status, 'cancelled', lifecycleAction, { contractId });
     const now = new Date().toISOString();
     revokePendingRemoteAccess(db, contractId, now);
     arr[idx] = {
@@ -589,8 +610,9 @@ export function cancelGeneratedContract(user, contractId, meta = {}) {
       canceledBy: meta.canceledBy || user?.id || null,
       canceledByName: meta.canceledByName || null,
       cancelFinancialAction: meta.financialAction || null,
+      cancelLifecycleAction: lifecycleAction,
     };
-    audit(user, contractId, 'CANCEL', { ...meta, remoteAccessRevoked: true });
+    audit(user, contractId, 'CANCEL', { ...meta, remoteAccessRevoked: true, action: lifecycleAction });
     return arr[idx];
   });
 }

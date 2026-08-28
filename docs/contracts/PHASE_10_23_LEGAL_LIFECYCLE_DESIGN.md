@@ -771,3 +771,19 @@ FINAL_GATE = READY_FOR_PHASE_10_23C_EMERGENCY_FAIL_CLOSED_PATCH
 ```
 
 Não implementar 10.23C neste documento.
+
+---
+
+## 10.23D — autoridade canônica (implementada)
+
+Código: `src/contracts/lifecycle/` (única fonte). O adapter `contractLifecycleGuard.js` **delega** — não há segundo grafo.
+
+| Superfície | Persistido vs derivado |
+| --- | --- |
+| CONTRACT_STATE | persistido em `generatedContracts.status`; normalização só na leitura |
+| CEREMONY_STATE | **HYBRID**. Persistido: `metadata.signatureCeremony.status`. Derivados: `not_started`, `awaiting_remote`, `aborted` |
+| REQUEST / LINK | persistidos; `cancelled`/`consumed` são aliases de leitura |
+
+`TRANSITION_DEFINED` ≠ `WRITER_IMPLEMENTED`. VOID_SIGNED / SUPERSEDE / REISSUE estão no grafo e **não** têm writer. REISSUE exige `oldContractId !== newContractId`.
+
+Cancel LIVE continua gravando `canceled`. Ação canônica no audit: `CANCEL_UNSIGNED` ou `ABORT_PARTIAL`.

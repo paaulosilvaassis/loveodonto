@@ -36,6 +36,12 @@ import { notifyClinicalBudgetUpdated } from './clinicalBudgetApprovedService.js'
 import { validateContractGeneration } from './contractValidationService.js';
 import { mergeContractAttachedTcleIds } from './clinicalTcleAttachmentService.js';
 import { coerceInternalSignatureType } from '../contracts/internalSignatureClassification.js';
+import {
+  LIFECYCLE_ACTIONS,
+  CONTRACT_LIFECYCLE_TRANSITION_INVALID,
+  CONTRACT_LIFECYCLE_WRITER_NOT_IMPLEMENTED,
+  assertContractStatusMutation,
+} from '../contracts/lifecycle/index.js';
 
 const APPROVED_BUDGET_STATUSES = new Set([
   BUDGET_STATUS.APROVADO,
@@ -319,6 +325,11 @@ export function applySignatureCompletion({
       return { contract, alreadySigned: true };
     }
 
+    assertContractStatusMutation(contract, CONTRACT_STATUS.COMPLETED, {
+      action: LIFECYCLE_ACTIONS.RECORD_SIGNATURE,
+      contractId,
+    });
+
     arr[idx] = {
       ...contract,
       status: CONTRACT_STATUS.COMPLETED,
@@ -402,7 +413,19 @@ export function processSignatureWebhookEvent(payload) {
     const arr = draft.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === request.contractId);
     if (idx >= 0) {
-      arr[idx] = { ...arr[idx], status: nextStatus };
+      try {
+        assertContractStatusMutation(arr[idx], nextStatus, {
+          contractId: request.contractId,
+        });
+        arr[idx] = { ...arr[idx], status: nextStatus };
+      } catch (err) {
+        if (
+          err?.code !== CONTRACT_LIFECYCLE_TRANSITION_INVALID
+          && err?.code !== CONTRACT_LIFECYCLE_WRITER_NOT_IMPLEMENTED
+        ) {
+          throw err;
+        }
+      }
     }
 
     const reqList = draft.contractSignatureRequests || [];

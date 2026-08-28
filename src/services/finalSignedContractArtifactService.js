@@ -10,6 +10,7 @@ import { addFile } from './patientFilesService.js';
 import { isImmutablePilotContract, readEvidenceDocumentHash } from '../contracts/remoteSignatureEvidence.js';
 import { requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
 import { contractHasFinalSignedArtifact } from '../contracts/contractLifecycleGuard.js';
+import { normalizeContractLifecycleStatus } from '../contracts/lifecycle/index.js';
 import {
   assertArtifactCryptoFields,
   decodePdfDataUrlToBytes,
@@ -214,8 +215,7 @@ export async function maybeGenerateFinalSignedArtifact({ contract, signatures, c
   if (isImmutablePilotContract(live)) {
     return { skipped: true, reason: 'immutable_pilot' };
   }
-  if (String(live.status || '').toLowerCase() !== 'signed'
-    && String(live.status || '').toLowerCase() !== 'completed') {
+  if (normalizeContractLifecycleStatus(live.status) !== 'signed') {
     return { skipped: true, reason: 'ceremony_incomplete' };
   }
   const frozenHtml = live.renderedHtml || live.finalContent || '';

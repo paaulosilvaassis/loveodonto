@@ -49,6 +49,16 @@ import {
   assertInPlaceReissueBlocked,
   isContractSignable,
 } from '../contracts/contractLifecycleGuard.js';
+import {
+  LIFECYCLE_ACTIONS,
+  assertContractStatusMutation,
+  assertSignLinkSignable,
+  assertSignatureRequestSignable,
+  isAccessExpired,
+  isTerminalContractState,
+  normalizeContractLifecycleStatus,
+  normalizeLinkLifecycleStatus,
+} from '../contracts/lifecycle/index.js';
 import { maybeGenerateFinalSignedArtifact } from './finalSignedContractArtifactService.js';
 import {
   createGeneratedContractDraft,
@@ -374,10 +384,10 @@ export function sendContractForSignature(user, contractId) {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === contractId);
     if (idx < 0) throw new Error('Contrato não encontrado.');
-    if (arr[idx].status === CONTRACT_STATUS.SIGNED || arr[idx].status === CONTRACT_STATUS.COMPLETED) {
+    if (isTerminalContractState(arr[idx].status) || normalizeContractLifecycleStatus(arr[idx].status) === 'signed') {
       throw new Error('Contrato já assinado.');
     }
-    if (arr[idx].status !== CONTRACT_STATUS.GENERATED) {
+    if (normalizeContractLifecycleStatus(arr[idx].status) !== 'generated') {
       throw new Error('Somente contratos gerados podem ser enviados para assinatura.');
     }
     if (arr[idx].quoteSource === 'clinical_budget') {
@@ -386,6 +396,7 @@ export function sendContractForSignature(user, contractId) {
         throw new Error('Manifest ainda não congelado. Prepare o pacote de assinatura primeiro.');
       }
     }
+    assertContractStatusMutation(arr[idx], CONTRACT_STATUS.SENT, { contractId });
     arr[idx] = {
       ...arr[idx],
       status: CONTRACT_STATUS.SENT,
@@ -421,11 +432,12 @@ export function getContractBySignToken(token, claims = {}) {
       return null;
     }
   }
-  if (link.status === 'signed' || link.status === 'consumed') {
+  const linkStatus = normalizeLinkLifecycleStatus(link.status);
+  if (linkStatus === 'signed') {
     return { replay: true, link };
   }
-  if (link.status !== 'pending') return null;
-  if (link.expiresAt && new Date(link.expiresAt) < new Date()) {
+  if (linkStatus !== 'pending') return null;
+  if (isAccessExpired(link.expiresAt)) {
     return { expired: true, link };
   }
   const contract = getGeneratedContract(link.contractId);
@@ -460,6 +472,7 @@ export function recordSignLinkFirstView(token, {
     const arr = db.generatedContracts || [];
     const cIdx = arr.findIndex((row) => row.id === link.contractId);
     if (cIdx >= 0 && arr[cIdx].status === CONTRACT_STATUS.SENT) {
+      assertContractStatusMutation(arr[cIdx], CONTRACT_STATUS.VIEWED, { contractId: link.contractId });
       arr[cIdx] = { ...arr[cIdx], status: CONTRACT_STATUS.VIEWED };
     }
     return links[idx];
@@ -472,6 +485,7 @@ export function markContractViewed(user, contractId) {
     const idx = arr.findIndex((c) => c.id === contractId);
     if (idx < 0) throw new Error('Contrato não encontrado.');
     if (arr[idx].status === CONTRACT_STATUS.SENT) {
+      assertContractStatusMutation(arr[idx], CONTRACT_STATUS.VIEWED, { contractId });
       arr[idx] = { ...arr[idx], status: CONTRACT_STATUS.VIEWED };
       registerEvent(user, contractId, 'VIEWED', 'Contrato visualizado pelo signatário');
     }
@@ -679,6 +693,10 @@ export async function signContractOnScreen(user, contractId, {
         { completedAt: recount.allRequiredSatisfied ? now : null },
       );
     }
+    assertContractStatusMutation(arr[idx], nextStatus, {
+      action: LIFECYCLE_ACTIONS.RECORD_SIGNATURE,
+      contractId,
+    });
     arr[idx] = {
       ...arr[idx],
       status: nextStatus,
@@ -758,6 +776,9 @@ export async function signContractViaLink(token, {
   const resolved = getContractBySignToken(token);
   if (!resolved || resolved.expired || resolved.replay) throw new Error('Link inválido ou expirado.');
   const { contract, link } = resolved;
+  assertSignLinkSignable(link);
+  const request = (loadDb().contractSignatureRequests || []).find((row) => row.id === link.requestId) || null;
+  if (request) assertSignatureRequestSignable(request);
   const map = acceptanceMap
     || (consentAcceptances && !Array.isArray(consentAcceptances) ? consentAcceptances : {})
     || {};
@@ -869,7 +890,11 @@ export function uploadSignedContractAttachment(user, contractId, { fileName, fil
     db.contractAttachments.push(att);
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === contractId);
-    if (idx >= 0 && arr[idx].status !== CONTRACT_STATUS.SIGNED) {
+    if (idx >= 0 && normalizeContractLifecycleStatus(arr[idx].status) !== 'signed') {
+      assertContractStatusMutation(arr[idx], CONTRACT_STATUS.SIGNED, {
+        action: LIFECYCLE_ACTIONS.RECORD_SIGNATURE,
+        contractId,
+      });
       arr[idx] = {
         ...arr[idx],
         status: CONTRACT_STATUS.SIGNED,
