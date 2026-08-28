@@ -8,6 +8,8 @@ import {
   LIFECYCLE_ACTOR_REQUIRED,
   LIFECYCLE_REASON_REQUIRED,
   LIFECYCLE_TENANT_MISMATCH,
+  REISSUE_NOT_ALLOWED,
+  VOID_NOT_ALLOWED,
 } from './constants.js';
 import { createLifecycleError } from './errors.js';
 
@@ -94,6 +96,25 @@ export function assertSensitiveLifecycleAuth(user, extra = {}) {
   throw createLifecycleError(
     CANCEL_NOT_ALLOWED,
     'Somente administradores autorizados podem executar esta ação jurídica.',
+    extra,
+  );
+}
+
+export function canPerformLegalHighImpact(user, permissionBit = null) {
+  return Boolean(
+    user?.role === 'admin'
+    || user?.isMaster
+    || (permissionBit && can(user, permissionBit)),
+  );
+}
+
+export function assertLegalHighImpactAuth(user, extra = {}, permissionBit = null) {
+  if (canPerformLegalHighImpact(user, permissionBit)) return true;
+  const code = extra.failureCode
+    || (extra.action === 'REISSUE' ? REISSUE_NOT_ALLOWED : VOID_NOT_ALLOWED);
+  throw createLifecycleError(
+    extra.failureCode || code,
+    'Somente admin ou master podem executar esta ação jurídica de alto impacto.',
     extra,
   );
 }

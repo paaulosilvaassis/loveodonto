@@ -26,6 +26,7 @@ export function appendLifecycleAudit(db, event) {
     newState: event.newState || null,
     requestId: event.requestId || null,
     linkId: event.linkId || null,
+    relatedContractId: event.relatedContractId || null,
     parentAction: event.parentAction || null,
     createdAt: event.actedAt,
   };
@@ -44,6 +45,7 @@ export function appendLifecycleAudit(db, event) {
       requestId: row.requestId,
       linkId: row.linkId,
       parentAction: row.parentAction,
+      relatedContractId: row.relatedContractId,
       actedAt: row.actedAt,
     },
     createdAt: event.actedAt,

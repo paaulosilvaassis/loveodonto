@@ -5,7 +5,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { initDb, resetDb, withDb, loadDb } from '../db/index.js';
 import {
   CONTRACT_LIFECYCLE_TRANSITION_INVALID,
-  CONTRACT_LIFECYCLE_WRITER_NOT_IMPLEMENTED,
   CONTRACT_NOT_SIGNABLE,
   LIFECYCLE_ACTIONS,
   REISSUE_IDENTITY_INVALID,
@@ -105,12 +104,9 @@ describe('PHASE_10.23D canonical lifecycle domain', () => {
         expect(err.to).toBe(to);
       }
     });
-    expect(() => assertContractTransition('signed', 'voided', LIFECYCLE_ACTIONS.VOID_SIGNED)).toThrowError();
-    try {
-      assertContractTransition('signed', 'voided', LIFECYCLE_ACTIONS.VOID_SIGNED);
-    } catch (err) {
-      expect(err.code).toBe(CONTRACT_LIFECYCLE_WRITER_NOT_IMPLEMENTED);
-    }
+    expect(() => assertContractTransition('signed', 'voided', LIFECYCLE_ACTIONS.VOID_SIGNED)).not.toThrow();
+    expect(assertContractTransition('signed', 'voided', LIFECYCLE_ACTIONS.VOID_SIGNED).writerImplemented).toBe(true);
+    expect(assertContractTransition('voided', 'superseded', LIFECYCLE_ACTIONS.SUPERSEDE).writerImplemented).toBe(true);
   });
 
   it('D28–D29 reissue requires a new contractId', () => {

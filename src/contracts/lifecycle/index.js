@@ -25,7 +25,11 @@ export {
   SIGNED_CONTRACT_IMMUTABLE,
   SIGNING_ACCESS_BINDING_INVALID,
   SIGN_LINK_NOT_SIGNABLE,
+  SUPERSEDE_REFERENCE_REQUIRED,
   TERMINAL_CONTRACT_STATES,
+  VOID_NOT_ALLOWED,
+  VOID_REQUIRED_BEFORE_SUPERSEDE,
+  REISSUE_NOT_ALLOWED,
 } from './constants.js';
 
 export { createLifecycleError } from './errors.js';
@@ -73,10 +77,12 @@ export {
 
 export {
   actorTenantId,
+  assertLegalHighImpactAuth,
   assertLegalReason,
   assertLifecycleActor,
   assertLifecycleTenant,
   assertSensitiveLifecycleAuth,
+  canPerformLegalHighImpact,
   canPerformSensitiveLifecycle,
   entityTenantId,
   readLegalReason,

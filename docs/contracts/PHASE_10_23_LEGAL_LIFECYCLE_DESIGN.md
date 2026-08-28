@@ -851,3 +851,29 @@ UI canônica: `CancelContractSecureModal` (motivo + frase + senha de reforço). 
 ### Não implementado nesta fase
 
 VOID_SIGNED, SUPERSEDE, REISSUE, ROTATE_SIGNING_ACCESS UI/writer redesign.
+
+---
+
+## 10.23F — VOID + REISSUE + SUPERSEDE (implementados)
+
+Writers: `src/services/contractVoidReissueCommandService.js`
+
+| Comando | Efeito |
+| --- | --- |
+| `voidSignedContract` | `signed` → `voided`. Evidência imutável. Sem financeiro. |
+| `reissueContract` | Fonte `signed` (VOID atômico), `voided` ou `cancelled` → SUPERSEDE da fonte + **novo** `contractId` em `draft`. |
+| SUPERSEDE | Interno ao reissue. Liga `replacedById` / `supersededByContractId`. |
+
+`createContractNewVersion` permanece bloqueado (`SIGNED_CONTRACT_IMMUTABLE`). Não há mutação in-place de assinado.
+
+### Cópias proibidas na nova identidade
+
+Assinaturas, manifesto, request/link/token, artefato final / `pdfUrl`. HTML de negócio pode ir como material inicial do draft.
+
+### Atomicidade e idempotência
+
+Um `withDb`. Retry de VOID já voided e de REISSUE já superseded (com sucessor) devolve resultado idempotente sem novo audit/identidade.
+
+Authz LEGAL_HIGH_IMPACT: admin / master apenas (gerente/recepção/profissional BLOCK).
+
+Pilotos 00003/00004/00005: `PILOT_IMMUTABLE`.
