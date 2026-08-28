@@ -59,9 +59,14 @@ export async function cancelContractSecure(user, contractId, payload = {}) {
   if (normalized === 'signed' || normalized === 'voided' || normalized === 'superseded') {
     throw new Error('Contrato assinado não pode ser cancelado por este fluxo.');
   }
-  if (normalized === 'cancelled') {
-    throw new Error('Contrato já está cancelado.');
-  }
+
+  const canceled = cancelGeneratedContract(user, contractId, {
+    reason: String(reason).trim(),
+    canceledByName: user.name || user.nome || user.email || 'Administrador',
+    financialAction,
+  });
+
+  if (normalized === 'cancelled') return canceled;
 
   const auditEntry = {
     id: createId('ctr_audit'),
@@ -72,7 +77,7 @@ export async function cancelContractSecure(user, contractId, payload = {}) {
     userId: user.id,
     userName: user.name || user.nome || user.email || 'Administrador',
     userRole: user.role || null,
-    canceledAt: new Date().toISOString(),
+    canceledAt: canceled.canceledAt,
     reason: String(reason).trim(),
     financialAction,
     previousStatus: contract.status,
@@ -80,26 +85,9 @@ export async function cancelContractSecure(user, contractId, payload = {}) {
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
   };
 
-  const canceled = cancelGeneratedContract(user, contractId, {
-    reason: auditEntry.reason,
-    canceledBy: user.id,
-    canceledByName: auditEntry.userName,
-    financialAction,
-  });
-
   withDb((d) => {
     if (!d.contractCancelAudit) d.contractCancelAudit = [];
     d.contractCancelAudit.push(auditEntry);
-    const idx = (d.generatedContracts || []).findIndex((c) => c.id === contractId);
-    if (idx >= 0) {
-      d.generatedContracts[idx] = {
-        ...d.generatedContracts[idx],
-        cancelReason: auditEntry.reason,
-        cancelFinancialAction: financialAction,
-        canceledBy: user.id,
-        canceledByName: auditEntry.userName,
-      };
-    }
     return d;
   });
 

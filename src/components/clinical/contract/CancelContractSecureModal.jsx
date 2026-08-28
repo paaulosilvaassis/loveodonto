@@ -22,6 +22,7 @@ export function CancelContractSecureModal({
   onOpenChange,
   busy = false,
   onConfirm,
+  variant = 'cancel',
 }) {
   const [password, setPassword] = useState('');
   const [reason, setReason] = useState('');
@@ -55,9 +56,13 @@ export function CancelContractSecureModal({
       <ModalContent size="md" onInteractOutside={(e) => e.preventDefault()}>
         <form id="cancel-contract-secure-form" onSubmit={handleSubmit}>
           <ModalHeader>
-            <ModalTitle>Cancelar contrato?</ModalTitle>
+            <ModalTitle>
+              {variant === 'abort' ? 'Cancelar cerimônia/contrato?' : 'Cancelar contrato?'}
+            </ModalTitle>
             <ModalDescription>
-              Esta ação é sensível e ficará registrada no histórico de auditoria.
+              {variant === 'abort'
+                ? 'As assinaturas e evidências já coletadas permanecem preservadas. Nenhum signatário pendente poderá concluir depois. Esta ação é sensível e ficará registrada no histórico de auditoria.'
+                : 'Esta ação é sensível e ficará registrada no histórico de auditoria.'}
             </ModalDescription>
           </ModalHeader>
           <ModalBody className="space-y-3">
@@ -82,6 +87,9 @@ export function CancelContractSecureModal({
                 required
               />
             </label>
+            <p className="text-xs text-[var(--color-muted)]">
+              Nenhuma alteração financeira automática é aplicada. A opção abaixo registra apenas a intenção operacional.
+            </p>
             <label className="block text-sm">
               <span className="font-medium">Financeiro vinculado</span>
               <select

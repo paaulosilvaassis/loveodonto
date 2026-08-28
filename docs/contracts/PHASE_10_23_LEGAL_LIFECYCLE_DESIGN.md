@@ -787,3 +787,67 @@ Código: `src/contracts/lifecycle/` (única fonte). O adapter `contractLifecycle
 `TRANSITION_DEFINED` ≠ `WRITER_IMPLEMENTED`. VOID_SIGNED / SUPERSEDE / REISSUE estão no grafo e **não** têm writer. REISSUE exige `oldContractId !== newContractId`.
 
 Cancel LIVE continua gravando `canceled`. Ação canônica no audit: `CANCEL_UNSIGNED` ou `ABORT_PARTIAL`.
+
+---
+
+## 10.23E — writers CANCEL / ABORT / REVOKE (implementados)
+
+Boundary único: `src/services/contractLifecycleCommandService.js`
+
+| Comando | Ação | Estados de origem | Reason | Actor | Authz |
+| --- | --- | --- | --- | --- | --- |
+| `cancelUnsignedContract` | CANCEL_UNSIGNED | `draft`, `generated` | obrigatório | `user.id` autenticado | SENSITIVE: admin / master / `admin_contratos:cancel` |
+| `abortPartialCeremony` | ABORT_PARTIAL | somente `partially_signed` + cerimônia incompleta + ≥1 csig | obrigatório | idem | LEGAL_HIGH_IMPACT: mesma RBAC efetiva |
+| `revokeSigningAccess` | REVOKE_SIGNING_ACCESS | qualquer estado jurídico (não cancela o contrato) | obrigatório na ação explícita | idem | SENSITIVE: mesma RBAC |
+
+VOID_SIGNED / SUPERSEDE / REISSUE / ROTATE **não** foram implementados.
+
+### Persistência LIVE (compatibilidade)
+
+- Contrato cancelado/abortado grava `status = canceled` (alias canônico `cancelled`).
+- Request/link revogados gravam `status = revoked`.
+- `cancelled`/`canceled` em request/link continuam aliases de leitura → `revoked`.
+
+### Metadados
+
+CANCEL_UNSIGNED: `canceledAt`, `canceledBy`, `canceledByRole`, `cancelReason`, `previousLifecycleState`, `cancelLifecycleAction`.  
+ABORT_PARTIAL: os mesmos + `abortedAt`, `abortedBy`, `abortReason` e `metadata.signatureCeremony.status = aborted`.  
+REVOKE: `revokedAt`, `revokedBy`, `revokeReason`, `previousStatus` no request/link. Retry idempotente **não** reescreve esses campos.
+
+`actedAt` é um único timestamp ISO por comando, reutilizado em contrato, request, link e audit.
+
+### Efeitos
+
+- CANCEL/ABORT revogam request `pending|sent` e link `pending` **do mesmo contractId**, no mesmo `withDb`.
+- Revogação explícita exige `contractId` + `requestId` (e `signLinkId` se informado). Binding cruzado → `SIGNING_ACCESS_BINDING_INVALID`.
+- Sem delete de request/link/csig/evidence/manifest/artifact.
+- Sem mutação financeira. `cancelFinancialAction` é intenção operacional apenas.
+- Falhas estáveis: `LIFECYCLE_REASON_REQUIRED`, `LIFECYCLE_ACTOR_REQUIRED`, `LIFECYCLE_TENANT_MISMATCH`, `CEREMONY_NOT_ABORTABLE`, `SIGNING_ACCESS_BINDING_INVALID`, `CANCEL_NOT_ALLOWED`.
+
+### Idempotência
+
+- CANCEL/ABORT já `cancelled` → `{ idempotent: true }` sem novo audit e sem reescrever motivo/ator/timestamp.
+- REVOKE já `revoked` → idempotente; metadados legais originais imutáveis.
+
+### Audit append-only
+
+`contractLifecycleAudits` + `contractAuditLogs`:
+
+- `CONTRACT_CANCELLED`
+- `CEREMONY_ABORTED`
+- `SIGN_REQUEST_REVOKED`
+- `SIGN_LINK_REVOKED`
+
+Payload mínimo: tenantId, contractId, actorId, actedAt, reason, previousState, newState, requestId/linkId quando couber. Sem token, senha ou PII desnecessária.
+
+### Delegação LIVE
+
+- `cancelGeneratedContract` → `dispatchCancelOrAbort`
+- `cancelContractSecure` → `cancelGeneratedContract` (senha = UX, não autorização)
+- `cancelSignatureRequest` → `revokeSigningAccess`
+
+UI canônica: `CancelContractSecureModal` (motivo + frase + senha de reforço). Parcial usa linguagem “Cancelar cerimônia/contrato” e preserva assinaturas.
+
+### Não implementado nesta fase
+
+VOID_SIGNED, SUPERSEDE, REISSUE, ROTATE_SIGNING_ACCESS UI/writer redesign.

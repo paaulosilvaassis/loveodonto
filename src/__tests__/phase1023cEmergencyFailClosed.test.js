@@ -413,8 +413,8 @@ describe('PHASE_10.23C emergency fail-closed', () => {
       return db;
     });
     await cancelSignatureRequest({ user: admin, requestId: 'csreq-rev', reason: 'cancelado pela clínica' });
-    expect(loadDb().contractSignatureRequests[0].status).toBe('cancelled');
-    expect(loadDb().contractSignLinks[0].status).toBe('cancelled');
+    expect(loadDb().contractSignatureRequests[0].status).toBe('revoked');
+    expect(loadDb().contractSignLinks[0].status).toBe('revoked');
     expect(getContractBySignToken('csgn-rev')).toBeNull();
     await expect(signContractViaLink('csgn-rev', {
       signerName: 'Paciente 23C',

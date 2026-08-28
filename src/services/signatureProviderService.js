@@ -12,6 +12,7 @@ import {
 import { CLINICAL_SIGNER_ROLE, mapLegacySignerRole } from '../contracts/clinicalRequiredSigners.js';
 import { logSignatureAudit } from './contractSignatureAuditService.js';
 import { getGeneratedContract } from './contractService.js';
+import { revokeSigningAccess } from './contractLifecycleCommandService.js';
 import { deliverSignatureInviteEmail } from './signatureInviteEmailService.js';
 import { assertFrozenDocumentIntegrityBeforeSignature } from '../contracts/assertFrozenDocumentIntegrityBeforeSignature.js';
 import { readPersistedContractVersion } from '../contracts/generatedContractVersion.js';
@@ -454,36 +455,16 @@ const internalProvider = {
   },
 
   async cancelSignatureRequest({ user, requestId, reason }) {
-    return withDb((db) => {
-      const requests = db.contractSignatureRequests || [];
-      const idx = requests.findIndex((r) => r.id === requestId);
-      if (idx < 0) throw new Error('Solicitação de assinatura não encontrada.');
-
-      requests[idx] = {
-        ...requests[idx],
-        status: 'cancelled',
-        cancelledAt: new Date().toISOString(),
-        cancelReason: reason || '',
-        cancelledBy: user?.id || null,
-      };
-
-      const links = db.contractSignLinks || [];
-      for (let i = 0; i < links.length; i += 1) {
-        if (links[i].requestId === requestId && links[i].status === 'pending') {
-          links[i] = { ...links[i], status: 'cancelled' };
-        }
-      }
-
-      logSignatureAudit({
-        contractId: requests[idx].contractId,
-        requestId,
-        action: 'request_cancelled',
-        user,
-        payload: { reason, provider: SIGNATURE_PROVIDERS.INTERNAL },
-      });
-
-      return requests[idx];
+    const db = loadDb();
+    const request = (db.contractSignatureRequests || []).find((row) => row.id === requestId);
+    if (!request) throw new Error('Solicitação de assinatura não encontrada.');
+    const result = revokeSigningAccess({
+      user,
+      contractId: request.contractId,
+      requestId,
+      reason,
     });
+    return result.request;
   },
 };
 

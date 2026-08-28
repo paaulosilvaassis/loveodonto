@@ -724,7 +724,7 @@ export function ClinicalContractSection({
             ) : null}
             {canCancel ? (
               <ClinicalBtn variant="danger" icon={XCircle} onClick={handleCancelContract}>
-                Cancelar contrato
+                {lifecycleStatus === 'partially_signed' ? 'Cancelar cerimônia/contrato' : 'Cancelar contrato'}
               </ClinicalBtn>
             ) : null}
           </>
@@ -979,6 +979,7 @@ export function ClinicalContractSection({
         open={cancelModalOpen}
         onOpenChange={setCancelModalOpen}
         busy={cancelBusy}
+        variant={lifecycleStatus === 'partially_signed' ? 'abort' : 'cancel'}
         onConfirm={handleConfirmCancelContract}
       />
 
