@@ -16,6 +16,7 @@ vi.mock('../services/signatureInviteEmailService.js', () => ({
   deliverSignatureInviteEmail: vi.fn(async () => ({
     ok: true,
     simulated: false,
+    acceptedByTransport: true,
     provider: 'resend',
     messageId: 'msg_test',
   })),
@@ -104,6 +105,7 @@ describe('contractSignatureFlow', () => {
         contractNumber: 'CTR-001',
         tenant_id: 'tenant-1',
         status: CONTRACT_STATUS.GENERATED,
+        version: 1,
         renderedHtml: '<p>Contrato teste</p>',
         finalContent: '<p>Contrato teste com #pacienteNomeCompleto</p>',
         metadata: { attachedTcleIds: [] },

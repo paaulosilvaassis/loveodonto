@@ -9,6 +9,11 @@ import { createId } from './helpers.js';
 import { addFile } from './patientFilesService.js';
 import { isImmutablePilotContract, readEvidenceDocumentHash } from '../contracts/remoteSignatureEvidence.js';
 import { requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
+import {
+  assertArtifactCryptoFields,
+  decodePdfDataUrlToBytes,
+  hashPersistedPdfBytes,
+} from './finalSignedArtifactCrypto.js';
 
 function stripTags(html) {
   return String(html || '')
@@ -101,7 +106,16 @@ export function generateFinalSignedPdfDataUrl({ contract, signatures = [], cerem
   return pdf.output('datauristring');
 }
 
-function persistArtifactRecord({ contract, dataUrl, documentHash, version, now }) {
+function persistArtifactRecord({
+  contract,
+  dataUrl,
+  documentHash,
+  version,
+  now,
+  artifactBinarySha256,
+  artifactByteLength,
+  artifactGeneratedAt,
+}) {
   return withDb((db) => {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((row) => row.id === contract.id);
@@ -110,6 +124,11 @@ function persistArtifactRecord({ contract, dataUrl, documentHash, version, now }
     if (current.metadata?.finalArtifactStatus === 'generated' && current.pdfUrl) {
       return { contract: current, alreadyGenerated: true };
     }
+    assertArtifactCryptoFields({
+      artifactBinarySha256,
+      artifactByteLength,
+      artifactGeneratedAt,
+    });
 
     if (!Array.isArray(db.contractAttachments)) db.contractAttachments = [];
     const att = {
@@ -126,6 +145,9 @@ function persistArtifactRecord({ contract, dataUrl, documentHash, version, now }
       documentHash,
       contractVersion: version,
       immutable: true,
+      artifactBinarySha256,
+      artifactByteLength,
+      artifactGeneratedAt,
     };
     db.contractAttachments.push(att);
 
@@ -140,6 +162,9 @@ function persistArtifactRecord({ contract, dataUrl, documentHash, version, now }
         finalArtifactDocumentHash: documentHash,
         finalArtifactVersion: version,
         finalArtifactAttachmentId: att.id,
+        artifactBinarySha256,
+        artifactByteLength,
+        artifactGeneratedAt,
       },
     };
 
@@ -178,7 +203,7 @@ function markArtifactFailed(contractId, error) {
   });
 }
 
-export function maybeGenerateFinalSignedArtifact({ contract, signatures, ceremony }) {
+export async function maybeGenerateFinalSignedArtifact({ contract, signatures, ceremony }) {
   if (!contract) return { skipped: true, reason: 'missing_contract' };
   if (isImmutablePilotContract(contract)) {
     return { skipped: true, reason: 'immutable_pilot' };
@@ -205,15 +230,33 @@ export function maybeGenerateFinalSignedArtifact({ contract, signatures, ceremon
     if (!dataUrl || !String(dataUrl).startsWith('data:application/pdf')) {
       throw new Error('PDF inválido.');
     }
+    const bytes = decodePdfDataUrlToBytes(dataUrl);
+    const hashed = await hashPersistedPdfBytes(bytes);
+    const now = new Date().toISOString();
     const persisted = persistArtifactRecord({
       contract: live,
       dataUrl,
       documentHash,
       version,
-      now: new Date().toISOString(),
+      now,
+      artifactBinarySha256: hashed.artifactBinarySha256,
+      artifactByteLength: hashed.artifactByteLength,
+      artifactGeneratedAt: now,
     });
+    if (persisted.alreadyGenerated) {
+      return {
+        ok: true,
+        artifactGenerated: false,
+        alreadyGenerated: true,
+        contract: persisted.contract,
+        documentHash,
+        artifactBinarySha256: persisted.contract.metadata?.artifactBinarySha256 || null,
+        artifactByteLength: persisted.contract.metadata?.artifactByteLength || null,
+        artifactGeneratedAt: persisted.contract.metadata?.artifactGeneratedAt || null,
+      };
+    }
     let chartFile = null;
-    if (persisted.contract?.patientId && !persisted.alreadyGenerated) {
+    if (persisted.contract?.patientId) {
       chartFile = addFile(
         persisted.contract.patientId,
         {
@@ -226,6 +269,9 @@ export function maybeGenerateFinalSignedArtifact({ contract, signatures, ceremon
             documentHash,
             contractVersion: version,
             source: 'final_signed_artifact',
+            artifactBinarySha256: hashed.artifactBinarySha256,
+            artifactByteLength: hashed.artifactByteLength,
+            artifactGeneratedAt: now,
           },
         },
         'system',
@@ -239,6 +285,9 @@ export function maybeGenerateFinalSignedArtifact({ contract, signatures, ceremon
       attachment: persisted.attachment,
       chartFile,
       documentHash,
+      artifactBinarySha256: hashed.artifactBinarySha256,
+      artifactByteLength: hashed.artifactByteLength,
+      artifactGeneratedAt: now,
     };
   } catch (error) {
     markArtifactFailed(contract.id, error);
@@ -247,6 +296,7 @@ export function maybeGenerateFinalSignedArtifact({ contract, signatures, ceremon
       artifactGenerated: false,
       strokesPreserved: true,
       error: String(error?.message || error),
+      code: error?.code || null,
     };
   }
 }

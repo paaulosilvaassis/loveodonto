@@ -116,7 +116,7 @@ export function assertRequiredConsentsAccepted({
 }
 
 export function canonicalEvidencePayload(fields) {
-  return JSON.stringify({
+  const payload = {
     contractId: fields.contractId || null,
     documentHash: fields.documentHash || null,
     contractVersion: fields.contractVersion || 1,
@@ -130,7 +130,16 @@ export function canonicalEvidencePayload(fields) {
     typedSignerName: fields.typedSignerName || null,
     consentAcceptances: fields.consentAcceptances || [],
     clientIp: fields.clientIp || null,
-  });
+  };
+  if (
+    fields.signingChannel === SIGNING_CHANNEL.PUBLIC_SIGN_LINK
+    || fields.signatureRequestId
+    || fields.signLinkId
+  ) {
+    payload.signatureRequestId = fields.signatureRequestId || null;
+    payload.signLinkId = fields.signLinkId || null;
+  }
+  return JSON.stringify(payload);
 }
 
 export function computeEvidenceHash(fields) {

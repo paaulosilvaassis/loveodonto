@@ -43,6 +43,7 @@ import {
 import { resolveEvidenceClientIp } from '../contracts/signingClientIp.js';
 import { readPersistedContractVersion, requirePersistedContractVersion } from '../contracts/generatedContractVersion.js';
 import { assertFrozenDocumentIntegrityBeforeSignature } from '../contracts/assertFrozenDocumentIntegrityBeforeSignature.js';
+import { assertRemoteSignatureBinding } from '../contracts/remoteSignatureBinding.js';
 import { maybeGenerateFinalSignedArtifact } from './finalSignedContractArtifactService.js';
 import {
   createGeneratedContractDraft,
@@ -505,6 +506,8 @@ export async function signContractOnScreen(user, contractId, {
   acceptedAtById = null,
   requireConsent = false,
   typedSignerName = null,
+  signatureRequestId = null,
+  signLinkId = null,
 }) {
   if (!signerName?.trim()) throw new Error('Nome do signatário é obrigatório.');
   if (!signatureImageDataUrl) throw new Error('Assinatura é obrigatória.');
@@ -578,6 +581,13 @@ export async function signContractOnScreen(user, contractId, {
   });
   const remote = identityGate.method === SIGNATURE_METHOD.REMOTE_ON_SCREEN;
   const operatorCollected = identityGate.method === SIGNATURE_METHOD.OPERATOR_COLLECTED_PRESENCE;
+  const remoteBinding = assertRemoteSignatureBinding({
+    contractId,
+    signingChannel: identityGate.signingChannel || channel,
+    signatureMethod: identityGate.method,
+    signatureRequestId,
+    signLinkId,
+  });
   const evidenceFields = {
     contractId,
     documentHash: hash,
@@ -592,6 +602,8 @@ export async function signContractOnScreen(user, contractId, {
     typedSignerName: typedName,
     consentAcceptances: consents,
     clientIp: clientIp.ip,
+    signatureRequestId: remoteBinding.signatureRequestId,
+    signLinkId: remoteBinding.signLinkId,
   };
   const result = withDb((db) => {
     if (!Array.isArray(db.contractSignatures)) db.contractSignatures = [];
@@ -635,6 +647,10 @@ export async function signContractOnScreen(user, contractId, {
         contractVersion: requirePersistedContractVersion(contract),
         documentTypes,
         rolesSatisfied,
+        ...(remoteBinding.required ? {
+          signatureRequestId: remoteBinding.signatureRequestId,
+          signLinkId: remoteBinding.signLinkId,
+        } : {}),
       },
     };
     db.contractSignatures.push(sig);
@@ -710,7 +726,7 @@ export async function signContractOnScreen(user, contractId, {
 
   if (result.contract?.status === CONTRACT_STATUS.SIGNED) {
     const signatures = (loadDb().contractSignatures || []).filter((row) => row.contractId === contractId);
-    const artifact = maybeGenerateFinalSignedArtifact({
+    const artifact = await maybeGenerateFinalSignedArtifact({
       contract: result.contract,
       signatures,
       ceremony: result.contract.metadata?.signatureCeremony,
@@ -771,6 +787,8 @@ export async function signContractViaLink(token, {
       acceptedAtById,
       requireConsent,
       typedSignerName: typedSignerName || signerName,
+      signatureRequestId: link.requestId,
+      signLinkId: link.id,
     },
   );
   withDb((db) => {

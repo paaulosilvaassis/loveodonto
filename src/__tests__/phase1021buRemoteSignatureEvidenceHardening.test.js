@@ -408,7 +408,7 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
       };
       return db;
     });
-    const artifact = maybeGenerateFinalSignedArtifact({
+    const artifact = await maybeGenerateFinalSignedArtifact({
       contract: { ...loadDb().generatedContracts.find((c) => c.id === CTR), renderedHtml: null, finalContent: null, documentHash: 'hfail' },
       signatures: before,
     });
@@ -458,12 +458,12 @@ describe('PHASE_10.21BU remote signature evidence hardening', () => {
     expect(readSrc('server/lib/contractsSignatureEmailApi.js')).toContain('sendTransactionalEmail');
   });
 
-  it('piloto CTR-2026-00003 não recebe PDF retroativo', () => {
+  it('piloto CTR-2026-00003 não recebe PDF retroativo', async () => {
     expect(isImmutablePilotContract({
       id: 'gctr-5e4a7739-2b8d-4346-8d17-ccd0ce9fbb6a',
       contractNumber: 'CTR-2026-00003',
     })).toBe(true);
-    const skipped = maybeGenerateFinalSignedArtifact({
+    const skipped = await maybeGenerateFinalSignedArtifact({
       contract: {
         id: 'gctr-5e4a7739-2b8d-4346-8d17-ccd0ce9fbb6a',
         contractNumber: 'CTR-2026-00003',
