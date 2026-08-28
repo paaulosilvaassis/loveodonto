@@ -6,6 +6,26 @@
 **HEAD no closeout:** `2e6de5d16036fd269834e2f437e8a3975db7af30`  
 **Ambiente:** `https://loveodonto.com.br/` (frontend Vercel) · Admin API Railway  
 
+```text
+PHASE_10.21 = CLOSED
+
+PRODUCTION_PILOT = PASS
+REAL_CONTRACT = PASS
+REAL_PROFESSIONAL_SIGNATURE = PASS
+REAL_REMOTE_PATIENT_SIGNATURE = PASS
+REAL_CEREMONY_2_OF_2 = PASS
+REAL_FINAL_ARTIFACT = PASS
+
+LEGAL_EVIDENCE_HARDENING = LIVE
+LEGACY_PILOT_BACKFILL = NONE
+HISTORICAL_PILOT_PRESERVED = YES
+
+GLOBAL_ROLLOUT = BLOCKED
+CONTROLLED_TENANT_EXPANSION = AUTHORIZED
+
+NEXT_PHASE = PHASE_10.22 — CONTROLLED TENANT EXPANSION
+```
+
 Esta fase **não** reexecuta a cerimônia real. Não há mutation jurídica, backfill, regeneração de PDF/csig, novo contrato, e-mail ou alteração de rollout flags.
 
 ---

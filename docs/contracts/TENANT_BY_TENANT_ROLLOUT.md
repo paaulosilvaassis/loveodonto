@@ -1,5 +1,7 @@
 # Estratégia tenant-by-tenant
 
+**Estado em 2026-08-28:** PHASE_10.21 = CLOSED. Piloto real CTR-2026-00005 PASS. `GLOBAL_ROLLOUT = BLOCKED`. `CONTROLLED_TENANT_EXPANSION = AUTHORIZED`. Próxima fase: **10.22**. Closeout: `PHASE_10_21_PRODUCTION_PILOT_CLOSEOUT.md`.
+
 ## Princípio
 
 Ativar a UX operacional **um tenant por vez** em produção. V1 nunca é desligado. Domínio Contracts V2 técnico permanece OFF.
