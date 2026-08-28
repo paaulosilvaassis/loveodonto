@@ -30,6 +30,9 @@ export {
   VOID_NOT_ALLOWED,
   VOID_REQUIRED_BEFORE_SUPERSEDE,
   REISSUE_NOT_ALLOWED,
+  ROTATION_RACE,
+  ROTATE_NOT_ALLOWED,
+  RESEND_NOT_ALLOWED,
 } from './constants.js';
 
 export { createLifecycleError } from './errors.js';
@@ -81,8 +84,12 @@ export {
   assertLegalReason,
   assertLifecycleActor,
   assertLifecycleTenant,
+  assertOperationalSigningAccess,
+  assertRotateSigningAccessAuth,
   assertSensitiveLifecycleAuth,
   canPerformLegalHighImpact,
+  canPerformOperationalSigningAccess,
+  canPerformRotateSigningAccess,
   canPerformSensitiveLifecycle,
   entityTenantId,
   readLegalReason,

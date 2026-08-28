@@ -16,3 +16,6 @@ export const Calendar = () => null;
 export const DollarSign = () => null;
 export const FileCheck = () => null;
 export const FileSignature = () => null;
+export const Printer = () => null;
+export const Copy = () => null;
+export const XCircle = () => null;

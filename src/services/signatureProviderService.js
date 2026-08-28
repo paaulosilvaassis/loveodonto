@@ -13,6 +13,8 @@ import { CLINICAL_SIGNER_ROLE, mapLegacySignerRole } from '../contracts/clinical
 import { logSignatureAudit } from './contractSignatureAuditService.js';
 import { getGeneratedContract } from './contractService.js';
 import { revokeSigningAccess } from './contractLifecycleCommandService.js';
+import { rotateSigningAccess } from './contractSigningAccessCommandService.js';
+import { persistClockExpiredAccess } from '../contracts/lifecycle/accessExpiry.js';
 import { deliverSignatureInviteEmail } from './signatureInviteEmailService.js';
 import { assertFrozenDocumentIntegrityBeforeSignature } from '../contracts/assertFrozenDocumentIntegrityBeforeSignature.js';
 import { readPersistedContractVersion } from '../contracts/generatedContractVersion.js';
@@ -145,6 +147,13 @@ const internalProvider = {
     const documentHash = simpleHash(contract.renderedHtml || contract.finalContent);
 
     const created = withDb((db) => {
+      persistClockExpiredAccess(db, {
+        contractId: contract.id,
+        trustedNow: Date.now(),
+        actorId: user?.id || 'system',
+        actorRole: user?.role || 'system',
+        tenantId: tenantIdFromUser(user) || contract.tenant_id || null,
+      });
       const reused = findReusableSignatureArtifacts(db, contract.id);
       if (reused) {
         const requests = db.contractSignatureRequests || [];
@@ -169,44 +178,25 @@ const internalProvider = {
 
       const rotatable = findRotatablePatientArtifacts(db, contract.id);
       if (rotatable?.request) {
-        const requests = db.contractSignatureRequests || [];
-        const rIdx = requests.findIndex((row) => row.id === rotatable.request.id);
-        const links = db.contractSignLinks || [];
-        if (rotatable.link) {
-          const lIdx = links.findIndex((row) => row.id === rotatable.link.id);
-          if (lIdx >= 0 && links[lIdx].status === 'pending') {
-            links[lIdx] = { ...links[lIdx], status: 'expired' };
-          }
-        }
-        const rotatedLink = bindPatientLink({
-          id: createId('clnk'),
-          tenant_id: tenantIdFromUser(user) || contract.tenant_id || null,
-          clinicId: clinicId(),
+        const rotated = rotateSigningAccess({
+          user,
           contractId: contract.id,
           requestId: rotatable.request.id,
-          token,
-          expiresAt,
-          status: 'pending',
-          createdBy: user?.id || null,
-          createdAt: new Date().toISOString(),
-          viewedAt: null,
-          signedAt: null,
-        }, contract);
-        links.push(rotatedLink);
+          reason: 'expired_link',
+        });
+        const requests = db.contractSignatureRequests || [];
+        const rIdx = requests.findIndex((row) => row.id === rotated.request.id);
         const nextRequest = {
-          ...rotatable.request,
-          externalId: token,
-          status: 'pending',
-          expiresAt,
+          ...rotated.request,
           signerRole: CLINICAL_SIGNER_ROLE.PATIENT,
-          signerPersonId: contract.patientId || null,
+          signerPersonId: contract.patientId || rotated.request.signerPersonId || null,
           deliveryStatus: SIGNATURE_DELIVERY_STATE.LINK_CREATED,
           sentAt: null,
           recipients: {
-            ...(rotatable.request.recipients || {}),
-            patientEmail: payload.patientEmail || rotatable.request.recipients?.patientEmail,
-            patientPhone: payload.patientPhone || rotatable.request.recipients?.patientPhone,
-            patientName: payload.patientName || rotatable.request.recipients?.patientName,
+            ...(rotated.request.recipients || {}),
+            patientEmail: payload.patientEmail || rotated.request.recipients?.patientEmail,
+            patientPhone: payload.patientPhone || rotated.request.recipients?.patientPhone,
+            patientName: payload.patientName || rotated.request.recipients?.patientName,
             patientCpf: payload.patientCpf || rotatable.request.recipients?.patientCpf,
           },
         };
@@ -224,8 +214,8 @@ const internalProvider = {
         });
         return {
           request: nextRequest,
-          link: rotatedLink,
-          signUrl: `/assinatura/${token}`,
+          link: rotated.link,
+          signUrl: rotated.signUrl,
           documentHash: nextRequest.documentHash || documentHash,
           reused: true,
           rotated: true,

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FileText, PenLine, Send, AlertTriangle, Printer } from 'lucide-react';
+import { FileText, PenLine, AlertTriangle, Printer } from 'lucide-react';
 import { ClinicalStageShell, ClinicalBtn } from './ClinicalStageShell.jsx';
 import ClinicalDocumentPackagePanel from '../contracts/operational/ClinicalDocumentPackagePanel.jsx';
 import ContractSignModal from '../contracts/ContractSignModal.jsx';
@@ -21,6 +21,16 @@ import { printClinicalContractForManualSignature } from '../../contracts/printCl
 import { prepareClinicalSignaturePackage } from '../../services/clinicalSignaturePackageService.js';
 import { getPatient } from '../../services/patientService.js';
 import { resolvePatientFullName } from '../../utils/patientIdentity.js';
+import { SIGNATURE_INVITE_SENT_MSG } from '../../services/signatureInviteEmailService.js';
+import {
+  cancelSignatureRequest,
+  getActivePatientSignatureInvite,
+} from '../../services/signatureProviderService.js';
+import { resendSigningAccess } from '../../services/contractSigningAccessCommandService.js';
+import {
+  PatientRemoteInviteActions,
+  patientRemoteStatusLabel,
+} from './PatientRemoteInviteActions.jsx';
 
 export function ClinicalSignatureSection({
   appointmentId,
@@ -130,6 +140,48 @@ export function ClinicalSignatureSection({
   const ceremony = readiness.ceremony;
   const signers = ceremony?.requiredSigners || [];
   const canOpenCeremony = readiness.canSignNow;
+  const patientInvite = contract?.id ? getActivePatientSignatureInvite(contract.id) : null;
+
+  const handleCopyLink = async () => {
+    if (!patientInvite?.signUrl) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    try {
+      await navigator.clipboard.writeText(`${origin}${patientInvite.signUrl}`);
+      showMsg('Link copiado. Compartilhe apenas com o paciente.');
+    } catch {
+      showMsg('Não foi possível copiar o link.', 'error');
+    }
+  };
+
+  const handleResendInvite = async () => {
+    if (!patientInvite?.request?.id || !contract?.id || !user) return;
+    setBusy(true);
+    try {
+      await resendSigningAccess({
+        user,
+        contractId: contract.id,
+        requestId: patientInvite.request.id,
+        origin: typeof window !== 'undefined' ? window.location.origin : '',
+      });
+      bump();
+      showMsg(SIGNATURE_INVITE_SENT_MSG);
+    } catch (e) {
+      showMsg(e?.message || 'Não foi possível reenviar o convite.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCancelInvite = () => {
+    if (!patientInvite?.request?.id || !user) return;
+    try {
+      cancelSignatureRequest({ user, requestId: patientInvite.request.id, reason: 'cancelado pela clínica' });
+      bump();
+      showMsg('Solicitação de assinatura cancelada.');
+    } catch (e) {
+      showMsg(e?.message || 'Não foi possível cancelar a solicitação.', 'error');
+    }
+  };
 
   return (
     <>
@@ -177,7 +229,11 @@ export function ClinicalSignatureSection({
               <p><strong>{slot.label}</strong> {slot.required ? '' : <span>(opcional)</span>}</p>
               <p>{slot.name || '—'}</p>
               {slot.cro ? <p>CRO{slot.uf ? `-${slot.uf}` : ''} {slot.cro}</p> : null}
-              <p>{slot.status === 'signed' ? 'Assinado' : (canAuthenticatedUserSignSlot(user, slot).waitingLabel || 'Pendente')}</p>
+              <p data-testid={`clinical-signer-status-${String(slot.role).toLowerCase()}`}>
+                {slot.role === CLINICAL_SIGNER_ROLE.PATIENT
+                  ? patientRemoteStatusLabel(slot, patientInvite)
+                  : (slot.status === 'signed' ? 'Assinado' : (canAuthenticatedUserSignSlot(user, slot).waitingLabel || 'Pendente'))}
+              </p>
               {slot.satisfiedBySameProfessional ? (
                 <p>Satisfeito pela mesma assinatura profissional</p>
               ) : null}
@@ -191,11 +247,15 @@ export function ClinicalSignatureSection({
                   >
                     Assinar agora
                   </ClinicalBtn>
-                  {slot.role === CLINICAL_SIGNER_ROLE.PATIENT && readiness.canSend ? (
-                    <ClinicalBtn variant="secondary" icon={Send} data-testid="clinical-send-signature-cta" onClick={() => setSendOpen(true)}>
-                      Enviar para assinatura
-                    </ClinicalBtn>
-                  ) : null}
+                  <PatientRemoteInviteActions
+                    slot={slot}
+                    invite={patientInvite}
+                    canSend={readiness.canSend}
+                    onSend={() => setSendOpen(true)}
+                    onResend={handleResendInvite}
+                    onCopyLink={handleCopyLink}
+                    onCancel={handleCancelInvite}
+                  />
                 </>
               ) : null}
               {canOpenCeremony && slot.status !== 'signed' && isAuthenticatedIdentityRole(slot.role) ? (
@@ -282,7 +342,7 @@ export function ClinicalSignatureSection({
             showMsg('O e-mail não foi enviado.', 'error');
             return;
           }
-          showMsg('Link de assinatura enviado para o e-mail informado.');
+          showMsg(SIGNATURE_INVITE_SENT_MSG);
         }}
       />
     </>

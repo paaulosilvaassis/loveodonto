@@ -877,3 +877,23 @@ Um `withDb`. Retry de VOID já voided e de REISSUE já superseded (com sucessor)
 Authz LEGAL_HIGH_IMPACT: admin / master apenas (gerente/recepção/profissional BLOCK).
 
 Pilotos 00003/00004/00005: `PILOT_IMMUTABLE`.
+
+---
+
+## 10.23G — ROTATE / RESEND / EXPIRE (implementados)
+
+Writers: `src/services/contractSigningAccessCommandService.js`
+
+| Comando | Efeito |
+| --- | --- |
+| `rotateSigningAccess` | SAME_REQUEST. Revoga (incidente) ou expira (relógio) **todos** os pending do request e emite **um** novo link/token. |
+| `resendSigningAccess` | Reenvia o **mesmo** link signable. Não cria request/link/token. Não altera `expiresAt`. |
+| `persistExpiredSigningAccess` | Lazy: `expiresAt <= trustedNow` → `expired`. Sem cron. Contrato **não** vira expired. |
+
+Invariante: no máximo **um** link signable (`pending` ∧ não expirado) por `requestId`.
+
+`createSignatureRequest` em link expirado **delega** a `rotateSigningAccess` (reason `expired_link`). Resolve/sign persistem expiry no primeiro writer que observa o relógio (`getContractBySignToken`).
+
+Authz ROTATE: SENSITIVE + profissional da cerimônia. RESEND: OPERATIONAL (inclui recepção). Reason obrigatório só no ROTATE.
+
+Audit: `SIGN_LINK_ROTATED`, `SIGN_LINK_EXPIRED`, `SIGN_INVITE_RESENT`. Sem raw token.

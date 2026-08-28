@@ -9,6 +9,8 @@ import {
   LIFECYCLE_REASON_REQUIRED,
   LIFECYCLE_TENANT_MISMATCH,
   REISSUE_NOT_ALLOWED,
+  RESEND_NOT_ALLOWED,
+  ROTATE_NOT_ALLOWED,
   VOID_NOT_ALLOWED,
 } from './constants.js';
 import { createLifecycleError } from './errors.js';
@@ -115,6 +117,40 @@ export function assertLegalHighImpactAuth(user, extra = {}, permissionBit = null
   throw createLifecycleError(
     extra.failureCode || code,
     'Somente admin ou master podem executar esta ação jurídica de alto impacto.',
+    extra,
+  );
+}
+
+const OPERATIONAL_SIGNING_ROLES = new Set([
+  'admin', 'gerente', 'recepcao', 'profissional', 'professional', 'dentista', 'atendimento',
+]);
+
+export function canPerformOperationalSigningAccess(user) {
+  if (canPerformSensitiveLifecycle(user)) return true;
+  const role = String(user?.role || '').toLowerCase();
+  return OPERATIONAL_SIGNING_ROLES.has(role);
+}
+
+export function assertOperationalSigningAccess(user, extra = {}) {
+  if (canPerformOperationalSigningAccess(user)) return true;
+  throw createLifecycleError(
+    extra.failureCode || RESEND_NOT_ALLOWED,
+    'Sem autorização operacional para reenviar o convite de assinatura.',
+    extra,
+  );
+}
+
+export function canPerformRotateSigningAccess(user) {
+  if (canPerformSensitiveLifecycle(user)) return true;
+  const role = String(user?.role || '').toLowerCase();
+  return role === 'profissional' || role === 'professional' || role === 'dentista';
+}
+
+export function assertRotateSigningAccessAuth(user, extra = {}) {
+  if (canPerformRotateSigningAccess(user)) return true;
+  throw createLifecycleError(
+    extra.failureCode || ROTATE_NOT_ALLOWED,
+    'Sem autorização para rotacionar o link de assinatura.',
     extra,
   );
 }

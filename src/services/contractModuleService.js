@@ -59,6 +59,7 @@ import {
   normalizeContractLifecycleStatus,
   normalizeLinkLifecycleStatus,
 } from '../contracts/lifecycle/index.js';
+import { persistExpiredSigningAccess } from '../contracts/lifecycle/accessExpiry.js';
 import { maybeGenerateFinalSignedArtifact } from './finalSignedContractArtifactService.js';
 import {
   createGeneratedContractDraft,
@@ -436,10 +437,20 @@ export function getContractBySignToken(token, claims = {}) {
   if (linkStatus === 'signed') {
     return { replay: true, link };
   }
-  if (linkStatus !== 'pending') return null;
-  if (isAccessExpired(link.expiresAt)) {
-    return { expired: true, link };
+  if (linkStatus === 'expired' || (linkStatus === 'pending' && isAccessExpired(link.expiresAt))) {
+    const persisted = persistExpiredSigningAccess({
+      token,
+      contractId: link.contractId,
+      requestId: link.requestId || null,
+      actorId: 'system',
+      actorRole: 'system',
+    });
+    const next = (persisted.expiredLinks || []).find((row) => row.token === token)
+      || persisted.expiredLinks?.[0]
+      || { ...link, status: 'expired' };
+    return { expired: true, link: next };
   }
+  if (linkStatus !== 'pending') return null;
   const contract = getGeneratedContract(link.contractId);
   if (!isContractSignable(contract)) return null;
   return { contract: normalizeContract(contract), link };

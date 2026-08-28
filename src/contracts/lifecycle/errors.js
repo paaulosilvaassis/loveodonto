@@ -6,6 +6,7 @@ export function createLifecycleError(code, message, extra = {}) {
   const keys = [
     'contractId', 'normalizedStatus', 'from', 'to', 'action',
     'requestId', 'linkId', 'newContractId', 'previousContractId',
+    'oldLinkId', 'newLinkId',
   ];
   for (let i = 0; i < keys.length; i += 1) {
     const key = keys[i];
