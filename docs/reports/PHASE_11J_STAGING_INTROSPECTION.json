@@ -1,0 +1,69 @@
+{
+  "environment": "STAGING",
+  "projectRef": "tckdjyunwmdpqmewrwvt",
+  "productionRefTouched": false,
+  "applyCommand": "mcp apply_migration project_id=tckdjyunwmdpqmewrwvt name=financial_core_v2",
+  "tables": [
+    "financial_v2_boleto_charges",
+    "financial_v2_boleto_reminder_events",
+    "financial_v2_charges",
+    "financial_v2_financing_installments",
+    "financial_v2_financings",
+    "financial_v2_payments",
+    "financial_v2_receivables"
+  ],
+  "legacy021TablesPresent": false,
+  "rlsEnabled": true,
+  "forceRls": true,
+  "deletePolicies": [],
+  "floatMoneyColumns": 0,
+  "tenantIdNullable": [],
+  "sourceIdTypes": [
+    { "table": "financial_v2_boleto_charges", "data_type": "text" },
+    { "table": "financial_v2_boleto_reminder_events", "data_type": "text" },
+    { "table": "financial_v2_charges", "data_type": "text" },
+    { "table": "financial_v2_financing_installments", "data_type": "text" },
+    { "table": "financial_v2_financings", "data_type": "text" },
+    { "table": "financial_v2_payments", "data_type": "text" },
+    { "table": "financial_v2_receivables", "data_type": "text" }
+  ],
+  "destructiveCascades": [],
+  "uniqueIdentitiesMissing": [],
+  "columnTypeChanges": [],
+  "constraintDropped": [],
+  "driftProbe": {
+    "rlsEnabled": true,
+    "deletePolicies": [],
+    "floatMoneyColumns": 0,
+    "uniqueIdentitiesMissing": [],
+    "columnTypeChanges": [],
+    "constraintDropped": []
+  },
+  "synthetic": {
+    "receivableDuplicateRejected": true,
+    "receivableCrossTenantAllowed": true,
+    "paymentDuplicateRejected": true,
+    "paymentCrossTenantAllowed": true,
+    "financingDuplicateActiveRejected": true,
+    "financingCanceledAllowsSuccessor": true,
+    "chargeDidNotCreateReceivable": true,
+    "originalPaymentRemained": true,
+    "reversalInserted": true,
+    "crossTenantReversalRejected": true,
+    "invalidStatusOpenRejected": true,
+    "unknownStatusRejected": true,
+    "validStatusAccepted": true,
+    "selectCrossTenantEmpty": true,
+    "selectOwnVisible": true,
+    "insertCrossTenantDenied": true,
+    "updateCrossTenantDenied": true,
+    "deleteDeniedAsAuthenticated": true,
+    "cleanupComplete": true,
+    "rlsTestedAsAuthenticated": true
+  },
+  "notes": [
+    "Synthetic tenants/users/rows used prefix phase11j- and were removed after validation.",
+    "RLS proven with SET ROLE authenticated + request.jwt.claim.sub, not service_role.",
+    "021 tables do not exist on staging; repo file 021 remains unchanged."
+  ]
+}
