@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useAuth } from '../auth/useAuth.js';
 import {
   ResponsiveContainer,
   LineChart,
@@ -72,6 +73,7 @@ function hubToView(hubin) {
 }
 
 export default function FinanceDREPage() {
+  const { user } = useAuth();
   const [hubTab, setHubTab] = useState('dre');
   const view = hubToView(hubTab);
   const [filters, setFilters] = useState({
@@ -89,9 +91,10 @@ export default function FinanceDREPage() {
     receita: false,
   });
 
-  const report = useMemo(() => getDreReport(filters), [filters]);
-  const cashReport = useMemo(() => getDreCashBasisReport(filters), [filters]);
-  const liqReport = useMemo(() => getDreLiquidityReport(filters), [filters]);
+  const scopedFilters = useMemo(() => ({ ...filters, user }), [filters, user]);
+  const report = useMemo(() => getDreReport(scopedFilters), [scopedFilters]);
+  const cashReport = useMemo(() => getDreCashBasisReport(scopedFilters), [scopedFilters]);
+  const liqReport = useMemo(() => getDreLiquidityReport(scopedFilters), [scopedFilters]);
 
   const { months, series, kpis, charts, details, insights } = report;
   const professionals = useMemo(() => getProfessionalOptions(), []);

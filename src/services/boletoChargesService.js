@@ -5,6 +5,16 @@ import { boletoProviderService, BOLETO_PROVIDER } from './boletoProviderService.
 import { patchFinancingInstallment } from './financingInstallmentsService.js';
 import { BOLETO_STATUS_EVENT_TYPE, createBoletoChargeStatusHistory } from './boletoChargeStatusHistoryService.js';
 import {
+  BOLETO_CREATE_PERMISSION,
+  BOLETO_ISSUE_PERMISSION,
+  BOLETO_CANCEL_PERMISSION,
+  BOLETO_RESEND_PERMISSION,
+  boletoChargeMatchesListTenant,
+  resolveListTenantId,
+  resolveBoletoWriteTenant,
+  assertBoletoChargeWriteOwnership,
+} from './financialChargeOwnership.js';
+import {
   AUDIT_EVENT_KEY,
   AUDIT_EVENT_SOURCE,
   AUDIT_OPERATION_CONTEXT,
@@ -21,6 +31,10 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 export const listBoletoCharges = (filters = {}) => {
   const db = loadDb();
   let items = Array.isArray(db.boletoCharges) ? [...db.boletoCharges] : [];
+  const tenantId = resolveListTenantId(filters);
+  if (tenantId) {
+    items = items.filter((item) => boletoChargeMatchesListTenant(item, tenantId, db));
+  }
   if (filters.status && Object.values(BOLETO_CHARGE_STATUS).includes(filters.status)) {
     items = items.filter((item) => item.status === filters.status);
   }
@@ -48,7 +62,16 @@ export const getBoletoChargeById = (id) => {
 };
 
 export const createBoletoCharge = (user, payload) => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, BOLETO_CREATE_PERMISSION);
+  const tenantId = resolveBoletoWriteTenant(user, payload);
+  const operationId = payload.operation_id || payload.idempotencyKey || payload.metadata?.operation_id || null;
+  if (operationId) {
+    const existing = (loadDb().boletoCharges || []).find((row) => (
+      String(row.operation_id || row.metadata?.operation_id || '') === String(operationId)
+      && String(row.tenant_id || row.tenantId || '') === tenantId
+    ));
+    if (existing) return existing;
+  }
   if (payload.external_provider !== undefined && !Object.values(BOLETO_PROVIDER).includes(payload.external_provider)) {
     throw new Error(`external_provider inválido: "${String(payload.external_provider)}".`);
   }
@@ -66,6 +89,8 @@ export const createBoletoCharge = (user, payload) => {
   const providerCharge = boletoProviderService.createCharge(provider, payload);
   const record = {
     id: createId('blt'),
+    tenant_id: tenantId,
+    operation_id: operationId,
     financing_id: payload.financing_id || null,
     installment_id: payload.installment_id || null,
     receivable_id: payload.receivable_id || null,
@@ -163,7 +188,9 @@ export const updateBoletoChargeStatus = (user, id, nextStatus, extra = {}) => {
   if (extra.charge_type !== undefined) {
     assertEnumValue('extra.charge_type', BOLETO_CHARGE_TYPE, extra.charge_type);
   }
-  requirePermission(user, 'finance:write');
+  requirePermission(user, nextStatus === BOLETO_CHARGE_STATUS.CANCELED
+    ? BOLETO_CANCEL_PERMISSION
+    : BOLETO_ISSUE_PERMISSION);
   assertEnumValue('nextStatus', BOLETO_CHARGE_STATUS, nextStatus);
   if (extra.event_type !== undefined) {
     assertEnumValue('extra.event_type', BOLETO_STATUS_EVENT_TYPE, extra.event_type);
@@ -177,6 +204,9 @@ export const updateBoletoChargeStatus = (user, id, nextStatus, extra = {}) => {
   if (extra.metadata?.operation_context !== undefined) {
     assertEnumValue('extra.metadata.operation_context', AUDIT_OPERATION_CONTEXT, extra.metadata.operation_context);
   }
+  const existing = getBoletoChargeById(id);
+  if (!existing) throw new Error('Cobrança de boleto não encontrada.');
+  assertBoletoChargeWriteOwnership(user, existing);
   let result = null;
   let historyPayload = null;
   withDb((db) => {
@@ -250,7 +280,7 @@ export const updateBoletoChargeStatus = (user, id, nextStatus, extra = {}) => {
 };
 
 export const generateSecondCopy = (user, id) => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, BOLETO_RESEND_PERMISSION);
   const current = getBoletoChargeById(id);
   if (!current) throw new Error('Cobrança de boleto não encontrada.');
   const providerResult = boletoProviderService.generateSecondCopy(current.external_provider, current);
@@ -270,7 +300,7 @@ export const generateSecondCopy = (user, id) => {
 };
 
 export const cancelBoletoCharge = (user, id, reason = '') => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, BOLETO_CANCEL_PERMISSION);
   return updateBoletoChargeStatus(user, id, BOLETO_CHARGE_STATUS.CANCELED, {
     instructions: reason || '',
     event_type: BOLETO_STATUS_EVENT_TYPE.CANCELED,
@@ -285,7 +315,7 @@ export const cancelBoletoCharge = (user, id, reason = '') => {
 };
 
 export const syncBoletoChargeStatusFromProvider = (user, id, providerPayload = null) => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, BOLETO_ISSUE_PERMISSION);
   const current = getBoletoChargeById(id);
   if (!current) throw new Error('Cobrança de boleto não encontrada.');
   const resolvedPayload = providerPayload
@@ -326,7 +356,7 @@ export const syncBoletoChargeStatusFromProvider = (user, id, providerPayload = n
 };
 
 export const syncOpenBoletoChargesFromProvider = (user, options = {}) => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, BOLETO_ISSUE_PERMISSION);
   const openStatuses = [
     BOLETO_CHARGE_STATUS.DRAFT,
     BOLETO_CHARGE_STATUS.GENERATED,
@@ -335,7 +365,7 @@ export const syncOpenBoletoChargesFromProvider = (user, options = {}) => {
     BOLETO_CHARGE_STATUS.OVERDUE,
   ];
   const limit = Number(options.limit || 0);
-  const list = listBoletoCharges({})
+  const list = listBoletoCharges({ user })
     .filter((item) => openStatuses.includes(item.status));
   const selected = limit > 0 ? list.slice(0, limit) : list;
   const results = [];
@@ -348,7 +378,7 @@ export const syncOpenBoletoChargesFromProvider = (user, options = {}) => {
 };
 
 export const processBoletoProviderWebhook = (user, payload = {}) => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, BOLETO_ISSUE_PERMISSION);
   const provider = payload.provider || BOLETO_PROVIDER.MANUAL;
   const normalized = boletoProviderService.normalizeWebhookEvent(provider, payload);
   if (!normalized?.external_charge_id) {

@@ -103,7 +103,11 @@ export function getDreReport(filters = {}) {
     specialty = '',
     revenueType = '',
     costCenterId = '',
+    user,
+    tenantId,
+    tenant_id,
   } = filters;
+  const listTenant = { user, tenantId: tenantId || tenant_id };
   const months = buildMonthKeys(startDate, endDate);
   const monthSet = new Set(months);
   const empty = initSeries(months);
@@ -137,7 +141,7 @@ export function getDreReport(filters = {}) {
     pushSeries(receitaBruta, m, l.totalAmount);
   });
 
-  const receivables = listReceivables(professionalId ? { professionalId } : {})
+  const receivables = listReceivables(professionalId ? { professionalId, ...listTenant } : listTenant)
     .filter((r) => !r.financing_id)
     .filter((_r) => revenueType !== 'financiamento')
     .filter((r) => matchesUnit(r, unitId))
@@ -156,7 +160,7 @@ export function getDreReport(filters = {}) {
     }
   });
 
-  const financings = listFinancings(professionalId ? { professional_id: professionalId } : {})
+  const financings = listFinancings(professionalId ? { professional_id: professionalId, ...listTenant } : listTenant)
     .filter((f) => revenueType !== 'avista')
     .filter((f) => matchesUnit(f, unitId))
     .filter((f) =>

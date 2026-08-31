@@ -24,9 +24,26 @@ import {
   FINANCIAL_PAYMENT_METHOD,
   RECEIVABLE_CHARGE_TYPE,
   RECEIVABLE_STATUS,
+  BOLETO_REMINDER_EVENT_KEY,
 } from './auditEventCatalog.js';
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+
+function reminderRuleKeyForCharge(charge, referenceDate) {
+  if ([BOLETO_CHARGE_STATUS.PAID, BOLETO_CHARGE_STATUS.CANCELED].includes(charge.status)) return null;
+  if (!charge.due_date) return null;
+  const scheduleMap = {
+    '-3': BOLETO_REMINDER_EVENT_KEY.BEFORE_3_DAYS,
+    '0': BOLETO_REMINDER_EVENT_KEY.DUE_TODAY,
+    '3': BOLETO_REMINDER_EVENT_KEY.AFTER_3_DAYS,
+    '7': BOLETO_REMINDER_EVENT_KEY.AFTER_7_DAYS,
+    '15': BOLETO_REMINDER_EVENT_KEY.AFTER_15_DAYS,
+  };
+  const due = new Date(`${charge.due_date}T12:00:00`);
+  const ref = new Date(`${referenceDate}T12:00:00`);
+  const diffDays = Math.round((ref.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
+  return scheduleMap[String(diffDays)] || null;
+}
 
 const ensureFinancingExists = (financingId) => {
   const financing = getFinancingById(financingId);
@@ -111,7 +128,7 @@ export const executeReceivementFlow = (user, payload) => {
 
 export const executeDelinquencyFlow = (user, referenceDate = todayIso()) => {
   const overdueInstallments = listFinancingInstallments({ status: FINANCING_INSTALLMENT_STATUS.OVERDUE });
-  const overdueReceivables = listReceivables({ status: RECEIVABLE_STATUS.OVERDUE });
+  const overdueReceivables = listReceivables({ status: RECEIVABLE_STATUS.OVERDUE, user });
   const reminders = runBoletoReminderRule(user, referenceDate);
   return {
     reference_date: referenceDate,
@@ -122,13 +139,32 @@ export const executeDelinquencyFlow = (user, referenceDate = todayIso()) => {
 };
 
 export const executeReminderFlow = (user, referenceDate = todayIso()) => {
-  const reminders = runBoletoReminderRule(user, referenceDate);
+  const newlyGenerated = runBoletoReminderRule(user, referenceDate);
+  const persisted = listBoletoReminderEvents({ user });
+  const byId = new Map();
+  for (const event of [...persisted, ...newlyGenerated]) {
+    if (event?.id) byId.set(event.id, event);
+  }
+  const windowEvents = [];
+  const seen = new Set();
+  for (const charge of listBoletoCharges({ user })) {
+    const ruleKey = reminderRuleKeyForCharge(charge, referenceDate);
+    if (!ruleKey) continue;
+    const match = [...byId.values()].find((event) => (
+      event.boleto_charge_id === charge.id
+      && event.event_key === ruleKey
+    ));
+    if (!match || seen.has(match.id)) continue;
+    seen.add(match.id);
+    windowEvents.push(match);
+  }
   const createdCharges = [];
-  for (const reminder of reminders) {
+  for (const reminder of windowEvents) {
     if (!reminder.receivable_id) continue;
     const alreadyExists = listReceivableCharges({
       receivableId: reminder.receivable_id,
       eventKey: AUDIT_EVENT_KEY.RECEIVABLE_CHARGE_CREATED,
+      user,
     }).find((item) =>
       item.metadata?.operation_context === AUDIT_OPERATION_CONTEXT.RUN_BOLETO_REMINDER_RULE
       && item.metadata?.reminder_event_id === reminder.id
@@ -136,6 +172,7 @@ export const executeReminderFlow = (user, referenceDate = todayIso()) => {
     if (alreadyExists) continue;
     const chargeRecord = createReceivableCharge(user, {
       receivable_id: reminder.receivable_id,
+      operation_id: `rmdchg:${reminder.id}`,
       charge_type: RECEIVABLE_CHARGE_TYPE.WHATSAPP_REMINDER,
       recipient: reminder.recipient || '',
       message_template: `Lembrete automático (${reminder.event_key})`,
@@ -152,9 +189,9 @@ export const executeReminderFlow = (user, referenceDate = todayIso()) => {
   }
   return {
     reference_date: referenceDate,
-    reminders_generated: reminders.length,
+    reminders_generated: windowEvents.length,
     receivable_charges_generated: createdCharges.length,
-    reminders,
+    reminders: windowEvents,
     receivable_charges: createdCharges,
     persisted_reminders: listBoletoReminderEvents({}),
   };

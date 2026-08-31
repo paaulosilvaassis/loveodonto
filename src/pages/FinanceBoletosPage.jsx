@@ -69,11 +69,11 @@ export default function FinanceBoletosPage() {
   const financings = db.financings || [];
 
   const boletos = useMemo(() => {
-    const list = listBoletoCharges(filters);
+    const list = listBoletoCharges({ ...filters, user });
     if (activeTab === 'all') return list;
     if (activeTab === 'second_copy') return list.filter((item) => item.charge_type === 'second_copy');
     return list.filter((item) => item.status === activeTab);
-  }, [filters, activeTab, refreshKey]);
+  }, [filters, activeTab, refreshKey, user]);
 
   const kpis = useMemo(() => {
     const currentMonth = new Date().toISOString().slice(0, 7);

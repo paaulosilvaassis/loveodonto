@@ -1,4 +1,5 @@
 ﻿import { useMemo, useState, useRef, useId } from 'react';
+import { useAuth } from '../auth/useAuth.js';
 import { Link } from 'react-router-dom';
 import {
   ResponsiveContainer,
@@ -160,6 +161,7 @@ function FatKpiCard({ icon: Icon, label, hint, value, valueClass = '' }) {
 }
 
 export default function FinanceFaturamentoPage() {
+  const { user } = useAuth();
   const chartGradUid = useId().replace(/:/g, '');
   const [refreshKey, setRefreshKey] = useState(0);
   const [filters, setFilters] = useState({
@@ -200,8 +202,9 @@ export default function FinanceFaturamentoPage() {
         status: filters.status,
         minValue: filters.minValue,
         maxValue: filters.maxValue,
+        user,
       }),
-    [filters, refreshKey]
+    [filters, refreshKey, user]
   );
 
   const { lines, kpis, chartData } = report;

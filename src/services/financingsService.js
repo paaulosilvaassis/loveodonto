@@ -51,6 +51,7 @@ import {
   findPathBObligationReceivable,
 } from './receivablesService.js';
 import { createBoletoCharge, listBoletoCharges, BOLETO_CHARGE_STATUS } from './boletoChargesService.js';
+import { BOLETO_RESEND_PERMISSION, resolveListTenantId, deriveBoletoChargeTenantId } from './financialChargeOwnership.js';
 import {
   createFinancingPaymentAllocation,
   listFinancingPaymentAllocations,
@@ -951,8 +952,8 @@ export const generateBoletoCarne = (user, financingId) => {
 };
 
 export const runBoletoReminderRule = (user, referenceDate = todayIso()) => {
-  requirePermission(user, 'finance:write');
-  const charges = listBoletoCharges();
+  requirePermission(user, BOLETO_RESEND_PERMISSION);
+  const charges = listBoletoCharges({ user });
   const scheduleMap = {
     '-3': BOLETO_REMINDER_EVENT_KEY.BEFORE_3_DAYS,
     '0': BOLETO_REMINDER_EVENT_KEY.DUE_TODAY,
@@ -960,6 +961,7 @@ export const runBoletoReminderRule = (user, referenceDate = todayIso()) => {
     '7': BOLETO_REMINDER_EVENT_KEY.AFTER_7_DAYS,
     '15': BOLETO_REMINDER_EVENT_KEY.AFTER_15_DAYS,
   };
+  const existingEvents = loadDb().boletoReminderEvents || [];
   const reminders = [];
   const ref = new Date(`${referenceDate}T12:00:00`);
   for (const charge of charges) {
@@ -969,8 +971,17 @@ export const runBoletoReminderRule = (user, referenceDate = todayIso()) => {
     const diffDays = Math.round((ref.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
     const ruleKey = scheduleMap[String(diffDays)];
     if (!ruleKey) continue;
+    const already = existingEvents.some((row) => (
+      row.boleto_charge_id === charge.id
+      && row.event_key === ruleKey
+    )) || reminders.some((row) => (
+      row.boleto_charge_id === charge.id
+      && row.event_key === ruleKey
+    ));
+    if (already) continue;
     const event = {
       id: createId('bltrm'),
+      tenant_id: charge.tenant_id || null,
       boleto_charge_id: charge.id,
       financing_id: charge.financing_id || null,
       installment_id: charge.installment_id || null,
@@ -1020,6 +1031,17 @@ export const runBoletoReminderRule = (user, referenceDate = todayIso()) => {
 export const listBoletoReminderEvents = (filters = {}) => {
   const db = loadDb();
   let items = Array.isArray(db.boletoReminderEvents) ? [...db.boletoReminderEvents] : [];
+  const tenantId = resolveListTenantId(filters);
+  if (tenantId) {
+    const chargeById = new Map((db.boletoCharges || []).map((row) => [row.id, row]));
+    const tid = String(tenantId).trim();
+    items = items.filter((item) => {
+      const direct = String(item.tenant_id || item.tenantId || '').trim();
+      if (direct) return direct === tid;
+      const charge = chargeById.get(item.boleto_charge_id);
+      return deriveBoletoChargeTenantId(charge, db) === tid;
+    });
+  }
   if (filters.financing_id) items = items.filter((item) => item.financing_id === filters.financing_id);
   if (filters.boleto_charge_id) items = items.filter((item) => item.boleto_charge_id === filters.boleto_charge_id);
   if (filters.channel && Object.values(BOLETO_REMINDER_CHANNEL).includes(filters.channel)) {

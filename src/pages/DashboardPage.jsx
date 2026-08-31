@@ -148,13 +148,13 @@ export default function DashboardPage() {
         todayAppointments: { total: 0, scheduled: 0, inProgress: 0, finished: 0, noShows: 0 },
       };
     }
-    return getDashboardMetrics();
-  }, [db, metricsVersion]);
+    return getDashboardMetrics(new Date(), { user });
+  }, [db, metricsVersion, user]);
 
   const chartData = useMemo(() => {
     if (!db) return [];
-    return getDashboardChartData(7);
-  }, [db, metricsVersion]);
+    return getDashboardChartData(7, new Date(), { user });
+  }, [db, metricsVersion, user]);
 
   const hasChartData = useMemo(
     () => chartData.some((row) => row.scheduled > 0 || row.attended > 0 || row.revenue > 0),

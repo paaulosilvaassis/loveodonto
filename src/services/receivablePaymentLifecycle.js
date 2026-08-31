@@ -59,22 +59,35 @@ function findPaymentByOperationId(payments, { tenantId, operationId }) {
  * LEGACY_RECEIVABLE_WRITE_POLICY = DERIVE_FROM_PATIENT_OR_FAIL_CLOSED
  * Não backfill. Não assume tenant da sessão como dono do título.
  */
+export function deriveReceivableTenantId(receivable, db) {
+  const rowTenant = normalizeTenant(receivable?.tenant_id || receivable?.tenantId);
+  if (rowTenant) return rowTenant;
+  const patient = (db.patients || []).find((row) => row.id === receivable?.patient_id);
+  return normalizeTenant(patient?.tenant_id || patient?.tenantId) || null;
+}
+
+/**
+ * LEGACY_RECEIVABLE_READ_POLICY = DERIVE_FROM_PATIENT_OR_OMIT
+ * Ownership desconhecido é omitido da listagem operacional tenant-scoped.
+ */
+export function receivableMatchesListTenant(receivable, tenantId, db) {
+  const tid = normalizeTenant(tenantId);
+  if (!tid) return true;
+  const derived = deriveReceivableTenantId(receivable, db);
+  if (!derived) return false;
+  return derived === tid;
+}
+
 export function assertReceivableWriteOwnership(user, receivable, db) {
   requireSessionTenantId(user);
-  const rowTenant = normalizeTenant(receivable?.tenant_id || receivable?.tenantId);
-  if (rowTenant) {
-    assertSameTenant(user, rowTenant, { action: 'write' });
-    return rowTenant;
+  const derived = deriveReceivableTenantId(receivable, db);
+  if (!derived) {
+    const error = new Error('Título sem vínculo de clínica comprovável. Mutação financeira bloqueada.');
+    error.code = 'LEGACY_RECEIVABLE_UNOWNED';
+    throw error;
   }
-  const patient = (db.patients || []).find((row) => row.id === receivable?.patient_id);
-  const derived = normalizeTenant(patient?.tenant_id || patient?.tenantId);
-  if (derived) {
-    assertSameTenant(user, derived, { action: 'write' });
-    return derived;
-  }
-  const error = new Error('Título sem vínculo de clínica comprovável. Mutação financeira bloqueada.');
-  error.code = 'LEGACY_RECEIVABLE_UNOWNED';
-  throw error;
+  assertSameTenant(user, derived, { action: 'write' });
+  return derived;
 }
 
 function assertPatientConsistency(receivable, payload = {}) {

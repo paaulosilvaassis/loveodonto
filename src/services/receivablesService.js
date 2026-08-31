@@ -14,12 +14,15 @@ import {
   normalizeEnumValue,
 } from './auditEventCatalog.js';
 import { resolveTenantIdForWrite, resolveUserTenantId } from './tenantWriteGuard.js';
+import { BOLETO_CREATE_PERMISSION } from './financialChargeOwnership.js';
 import {
   registerReceivablePayment,
   reverseReceivablePayment,
   PAYMENT_RECEIVE_PERMISSION,
   PAYMENT_REVERSE_PERMISSION,
   assertReceivableWriteOwnership,
+  deriveReceivableTenantId,
+  receivableMatchesListTenant,
 } from './receivablePaymentLifecycle.js';
 import {
   cancelReceivable,
@@ -48,6 +51,7 @@ export {
   cancelReceivable,
   RECEIVABLE_CANCEL_PERMISSION,
   RECEIVABLE_UPDATE_PERMISSION,
+  BOLETO_CREATE_PERMISSION,
 };
 
 export const RECEIVABLE_TABS = {
@@ -223,21 +227,20 @@ export const listReceivables = (filters = {}) => {
 
   const tenantId = filters.tenantId || filters.tenant_id || resolveUserTenantId(filters.user);
   if (tenantId) {
-    const tid = String(tenantId).trim();
-    items = items.filter((r) => {
-      const rowTenant = String(r.tenant_id || r.tenantId || '').trim();
-      if (!rowTenant) return true;
-      return rowTenant === tid;
-    });
+    items = items.filter((r) => receivableMatchesListTenant(r, tenantId, db));
   }
 
   items.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
   return items;
 };
 
-export const getReceivablesKPIs = (month, year) => {
+export const getReceivablesKPIs = (month, year, filters = {}) => {
   const db = loadDb();
-  const items = Array.isArray(db.accountsReceivable) ? db.accountsReceivable : [];
+  let items = Array.isArray(db.accountsReceivable) ? db.accountsReceivable : [];
+  const tenantId = filters.tenantId || filters.tenant_id || resolveUserTenantId(filters.user);
+  if (tenantId) {
+    items = items.filter((r) => receivableMatchesListTenant(r, tenantId, db));
+  }
   const todayIso = TODAY();
   const y = year ?? new Date().getFullYear();
   const m = month ?? new Date().getMonth() + 1;
@@ -533,7 +536,7 @@ export const createReceivableCharge = (user, payload) => {
   if (payload.charge_type !== undefined) {
     assertEnumValue('charge_type', RECEIVABLE_CHARGE_TYPE, payload.charge_type);
   }
-  requirePermission(user, 'finance:write');
+  requirePermission(user, BOLETO_CREATE_PERMISSION);
   const receivableId = payload.receivable_id;
   if (!receivableId) throw new Error('receivable_id é obrigatório para criar cobrança.');
   if (payload.event_type !== undefined) {
@@ -560,15 +563,27 @@ export const createReceivableCharge = (user, payload) => {
 
   const db = loadDb();
   const receivables = Array.isArray(db.accountsReceivable) ? db.accountsReceivable : [];
-  const exists = receivables.some((r) => r.id === receivableId);
-  if (!exists) throw new Error('Título de contas a receber não encontrado para cobrança.');
+  const receivable = receivables.find((r) => r.id === receivableId);
+  if (!receivable) throw new Error('Título de contas a receber não encontrado para cobrança.');
+  const tenantId = assertReceivableWriteOwnership(user, receivable, db);
+
+  const operationId = payload.operation_id || payload.idempotencyKey || payload.metadata?.operation_id || null;
+  if (operationId) {
+    const existing = (Array.isArray(db.receivableCharges) ? db.receivableCharges : []).find((row) => (
+      String(row.operation_id || row.metadata?.operation_id || '') === String(operationId)
+      && String(row.tenant_id || row.tenantId || '') === tenantId
+    ));
+    if (existing) return existing;
+  }
 
   const now = new Date().toISOString();
   const id = createId('rvchg');
 
   const record = {
     id,
+    tenant_id: tenantId,
     receivable_id: receivableId,
+    operation_id: operationId,
     event_type: normalizeEnumValue(
       RECEIVABLE_CHARGE_EVENT_TYPE,
       payload.event_type,
@@ -617,7 +632,7 @@ export const createReceivableCharge = (user, payload) => {
         payload.metadata?.source || payload.source,
         AUDIT_EVENT_SOURCE.INTERNAL_MANUAL
       ),
-      operation_id: payload.metadata?.operation_id || null,
+      operation_id: operationId,
       payment_method: payload.metadata?.payment_method || null,
       ...payload.metadata,
     },
@@ -647,7 +662,21 @@ export const listReceivableCharges = (filters = {}) => {
     eventKey,
     startDate,
     endDate,
+    user,
+    tenantId,
+    tenant_id,
   } = filters;
+
+  const scopedTenant = tenantId || tenant_id || resolveUserTenantId(user);
+  if (scopedTenant) {
+    const recvById = new Map((db.accountsReceivable || []).map((row) => [row.id, row]));
+    items = items.filter((c) => {
+      const chargeTenant = String(c.tenant_id || c.tenantId || '').trim();
+      if (chargeTenant) return chargeTenant === String(scopedTenant).trim();
+      const recv = recvById.get(c.receivable_id);
+      return receivableMatchesListTenant(recv, scopedTenant, db);
+    });
+  }
 
   if (receivableId) {
     items = items.filter((c) => c.receivable_id === receivableId);

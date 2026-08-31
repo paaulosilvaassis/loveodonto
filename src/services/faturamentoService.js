@@ -126,6 +126,9 @@ export function getFaturamentoReport(filters = {}) {
     status: statusFilter = '',
     minValue = '',
     maxValue = '',
+    user,
+    tenantId,
+    tenant_id,
   } = filters;
 
   const minV = minValue !== '' && minValue !== undefined && minValue !== null ? Number(minValue) : null;
@@ -133,7 +136,7 @@ export function getFaturamentoReport(filters = {}) {
 
   const lines = [];
 
-  const financings = listFinancings({});
+  const financings = listFinancings({ user, tenantId: tenantId || tenant_id });
   for (const f of financings) {
     const saleDateShort = saleDay(f.created_at);
     if (!inDateRange(saleDateShort, startDate, endDate)) continue;
@@ -165,7 +168,7 @@ export function getFaturamentoReport(filters = {}) {
     });
   }
 
-  const receivables = listReceivables({});
+  const receivables = listReceivables({ user, tenantId: tenantId || tenant_id });
   for (const r of receivables) {
     if (r.financing_id) continue;
     if (r.origin_type === RECEIVABLE_ORIGIN_TYPE.FINANCING) continue;

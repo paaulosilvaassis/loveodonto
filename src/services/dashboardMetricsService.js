@@ -4,6 +4,8 @@ import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
 import { BUDGET_STATUS as CRM_BUDGET_STATUS } from './crmBudgetService.js';
 import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
 import { isEffectiveReceivablePayment } from './receivableReconciliation.js';
+import { receivableMatchesListTenant } from './receivablePaymentLifecycle.js';
+import { resolveUserTenantId } from './tenantWriteGuard.js';
 
 const PENDING_CLINICAL_BUDGET_STATUSES = new Set([
   BUDGET_STATUS.RASCUNHO,
@@ -141,11 +143,21 @@ function countAttendedAppointments(db, dateStr) {
   ).length;
 }
 
-function sumReceivedPayments(db, startDate, endDate) {
+function paymentMatchesTenant(payment, tenantId, db) {
+  const tid = String(tenantId || '').trim();
+  if (!tid) return true;
+  const direct = String(payment?.tenant_id || payment?.tenantId || '').trim();
+  if (direct) return direct === tid;
+  const receivable = (db.accountsReceivable || []).find((row) => row.id === payment?.receivable_id);
+  return receivableMatchesListTenant(receivable, tid, db);
+}
+
+function sumReceivedPayments(db, startDate, endDate, tenantId = null) {
   let total = 0;
 
   for (const payment of db.receivablePayments || []) {
     if (!isEffectiveReceivablePayment(payment)) continue;
+    if (!paymentMatchesTenant(payment, tenantId, db)) continue;
     const dateKey = resolvePaymentDateKey(payment);
     if (!isDateInRange(dateKey, startDate, endDate)) continue;
     total += Number(payment.amount_received || payment.amountReceived || payment.amount || 0);
@@ -286,14 +298,15 @@ function buildTodayAppointments(db, today) {
  * Métricas principais do Dashboard operacional.
  * @param {Date} [referenceDate]
  */
-export function getDashboardMetrics(referenceDate = new Date()) {
+export function getDashboardMetrics(referenceDate = new Date(), options = {}) {
   const db = loadDb();
   const today = getLocalDateKey(referenceDate);
   const monthRange = getMonthRange(referenceDate);
   const todayAppointments = buildTodayAppointments(db, today);
+  const tenantId = options.tenantId || options.tenant_id || resolveUserTenantId(options.user) || null;
 
-  const dailyRevenue = sumReceivedPayments(db, today, today);
-  const monthlyRevenue = sumReceivedPayments(db, monthRange.start, monthRange.end);
+  const dailyRevenue = sumReceivedPayments(db, today, today, tenantId);
+  const monthlyRevenue = sumReceivedPayments(db, monthRange.start, monthRange.end, tenantId);
   const pendingBudgets = countPendingBudgets(db);
   const patientsInTreatment = countPatientsInTreatment(db);
 
@@ -320,9 +333,10 @@ export function getDashboardMetrics(referenceDate = new Date()) {
  * @param {Date} [referenceDate]
  * @returns {Array<{ date: string, label: string, scheduled: number, attended: number, revenue: number }>}
  */
-export function getDashboardChartData(days = 7, referenceDate = new Date()) {
+export function getDashboardChartData(days = 7, referenceDate = new Date(), options = {}) {
   const db = loadDb();
   const result = [];
+  const tenantId = options.tenantId || options.tenant_id || resolveUserTenantId(options.user) || null;
 
   for (let offset = days - 1; offset >= 0; offset -= 1) {
     const date = new Date(
@@ -335,7 +349,7 @@ export function getDashboardChartData(days = 7, referenceDate = new Date()) {
 
     const scheduled = countScheduledAppointments(db, dateStr);
     const attended = countAttendedAppointments(db, dateStr);
-    const revenue = Math.round(sumReceivedPayments(db, dateStr, dateStr) * 100) / 100;
+    const revenue = Math.round(sumReceivedPayments(db, dateStr, dateStr, tenantId) * 100) / 100;
 
     result.push({
       date: dateStr,

@@ -123,6 +123,9 @@ export function getDreCashBasisReport(filters = {}) {
     specialty = '',
     revenueType = '',
     costCenterId = '',
+    user,
+    tenantId,
+    tenant_id,
   } = filters;
 
   const months = buildMonthKeys(startDate, endDate);
@@ -130,7 +133,7 @@ export function getDreCashBasisReport(filters = {}) {
   const empty = initSeries(months);
   const collaborators = Array.isArray(db.collaborators) ? db.collaborators : [];
 
-  const receivableList = listReceivables({});
+  const receivableList = listReceivables({ user, tenantId: tenantId || tenant_id });
   const recvMap = new Map(receivableList.map((r) => [r.id, r]));
   const payments = Array.isArray(db.receivablePayments) ? db.receivablePayments : [];
 
@@ -154,7 +157,7 @@ export function getDreCashBasisReport(filters = {}) {
     else pushSeries(recebimentosParcelas, mk, amt);
   });
 
-  const boletos = listBoletoCharges({});
+  const boletos = listBoletoCharges({ user, tenantId: tenantId || tenant_id });
   boletos
     .filter((b) => b.status === BOLETO_CHARGE_STATUS.PAID && b.paid_at)
     .forEach((b) => {
@@ -327,6 +330,9 @@ export function getDreLiquidityReport(filters = {}) {
     professionalId = '',
     specialty = '',
     costCenterId = '',
+    user,
+    tenantId,
+    tenant_id,
   } = filters;
 
   const today = new Date().toISOString().slice(0, 10);
@@ -336,7 +342,7 @@ export function getDreLiquidityReport(filters = {}) {
   const cash = getCashSummaryForDate(refDate);
   const disponivel = toNum(cash.currentBalance);
 
-  const receivableList = listReceivables({});
+  const receivableList = listReceivables({ user, tenantId: tenantId || tenant_id });
   const activeRecv = receivableList.filter((r) =>
     ![RECEIVABLE_STATUS.CANCELED, RECEIVABLE_STATUS.RENEGOTIATED].includes(r.status)
   );

@@ -135,8 +135,8 @@ export default function FinanceReceivablesPage() {
 
   const kpis = useMemo(() => {
     const d = new Date();
-    return getReceivablesKPIs(d.getMonth() + 1, d.getFullYear());
-  }, [refreshKey]);
+    return getReceivablesKPIs(d.getMonth() + 1, d.getFullYear(), { user });
+  }, [refreshKey, user]);
 
   const chargesForTab = useMemo(() => {
     if (activeTab !== RECEIVABLE_TABS.COBRANCAS) return [];
@@ -146,10 +146,10 @@ export default function FinanceReceivablesPage() {
       patientId: chargeFilters.patientId || undefined,
       type: chargeFilters.type || undefined,
       status: chargeFilters.status || undefined,
+      user,
     });
-    const db = loadDb();
-    const allReceivables = Array.isArray(db.accountsReceivable) ? db.accountsReceivable : [];
-    const receivableById = new Map(allReceivables.map((r) => [r.id, r]));
+    const scopedReceivables = listReceivables({ user });
+    const receivableById = new Map(scopedReceivables.map((r) => [r.id, r]));
     return baseCharges.map((c) => {
       const recv = receivableById.get(c.receivable_id);
       return {
@@ -157,7 +157,7 @@ export default function FinanceReceivablesPage() {
         _receivable: recv || null,
       };
     });
-  }, [activeTab, chargeFilters.startDate, chargeFilters.endDate, chargeFilters.patientId, chargeFilters.type, chargeFilters.status, refreshKey]);
+  }, [activeTab, chargeFilters.startDate, chargeFilters.endDate, chargeFilters.patientId, chargeFilters.type, chargeFilters.status, refreshKey, user]);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ message: msg, type });
