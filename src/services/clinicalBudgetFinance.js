@@ -10,6 +10,7 @@ import { FINANCIAL_PAYMENT_METHOD } from './auditEventCatalog.js';
 import { calcOptionFinalValue, calcPlannedValue } from '../components/clinical/budget/budgetUtils.js';
 import { createFinancingFromApprovedBudget } from './clinicalBudgetFinancingIntegration.js';
 import { assertSameTenant, requireSessionTenantId } from './tenantWriteGuard.js';
+import { fromCents, splitInCents, toCents } from './receivableMoney.js';
 
 const METHOD_MAP = {
   pix: FINANCIAL_PAYMENT_METHOD.PIX,
@@ -68,19 +69,19 @@ function buildPathAReceivableSpecs({ patientId, budget, tenantId }) {
   const accepted = getAcceptedOption(budget);
   const original = calcPlannedValue(budget.procedures || []);
   const total = calcOptionFinalValue(accepted, original);
-  const down = Number(accepted.downPayment || 0);
+  const downCents = Math.max(0, toCents(accepted.downPayment || 0));
+  const remainderCents = Math.max(0, toCents(total) - downCents);
   const installments = Math.max(1, Number(accepted.installments || 1));
-  const remainder = Math.max(0, total - down);
-  const installmentValue = installments > 0 ? remainder / installments : remainder;
+  const installmentParts = remainderCents > 0 ? splitInCents(fromCents(remainderCents), installments) : [];
   const originId = budget.id;
   const paymentMethod = resolvePaymentMethod(accepted.method);
   const specs = [];
 
-  if (down > 0) {
+  if (downCents > 0) {
     specs.push({
       patient_id: patientId,
       description: `Entrada — Orçamento ${originId}`,
-      original_amount: down,
+      original_amount: fromCents(downCents),
       origin_type: RECEIVABLE_ORIGIN_TYPE.TREATMENT_PLAN,
       origin_id: originId,
       budget_id: originId,
@@ -93,9 +94,8 @@ function buildPathAReceivableSpecs({ patientId, budget, tenantId }) {
     });
   }
 
-  for (let i = 0; i < installments; i += 1) {
-    const amount = Number(installmentValue.toFixed(2));
-    if (!(amount > 0)) continue;
+  installmentParts.forEach((amount, i) => {
+    if (!(toCents(amount) > 0)) return;
     const due = accepted.firstDueDate ? new Date(accepted.firstDueDate) : new Date();
     due.setMonth(due.getMonth() + i);
     specs.push({
@@ -112,7 +112,7 @@ function buildPathAReceivableSpecs({ patientId, budget, tenantId }) {
       payment_method_expected: paymentMethod,
       tenant_id: tenantId,
     });
-  }
+  });
 
   return specs;
 }

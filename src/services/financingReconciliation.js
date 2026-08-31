@@ -1,5 +1,5 @@
 import { FINANCING_STATUS, RECEIVABLE_STATUS } from './auditEventCatalog.js';
-import { toCents, fromCents } from './receivableMoney.js';
+import { clampNonNegativeCents, toCents, fromCents } from './receivableMoney.js';
 
 function isLinkedReceivableCollectible(row) {
   return row?.status !== RECEIVABLE_STATUS.CANCELED && row?.status !== RECEIVABLE_STATUS.RENEGOTIATED;
@@ -34,7 +34,7 @@ export function reconcileFinancingFromReceivables(financing, db) {
     }
     collectible += 1;
     paidCents += received;
-    openCents += Math.max(net - received, 0);
+    openCents += clampNonNegativeCents(net - received);
     if (row.status === RECEIVABLE_STATUS.OVERDUE) hasOverdue = true;
     if (row.status === RECEIVABLE_STATUS.PARTIALLY_PAID || (received > 0 && received < net)) hasPartial = true;
     if (received >= net && net > 0) collectiblePaid += 1;

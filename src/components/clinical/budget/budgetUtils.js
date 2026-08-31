@@ -1,6 +1,13 @@
 import { formatCurrencyBRL } from '../../../utils/currency.js';
 import { getPaymentOptionTitle } from './budgetEventLabels.js';
 import { getFinancingSummaryForOption } from './budgetFinancingUtils.js';
+import {
+  applyPercentDiscountCents,
+  fromCents,
+  splitInCents,
+  sumCents,
+  toCents,
+} from '../../../services/receivableMoney.js';
 const CASH_METHODS = [
   { value: 'pix', label: 'Pix' },
   { value: 'dinheiro', label: 'Dinheiro' },
@@ -21,26 +28,28 @@ export { CASH_METHODS, CARD_BRANDS };
 
 export function calcProcedureTotal(proc) {
   const qty = Number(proc.quantity || 1);
-  const unit = Number(proc.unitValue || 0);
-  return Number(proc.totalValue ?? qty * unit);
+  if (proc.totalValue != null && proc.totalValue !== '') {
+    return fromCents(toCents(proc.totalValue));
+  }
+  return fromCents(Math.round(qty * toCents(proc.unitValue || 0)));
 }
 
 export function calcPlannedValue(procedures = []) {
-  return procedures.reduce((sum, proc) => sum + calcProcedureTotal(proc), 0);
+  return fromCents(sumCents((procedures || []).map((proc) => calcProcedureTotal(proc))));
 }
 
 export function calcOptionFinalValue(opt, originalValue) {
   const base = Number(opt?.total) > 0 ? Number(opt.total) : Number(originalValue ?? 0);
   const pct = Number(opt?.discountPercent || 0);
-  if (pct > 0) return Math.max(0, base * (1 - pct / 100));
+  if (pct > 0) return fromCents(applyPercentDiscountCents(base, pct).netCents);
   const fixed = Number(opt?.discount || 0);
-  if (fixed > 0) return Math.max(0, base - fixed);
-  return base;
+  if (fixed > 0) return fromCents(Math.max(0, toCents(base) - toCents(fixed)));
+  return fromCents(toCents(base));
 }
 
 export function calcOptionDiscount(opt, originalValue) {
   const base = Number(opt?.total) > 0 ? Number(opt.total) : Number(originalValue ?? 0);
-  return Math.max(0, base - calcOptionFinalValue(opt, originalValue));
+  return fromCents(Math.max(0, toCents(base) - toCents(calcOptionFinalValue(opt, originalValue))));
 }
 
 export function formatPaymentOptionLabel(opt) {
@@ -54,7 +63,7 @@ export function formatPaymentOptionLabel(opt) {
   if (opt.type === 'parcelado_clinica') {
     const inst = Number(opt.installments || 1);
     const val = calcOptionFinalValue(opt);
-    const parcel = inst > 0 ? val / inst : val;
+    const parcel = inst > 0 ? splitInCents(val, inst)[0] : val;
     return `Parcelado clínica · ${inst}x de ${formatCurrencyBRL(parcel)}`;
   }
   if (opt.type === 'installments' || opt.type === 'parcelado') {
@@ -97,6 +106,6 @@ export function resolveBudgetFinancials(budget) {
   const originalValue = calcPlannedValue(budget?.procedures || []);
   const accepted = getAcceptedOption(budget);
   const finalValue = accepted ? calcOptionFinalValue(accepted, originalValue) : originalValue;
-  const discount = Math.max(0, originalValue - finalValue);
+  const discount = fromCents(Math.max(0, toCents(originalValue) - toCents(finalValue)));
   return { originalValue, finalValue, discount, accepted };
 }

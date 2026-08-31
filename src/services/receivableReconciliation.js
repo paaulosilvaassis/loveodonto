@@ -1,5 +1,5 @@
 import { RECEIVABLE_STATUS } from './auditEventCatalog.js';
-import { fromCents, toCents } from './receivableMoney.js';
+import { clampNonNegativeCents, fromCents, toCents } from './receivableMoney.js';
 import { applyFinancingReconciliation } from './financingReconciliation.js';
 
 export const RECEIVABLE_PAYMENT_KIND = {
@@ -94,7 +94,7 @@ export function computeReceivableStatus(receivable, todayIso = TODAY()) {
 export function reconcileReceivableFromPayments(receivable, payments, todayIso = TODAY()) {
   const netCents = toCents(receivable?.net_amount || 0);
   const paidCents = sumEffectivePaidCents(payments, receivable?.id);
-  const remainingCents = Math.max(netCents - paidCents, 0);
+  const remainingCents = clampNonNegativeCents(netCents - paidCents);
   const next = {
     ...receivable,
     received_amount: fromCents(paidCents),
@@ -117,14 +117,14 @@ export function refreshFinancingFromReceivable(db, receivable) {
     : -1;
   if (installmentIndex >= 0) {
     const installment = db.financingInstallments[installmentIndex];
-    const paidAmount = Number(receivable.received_amount || 0);
-    const netAmount = Number(receivable.net_amount || 0);
+    const paidCents = toCents(receivable.received_amount || 0);
+    const netCents = toCents(receivable.net_amount || 0);
     db.financingInstallments[installmentIndex] = {
       ...installment,
-      paid_amount: paidAmount,
-      remaining_amount: Math.max(netAmount - paidAmount, 0),
+      paid_amount: fromCents(paidCents),
+      remaining_amount: fromCents(clampNonNegativeCents(netCents - paidCents)),
       status: computeReceivableStatus(receivable, TODAY()),
-      last_payment_at: paidAmount > 0 ? new Date().toISOString() : installment.last_payment_at || null,
+      last_payment_at: paidCents > 0 ? new Date().toISOString() : installment.last_payment_at || null,
       updated_at: new Date().toISOString(),
     };
   }

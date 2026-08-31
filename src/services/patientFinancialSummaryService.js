@@ -13,6 +13,7 @@ import { listPatientContracts } from './contractModuleService.js';
 import { listPatientBudgetHistory } from './clinicalBudgetLockService.js';
 import { formatFriendlyBudgetNumber, formatFriendlyContractNumber, formatFriendlyFinancialNumber } from '../utils/friendlyNumbers.js';
 import { formatCurrencyBRL } from '../utils/currency.js';
+import { fromCents, toCents } from './receivableMoney.js';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
@@ -226,13 +227,15 @@ export function getPatientDelinquencyInfo(patientId) {
   );
 
   const overdueCount = overdueReceivables.length + boletoOnlyOverdue.length;
-  const overdueTotal = overdueReceivables.reduce(
-    (sum, r) => sum + Number(r.remaining_amount ?? r.net_amount ?? 0),
-    0,
-  ) + boletoOnlyOverdue.reduce((sum, b) => sum + Number(b.amount || 0), 0);
+  const overdueTotal = fromCents(
+    overdueReceivables.reduce(
+      (sum, r) => sum + toCents(r.remaining_amount ?? r.net_amount ?? 0),
+      0,
+    ) + boletoOnlyOverdue.reduce((sum, b) => sum + toCents(b.amount || 0), 0)
+  );
 
   const openCount = openReceivables.length + overdueBoletos.filter((b) => !b.receivable_id).length;
-  const openTotal = openReceivables.reduce((sum, r) => sum + Number(r.remaining_amount || 0), 0);
+  const openTotal = fromCents(openReceivables.reduce((sum, r) => sum + toCents(r.remaining_amount || 0), 0));
 
   const isDelinquent = overdueCount > 0;
   const hasPending = !isDelinquent && openCount > 0;
@@ -264,11 +267,11 @@ export function getPatientFinancialSummary(patientId) {
   const openItems = receivables.filter((r) => OPEN_RECEIVABLE_STATUSES.has(r.status));
   const paidItems = receivables.filter((r) => r.status === RECEIVABLE_STATUS.PAID);
 
-  const totalOpen = openItems.reduce((sum, r) => sum + Number(r.remaining_amount || 0), 0);
-  const totalOverdue = receivables
+  const totalOpen = fromCents(openItems.reduce((sum, r) => sum + toCents(r.remaining_amount || 0), 0));
+  const totalOverdue = fromCents(receivables
     .filter((r) => r.status === RECEIVABLE_STATUS.OVERDUE)
-    .reduce((sum, r) => sum + Number(r.remaining_amount || 0), 0);
-  const totalPaid = paidItems.reduce((sum, r) => sum + Number(r.net_amount || 0), 0);
+    .reduce((sum, r) => sum + toCents(r.remaining_amount || 0), 0));
+  const totalPaid = fromCents(paidItems.reduce((sum, r) => sum + toCents(r.net_amount || 0), 0));
 
   const nextDue = [...openItems]
     .filter((r) => r.due_date)

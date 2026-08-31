@@ -25,7 +25,7 @@ import {
 } from './financingOwnership.js';
 import { applyFinancingReconciliation, listReceivablesForFinancing, reconcileFinancingFromReceivables } from './financingReconciliation.js';
 import { sumEffectivePaidCents } from './receivableReconciliation.js';
-import { toCents } from './receivableMoney.js';
+import { fromCents, toCents } from './receivableMoney.js';
 import {
   calculateFinancingSummary,
   buildInstallmentsSchedule,
@@ -237,18 +237,18 @@ export const getFinancingsKPIs = (filters = {}) => {
   const items = listFinancings(filters);
   const nowPrefix = todayIso().slice(0, 7);
   const monthItems = items.filter((item) => (item.created_at || '').slice(0, 7) === nowPrefix);
-  const totalFinancedMonth = monthItems.reduce((sum, item) => sum + Number(item.net_financed_amount || 0), 0);
-  const totalOpen = items
+  const totalFinancedMonth = fromCents(monthItems.reduce((sum, item) => sum + toCents(item.net_financed_amount || 0), 0));
+  const totalOpen = fromCents(items
     .filter((item) => [FINANCING_STATUS.ACTIVE, FINANCING_STATUS.PARTIALLY_PAID, FINANCING_STATUS.OVERDUE].includes(item.status))
-    .reduce((sum, item) => sum + Number(item.total_payable_amount || 0), 0);
-  const totalReceived = items
-    .reduce((sum, item) => sum + Number(item.total_paid_amount || 0), 0);
-  const totalOverdue = items
+    .reduce((sum, item) => sum + toCents(item.total_payable_amount || 0), 0));
+  const totalReceived = fromCents(items
+    .reduce((sum, item) => sum + toCents(item.total_paid_amount || 0), 0));
+  const totalOverdue = fromCents(items
     .filter((item) => item.status === FINANCING_STATUS.OVERDUE)
-    .reduce((sum, item) => sum + Number(item.total_open_amount || 0), 0);
+    .reduce((sum, item) => sum + toCents(item.total_open_amount || 0), 0));
   const defaultRate = totalOpen > 0 ? (totalOverdue / totalOpen) * 100 : 0;
   const ticketMedio = items.length > 0
-    ? items.reduce((sum, item) => sum + Number(item.total_payable_amount || 0), 0) / items.length
+    ? fromCents(items.reduce((sum, item) => sum + toCents(item.total_payable_amount || 0), 0)) / items.length
     : 0;
 
   return {

@@ -6,6 +6,7 @@ import { loadDb } from '../db/index.js';
 import { listFinancings } from './financingsService.js';
 import { listReceivables, RECEIVABLE_ORIGIN_TYPE, RECEIVABLE_STATUS } from './receivablesService.js';
 import { FINANCING_STATUS } from './auditEventCatalog.js';
+import { fromCents, normalizeMoney, toCents } from './receivableMoney.js';
 
 /** Status que não entram no faturamento líquido (KPIs e gráficos). */
 const FINANCING_EXCLUDED_FROM_KPI = new Set([
@@ -69,14 +70,14 @@ function buildChartData(kpiLines) {
   for (const l of kpiLines) {
     const month = (l.saleDateShort || '').slice(0, 7);
     if (month) {
-      byPeriod.set(month, (byPeriod.get(month) || 0) + l.totalAmount);
+      byPeriod.set(month, fromCents(toCents(byPeriod.get(month) || 0) + toCents(l.totalAmount)));
     }
     const prof = l.professionalName || '—';
-    byProfessional.set(prof, (byProfessional.get(prof) || 0) + l.totalAmount);
+    byProfessional.set(prof, fromCents(toCents(byProfessional.get(prof) || 0) + toCents(l.totalAmount)));
     const spec = l.specialty || '—';
-    bySpecialty.set(spec, (bySpecialty.get(spec) || 0) + l.totalAmount);
-    if (l.kind === 'avista') byTipo[0].value += l.totalAmount;
-    else byTipo[1].value += l.totalAmount;
+    bySpecialty.set(spec, fromCents(toCents(bySpecialty.get(spec) || 0) + toCents(l.totalAmount)));
+    if (l.kind === 'avista') byTipo[0].value = fromCents(toCents(byTipo[0].value) + toCents(l.totalAmount));
+    else byTipo[1].value = fromCents(toCents(byTipo[1].value) + toCents(l.totalAmount));
   }
 
   const byPeriodArr = [...byPeriod.entries()]
@@ -152,9 +153,9 @@ export function getFaturamentoReport(filters = {}) {
       patientId: f.patient_id,
       patientName: patientName(patients, f.patient_id),
       tipoLabel: 'Financiamento',
-      totalAmount: Number(f.total_amount || 0),
-      receivedAmount: Number(f.total_paid_amount || 0),
-      openAmount: Number(f.total_open_amount || 0),
+      totalAmount: normalizeMoney(f.total_amount || 0),
+      receivedAmount: normalizeMoney(f.total_paid_amount || 0),
+      openAmount: normalizeMoney(f.total_open_amount || 0),
       saleDate: f.created_at,
       saleDateShort,
       professionalId: f.professional_id || null,
@@ -188,9 +189,9 @@ export function getFaturamentoReport(filters = {}) {
       patientId: r.patient_id,
       patientName: patientName(patients, r.patient_id),
       tipoLabel: 'À vista',
-      totalAmount: Number(r.net_amount || 0),
-      receivedAmount: Number(r.received_amount || 0),
-      openAmount: Number(r.remaining_amount || 0),
+      totalAmount: normalizeMoney(r.net_amount || 0),
+      receivedAmount: normalizeMoney(r.received_amount || 0),
+      openAmount: normalizeMoney(r.remaining_amount || 0),
       saleDate: r.created_at,
       saleDateShort,
       professionalId: r.professional_id || null,
@@ -216,9 +217,9 @@ export function getFaturamentoReport(filters = {}) {
   filtered.sort((a, b) => (b.saleDate || '').localeCompare(a.saleDate || ''));
 
   const kpiLines = filtered.filter((l) => l.countsInKpi);
-  const totalFaturamento = kpiLines.reduce((s, l) => s + l.totalAmount, 0);
-  const vista = kpiLines.filter((l) => l.kind === 'avista').reduce((s, l) => s + l.totalAmount, 0);
-  const fin = kpiLines.filter((l) => l.kind === 'financiamento').reduce((s, l) => s + l.totalAmount, 0);
+  const totalFaturamento = fromCents(kpiLines.reduce((s, l) => s + toCents(l.totalAmount), 0));
+  const vista = fromCents(kpiLines.filter((l) => l.kind === 'avista').reduce((s, l) => s + toCents(l.totalAmount), 0));
+  const fin = fromCents(kpiLines.filter((l) => l.kind === 'financiamento').reduce((s, l) => s + toCents(l.totalAmount), 0));
   const countSales = kpiLines.length;
   const ticketMedio = countSales > 0 ? totalFaturamento / countSales : 0;
   const patientSet = new Set(kpiLines.map((l) => l.patientId).filter(Boolean));

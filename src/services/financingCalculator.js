@@ -1,18 +1,6 @@
-const toNumber = (value) => Number(value || 0);
+import { toCents, fromCents, splitInCents } from './receivableMoney.js';
 
-const roundToCents = (value) => Math.round(toNumber(value) * 100) / 100;
-
-const splitInCents = (totalValue, parts) => {
-  const safeParts = Math.max(1, Number(parts || 1));
-  const totalCents = Math.round(roundToCents(totalValue) * 100);
-  const base = Math.floor(totalCents / safeParts);
-  const remainder = totalCents - base * safeParts;
-  const result = [];
-  for (let i = 0; i < safeParts; i += 1) {
-    result.push((base + (i < remainder ? 1 : 0)) / 100);
-  }
-  return result;
-};
+const roundToCents = (value) => fromCents(toCents(value));
 
 export const FINANCING_INTEREST_TYPES = {
   NONE: 'none',
@@ -44,57 +32,60 @@ export const addFrequencyDate = (startIsoDate, index, frequency) => {
   return date.toISOString().slice(0, 10);
 };
 
+function percentOfCents(amountCents, rate) {
+  return Math.round((amountCents * Number(rate || 0)) / 100);
+}
+
 export const calculateFinancingSummary = (payload) => {
-  const totalAmount = roundToCents(payload.total_amount);
-  const entryAmount = roundToCents(payload.entry_amount);
+  const totalCents = toCents(payload.total_amount);
+  const entryCents = toCents(payload.entry_amount);
   const installmentsCount = Math.max(1, Number(payload.installments_count || 1));
   const interestType = payload.interest_type || FINANCING_INTEREST_TYPES.NONE;
   const interestRate = roundToCents(payload.interest_rate);
-  const discountAmount = roundToCents(payload.discount_amount);
-  const adminFeeAmountInput = roundToCents(payload.admin_fee_amount);
+  const discountCents = toCents(payload.discount_amount);
+  const adminFeeAmountInputCents = toCents(payload.admin_fee_amount);
   const adminFeeRate = roundToCents(payload.admin_fee_rate);
 
-  if (totalAmount <= 0) throw new Error('Valor total deve ser maior que zero.');
-  if (entryAmount < 0) throw new Error('Entrada não pode ser negativa.');
-  if (entryAmount > totalAmount) throw new Error('Entrada não pode ser maior que o valor total.');
+  if (totalCents <= 0) throw new Error('Valor total deve ser maior que zero.');
+  if (entryCents < 0) throw new Error('Entrada não pode ser negativa.');
+  if (entryCents > totalCents) throw new Error('Entrada não pode ser maior que o valor total.');
   if (interestRate < 0) throw new Error('Taxa de juros não pode ser negativa.');
 
-  const financedAmount = roundToCents(totalAmount - entryAmount);
-  let totalInterest = 0;
-  if (interestType === FINANCING_INTEREST_TYPES.SIMPLE && financedAmount > 0) {
-    totalInterest = roundToCents((financedAmount * (interestRate / 100)) * installmentsCount);
-  } else if (interestType === FINANCING_INTEREST_TYPES.COMPOUND && financedAmount > 0) {
-    const compounded = financedAmount * ((1 + (interestRate / 100)) ** installmentsCount);
-    totalInterest = roundToCents(compounded - financedAmount);
-  } else if (interestType === FINANCING_INTEREST_TYPES.FIXED_PERCENT && financedAmount > 0) {
-    totalInterest = roundToCents(financedAmount * (interestRate / 100));
+  const financedCents = totalCents - entryCents;
+  let interestCents = 0;
+  if (interestType === FINANCING_INTEREST_TYPES.SIMPLE && financedCents > 0) {
+    interestCents = Math.round((financedCents * (interestRate / 100)) * installmentsCount);
+  } else if (interestType === FINANCING_INTEREST_TYPES.COMPOUND && financedCents > 0) {
+    const compounded = financedCents * ((1 + (interestRate / 100)) ** installmentsCount);
+    interestCents = Math.round(compounded - financedCents);
+  } else if (interestType === FINANCING_INTEREST_TYPES.FIXED_PERCENT && financedCents > 0) {
+    interestCents = percentOfCents(financedCents, interestRate);
   }
 
-  const adminFee = adminFeeAmountInput > 0
-    ? adminFeeAmountInput
-    : roundToCents(financedAmount * (adminFeeRate / 100));
+  const adminFeeCents = adminFeeAmountInputCents > 0
+    ? adminFeeAmountInputCents
+    : percentOfCents(financedCents, adminFeeRate);
 
-  const netFinancedAmount = roundToCents(financedAmount + totalInterest + adminFee - discountAmount);
-  const totalPayableAmount = roundToCents(entryAmount + netFinancedAmount);
-  const installmentParts = splitInCents(netFinancedAmount, installmentsCount);
-  const installmentAmount = installmentParts[0] || 0;
+  const netFinancedCents = financedCents + interestCents + adminFeeCents - discountCents;
+  const totalPayableCents = entryCents + netFinancedCents;
+  const installmentParts = splitInCents(fromCents(netFinancedCents), installmentsCount);
 
   return {
-    totalAmount,
-    entryAmount,
-    financedAmount,
+    totalAmount: fromCents(totalCents),
+    entryAmount: fromCents(entryCents),
+    financedAmount: fromCents(financedCents),
     installmentsCount,
     interestType,
     interestRate,
-    totalInterest,
-    adminFee,
+    totalInterest: fromCents(interestCents),
+    adminFee: fromCents(adminFeeCents),
     adminFeeRate,
-    adminFeeAmount: adminFeeAmountInput,
-    discountAmount,
-    netFinancedAmount,
-    installmentAmount,
+    adminFeeAmount: fromCents(adminFeeAmountInputCents),
+    discountAmount: fromCents(discountCents),
+    netFinancedAmount: fromCents(netFinancedCents),
+    installmentAmount: installmentParts[0] || 0,
     installmentParts,
-    totalPayableAmount,
+    totalPayableAmount: fromCents(totalPayableCents),
   };
 };
 
@@ -140,3 +131,5 @@ export const isFinancingFrequencyInput = (value) => {
   ]);
   return allowedInputs.has(value);
 };
+
+export { splitInCents };

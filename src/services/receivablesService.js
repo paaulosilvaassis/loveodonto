@@ -32,7 +32,9 @@ import {
 import {
   computeReceivableStatus,
   isReceivableOpenBalanceStatus,
+  reconcileReceivableFromPayments,
 } from './receivableReconciliation.js';
+import { fromCents, netFromComponentsCents, toCents } from './receivableMoney.js';
 import { readGetReceivable, readListReceivables } from './financialReadAdapter.js';
 import {
   scheduleFinancialDualWriteCreateReceivable,
@@ -150,17 +152,22 @@ const normalizeAmounts = ({
   interest_amount,
   fine_amount,
 }) => {
-  const original = Number(original_amount || 0);
-  const discount = Number(discount_amount || 0);
-  const interest = Number(interest_amount || 0);
-  const fine = Number(fine_amount || 0);
-  const net = original - discount + interest + fine;
+  const originalCents = toCents(original_amount || 0);
+  const discountCents = toCents(discount_amount || 0);
+  const interestCents = toCents(interest_amount || 0);
+  const fineCents = toCents(fine_amount || 0);
+  const netCents = netFromComponentsCents({
+    original_amount,
+    discount_amount,
+    interest_amount,
+    fine_amount,
+  });
   return {
-    original_amount: original,
-    discount_amount: discount,
-    interest_amount: interest,
-    fine_amount: fine,
-    net_amount: net,
+    original_amount: fromCents(originalCents),
+    discount_amount: fromCents(discountCents),
+    interest_amount: fromCents(interestCents),
+    fine_amount: fromCents(fineCents),
+    net_amount: fromCents(netCents),
   };
 };
 
@@ -246,40 +253,37 @@ export const getReceivablesKPIs = (month, year, filters = {}) => {
   const m = month ?? new Date().getMonth() + 1;
   const prefix = `${y}-${String(m).padStart(2, '0')}`;
 
-  let totalToReceive = 0;
-  let totalReceived = 0;
-  let totalOverdue = 0;
-  let totalUpcoming = 0;
+  let totalToReceiveCents = 0;
+  let totalReceivedCents = 0;
+  let totalOverdueCents = 0;
+  let totalUpcomingCents = 0;
 
   items.forEach((r) => {
     const duePrefix = (r.due_date || '').slice(0, 7);
     if (duePrefix !== prefix) return;
 
-    const net = Number(r.net_amount || 0);
-    const remaining = Number(r.remaining_amount || 0);
-    const status = computeReceivableStatus(r, todayIso);
+    const recon = reconcileReceivableFromPayments(r, db.receivablePayments || [], todayIso);
+    const status = recon.receivable.status;
     if (!isReceivableOpenBalanceStatus(status) && status !== RECEIVABLE_STATUS.PAID) return;
 
     if (status === RECEIVABLE_STATUS.PAID) {
-      totalReceived += net;
+      totalReceivedCents += recon.net_cents;
     } else if (status === RECEIVABLE_STATUS.OVERDUE) {
-      totalOverdue += remaining;
+      totalOverdueCents += recon.remaining_cents;
     } else if (status === RECEIVABLE_STATUS.UPCOMING || status === RECEIVABLE_STATUS.DUE_TODAY || status === RECEIVABLE_STATUS.PARTIALLY_PAID) {
-      totalUpcoming += remaining;
+      totalUpcomingCents += recon.remaining_cents;
     }
   });
 
-  totalToReceive = totalReceived + totalOverdue + totalUpcoming;
-
-  const totalReceivableBase = totalReceived + totalOverdue + totalUpcoming;
+  totalToReceiveCents = totalReceivedCents + totalOverdueCents + totalUpcomingCents;
   const inadimplenciaPercent =
-    totalReceivableBase > 0 ? (totalOverdue / totalReceivableBase) * 100 : 0;
+    totalToReceiveCents > 0 ? (totalOverdueCents / totalToReceiveCents) * 100 : 0;
 
   return {
-    totalToReceive,
-    totalReceived,
-    totalOverdue,
-    totalUpcoming,
+    totalToReceive: fromCents(totalToReceiveCents),
+    totalReceived: fromCents(totalReceivedCents),
+    totalOverdue: fromCents(totalOverdueCents),
+    totalUpcoming: fromCents(totalUpcomingCents),
     inadimplenciaPercent,
   };
 };
@@ -337,7 +341,12 @@ export const createReceivable = (user, payload) => {
   const issueDate = payload.issue_date || payload.issueDate || todayIso;
   const dueDate = payload.due_date || payload.dueDate || todayIso;
 
-  const netAmount = original_amount - discount_amount + interest_amount + fine_amount;
+  const netAmount = fromCents(netFromComponentsCents({
+    original_amount,
+    discount_amount,
+    interest_amount,
+    fine_amount,
+  }));
 
   const now = new Date().toISOString();
   const id = createId('recv');
@@ -464,9 +473,8 @@ export const updateReceivable = (user, id, payload) => {
     fine_amount: payload.fine_amount !== undefined ? payload.fine_amount : current.fine_amount,
   });
 
-  const netAmount = mergedAmounts.original_amount - mergedAmounts.discount_amount + mergedAmounts.interest_amount + mergedAmounts.fine_amount;
-  const receivedAmount = Number(current.received_amount || 0);
-  const remainingAmount = Math.max(netAmount - receivedAmount, 0);
+  const netAmount = mergedAmounts.net_amount;
+  const remainingAmount = fromCents(Math.max(toCents(netAmount) - toCents(current.received_amount || 0), 0));
 
   const updated = {
     ...current,

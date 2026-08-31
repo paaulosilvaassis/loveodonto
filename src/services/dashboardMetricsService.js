@@ -6,6 +6,7 @@ import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
 import { isEffectiveReceivablePayment } from './receivableReconciliation.js';
 import { receivableMatchesListTenant } from './receivablePaymentLifecycle.js';
 import { resolveUserTenantId } from './tenantWriteGuard.js';
+import { fromCents, toCents } from './receivableMoney.js';
 
 const PENDING_CLINICAL_BUDGET_STATUSES = new Set([
   BUDGET_STATUS.RASCUNHO,
@@ -153,15 +154,17 @@ function paymentMatchesTenant(payment, tenantId, db) {
 }
 
 function sumReceivedPayments(db, startDate, endDate, tenantId = null) {
-  let total = 0;
+  let coreCents = 0;
 
   for (const payment of db.receivablePayments || []) {
     if (!isEffectiveReceivablePayment(payment)) continue;
     if (!paymentMatchesTenant(payment, tenantId, db)) continue;
     const dateKey = resolvePaymentDateKey(payment);
     if (!isDateInRange(dateKey, startDate, endDate)) continue;
-    total += Number(payment.amount_received || payment.amountReceived || payment.amount || 0);
+    coreCents += toCents(payment.amount_received || payment.amountReceived || payment.amount || 0);
   }
+
+  let legacyCash = 0;
 
   for (const txn of db.transactions || []) {
     if (txn.type !== 'receber') continue;
@@ -171,7 +174,7 @@ function sumReceivedPayments(db, startDate, endDate, tenantId = null) {
       txn.paidDate || txn.payment_date || txn.paid_at || txn.received_at || txn.updatedAt,
     );
     if (!isDateInRange(dateKey, startDate, endDate)) continue;
-    total += Number(txn.amount || txn.value || 0);
+    legacyCash += Number(txn.amount || txn.value || 0);
   }
 
   for (const txn of db.cashTransactions || []) {
@@ -181,10 +184,16 @@ function sumReceivedPayments(db, startDate, endDate, tenantId = null) {
       txn.date || txn.payment_date || txn.paid_at || txn.received_at || txn.created_at,
     );
     if (!isDateInRange(dateKey, startDate, endDate)) continue;
-    total += Number(txn.amount || txn.value || 0);
+    legacyCash += Number(txn.amount || txn.value || 0);
   }
 
-  return total;
+  const core = fromCents(coreCents);
+  const legacy = fromCents(toCents(legacyCash));
+  return {
+    core,
+    legacyCash: legacy,
+    total: fromCents(coreCents + toCents(legacyCash)),
+  };
 }
 
 function countPendingBudgets(db) {
@@ -305,21 +314,25 @@ export function getDashboardMetrics(referenceDate = new Date(), options = {}) {
   const todayAppointments = buildTodayAppointments(db, today);
   const tenantId = options.tenantId || options.tenant_id || resolveUserTenantId(options.user) || null;
 
-  const dailyRevenue = sumReceivedPayments(db, today, today, tenantId);
-  const monthlyRevenue = sumReceivedPayments(db, monthRange.start, monthRange.end, tenantId);
+  const daily = sumReceivedPayments(db, today, today, tenantId);
+  const monthly = sumReceivedPayments(db, monthRange.start, monthRange.end, tenantId);
   const pendingBudgets = countPendingBudgets(db);
   const patientsInTreatment = countPatientsInTreatment(db);
 
   return {
     todayAppointments,
-    dailyRevenue,
-    monthlyRevenue,
+    dailyRevenue: daily.total,
+    monthlyRevenue: monthly.total,
+    coreFinancialRevenueToday: daily.core,
+    coreFinancialRevenueMonth: monthly.core,
+    legacyCashRevenueToday: daily.legacyCash,
+    legacyCashRevenueMonth: monthly.legacyCash,
     pendingBudgets,
     patientsInTreatment,
     // aliases legados usados na UI
     atendimentosHoje: todayAppointments.total,
-    faturamentoHoje: dailyRevenue,
-    faturamentoMes: monthlyRevenue,
+    faturamentoHoje: daily.total,
+    faturamentoMes: monthly.total,
     orcamentosPendentes: pendingBudgets,
     pacientesEmTratamento: patientsInTreatment,
     pacientesEmEspera: todayAppointments.pacientesEmEspera,
@@ -349,7 +362,7 @@ export function getDashboardChartData(days = 7, referenceDate = new Date(), opti
 
     const scheduled = countScheduledAppointments(db, dateStr);
     const attended = countAttendedAppointments(db, dateStr);
-    const revenue = Math.round(sumReceivedPayments(db, dateStr, dateStr, tenantId) * 100) / 100;
+    const revenue = sumReceivedPayments(db, dateStr, dateStr, tenantId).total;
 
     result.push({
       date: dateStr,

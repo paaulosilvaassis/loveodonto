@@ -4,6 +4,7 @@ import { listReceivables, RECEIVABLE_STATUS } from './receivablesService.js';
 import { listFinancings, FINANCING_STATUS } from './financingsService.js';
 import { listPayables, listStandaloneCashTransactions, getCategoryName } from './payablesService.js';
 import { listCommissions, COMMISSION_STATUS } from './commissionCalculationService.js';
+import { fromCents, toCents } from './receivableMoney.js';
 
 const BR_MONTH = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' });
 
@@ -49,6 +50,11 @@ function initSeries(months) {
 function pushSeries(series, month, value) {
   if (!month || !(month in series)) return;
   series[month] += toNum(value);
+}
+
+function pushCoreMoney(series, month, value) {
+  if (!month || !(month in series)) return;
+  series[month] = fromCents(toCents(series[month]) + toCents(value));
 }
 
 function matchSpecialty(itemSpecialty, filterSpecialty) {
@@ -138,7 +144,7 @@ export function getDreReport(filters = {}) {
 
   lines.forEach((l) => {
     const m = monthKeyFrom(l.saleDateShort || l.saleDate || l.created_at);
-    pushSeries(receitaBruta, m, l.totalAmount);
+    pushCoreMoney(receitaBruta, m, l.totalAmount);
   });
 
   const receivables = listReceivables(professionalId ? { professionalId, ...listTenant } : listTenant)
@@ -154,9 +160,9 @@ export function getDreReport(filters = {}) {
     );
   receivables.forEach((r) => {
     const comp = monthKeyFrom(r.created_at || r.issue_date);
-    pushSeries(descontos, comp, r.discount_amount);
+    pushCoreMoney(descontos, comp, r.discount_amount);
     if ([RECEIVABLE_STATUS.CANCELED, RECEIVABLE_STATUS.RENEGOTIATED].includes(r.status)) {
-      pushSeries(estornos, comp, r.net_amount);
+      pushCoreMoney(estornos, comp, r.net_amount);
     }
   });
 
@@ -171,15 +177,17 @@ export function getDreReport(filters = {}) {
     );
   financings.forEach((f) => {
     const comp = monthKeyFrom(f.created_at || f.issue_date);
-    pushSeries(descontos, comp, f.discount_amount);
+    pushCoreMoney(descontos, comp, f.discount_amount);
     if ([FINANCING_STATUS.CANCELED, FINANCING_STATUS.RENEGOTIATED].includes(f.status)) {
-      pushSeries(estornos, comp, f.total_amount);
+      pushCoreMoney(estornos, comp, f.total_amount);
     }
   });
 
   const receitaLiquida = { ...empty };
   months.forEach((m) => {
-    receitaLiquida[m] = receitaBruta[m] - descontos[m] - estornos[m];
+    receitaLiquida[m] = fromCents(
+      toCents(receitaBruta[m]) - toCents(descontos[m]) - toCents(estornos[m])
+    );
   });
 
   const comDentista = { ...empty };

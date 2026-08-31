@@ -9,6 +9,7 @@ import { listCommissions, COMMISSION_STATUS } from './commissionCalculationServi
 import { listBoletoCharges, BOLETO_CHARGE_STATUS } from './boletoChargesService.js';
 import { getCashSummaryForDate } from './cashRegisterService.js';
 import { isEffectiveReceivablePayment } from './receivableReconciliation.js';
+import { fromCents, toCents } from './receivableMoney.js';
 
 const BR_MONTH = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' });
 
@@ -54,6 +55,11 @@ function initSeries(months) {
 function pushSeries(series, month, value) {
   if (!month || !(month in series)) return;
   series[month] += toNum(value);
+}
+
+function pushCoreMoney(series, month, value) {
+  if (!month || !(month in series)) return;
+  series[month] = fromCents(toCents(series[month]) + toCents(value));
 }
 
 function matchSpecialty(itemSpecialty, filterSpecialty) {
@@ -151,10 +157,10 @@ export function getDreCashBasisReport(filters = {}) {
     if (!r || !receivableMatchesFilters(r, { unitId, professionalId, specialty, revenueType, costCenterId }, collaborators)) return;
     const mk = monthKeyFrom(payDay);
     if (!monthSet.has(mk)) return;
-    const amt = toNum(p.amount_received);
-    if (!r.financing_id) pushSeries(recebimentosAvista, mk, amt);
-    else if (Number(r.installment_number || 0) === 0) pushSeries(financiamentosRecebidos, mk, amt);
-    else pushSeries(recebimentosParcelas, mk, amt);
+    const amt = fromCents(toCents(p.amount_received));
+    if (!r.financing_id) pushCoreMoney(recebimentosAvista, mk, amt);
+    else if (Number(r.installment_number || 0) === 0) pushCoreMoney(financiamentosRecebidos, mk, amt);
+    else pushCoreMoney(recebimentosParcelas, mk, amt);
   });
 
   const boletos = listBoletoCharges({ user, tenantId: tenantId || tenant_id });
@@ -173,11 +179,12 @@ export function getDreCashBasisReport(filters = {}) {
 
   const entradasTotal = { ...empty };
   months.forEach((m) => {
-    entradasTotal[m] =
-      recebimentosAvista[m] +
-      recebimentosParcelas[m] +
-      financiamentosRecebidos[m] +
-      outrosRecebimentos[m];
+    entradasTotal[m] = fromCents(
+      toCents(recebimentosAvista[m])
+      + toCents(recebimentosParcelas[m])
+      + toCents(financiamentosRecebidos[m])
+      + toCents(outrosRecebimentos[m])
+    );
   });
 
   const comissoesPagas = { ...empty };
@@ -353,18 +360,20 @@ export function getDreLiquidityReport(filters = {}) {
     return d >= refDate && d <= addDaysIso(refDate, days);
   };
 
-  let receber7 = 0;
-  let receber30 = 0;
+  let receber7Cents = 0;
+  let receber30Cents = 0;
   activeRecv.forEach((r) => {
     if (!matchesUnit(r, unitId)) return;
     if (professionalId && r.professional_id !== professionalId) return;
     if (!matchSpecialty(specialtyFromCollaborator(collaborators, r.professional_id), specialty)) return;
     if (!matchCostCenter(r, costCenterId)) return;
-    const rem = toNum(r.remaining_amount);
-    if (rem <= 0) return;
-    if (inShortWindow(r.due_date, 7)) receber7 += rem;
-    if (inShortWindow(r.due_date, 30)) receber30 += rem;
+    const remCents = toCents(r.remaining_amount);
+    if (!(remCents > 0)) return;
+    if (inShortWindow(r.due_date, 7)) receber7Cents += remCents;
+    if (inShortWindow(r.due_date, 30)) receber30Cents += remCents;
   });
+  const receber7 = fromCents(receber7Cents);
+  const receber30 = fromCents(receber30Cents);
 
   let pagar7 = 0;
   let pagar30 = 0;
@@ -392,12 +401,12 @@ export function getDreLiquidityReport(filters = {}) {
     .filter((r) => matchesUnit(r, unitId) && matchCostCenter(r, costCenterId))
     .filter((r) => !professionalId || r.professional_id === professionalId)
     .filter((r) => matchSpecialty(specialtyFromCollaborator(collaborators, r.professional_id), specialty))
-    .filter((r) => toNum(r.remaining_amount) > 0 && inShortWindow(r.due_date, 30))
+    .filter((r) => fromCents(toCents(r.remaining_amount)) > 0 && inShortWindow(r.due_date, 30))
     .map((r) => ({
       tipo: 'A receber',
       descricao: (r.description || '').slice(0, 80) || r.id,
       vencimento: r.due_date,
-      valor: toNum(r.remaining_amount),
+      valor: fromCents(toCents(r.remaining_amount)),
     }))
     .sort((a, b) => String(a.vencimento).localeCompare(String(b.vencimento)))
     .slice(0, 15);
