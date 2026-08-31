@@ -1,0 +1,194 @@
+{
+  "environment": "STAGING",
+  "projectRef": "tckdjyunwmdpqmewrwvt",
+  "productionRefTouched": false,
+  "syntheticPrefix": "phase11o-",
+  "operationalAuth": "AUTHENTICATED_TENANT_SCOPED",
+  "runtimeInsertRole": "authenticated",
+  "executorRoleForSetupCleanup": "postgres_or_service_role",
+  "pilotTenant": "f00f00f0-0000-4000-8000-f00f00f0000f",
+  "jwtClaimsUsed": ["sub", "role", "tenant_id"],
+  "entities": {
+    "pathA": {
+      "source_id": "recv-6d23066f-e53b-4f99-94e5-44708ae864ad",
+      "origin_type": "treatment_plan",
+      "total_cents": 8000,
+      "status": "upcoming",
+      "compareFinancialShadow": "MATCH"
+    },
+    "financing": {
+      "source_id": "fin-febc6362-a04f-46e0-9868-afaedd286aed",
+      "status": "active",
+      "total_cents": 40000,
+      "approved": true,
+      "compareFinancialShadow": "MATCH"
+    },
+    "financingApproval": {
+      "source_id": "fin-febc6362-a04f-46e0-9868-afaedd286aed",
+      "lifecycleUpdate": "status draft→active, money unchanged",
+      "compareFinancialShadow": "MATCH"
+    },
+    "pathB": [
+      {
+        "source_id": "recv-7ee91d72-f6dc-41a1-bea6-2103efb2425a",
+        "origin_type": "financing",
+        "installment_number": 1,
+        "total_cents": 20000,
+        "compareFinancialShadow": "MATCH"
+      },
+      {
+        "source_id": "recv-4eeceb51-0bc2-4de2-8b9a-eecaf4c1d00e",
+        "origin_type": "financing",
+        "installment_number": 2,
+        "total_cents": 20000,
+        "compareFinancialShadow": "MATCH"
+      }
+    ],
+    "payment": {
+      "source_id": "rvpay-d814e8bd-a03d-4495-9c7a-9f0977a8c363",
+      "operation_id": "phase11o-op-pay",
+      "amount_cents": 8000,
+      "status": "reversed",
+      "preservedAfterReversal": true,
+      "compareFinancialShadow": "MATCH"
+    },
+    "reversal": {
+      "source_id": "rvpay-e7a676ab-ebce-4c6b-91d7-90227073005e",
+      "reverses_payment_id": "rvpay-d814e8bd-a03d-4495-9c7a-9f0977a8c363",
+      "amount_cents": 8000,
+      "compareFinancialShadow": "MATCH"
+    },
+    "charge": {
+      "source_id": "rvchg-09d7378e-372c-4360-9009-fa8939b3c1bb",
+      "receivable_id": "recv-6d23066f-e53b-4f99-94e5-44708ae864ad",
+      "amount_cents": 0,
+      "createsReceivable": false,
+      "compareFinancialShadow": "MATCH"
+    }
+  },
+  "operations": [
+    {
+      "seq": 1,
+      "entity_type": "receivable",
+      "source_id": "recv-6d23066f-e53b-4f99-94e5-44708ae864ad",
+      "remote_table": "financial_v2_receivables",
+      "write": "authenticated_insert",
+      "readback": true,
+      "compare": "MATCH"
+    },
+    {
+      "seq": 2,
+      "entity_type": "financing",
+      "source_id": "fin-febc6362-a04f-46e0-9868-afaedd286aed",
+      "remote_table": "financial_v2_financings",
+      "write": "authenticated_insert_draft",
+      "readback": true,
+      "compare": "MATCH"
+    },
+    {
+      "seq": 3,
+      "entity_type": "financing",
+      "source_id": "fin-febc6362-a04f-46e0-9868-afaedd286aed",
+      "operation_id": null,
+      "remote_table": "financial_v2_financings",
+      "write": "authenticated_lifecycle_update_active",
+      "readback": true,
+      "compare": "MATCH"
+    },
+    {
+      "seq": 4,
+      "entity_type": "receivable",
+      "source_id": "recv-7ee91d72-f6dc-41a1-bea6-2103efb2425a",
+      "remote_table": "financial_v2_receivables",
+      "write": "authenticated_insert",
+      "readback": true,
+      "compare": "MATCH"
+    },
+    {
+      "seq": 5,
+      "entity_type": "receivable",
+      "source_id": "recv-4eeceb51-0bc2-4de2-8b9a-eecaf4c1d00e",
+      "remote_table": "financial_v2_receivables",
+      "write": "authenticated_insert",
+      "readback": true,
+      "compare": "MATCH"
+    },
+    {
+      "seq": 6,
+      "entity_type": "payment",
+      "source_id": "rvpay-d814e8bd-a03d-4495-9c7a-9f0977a8c363",
+      "operation_id": "phase11o-op-pay",
+      "remote_table": "financial_v2_payments",
+      "write": "authenticated_insert",
+      "readback": true,
+      "compare": "MATCH"
+    },
+    {
+      "seq": 7,
+      "entity_type": "payment",
+      "source_id": "rvpay-d814e8bd-a03d-4495-9c7a-9f0977a8c363",
+      "operation_id": "phase11o-op-pay",
+      "remote_table": "financial_v2_payments",
+      "write": "authenticated_retry_on_conflict_do_nothing",
+      "readback": true,
+      "compare": "MATCH"
+    },
+    {
+      "seq": 8,
+      "entity_type": "payment",
+      "source_id": "rvpay-e7a676ab-ebce-4c6b-91d7-90227073005e",
+      "operation_id": "revop:rvpay-d814e8bd-a03d-4495-9c7a-9f0977a8c363",
+      "remote_table": "financial_v2_payments",
+      "write": "authenticated_insert_reversal",
+      "readback": true,
+      "compare": "MATCH"
+    },
+    {
+      "seq": 9,
+      "entity_type": "charge",
+      "source_id": "rvchg-09d7378e-372c-4360-9009-fa8939b3c1bb",
+      "operation_id": "phase11o-op-chg",
+      "remote_table": "financial_v2_charges",
+      "write": "authenticated_insert",
+      "readback": true,
+      "compare": "MATCH"
+    }
+  ],
+  "rls": {
+    "TENANT_RLS_SELECT": "PASS",
+    "TENANT_RLS_INSERT": "PASS",
+    "TENANT_RLS_UPDATE": "PASS"
+  },
+  "integrity": {
+    "PAYMENT_REMOTE_IDEMPOTENCY": "PASS",
+    "PATH_A_REMOTE_IDEMPOTENCY": "PASS",
+    "PATH_B_REMOTE_IDEMPOTENCY": "PASS",
+    "FINANCING_REMOTE_IDEMPOTENCY": "PASS",
+    "DUPLICATE_REMOTE_FACTS": 0,
+    "IMMUTABLE_REMOTE_OVERWRITES": 0,
+    "ORPHAN_REMOTE_FACTS": 0,
+    "PII_TELEMETRY_LEAKS": 0,
+    "MONETARY_PARITY": "PASS",
+    "payment_ops_for_phase11o_op_pay": 1,
+    "original_payment_amount_cents_after_conflict": 8000
+  },
+  "acceptance": {
+    "pass": true,
+    "failures": []
+  },
+  "cleanupComplete": true,
+  "leftoverCounts": {
+    "receivables": 0,
+    "payments": 0,
+    "financings": 0,
+    "charges": 0,
+    "tenants": 0,
+    "tenant_users": 0
+  },
+  "notes": [
+    "Canonical writers produced the mapped source_ids; SQL was the 11.M persist builders.",
+    "Live writes used SET LOCAL ROLE authenticated + JWT sub/role/tenant_id.",
+    "Service role used only for fixture setup/cleanup and leftover counts.",
+    "Production uoepkwhqztmsjnzirpev was not touched."
+  ]
+}

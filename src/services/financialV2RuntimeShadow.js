@@ -19,6 +19,7 @@ import {
   buildFinancialV2InsertSql,
   buildFinancialV2SelectSql,
 } from './financialV2StagingShadowPersist.js';
+import { buildFinancialV2LifecycleUpdateSql } from './financialV2AuthenticatedSql.js';
 import {
   SHADOW_WRITE_DECISION,
   createMemoryFinancialV2Store,
@@ -226,6 +227,10 @@ function factsConflict(existing, incoming, table) {
       || String(existing.receivable_id) !== String(incoming.receivable_id);
   }
   if (table === 'receivables') {
+    return Number(existing.total_cents) !== Number(incoming.total_cents)
+      || Number(existing.original_cents) !== Number(incoming.original_cents);
+  }
+  if (table === 'financings') {
     return Number(existing.total_cents) !== Number(incoming.total_cents);
   }
   return false;
@@ -256,8 +261,18 @@ export function createImmutableAwareFinancialV2Store() {
 export async function persistRuntimeShadowRow({ table, mapped, executor = state.executor, store = state.store }) {
   if (executor) {
     await executor(buildFinancialV2InsertSql(table, mapped));
-    const rows = await executor(buildFinancialV2SelectSql(table, mapped.tenant_id, mapped.source_id));
-    return (Array.isArray(rows) ? rows[0] : rows) || mapped;
+    let rows = await executor(buildFinancialV2SelectSql(table, mapped.tenant_id, mapped.source_id));
+    let readback = (Array.isArray(rows) ? rows[0] : rows) || null;
+    if (readback && factsConflict(readback, mapped, table)) {
+      return readback;
+    }
+    const updateSql = buildFinancialV2LifecycleUpdateSql(table, mapped);
+    if (updateSql && readback) {
+      await executor(updateSql);
+      rows = await executor(buildFinancialV2SelectSql(table, mapped.tenant_id, mapped.source_id));
+      readback = (Array.isArray(rows) ? rows[0] : rows) || readback;
+    }
+    return readback || mapped;
   }
   const persisted = store.upsert(table, mapped);
   return persisted.row;
