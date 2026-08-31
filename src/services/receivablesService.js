@@ -13,7 +13,7 @@ import {
   assertEnumValue,
   normalizeEnumValue,
 } from './auditEventCatalog.js';
-import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
+import { resolveTenantIdForWrite, resolveUserTenantId } from './tenantWriteGuard.js';
 import { readGetReceivable, readListReceivables } from './financialReadAdapter.js';
 import {
   scheduleFinancialDualWriteCreateReceivable,
@@ -44,6 +44,32 @@ export const RECEIVABLE_ORIGIN_TYPE = {
   RENEGOTIATION: 'renegotiation',
   RECURRING_CHARGE: 'recurring_charge',
 };
+
+/** Permission canônica de escrita de CR. Não usar finance:write (módulo inexistente). */
+export const RECEIVABLE_WRITE_PERMISSION = 'financeiro_contas_receber:create';
+
+export function normalizeInstallmentNumber(value, fallback = 1) {
+  if (value === 0 || value === '0') return 0;
+  if (value === undefined || value === null || value === '') return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+export function findPathAObligationReceivable(records, { tenantId, originId, installmentNumber }) {
+  const tid = String(tenantId || '').trim();
+  const oid = String(originId || '').trim();
+  if (!tid || !oid) return null;
+  const inst = normalizeInstallmentNumber(installmentNumber, 0);
+  const items = Array.isArray(records) ? records : [];
+  return items.find((row) => {
+    const rowTenant = String(row?.tenant_id || row?.tenantId || '').trim();
+    if (rowTenant !== tid) return false;
+    if (row.origin_type !== RECEIVABLE_ORIGIN_TYPE.TREATMENT_PLAN) return false;
+    const rowOrigin = String(row.origin_id || row.budget_id || '').trim();
+    if (rowOrigin !== oid) return false;
+    return normalizeInstallmentNumber(row.installment_number, 0) === inst;
+  }) || null;
+}
 
 export const RECEIVABLE_PAYMENT_METHODS = [
   { value: FINANCIAL_PAYMENT_METHOD.CASH, label: 'Dinheiro' },
@@ -228,6 +254,16 @@ export const listReceivables = (filters = {}) => {
   if (paymentMethodExpected) items = items.filter((r) => r.payment_method_expected === paymentMethodExpected);
   if (originType) items = items.filter((r) => r.origin_type === originType);
 
+  const tenantId = filters.tenantId || filters.tenant_id || resolveUserTenantId(filters.user);
+  if (tenantId) {
+    const tid = String(tenantId).trim();
+    items = items.filter((r) => {
+      const rowTenant = String(r.tenant_id || r.tenantId || '').trim();
+      if (!rowTenant) return true;
+      return rowTenant === tid;
+    });
+  }
+
   items.sort((a, b) => (a.due_date || '').localeCompare(b.due_date || ''));
   return items;
 };
@@ -284,7 +320,7 @@ export const createReceivable = (user, payload) => {
   if (payload.charge_method !== undefined) {
     assertEnumValue('charge_method', RECEIVABLE_CHARGE_TYPE, payload.charge_method);
   }
-  requirePermission(user, 'finance:write');
+  requirePermission(user, RECEIVABLE_WRITE_PERMISSION);
   const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
 
   const todayIso = TODAY();
@@ -292,11 +328,21 @@ export const createReceivable = (user, payload) => {
   const patientId = payload.patient_id || payload.patientId || null;
   const originType = payload.origin_type || payload.originType || RECEIVABLE_ORIGIN_TYPE.MANUAL_ENTRY;
   const originId = payload.origin_id || payload.originId || null;
+  const installmentNumber = normalizeInstallmentNumber(payload.installment_number, 1);
 
   if (!description) throw new Error('Descrição é obrigatória.');
   if (!patientId) throw new Error('Paciente é obrigatório.');
   if (!Object.values(RECEIVABLE_ORIGIN_TYPE).includes(originType)) {
     throw new Error(`origin_type inválido: "${String(originType)}".`);
+  }
+
+  if (originType === RECEIVABLE_ORIGIN_TYPE.TREATMENT_PLAN && originId) {
+    const existing = findPathAObligationReceivable(loadDb().accountsReceivable, {
+      tenantId,
+      originId,
+      installmentNumber,
+    });
+    if (existing) return existing;
   }
 
   const {
@@ -323,7 +369,7 @@ export const createReceivable = (user, payload) => {
     origin_type: originType,
     origin_id: originId,
     description,
-    installment_number: Number(payload.installment_number || 1),
+    installment_number: installmentNumber,
     total_installments: Number(payload.total_installments || 1),
     issue_date: issueDate,
     due_date: dueDate,

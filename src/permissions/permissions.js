@@ -28,7 +28,7 @@ export const can = (user, permission) => {
 export { can as canModuleAction } from '../services/accessService.js';
 
 export const requirePermission = (user, permission) => {
-  if (!can(user, permission)) {
+  if (!user || !permission || !can(user, permission)) {
     const error = new Error('Permissão insuficiente.');
     error.code = 'PERMISSION_DENIED';
     throw error;

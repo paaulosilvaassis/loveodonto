@@ -121,8 +121,10 @@ export default function FinanceReceivablesPage() {
         paymentMethodExpected: filters.paymentMethodExpected,
         originType: filters.originType,
         tabFilter: activeTab,
+        tenantId: user?.tenant_id || user?.tenantId || user?.tenant?.id,
+        user,
       }),
-    [filters, activeTab, refreshKey]
+    [filters, activeTab, refreshKey, user],
   );
 
   const kpis = useMemo(() => {

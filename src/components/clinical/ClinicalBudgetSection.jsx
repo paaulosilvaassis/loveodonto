@@ -24,7 +24,7 @@ import {
   BUDGET_CONSISTENCY_ALERT,
 } from '../../services/budgetNavigationService.js';
 import { notifyClinicalBudgetUpdated } from '../../services/clinicalBudgetApprovedService.js';
-import { processApprovedBudgetFinance } from '../../services/clinicalBudgetFinance.js';
+import { approveClinicalBudgetWithFinance } from '../../services/clinicalBudgetFinance.js';
 import { BudgetPaymentConditions } from './budget/BudgetPaymentConditions.jsx';
 import { BudgetSummaryPanel } from './budget/BudgetSummaryPanel.jsx';
 import { BudgetPremiumHeader } from './budget/BudgetPremiumHeader.jsx';
@@ -384,30 +384,14 @@ export function ClinicalBudgetSection({
         id: budget.id || createId('budget'),
       };
 
-      saveBudget(user, appointmentId, budgetToSave);
-      updateBudgetStatus(user, appointmentId, BUDGET_STATUS.APROVADO);
-
-      const approvedBudget = {
-        ...budgetToSave,
-        status: BUDGET_STATUS.APROVADO,
-        approvedAt: new Date().toISOString(),
-        approvedBy: user.id,
-      };
-
-      const { receivables, financing } = processApprovedBudgetFinance(user, {
+      const { receivables, financing, budget: nextBudget } = approveClinicalBudgetWithFinance(user, {
         appointmentId,
         patientId,
         patient,
-        budget: approvedBudget,
+        budget: budgetToSave,
         professional: appointment?.professionalId ? { id: appointment.professionalId } : null,
       });
 
-      let nextBudget = approvedBudget;
-      if (financing?.id) {
-        nextBudget = { ...approvedBudget, financingId: financing.id };
-      }
-
-      saveBudget(user, appointmentId, nextBudget, { skipLockCheck: true });
       setBudget(nextBudget);
       setApprovalOpen(false);
       refreshHistory();
