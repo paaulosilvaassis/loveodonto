@@ -40,6 +40,7 @@ import {
   scheduleFinancialDualWriteCreateReceivable,
   scheduleFinancialDualWriteUpdateReceivable,
 } from './financialWriteAdapter.js';
+import { scheduleFinancialV2ShadowWrite } from './financialV2ShadowWrite.js';
 import {
   scheduleReceivableCreatedDomainEvent,
   scheduleReceivableUpdatedDomainEvent,
@@ -581,7 +582,10 @@ export const createReceivableCharge = (user, payload) => {
       String(row.operation_id || row.metadata?.operation_id || '') === String(operationId)
       && String(row.tenant_id || row.tenantId || '') === tenantId
     ));
-    if (existing) return existing;
+    if (existing) {
+      scheduleFinancialV2ShadowWrite({ entityType: 'charge', record: existing });
+      return existing;
+    }
   }
 
   const now = new Date().toISOString();
@@ -653,6 +657,7 @@ export const createReceivableCharge = (user, payload) => {
     return d;
   });
 
+  scheduleFinancialV2ShadowWrite({ entityType: 'charge', record });
   return record;
 };
 

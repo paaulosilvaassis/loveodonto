@@ -2,6 +2,7 @@ import { loadDb, withDb } from '../db/index.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { RECEIVABLE_STATUS } from './auditEventCatalog.js';
 import { scheduleReceivableUpdatedDomainEvent } from './financialDomainEventPublisher.js';
+import { scheduleFinancialV2ShadowWrite } from './financialV2ShadowWrite.js';
 import { assertReceivableWriteOwnership } from './receivablePaymentLifecycle.js';
 import {
   refreshFinancingFromReceivable,
@@ -90,6 +91,7 @@ export function cancelReceivable(user, id, reason = '') {
       canceled_reason: reason || '',
     });
   }
+  scheduleFinancialV2ShadowWrite({ entityType: 'receivable', record: saved });
   return saved;
 }
 

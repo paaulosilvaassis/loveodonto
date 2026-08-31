@@ -22,6 +22,7 @@ import {
   shouldUseFinancialRepositoryWrite,
   shouldUseFinancialRepositoryWritePrimary,
 } from './financialRepositoryBridge.js';
+import { scheduleFinancialV2ShadowWrite } from './financialV2ShadowWrite.js';
 
 function logFinancialWriteAdapterDev(event, payload) {
   if (!import.meta.env?.DEV) return;
@@ -136,6 +137,7 @@ export function scheduleFinancialDualWriteCreateReceivable(user, record) {
     () => runReceivableCreate(user, record, tenantId),
     { event: 'createReceivable', tenantId, legacyId: record?.id, userId: user?.id },
   );
+  scheduleFinancialV2ShadowWrite({ entityType: 'receivable', record });
 }
 
 export function scheduleFinancialDualWriteUpdateReceivable(user, record, partial = {}) {
@@ -145,6 +147,7 @@ export function scheduleFinancialDualWriteUpdateReceivable(user, record, partial
     () => runReceivableUpdate(user, record, tenantId, partial),
     { event: 'updateReceivable', tenantId, legacyId: record?.id, userId: user?.id },
   );
+  scheduleFinancialV2ShadowWrite({ entityType: 'receivable', record });
 }
 
 export function scheduleFinancialDualWriteCreatePayable(user, record) {
@@ -181,6 +184,7 @@ export function scheduleFinancialDualWriteCreateFinancing(user, record) {
     () => runFinancingCreate(user, record, tenantId),
     { event: 'createFinancing', tenantId, legacyId: record?.id, userId: user?.id },
   );
+  scheduleFinancialV2ShadowWrite({ entityType: 'financing', record });
 }
 
 export function scheduleFinancialDualWriteUpdateFinancing(user, record, partial = {}) {
@@ -190,6 +194,7 @@ export function scheduleFinancialDualWriteUpdateFinancing(user, record, partial 
     () => runFinancingUpdate(user, record, tenantId, partial),
     { event: 'updateFinancing', tenantId, legacyId: record?.id, userId: user?.id },
   );
+  scheduleFinancialV2ShadowWrite({ entityType: 'financing', record });
 }
 
 /** Preparado — registerReceivablePayment (sem ativação indevida). */

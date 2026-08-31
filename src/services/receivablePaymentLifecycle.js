@@ -8,6 +8,7 @@ import {
 } from './auditEventCatalog.js';
 import { resolveTenantIdForWrite, requireSessionTenantId, assertSameTenant } from './tenantWriteGuard.js';
 import { schedulePaymentReceivedDomainEvent } from './financialDomainEventPublisher.js';
+import { scheduleFinancialV2ShadowWrite } from './financialV2ShadowWrite.js';
 import { reverseAllocationsByReceivablePayment } from './financingPaymentAllocationsService.js';
 import { assertFiniteMoney, fromCents, toCents } from './receivableMoney.js';
 import {
@@ -217,6 +218,8 @@ export function registerReceivablePayment(user, receivableId, payload = {}) {
   if (!replayed && isEffectiveReceivablePayment(savedPayment)) {
     schedulePaymentReceivedDomainEvent(user, savedPayment, savedReceivable);
   }
+  scheduleFinancialV2ShadowWrite({ entityType: 'receivable', record: savedReceivable });
+  scheduleFinancialV2ShadowWrite({ entityType: 'payment', record: savedPayment });
   return { receivable: savedReceivable, payment: savedPayment, replayed };
 }
 
@@ -309,6 +312,9 @@ export function reverseReceivablePayment(user, paymentId, payload = {}) {
     reversal_reason: payload.reversal_reason || payload.reason || 'Estorno de recebimento.',
   });
 
+  scheduleFinancialV2ShadowWrite({ entityType: 'receivable', record: savedReceivable });
+  scheduleFinancialV2ShadowWrite({ entityType: 'payment', record: savedPayment });
+  scheduleFinancialV2ShadowWrite({ entityType: 'payment', record: savedReversal });
   return {
     receivable: savedReceivable,
     payment: savedPayment,
