@@ -1,0 +1,210 @@
+{
+  "environment": "STAGING",
+  "projectRef": "tckdjyunwmdpqmewrwvt",
+  "productionRefTouched": false,
+  "syntheticPrefix": "phase11l-",
+  "writePath": "mcp execute_sql project_id=tckdjyunwmdpqmewrwvt",
+  "executorRole": "postgres_or_service_role_bypassrls",
+  "appWritersWired": false,
+  "stats": {
+    "TOTAL": 6,
+    "MATCH": 6,
+    "MISMATCH": 0,
+    "NOT_COMPARABLE": 0
+  },
+  "comparisons": [
+    {
+      "entityType": "financing",
+      "source_id": "phase11l-fin-a1",
+      "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+      "comparison": { "result": "MATCH", "reason_code": null },
+      "legacy": {
+        "id": "phase11l-fin-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "patient_id": "phase11l-patient-a",
+        "budget_id": "phase11l-budget-fin-a1",
+        "status": "draft",
+        "total_amount": 500,
+        "entry_amount": 0,
+        "total_payable_amount": 500,
+        "installments_count": 2
+      },
+      "normalized": {
+        "source_id": "phase11l-fin-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "status": "draft",
+        "total_cents": 50000,
+        "total_payable_cents": 50000
+      },
+      "readback": {
+        "source_id": "phase11l-fin-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "status": "draft",
+        "total_cents": 50000,
+        "total_payable_cents": 50000,
+        "budget_id": "phase11l-budget-fin-a1"
+      }
+    },
+    {
+      "entityType": "receivable",
+      "source_id": "phase11l-recv-a1",
+      "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+      "comparison": { "result": "MATCH", "reason_code": null },
+      "legacy": {
+        "id": "phase11l-recv-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "patient_id": "phase11l-patient-a",
+        "origin_type": "manual_entry",
+        "net_amount": 99.99,
+        "status": "partially_paid"
+      },
+      "normalized": {
+        "source_id": "phase11l-recv-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "status": "partially_paid",
+        "total_cents": 9999
+      },
+      "readback": {
+        "source_id": "phase11l-recv-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "status": "partially_paid",
+        "total_cents": 9999,
+        "original_cents": 9999
+      }
+    },
+    {
+      "entityType": "receivable",
+      "source_id": "phase11l-recv-b1",
+      "tenant_id": "b22b22b2-2222-4222-8222-b22b22b2222b",
+      "comparison": { "result": "MATCH", "reason_code": null },
+      "legacy": {
+        "id": "phase11l-recv-b1",
+        "tenant_id": "b22b22b2-2222-4222-8222-b22b22b2222b",
+        "patient_id": "phase11l-patient-b",
+        "origin_type": "manual_entry",
+        "net_amount": 10,
+        "status": "upcoming"
+      },
+      "normalized": {
+        "source_id": "phase11l-recv-b1",
+        "tenant_id": "b22b22b2-2222-4222-8222-b22b22b2222b",
+        "status": "upcoming",
+        "total_cents": 1000
+      },
+      "readback": {
+        "source_id": "phase11l-recv-b1",
+        "tenant_id": "b22b22b2-2222-4222-8222-b22b22b2222b",
+        "status": "upcoming",
+        "total_cents": 1000
+      }
+    },
+    {
+      "entityType": "payment",
+      "source_id": "phase11l-pay-a1",
+      "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+      "comparison": { "result": "MATCH", "reason_code": null },
+      "legacy": {
+        "id": "phase11l-pay-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "receivable_id": "phase11l-recv-a1",
+        "operation_id": "phase11l-op-pay-a1",
+        "kind": "payment",
+        "amount_received": 49.99
+      },
+      "normalized": {
+        "source_id": "phase11l-pay-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "receivable_id": "phase11l-recv-a1",
+        "operation_id": "phase11l-op-pay-a1",
+        "kind": "payment",
+        "amount_cents": 4999,
+        "reverses_payment_id": null
+      },
+      "readback": {
+        "source_id": "phase11l-pay-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "receivable_id": "phase11l-recv-a1",
+        "operation_id": "phase11l-op-pay-a1",
+        "kind": "payment",
+        "status": "applied",
+        "amount_cents": 4999,
+        "reverses_payment_id": null
+      }
+    },
+    {
+      "entityType": "payment",
+      "source_id": "phase11l-rev-a1",
+      "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+      "comparison": { "result": "MATCH", "reason_code": null },
+      "legacy": {
+        "id": "phase11l-rev-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "receivable_id": "phase11l-recv-a1",
+        "operation_id": "phase11l-op-rev-a1",
+        "kind": "reversal",
+        "amount_received": 49.99,
+        "reverses_payment_id": "phase11l-pay-a1"
+      },
+      "normalized": {
+        "source_id": "phase11l-rev-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "receivable_id": "phase11l-recv-a1",
+        "operation_id": "phase11l-op-rev-a1",
+        "kind": "reversal",
+        "amount_cents": 4999,
+        "reverses_payment_id": "phase11l-pay-a1"
+      },
+      "readback": {
+        "source_id": "phase11l-rev-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "receivable_id": "phase11l-recv-a1",
+        "kind": "reversal",
+        "amount_cents": 4999,
+        "reverses_payment_id": "phase11l-pay-a1"
+      }
+    },
+    {
+      "entityType": "charge",
+      "source_id": "phase11l-chg-a1",
+      "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+      "comparison": { "result": "MATCH", "reason_code": null },
+      "legacy": {
+        "id": "phase11l-chg-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "receivable_id": "phase11l-recv-a1",
+        "operation_id": "phase11l-op-chg-a1",
+        "status": "draft",
+        "amount": 99.99
+      },
+      "normalized": {
+        "source_id": "phase11l-chg-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "receivable_id": "phase11l-recv-a1",
+        "amount_cents": 9999,
+        "creates_receivable": false
+      },
+      "readback": {
+        "source_id": "phase11l-chg-a1",
+        "tenant_id": "a11a11a1-1111-4111-8111-a11a11a1111a",
+        "receivable_id": "phase11l-recv-a1",
+        "operation_id": "phase11l-op-chg-a1",
+        "status": "draft",
+        "amount_cents": 9999
+      }
+    }
+  ],
+  "cleanupComplete": true,
+  "leftoverCounts": {
+    "receivables": 0,
+    "payments": 0,
+    "financings": 0,
+    "charges": 0,
+    "tenants": 0
+  },
+  "notes": [
+    "Live write/read-back executed on staging tckdjyunwmdpqmewrwvt only.",
+    "Production uoepkwhqztmsjnzirpev was not touched.",
+    "All source_ids used prefix phase11l-.",
+    "IndexedDB was not mutated. App writers were not wired to staging."
+  ]
+}
