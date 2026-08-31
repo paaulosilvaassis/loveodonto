@@ -914,3 +914,15 @@ Cancel/abort/revoke = `canPerformSensitiveLifecycle`. RESEND = operacional. ROTA
 Contrato **nunca** é rotulado Expirado. Expiração pertence ao acesso de assinatura (relógio confiável).
 
 `createContractNewVersion` permanece bloqueado. Sem `Nova versão` em ciclo jurídico assinado.
+## 10.23I — validação final + binding no send legado
+
+Defeito real no writer de produção `sendContractForSignature`: criava `contractSignLinks` **sem** `requestId` / `contractSignatureRequests`. Isso quebrava `assertRemoteSignatureBinding` (10.21CO) no path Pendentes/Fila e no teste 10.21L.
+
+Correção mínima: todo **novo** link desse writer nasce com request ligado (`tenantId`, `contractId`, `requestId`, party PATIENT). Reuso se já existir par signable. `NEW_LINK_WITHOUT_REQUEST_ID` é fail-closed.
+
+Compatibilidade de escrita (não são significados jurídicos concorrentes):
+
+- contrato `sent` / `viewed` → leitura `generated`
+- cancel/abort persiste LIVE `canceled` → leitura `cancelled`
+
+Reissue de fonte `cancelled` permanece **SAFE_AND_INTENTIONAL** (10.23B): a fonte vira `superseded` e nunca volta a ser assinável.

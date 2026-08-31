@@ -11,6 +11,7 @@ import { mergeContractAttachedTcleIds } from './clinicalTcleAttachmentService.js
 import {
   CONTRACT_STATUS,
   DEFAULT_CONTRACT_SETTINGS,
+  SIGNATURE_PROVIDERS,
   SIGNATURE_TYPES,
   SIGNER_ROLES,
 } from '../contracts/contractConstants.js';
@@ -59,7 +60,7 @@ import {
   normalizeContractLifecycleStatus,
   normalizeLinkLifecycleStatus,
 } from '../contracts/lifecycle/index.js';
-import { persistExpiredSigningAccess } from '../contracts/lifecycle/accessExpiry.js';
+import { persistClockExpiredAccess, persistExpiredSigningAccess } from '../contracts/lifecycle/accessExpiry.js';
 import { maybeGenerateFinalSignedArtifact } from './finalSignedContractArtifactService.js';
 import {
   createGeneratedContractDraft,
@@ -376,20 +377,92 @@ export function getContractDetails(contractId, expectedIdentity) {
   return { contract, signatures, events, attachments, signLinks };
 }
 
+function isReusablePatientRequest(request, now) {
+  if (!request?.id) return false;
+  const status = String(request.status || '');
+  if (!['pending', 'sent'].includes(status)) return false;
+  const role = mapLegacySignerRole(request.signerRole || CLINICAL_SIGNER_ROLE.PATIENT);
+  if (role !== CLINICAL_SIGNER_ROLE.PATIENT) return false;
+  if (!request.expiresAt) return true;
+  return new Date(request.expiresAt).getTime() > now;
+}
+
+function findReusableBoundSignAccess(db, contractId, now = Date.now()) {
+  const request = (db.contractSignatureRequests || [])
+    .filter((row) => row.contractId === contractId && isReusablePatientRequest(row, now))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0] || null;
+  if (!request) return null;
+  const link = (db.contractSignLinks || []).find((row) => (
+    row.requestId === request.id
+    && row.status === 'pending'
+    && row.token
+    && !isAccessExpired(row.expiresAt, now)
+  )) || null;
+  if (!link?.requestId) return null;
+  return { request, link };
+}
+
+function createBoundPatientSignAccess(db, { user, contract, token, expiresAt }) {
+  const requestId = createId('csreq');
+  if (!requestId) throw new Error('requestId obrigatório para novo link de assinatura.');
+  const tenantId = tenantIdFromUser(user) || contract.tenant_id || contract.tenantId || null;
+  const actedAt = new Date().toISOString();
+  const request = {
+    id: requestId,
+    tenant_id: tenantId,
+    clinicId: clinicId(),
+    contractId: contract.id,
+    provider: SIGNATURE_PROVIDERS.INTERNAL,
+    externalId: token,
+    status: 'pending',
+    signerRole: CLINICAL_SIGNER_ROLE.PATIENT,
+    signerPersonId: contract.patientId || null,
+    expiresAt,
+    createdBy: user?.id || null,
+    createdAt: actedAt,
+    sentAt: null,
+    completedAt: null,
+  };
+  const link = {
+    id: createId('clnk'),
+    tenant_id: tenantId,
+    clinicId: request.clinicId,
+    contractId: contract.id,
+    requestId,
+    token,
+    expiresAt,
+    status: 'pending',
+    signerRole: CLINICAL_SIGNER_ROLE.PATIENT,
+    signerPersonId: contract.patientId || null,
+    createdBy: user?.id || null,
+    createdAt: actedAt,
+    viewedAt: null,
+    signedAt: null,
+  };
+  if (!link.requestId) {
+    throw new Error('NEW_LINK_WITHOUT_REQUEST_ID');
+  }
+  if (!Array.isArray(db.contractSignatureRequests)) db.contractSignatureRequests = [];
+  if (!Array.isArray(db.contractSignLinks)) db.contractSignLinks = [];
+  db.contractSignatureRequests.push(request);
+  db.contractSignLinks.push(link);
+  return { request, link };
+}
+
 export function sendContractForSignature(user, contractId) {
   const settings = getContractSettings(user);
   const days = Number(settings.signLinkExpiryDays || 7);
   const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
-  const token = createId('csgn');
   return withDb((db) => {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === contractId);
     if (idx < 0) throw new Error('Contrato não encontrado.');
-    if (isTerminalContractState(arr[idx].status) || normalizeContractLifecycleStatus(arr[idx].status) === 'signed') {
+    const normalized = normalizeContractLifecycleStatus(arr[idx].status);
+    if (isTerminalContractState(arr[idx].status) || normalized === 'signed') {
       throw new Error('Contrato já assinado.');
     }
-    if (normalizeContractLifecycleStatus(arr[idx].status) !== 'generated') {
-      throw new Error('Somente contratos gerados podem ser enviados para assinatura.');
+    if (normalized !== 'generated' && normalized !== 'partially_signed') {
+      throw new Error('Somente contratos gerados ou parcialmente assinados podem ser enviados para assinatura.');
     }
     if (arr[idx].quoteSource === 'clinical_budget') {
       const md = arr[idx].metadata || {};
@@ -397,29 +470,42 @@ export function sendContractForSignature(user, contractId) {
         throw new Error('Manifest ainda não congelado. Prepare o pacote de assinatura primeiro.');
       }
     }
+    persistClockExpiredAccess(db, {
+      contractId,
+      trustedNow: Date.now(),
+      actorId: user?.id || 'system',
+      actorRole: user?.role || 'system',
+      tenantId: tenantIdFromUser(user) || arr[idx].tenant_id || null,
+    });
+    const reused = findReusableBoundSignAccess(db, contractId);
+    const token = reused?.link?.token || createId('csgn');
+    const access = reused || createBoundPatientSignAccess(db, {
+      user,
+      contract: arr[idx],
+      token,
+      expiresAt,
+    });
+    if (!access.link.requestId) {
+      throw new Error('NEW_LINK_WITHOUT_REQUEST_ID');
+    }
     assertContractStatusMutation(arr[idx], CONTRACT_STATUS.SENT, { contractId });
     arr[idx] = {
       ...arr[idx],
       status: CONTRACT_STATUS.SENT,
       lockedAt: arr[idx].lockedAt || new Date().toISOString(),
+      signatureRequestId: access.request.id,
     };
-    if (!Array.isArray(db.contractSignLinks)) db.contractSignLinks = [];
-    const link = {
-      id: createId('clnk'),
-      tenant_id: tenantIdFromUser(user),
-      clinicId: clinicId(),
-      contractId,
-      token,
-      expiresAt,
-      status: 'pending',
-      createdBy: user?.id || null,
-      createdAt: new Date().toISOString(),
-      viewedAt: null,
-      signedAt: null,
+    registerEvent(user, contractId, 'SENT', 'Enviado para assinatura por link', {
+      linkId: access.link.id,
+      requestId: access.request.id,
+      expiresAt: access.link.expiresAt,
+    });
+    return {
+      contract: arr[idx],
+      request: access.request,
+      link: access.link,
+      signUrl: `/assinatura/${access.link.token}`,
     };
-    db.contractSignLinks.push(link);
-    registerEvent(user, contractId, 'SENT', 'Enviado para assinatura por link', { linkId: link.id, expiresAt });
-    return { contract: arr[idx], link, signUrl: `/assinatura/${token}` };
   });
 }
 
