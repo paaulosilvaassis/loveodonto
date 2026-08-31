@@ -1,0 +1,54 @@
+{
+  "environment": "STAGING",
+  "projectRef": "tckdjyunwmdpqmewrwvt",
+  "productionRefTouched": false,
+  "syntheticPrefix": "phase11n-",
+  "operationalAuth": "TENANT_SCOPED",
+  "runtimeInsertRole": "authenticated",
+  "observationTenant": "f33f33f3-3333-4333-8333-f33f33f3333f",
+  "livePathA": {
+    "source_id": "recv-phase11n-obs-a1",
+    "total_cents": 8000,
+    "origin_type": "treatment_plan",
+    "status": "upcoming",
+    "compareFinancialShadow": "MATCH"
+  },
+  "harness": {
+    "OBSERVATION_OPERATIONS_TOTAL": 13,
+    "OBSERVATION_ELIGIBLE": 13,
+    "OBSERVATION_MATCH": 13,
+    "OBSERVATION_MISMATCH": 0,
+    "OBSERVATION_WRITE_FAILED": 0,
+    "OBSERVATION_QUARANTINED": 0,
+    "OBSERVATION_NOT_COMPARABLE": 0,
+    "PATH_A_RUNTIME_SHADOW": "MATCH",
+    "FINANCING_RUNTIME_SHADOW": "MATCH",
+    "PATH_B_RUNTIME_SHADOW": "MATCH",
+    "PAYMENT_RUNTIME_SHADOW": "MATCH",
+    "REVERSAL_RUNTIME_SHADOW": "MATCH",
+    "CHARGE_RUNTIME_SHADOW": "MATCH",
+    "DUPLICATE_REMOTE_FACTS": 0,
+    "IMMUTABLE_REMOTE_OVERWRITES": 0,
+    "ORPHAN_REMOTE_FACTS": 0,
+    "PII_TELEMETRY_LEAKS": 0
+  },
+  "acceptance": {
+    "pass": true,
+    "failures": []
+  },
+  "cleanupComplete": true,
+  "leftoverCounts": {
+    "receivables": 0,
+    "payments": 0,
+    "financings": 0,
+    "charges": 0,
+    "tenants": 0,
+    "tenant_users": 0
+  },
+  "notes": [
+    "Observation window used FINANCIAL_V2_RUNTIME_SHADOW only inside the harness, default remains OFF.",
+    "Live PATH A insert used SET ROLE authenticated + JWT sub/tenant_id.",
+    "Service role used only for fixture setup/cleanup.",
+    "Production uoepkwhqztmsjnzirpev was not touched."
+  ]
+}
