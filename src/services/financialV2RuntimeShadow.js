@@ -72,6 +72,7 @@ const state = {
   allowlist: [],
   projectRef: '',
   executor: null,
+  transport: null,
   store: createImmutableAwareFinancialV2Store(),
   telemetry: [],
   chain: Promise.resolve(),
@@ -172,11 +173,13 @@ export function __setFinancialV2RuntimeShadowForTest({
   allowlist = PHASE_11M_DEFAULT_ALLOWLIST,
   projectRef = STAGING_SUPABASE_PROJECT_REF,
   executor = null,
+  transport = null,
 } = {}) {
   state.enabled = Boolean(enabled);
   state.allowlist = parseFinancialV2ShadowAllowlist(allowlist);
   state.projectRef = projectRef || '';
   state.executor = executor;
+  state.transport = transport;
   state.store = createImmutableAwareFinancialV2Store();
 }
 
@@ -185,6 +188,7 @@ export function __resetFinancialV2RuntimeShadowForTest() {
   state.allowlist = [];
   state.projectRef = '';
   state.executor = null;
+  state.transport = null;
   state.store = createImmutableAwareFinancialV2Store();
   state.telemetry = [];
   state.counters = emptyCounters();
@@ -258,7 +262,16 @@ export function createImmutableAwareFinancialV2Store() {
   };
 }
 
-export async function persistRuntimeShadowRow({ table, mapped, executor = state.executor, store = state.store }) {
+export function __getFinancialV2RuntimeTransportForTest() {
+  return state.transport;
+}
+
+export async function persistRuntimeShadowRow({
+  table, mapped, executor = state.executor, store = state.store, transport = state.transport,
+}) {
+  if (transport && typeof transport.persist === 'function') {
+    return transport.persist({ table, mapped });
+  }
   if (executor) {
     await executor(buildFinancialV2InsertSql(table, mapped));
     let rows = await executor(buildFinancialV2SelectSql(table, mapped.tenant_id, mapped.source_id));

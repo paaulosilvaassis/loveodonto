@@ -1,0 +1,86 @@
+{
+  "environment": "STAGING",
+  "projectRef": "tckdjyunwmdpqmewrwvt",
+  "productionRefTouched": false,
+  "transport": "SUPABASE_JS_POSTGREST",
+  "authMode": "REAL_STAGING_AUTHENTICATED_SESSION",
+  "syntheticPrefix": "phase11p-",
+  "entities": {
+    "pathA": {
+      "source_id": "recv-98801c63-8305-4dd3-949f-e23a8be10d25",
+      "compareFinancialShadow": "MATCH"
+    },
+    "financing": {
+      "source_id": "fin-58622bf1-379b-46cd-9cf8-b841600f878a",
+      "compareFinancialShadow": "MATCH"
+    },
+    "pathB": [
+      {
+        "source_id": "recv-158ec108-7780-4c52-acf0-d1f29d3a6ba1",
+        "compareFinancialShadow": "MATCH"
+      },
+      {
+        "source_id": "recv-522b1023-2901-4897-bbee-0e2d25913eff",
+        "compareFinancialShadow": "MATCH"
+      }
+    ],
+    "payment": {
+      "source_id": "rvpay-75eda14b-cc68-4290-a8ff-251756639ebc",
+      "compareFinancialShadow": "MATCH",
+      "preservedAfterReversal": true
+    },
+    "reversal": {
+      "source_id": "rvpay-f5d97b95-4c57-4f62-a680-b4943b50a4e2",
+      "compareFinancialShadow": "MATCH"
+    },
+    "charge": {
+      "source_id": "rvchg-8db72d90-83f1-4464-8ff5-706e0b2cd13c",
+      "compareFinancialShadow": "MATCH",
+      "createsReceivable": false
+    }
+  },
+  "summary": {
+    "APP_RUNTIME_OPERATIONS_TOTAL": 13,
+    "APP_RUNTIME_ELIGIBLE": 13,
+    "APP_RUNTIME_MATCH": 13,
+    "APP_RUNTIME_MISMATCH": 0,
+    "APP_RUNTIME_WRITE_FAILED": 0,
+    "APP_RUNTIME_QUARANTINED": 0,
+    "APP_RUNTIME_NOT_COMPARABLE": 0,
+    "PATH_A_APP_RUNTIME_REMOTE": "MATCH",
+    "FINANCING_APP_RUNTIME_REMOTE": "MATCH",
+    "FINANCING_APPROVAL_APP_RUNTIME_REMOTE": "MATCH",
+    "PATH_B_APP_RUNTIME_REMOTE": "MATCH",
+    "PAYMENT_APP_RUNTIME_REMOTE": "MATCH",
+    "REVERSAL_APP_RUNTIME_REMOTE": "MATCH",
+    "CHARGE_APP_RUNTIME_REMOTE": "MATCH",
+    "PAYMENT_APP_RUNTIME_IDEMPOTENCY": true,
+    "TOKEN_TELEMETRY_LEAKS": 0,
+    "PII_TELEMETRY_LEAKS": 0
+  },
+  "rls": {
+    "APP_RUNTIME_RLS_SELECT": "PASS",
+    "APP_RUNTIME_RLS_INSERT": "PASS",
+    "APP_RUNTIME_RLS_UPDATE": "PASS"
+  },
+  "session": {
+    "CROSS_TENANT_SESSION_LEAK": 0,
+    "POST_LOGOUT_REMOTE_WRITE": "DENIED"
+  },
+  "integrity": {
+    "DUPLICATE_REMOTE_FACTS": 0,
+    "IMMUTABLE_REMOTE_OVERWRITES": 0,
+    "ORPHAN_REMOTE_FACTS": 0,
+    "MONETARY_PARITY": "PASS",
+    "PAYMENT_APP_RUNTIME_IDEMPOTENCY": "PASS"
+  },
+  "cleanupComplete": true,
+  "leftoverCounts": {
+    "receivables": 0,
+    "payments": 0,
+    "financings": 0,
+    "charges": 0,
+    "tenants": 0,
+    "tenant_users": 0
+  }
+}
