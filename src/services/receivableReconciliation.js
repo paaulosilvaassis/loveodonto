@@ -46,6 +46,26 @@ export function sumEffectivePaidCents(payments, receivableId) {
     }, 0);
 }
 
+export function isReceivableCollectible(receivable) {
+  const status = receivable?.status;
+  return status !== RECEIVABLE_STATUS.CANCELED && status !== RECEIVABLE_STATUS.RENEGOTIATED;
+}
+
+export function isReceivableOpenBalanceStatus(status) {
+  return status !== RECEIVABLE_STATUS.CANCELED
+    && status !== RECEIVABLE_STATUS.RENEGOTIATED
+    && status !== RECEIVABLE_STATUS.PAID;
+}
+
+export function assertReceivableCollectible(receivable) {
+  if (receivable?.status === RECEIVABLE_STATUS.CANCELED) {
+    throw new Error('Título cancelado não pode receber pagamentos.');
+  }
+  if (receivable?.status === RECEIVABLE_STATUS.RENEGOTIATED) {
+    throw new Error('Título renegociado não pode receber pagamentos.');
+  }
+}
+
 export function computeReceivableStatus(receivable, todayIso = TODAY()) {
   if (receivable.status === RECEIVABLE_STATUS.CANCELED) return RECEIVABLE_STATUS.CANCELED;
   if (receivable.status === RECEIVABLE_STATUS.RENEGOTIATED) return RECEIVABLE_STATUS.RENEGOTIATED;

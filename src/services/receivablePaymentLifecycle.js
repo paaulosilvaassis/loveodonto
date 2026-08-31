@@ -3,7 +3,6 @@ import { requirePermission } from '../permissions/permissions.js';
 import { createId } from './helpers.js';
 import {
   FINANCIAL_PAYMENT_METHOD,
-  RECEIVABLE_STATUS,
   assertEnumValue,
   normalizeEnumValue,
 } from './auditEventCatalog.js';
@@ -14,6 +13,7 @@ import { assertFiniteMoney, fromCents, toCents } from './receivableMoney.js';
 import {
   RECEIVABLE_PAYMENT_KIND,
   RECEIVABLE_PAYMENT_STATUS,
+  assertReceivableCollectible,
   isEffectiveReceivablePayment,
   reconcileReceivableFromPayments,
   refreshFinancingFromReceivable,
@@ -133,9 +133,7 @@ export function registerReceivablePayment(user, receivableId, payload = {}) {
 
     const { current } = findReceivable(db, receivableId);
     if (!current) throw new Error('Título não encontrado.');
-    if (current.status === RECEIVABLE_STATUS.CANCELED) {
-      throw new Error('Título cancelado não pode receber pagamentos.');
-    }
+    assertReceivableCollectible(current);
 
     const tenantId = assertReceivableWriteOwnership(user, current, db);
     if (payload.tenant_id || payload.tenantId) {

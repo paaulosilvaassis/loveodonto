@@ -15,15 +15,21 @@ import {
 } from './auditEventCatalog.js';
 import { resolveTenantIdForWrite, resolveUserTenantId } from './tenantWriteGuard.js';
 import {
-  computeReceivableStatus,
-  refreshFinancingFromReceivable,
-} from './receivableReconciliation.js';
-import {
   registerReceivablePayment,
   reverseReceivablePayment,
   PAYMENT_RECEIVE_PERMISSION,
   PAYMENT_REVERSE_PERMISSION,
+  assertReceivableWriteOwnership,
 } from './receivablePaymentLifecycle.js';
+import {
+  cancelReceivable,
+  RECEIVABLE_CANCEL_PERMISSION,
+  RECEIVABLE_UPDATE_PERMISSION,
+} from './receivableObligationLifecycle.js';
+import {
+  computeReceivableStatus,
+  isReceivableOpenBalanceStatus,
+} from './receivableReconciliation.js';
 import { readGetReceivable, readListReceivables } from './financialReadAdapter.js';
 import {
   scheduleFinancialDualWriteCreateReceivable,
@@ -39,6 +45,9 @@ export {
   reverseReceivablePayment,
   PAYMENT_RECEIVE_PERMISSION,
   PAYMENT_REVERSE_PERMISSION,
+  cancelReceivable,
+  RECEIVABLE_CANCEL_PERMISSION,
+  RECEIVABLE_UPDATE_PERMISSION,
 };
 
 export const RECEIVABLE_TABS = {
@@ -230,6 +239,7 @@ export const getReceivablesKPIs = (month, year) => {
     const net = Number(r.net_amount || 0);
     const remaining = Number(r.remaining_amount || 0);
     const status = computeReceivableStatus(r, todayIso);
+    if (!isReceivableOpenBalanceStatus(status) && status !== RECEIVABLE_STATUS.PAID) return;
 
     if (status === RECEIVABLE_STATUS.PAID) {
       totalReceived += net;
@@ -388,15 +398,22 @@ export const updateReceivable = (user, id, payload) => {
   if (payload.charge_method !== undefined) {
     assertEnumValue('charge_method', RECEIVABLE_CHARGE_TYPE, payload.charge_method);
   }
-  requirePermission(user, 'finance:write');
+  requirePermission(user, RECEIVABLE_UPDATE_PERMISSION);
   const db = loadDb();
   const items = Array.isArray(db.accountsReceivable) ? db.accountsReceivable : [];
   const idx = items.findIndex((r) => r.id === id);
   if (idx < 0) throw new Error('Título não encontrado.');
 
   const current = items[idx];
+  assertReceivableWriteOwnership(user, current, db);
   if (current.status === RECEIVABLE_STATUS.CANCELED) throw new Error('Não é possível editar título cancelado.');
   if (current.status === RECEIVABLE_STATUS.RENEGOTIATED) throw new Error('Não é possível editar título renegociado.');
+  if (payload.origin_id !== undefined && String(payload.origin_id || '') !== String(current.origin_id || '')) {
+    throw new Error('Origem financeira do título não pode ser reatribuída.');
+  }
+  if (payload.origin_type !== undefined && payload.origin_type !== current.origin_type) {
+    throw new Error('Origem financeira do título não pode ser reatribuída.');
+  }
   if (payload.origin_type !== undefined) {
     const nextOriginType = payload.origin_type || current.origin_type;
     if (!Object.values(RECEIVABLE_ORIGIN_TYPE).includes(nextOriginType)) {
@@ -470,38 +487,6 @@ export const updateReceivable = (user, id, payload) => {
 
   scheduleFinancialDualWriteUpdateReceivable(user, updated, payload);
   scheduleReceivableUpdatedDomainEvent(user, updated, payload);
-  return updated;
-};
-
-export const cancelReceivable = (user, id, reason) => {
-  requirePermission(user, 'finance:write');
-  const db = loadDb();
-  const items = Array.isArray(db.accountsReceivable) ? db.accountsReceivable : [];
-  const idx = items.findIndex((r) => r.id === id);
-  if (idx < 0) throw new Error('Título não encontrado.');
-
-  const current = items[idx];
-  if (current.status === RECEIVABLE_STATUS.PAID) throw new Error('Não é possível cancelar título já pago. Utilize estorno/renegociação.');
-
-  const updated = {
-    ...current,
-    status: RECEIVABLE_STATUS.CANCELED,
-    canceled_at: new Date().toISOString(),
-    canceled_reason: reason || '',
-    updated_at: new Date().toISOString(),
-  };
-
-  withDb((d) => {
-    const arr = Array.isArray(d.accountsReceivable) ? d.accountsReceivable : [];
-    const index = arr.findIndex((r) => r.id === id);
-    if (index >= 0) {
-      arr[index] = updated;
-      d.accountsReceivable = arr;
-      refreshFinancingFromReceivable(d, updated);
-    }
-    return d;
-  });
-
   return updated;
 };
 

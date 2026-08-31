@@ -20,11 +20,12 @@ import {
   createReceivableCharge,
   listReceivableCharges,
   getReceivableChargesByReceivable,
+  RECEIVABLE_CANCEL_PERMISSION,
 } from '../services/receivablesService.js';
 import { createId } from '../services/helpers.js';
 import { can } from '../permissions/permissions.js';
 import { PAYMENT_REVERSE_PERMISSION } from '../services/receivablePaymentLifecycle.js';
-import { isEffectiveReceivablePayment } from '../services/receivableReconciliation.js';
+import { isEffectiveReceivablePayment, isReceivableCollectible } from '../services/receivableReconciliation.js';
 import { Plus, Eye, DollarSign, FileText, X } from 'lucide-react';
 import {
   ModalBody,
@@ -744,6 +745,7 @@ export default function FinanceReceivablesPage() {
                           >
                             <FileText size={18} />
                           </button>
+                          {isReceivableCollectible(r) && can(user, RECEIVABLE_CANCEL_PERMISSION) ? (
                           <button
                             type="button"
                             className="button icon danger"
@@ -752,6 +754,7 @@ export default function FinanceReceivablesPage() {
                           >
                             <X size={18} />
                           </button>
+                          ) : null}
                         </td>
                       </tr>
                     );

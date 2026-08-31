@@ -242,7 +242,7 @@ export const MODULES_SPEC = [
     key: 'financeiro',
     label: 'Financeiro',
     children: [
-      { key: 'financeiro_contas_receber', label: 'Contas a Receber', actions: ['view', 'create', 'edit', 'download', 'delete', 'export', 'reverse'] },
+      { key: 'financeiro_contas_receber', label: 'Contas a Receber', actions: ['view', 'create', 'edit', 'download', 'delete', 'export', 'reverse', 'cancel'] },
       { key: 'financeiro_contas_pagar', label: 'Contas a Pagar', actions: ['view', 'create', 'edit', 'download', 'delete', 'export'] },
       { key: 'financeiro_caixa', label: 'Caixa', actions: ['view', 'open', 'close', 'launch', 'reverse'] },
       { key: 'financeiro_boletos', label: 'Boletos/Cobranças', actions: ['view', 'create', 'issue', 'cancel', 'resend'] },
