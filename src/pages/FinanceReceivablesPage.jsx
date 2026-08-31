@@ -14,12 +14,17 @@ import {
   RECEIVABLE_CHARGE_STATUS,
   createReceivable,
   registerReceivablePayment,
+  reverseReceivablePayment,
   cancelReceivable,
   getReceivablePayments,
   createReceivableCharge,
   listReceivableCharges,
   getReceivableChargesByReceivable,
 } from '../services/receivablesService.js';
+import { createId } from '../services/helpers.js';
+import { can } from '../permissions/permissions.js';
+import { PAYMENT_REVERSE_PERMISSION } from '../services/receivablePaymentLifecycle.js';
+import { isEffectiveReceivablePayment } from '../services/receivableReconciliation.js';
 import { Plus, Eye, DollarSign, FileText, X } from 'lucide-react';
 import {
   ModalBody,
@@ -163,7 +168,7 @@ export default function FinanceReceivablesPage() {
   };
 
   const handleOpenPayment = (receivable) => {
-    setModal({ type: 'register_payment', receivable });
+    setModal({ type: 'register_payment', receivable, operationId: createId('payop') });
   };
 
   const handleOpenDetails = (receivable) => {
@@ -385,6 +390,8 @@ export default function FinanceReceivablesPage() {
         fine_amount: fineAmount,
         payment_method: paymentMethod,
         notes,
+        operation_id: modal.operationId,
+        patient_id: modal.receivable.patient_id,
       });
 
       showToast('Recebimento registrado com sucesso.');
@@ -392,6 +399,20 @@ export default function FinanceReceivablesPage() {
       setRefresh((k) => k + 1);
     } catch (err) {
       showToast(err.message || 'Erro ao registrar recebimento.', 'error');
+    }
+  };
+
+  const handleReversePayment = (payment) => {
+    try {
+      const { receivable } = reverseReceivablePayment(user, payment.id, {
+        reversal_reason: 'Estorno operacional',
+      });
+      setDetailsPayments(getReceivablePayments(receivable.id));
+      setModal((prev) => (prev ? { ...prev, receivable } : prev));
+      setRefresh((k) => k + 1);
+      showToast('Estorno registrado.');
+    } catch (err) {
+      showToast(err.message || 'Erro ao estornar recebimento.', 'error');
     }
   };
 
@@ -1143,6 +1164,8 @@ export default function FinanceReceivablesPage() {
                         <th>Juros</th>
                         <th>Multa</th>
                         <th>Forma</th>
+                        <th>Tipo</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1154,6 +1177,18 @@ export default function FinanceReceivablesPage() {
                           <td>{formatCurrency(p.interest_amount)}</td>
                           <td>{formatCurrency(p.fine_amount)}</td>
                           <td>{p.payment_method || '—'}</td>
+                          <td>{p.kind === 'reversal' ? 'Estorno' : (p.status === 'reversed' ? 'Estornado' : 'Pagamento')}</td>
+                          <td>
+                            {isEffectiveReceivablePayment(p) && can(user, PAYMENT_REVERSE_PERMISSION) ? (
+                              <button
+                                type="button"
+                                className="button secondary"
+                                onClick={() => handleReversePayment(p)}
+                              >
+                                Estornar
+                              </button>
+                            ) : null}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

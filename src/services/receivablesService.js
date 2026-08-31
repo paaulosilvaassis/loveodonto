@@ -14,16 +14,32 @@ import {
   normalizeEnumValue,
 } from './auditEventCatalog.js';
 import { resolveTenantIdForWrite, resolveUserTenantId } from './tenantWriteGuard.js';
+import {
+  computeReceivableStatus,
+  refreshFinancingFromReceivable,
+} from './receivableReconciliation.js';
+import {
+  registerReceivablePayment,
+  reverseReceivablePayment,
+  PAYMENT_RECEIVE_PERMISSION,
+  PAYMENT_REVERSE_PERMISSION,
+} from './receivablePaymentLifecycle.js';
 import { readGetReceivable, readListReceivables } from './financialReadAdapter.js';
 import {
   scheduleFinancialDualWriteCreateReceivable,
   scheduleFinancialDualWriteUpdateReceivable,
 } from './financialWriteAdapter.js';
 import {
-  schedulePaymentReceivedDomainEvent,
   scheduleReceivableCreatedDomainEvent,
   scheduleReceivableUpdatedDomainEvent,
 } from './financialDomainEventPublisher.js';
+
+export {
+  registerReceivablePayment,
+  reverseReceivablePayment,
+  PAYMENT_RECEIVE_PERMISSION,
+  PAYMENT_REVERSE_PERMISSION,
+};
 
 export const RECEIVABLE_TABS = {
   A_RECEBER: 'a_receber',
@@ -116,80 +132,6 @@ const normalizeAmounts = ({
     interest_amount: interest,
     fine_amount: fine,
     net_amount: net,
-  };
-};
-
-const computeReceivableStatus = (receivable, todayIso = TODAY()) => {
-  if (receivable.status === RECEIVABLE_STATUS.CANCELED) return RECEIVABLE_STATUS.CANCELED;
-  if (receivable.status === RECEIVABLE_STATUS.RENEGOTIATED) return RECEIVABLE_STATUS.RENEGOTIATED;
-
-  const remaining = Number(receivable.remaining_amount || 0);
-  const net = Number(receivable.net_amount || 0);
-  const dueDate = receivable.due_date;
-
-  if (remaining <= 0 && net > 0) {
-    return RECEIVABLE_STATUS.PAID;
-  }
-
-  if (remaining > 0 && net > 0 && remaining < net) {
-    // parcialmente pago
-    if (dueDate && dueDate < todayIso) return RECEIVABLE_STATUS.OVERDUE;
-    if (dueDate && dueDate === todayIso) return RECEIVABLE_STATUS.DUE_TODAY;
-    return RECEIVABLE_STATUS.PARTIALLY_PAID;
-  }
-
-  if (!dueDate) return RECEIVABLE_STATUS.PENDING;
-
-  if (dueDate < todayIso) return RECEIVABLE_STATUS.OVERDUE;
-  if (dueDate === todayIso) return RECEIVABLE_STATUS.DUE_TODAY;
-
-  // a vencer no futuro
-  return RECEIVABLE_STATUS.UPCOMING;
-};
-
-const refreshFinancingFromReceivable = (db, receivable) => {
-  const financingId = receivable?.financing_id;
-  if (!financingId) return;
-  const installmentIndex = Array.isArray(db.financingInstallments)
-    ? db.financingInstallments.findIndex((item) => item.receivable_id === receivable.id)
-    : -1;
-  if (installmentIndex >= 0) {
-    const installment = db.financingInstallments[installmentIndex];
-    const paidAmount = Number(receivable.received_amount || 0);
-    const netAmount = Number(receivable.net_amount || 0);
-    const nextInstallment = {
-      ...installment,
-      paid_amount: paidAmount,
-      remaining_amount: Math.max(netAmount - paidAmount, 0),
-      status: computeReceivableStatus(receivable, TODAY()),
-      last_payment_at: paidAmount > 0 ? new Date().toISOString() : installment.last_payment_at || null,
-      updated_at: new Date().toISOString(),
-    };
-    db.financingInstallments[installmentIndex] = nextInstallment;
-  }
-  if (!Array.isArray(db.financings)) return;
-  const financingIndex = db.financings.findIndex((item) => item.id === financingId);
-  if (financingIndex < 0) return;
-  const linkedInstallments = (Array.isArray(db.financingInstallments) ? db.financingInstallments : [])
-    .filter((item) => item.financing_id === financingId);
-  const totalNet = linkedInstallments.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
-  const totalPaid = linkedInstallments.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0);
-  const totalOpen = Math.max(totalNet - totalPaid, 0);
-  const hasOverdue = linkedInstallments.some((item) => item.status === RECEIVABLE_STATUS.OVERDUE);
-  const allPaid = linkedInstallments.length > 0
-    && linkedInstallments.every((item) => item.status === RECEIVABLE_STATUS.PAID);
-  const hasPartial = linkedInstallments.some((item) => item.status === RECEIVABLE_STATUS.PARTIALLY_PAID);
-  let nextStatus = db.financings[financingIndex].status || 'active';
-  if (allPaid) nextStatus = 'paid_off';
-  else if (hasOverdue) nextStatus = 'overdue';
-  else if (hasPartial || totalPaid > 0) nextStatus = 'partially_paid';
-  else nextStatus = 'active';
-  db.financings[financingIndex] = {
-    ...db.financings[financingIndex],
-    status: nextStatus,
-    total_paid_amount: totalPaid,
-    total_open_amount: totalOpen,
-    updated_at: new Date().toISOString(),
   };
 };
 
@@ -529,103 +471,6 @@ export const updateReceivable = (user, id, payload) => {
   scheduleFinancialDualWriteUpdateReceivable(user, updated, payload);
   scheduleReceivableUpdatedDomainEvent(user, updated, payload);
   return updated;
-};
-
-export const registerReceivablePayment = (user, receivableId, payload) => {
-  if (payload.payment_method !== undefined || payload.paymentMethod !== undefined) {
-    assertEnumValue(
-      'payment_method',
-      FINANCIAL_PAYMENT_METHOD,
-      payload.payment_method || payload.paymentMethod
-    );
-  }
-  requirePermission(user, 'finance:write');
-  const db = loadDb();
-  const items = Array.isArray(db.accountsReceivable) ? db.accountsReceivable : [];
-  const idx = items.findIndex((r) => r.id === receivableId);
-  if (idx < 0) throw new Error('Título não encontrado.');
-
-  const current = items[idx];
-  if (current.status === RECEIVABLE_STATUS.CANCELED) throw new Error('Título cancelado não pode receber pagamentos.');
-
-  const paymentDate = payload.payment_date || payload.paymentDate || TODAY();
-  const amountReceived = Number(payload.amount_received || payload.amountReceived || 0);
-  const discount = Number(payload.discount_amount || payload.discountAmount || 0);
-  const interest = Number(payload.interest_amount || payload.interestAmount || 0);
-  const fine = Number(payload.fine_amount || payload.fineAmount || 0);
-
-  if (!amountReceived && !discount && !interest && !fine) {
-    throw new Error('Informe algum valor recebido, desconto, juros ou multa.');
-  }
-
-  const prevReceived = Number(current.received_amount || 0);
-  const newReceived = prevReceived + amountReceived;
-  const netAmount = Number(current.net_amount || 0);
-  const newRemaining = Math.max(netAmount - newReceived, 0);
-
-  const now = new Date().toISOString();
-  const paymentId = createId('rvpay');
-  // Pagamento herda o tenant do título; fallback para o tenant do usuário.
-  const tenantId = String(current.tenant_id || '').trim()
-    || resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
-
-  const paymentRecord = {
-    id: paymentId,
-    tenant_id: tenantId,
-    receivable_id: receivableId,
-    payment_date: paymentDate,
-    amount_received: amountReceived,
-    discount_amount: discount,
-    interest_amount: interest,
-    fine_amount: fine,
-    payment_method: normalizeEnumValue(
-      FINANCIAL_PAYMENT_METHOD,
-      payload.payment_method || payload.paymentMethod || current.payment_method_expected,
-      FINANCIAL_PAYMENT_METHOD.OTHERS
-    ),
-    financial_account_id: payload.financial_account_id || null,
-    cash_register_id: payload.cash_register_id || null,
-    transaction_reference: payload.transaction_reference || null,
-    notes: payload.notes || '',
-    created_at: now,
-    created_by: user?.id || null,
-  };
-
-  const updatedReceivable = {
-    ...current,
-    received_amount: newReceived,
-    remaining_amount: newRemaining,
-    payment_method_received: paymentRecord.payment_method,
-    updated_at: now,
-  };
-
-  updatedReceivable.status = computeReceivableStatus(updatedReceivable, TODAY());
-
-  withDb((d) => {
-    if (!Array.isArray(d.accountsReceivable)) d.accountsReceivable = [];
-    if (!Array.isArray(d.receivablePayments)) d.receivablePayments = [];
-
-    const arr = d.accountsReceivable;
-    const index = arr.findIndex((r) => r.id === receivableId);
-    if (index >= 0) {
-      arr[index] = updatedReceivable;
-      d.accountsReceivable = arr;
-    }
-
-    d.receivablePayments.push(paymentRecord);
-    refreshFinancingFromReceivable(d, updatedReceivable);
-
-    // Estrutura futura: integração com caixa/contas financeiras
-    // Ex.: d.cashTransactions.push({ type: 'income', source: 'receivable_payment', ... })
-
-    return d;
-  });
-
-  schedulePaymentReceivedDomainEvent(user, paymentRecord, updatedReceivable);
-  return {
-    receivable: updatedReceivable,
-    payment: paymentRecord,
-  };
 };
 
 export const cancelReceivable = (user, id, reason) => {

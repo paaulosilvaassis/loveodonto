@@ -3,6 +3,7 @@ import { APPOINTMENT_STATUS } from './appointmentService.js';
 import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
 import { BUDGET_STATUS as CRM_BUDGET_STATUS } from './crmBudgetService.js';
 import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
+import { isEffectiveReceivablePayment } from './receivableReconciliation.js';
 
 const PENDING_CLINICAL_BUDGET_STATUSES = new Set([
   BUDGET_STATUS.RASCUNHO,
@@ -144,6 +145,7 @@ function sumReceivedPayments(db, startDate, endDate) {
   let total = 0;
 
   for (const payment of db.receivablePayments || []) {
+    if (!isEffectiveReceivablePayment(payment)) continue;
     const dateKey = resolvePaymentDateKey(payment);
     if (!isDateInRange(dateKey, startDate, endDate)) continue;
     total += Number(payment.amount_received || payment.amountReceived || payment.amount || 0);

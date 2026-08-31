@@ -3,6 +3,7 @@ import { requirePermission } from '../permissions/permissions.js';
 import { createId } from './helpers.js';
 import { listFinancings } from './financingsService.js';
 import { listReceivables, RECEIVABLE_STATUS } from './receivablesService.js';
+import { isEffectiveReceivablePayment } from './receivableReconciliation.js';
 import { listCommissionRules, COMMISSION_RULE_TYPE, COMMISSION_ROLE } from './commissionRulesService.js';
 
 export const COMMISSION_STATUS = {
@@ -319,6 +320,7 @@ function buildReceivedTransactions(db, filters = {}) {
   const payments = Array.isArray(db.receivablePayments) ? db.receivablePayments : [];
 
   payments.forEach((p) => {
+    if (!isEffectiveReceivablePayment(p)) return;
     const referenceDate = toDay(p.payment_date || p.created_at);
     if (!isInRange(referenceDate, filters.startDate, filters.endDate)) return;
     const recv = receivableById.get(p.receivable_id);

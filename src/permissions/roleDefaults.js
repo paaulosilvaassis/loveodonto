@@ -43,7 +43,7 @@ export const ROLE_DEFAULT_PERMISSIONS = {
   ],
   financeiro: [
     p('dashboard', 'view'),
-    p('financeiro_contas_receber', 'view'), p('financeiro_contas_receber', 'create'), p('financeiro_contas_receber', 'edit'), p('financeiro_contas_receber', 'export'),
+    p('financeiro_contas_receber', 'view'), p('financeiro_contas_receber', 'create'), p('financeiro_contas_receber', 'edit'), p('financeiro_contas_receber', 'reverse'), p('financeiro_contas_receber', 'export'),
     p('financeiro_contas_pagar', 'view'), p('financeiro_contas_pagar', 'create'), p('financeiro_contas_pagar', 'edit'), p('financeiro_contas_pagar', 'export'),
     p('financeiro_caixa', 'view'), p('financeiro_caixa', 'create'), p('financeiro_caixa', 'edit'),
     p('financeiro_relatorios', 'view'), p('financeiro_relatorios', 'export'),

@@ -8,6 +8,7 @@ import {
 import { listCommissions, COMMISSION_STATUS } from './commissionCalculationService.js';
 import { listBoletoCharges, BOLETO_CHARGE_STATUS } from './boletoChargesService.js';
 import { getCashSummaryForDate } from './cashRegisterService.js';
+import { isEffectiveReceivablePayment } from './receivableReconciliation.js';
 
 const BR_MONTH = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' });
 
@@ -140,6 +141,7 @@ export function getDreCashBasisReport(filters = {}) {
   const outrosRecebimentos = { ...empty };
 
   payments.forEach((p) => {
+    if (!isEffectiveReceivablePayment(p)) return;
     const payDay = String(p.payment_date || '').slice(0, 10);
     if (!inDayRange(payDay, startDate, endDate)) return;
     const r = recvMap.get(p.receivable_id);

@@ -29,15 +29,17 @@ import {
 import {
   createReceivable,
   registerReceivablePayment,
+  reverseReceivablePayment,
+  PAYMENT_RECEIVE_PERMISSION,
   RECEIVABLE_ORIGIN_TYPE,
   cancelReceivable,
 } from './receivablesService.js';
 import { createBoletoCharge, listBoletoCharges, BOLETO_CHARGE_STATUS } from './boletoChargesService.js';
 import {
   createFinancingPaymentAllocation,
+  listFinancingPaymentAllocations,
   FINANCING_PAYMENT_ALLOCATION_TYPE,
   FINANCING_PAYMENT_ALLOCATION_STATUS,
-  reverseAllocationsByReceivablePayment,
 } from './financingPaymentAllocationsService.js';
 import {
   AUDIT_EVENT_KEY,
@@ -567,7 +569,7 @@ export const rejectFinancing = (user, financingId, reason = '') => {
 };
 
 export const registerFinancingPayment = (user, payload) => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, PAYMENT_RECEIVE_PERMISSION);
   if (payload.payment_method !== undefined) {
     assertEnumValue('payment_method', FINANCIAL_PAYMENT_METHOD, payload.payment_method);
   }
@@ -586,7 +588,9 @@ export const registerFinancingPayment = (user, payload) => {
       FINANCIAL_PAYMENT_METHOD.BOLETO
     ),
     notes: payload.notes || '',
+    operation_id: payload.operation_id || payload.idempotencyKey || createId('payop'),
   });
+  if (result.replayed) return result;
 
   const linkedInstallment = installment || listFinancingInstallments({}).find((i) => i.receivable_id === receivableId);
   if (linkedInstallment) {
@@ -664,18 +668,16 @@ export const registerFinancingPayment = (user, payload) => {
 };
 
 export const reverseFinancingPaymentAudit = (user, payload) => {
-  requirePermission(user, 'finance:write');
   const receivablePaymentId = payload?.receivable_payment_id || null;
   if (!receivablePaymentId) throw new Error('receivable_payment_id é obrigatório para estorno.');
-  const reversed = reverseAllocationsByReceivablePayment(receivablePaymentId, {
-    reversed_by: user?.id || null,
+  reverseReceivablePayment(user, receivablePaymentId, {
     reversal_reason: payload.reversal_reason || 'Estorno operacional registrado.',
-    metadata: {
-      reversal_event_key: AUDIT_EVENT_KEY.PAYMENT_ALLOCATION_REVERSED,
-      reversal_source: AUDIT_EVENT_SOURCE.FINANCIAL_OPERATION,
-      reversal_operation_context: AUDIT_OPERATION_CONTEXT.REVERSE_FINANCING_PAYMENT_AUDIT,
-      reversal_reference: payload.reversal_reference || null,
-    },
+    reversal_reference: payload.reversal_reference || null,
+    operation_id: payload.operation_id || payload.idempotencyKey,
+  });
+  const reversed = listFinancingPaymentAllocations({
+    receivable_payment_id: receivablePaymentId,
+    status: FINANCING_PAYMENT_ALLOCATION_STATUS.REVERSED,
   });
   for (const allocation of reversed) {
     if (!allocation) continue;
