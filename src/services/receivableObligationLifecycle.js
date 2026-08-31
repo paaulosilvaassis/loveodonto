@@ -3,6 +3,7 @@ import { requirePermission } from '../permissions/permissions.js';
 import { RECEIVABLE_STATUS } from './auditEventCatalog.js';
 import { scheduleReceivableUpdatedDomainEvent } from './financialDomainEventPublisher.js';
 import { scheduleFinancialV2ShadowWrite } from './financialV2ShadowWrite.js';
+import './financialV2RuntimeShadow.js';
 import { assertReceivableWriteOwnership } from './receivablePaymentLifecycle.js';
 import {
   refreshFinancingFromReceivable,

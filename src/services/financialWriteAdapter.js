@@ -23,6 +23,7 @@ import {
   shouldUseFinancialRepositoryWritePrimary,
 } from './financialRepositoryBridge.js';
 import { scheduleFinancialV2ShadowWrite } from './financialV2ShadowWrite.js';
+import './financialV2RuntimeShadow.js';
 
 function logFinancialWriteAdapterDev(event, payload) {
   if (!import.meta.env?.DEV) return;

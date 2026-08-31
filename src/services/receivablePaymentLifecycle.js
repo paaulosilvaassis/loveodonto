@@ -9,6 +9,7 @@ import {
 import { resolveTenantIdForWrite, requireSessionTenantId, assertSameTenant } from './tenantWriteGuard.js';
 import { schedulePaymentReceivedDomainEvent } from './financialDomainEventPublisher.js';
 import { scheduleFinancialV2ShadowWrite } from './financialV2ShadowWrite.js';
+import './financialV2RuntimeShadow.js';
 import { reverseAllocationsByReceivablePayment } from './financingPaymentAllocationsService.js';
 import { assertFiniteMoney, fromCents, toCents } from './receivableMoney.js';
 import {

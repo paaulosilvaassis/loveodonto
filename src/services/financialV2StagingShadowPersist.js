@@ -116,8 +116,8 @@ function sqlTs(value) {
   return `${sqlText(value)}::timestamptz`;
 }
 
-export function buildPhase11lInsertSql(table, row) {
-  assertPhase11lSyntheticSourceId(row.source_id);
+export function buildFinancialV2InsertSql(table, row) {
+  if (!String(row?.source_id || '').trim()) throw new Error('FINANCIAL_V2_SOURCE_ID_REQUIRED');
   if (table === 'receivables') {
     return `INSERT INTO public.financial_v2_receivables (
       source_id, tenant_id, patient_id, origin_type, origin_id, installment_number, total_installments,
@@ -176,10 +176,20 @@ export function buildPhase11lInsertSql(table, row) {
   throw new Error(`unknown v2 bag ${table}`);
 }
 
-export function buildPhase11lSelectSql(table, tenantId, sourceId) {
-  assertPhase11lSyntheticSourceId(sourceId);
+export function buildPhase11lInsertSql(table, row) {
+  assertPhase11lSyntheticSourceId(row.source_id);
+  return buildFinancialV2InsertSql(table, row);
+}
+
+export function buildFinancialV2SelectSql(table, tenantId, sourceId) {
+  if (!String(sourceId || '').trim()) throw new Error('FINANCIAL_V2_SOURCE_ID_REQUIRED');
   return `SELECT * FROM public.${STAGING_SQL_TABLE[table]}
     WHERE tenant_id = ${sqlUuid(tenantId)} AND source_id = ${sqlText(sourceId)} LIMIT 1`;
+}
+
+export function buildPhase11lSelectSql(table, tenantId, sourceId) {
+  assertPhase11lSyntheticSourceId(sourceId);
+  return buildFinancialV2SelectSql(table, tenantId, sourceId);
 }
 
 export function buildPhase11lTenantSeedSql() {

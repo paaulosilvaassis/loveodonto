@@ -545,7 +545,10 @@ export const approveFinancing = (user, financingId, options = {}) => {
   const installments = createInstallmentsAndReceivables(user, current);
   maybeThrowFinancingApproveFault('before_status', { financingId });
 
-  persistFinancingApproval(user, financingId, current, options);
+  const approvedLegacy = persistFinancingApproval(user, financingId, current, options);
+  if (approvedLegacy) {
+    scheduleFinancialDualWriteUpdateFinancing(user, approvedLegacy, { status: approvedLegacy.status });
+  }
 
   logEvent({
     financing_id: financingId,

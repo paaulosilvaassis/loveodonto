@@ -119,6 +119,7 @@ export function shadowWriteFinancialRecord({
   store = activeStore,
   enabled,
   projectRef,
+  fabricateDependencies = true,
 } = {}) {
   try {
     if (String(projectRef || '') === PRODUCTION_SUPABASE_PROJECT_REF) {
@@ -155,9 +156,22 @@ export function shadowWriteFinancialRecord({
       };
     }
 
+    if (
+      !fabricateDependencies
+      && entityType === 'payment'
+      && record.status === 'reversed'
+      && !record.reverses_payment_id
+      && !store.get(STORE_TABLE.payment, tenantId, record.id)
+    ) {
+      return { decision: SHADOW_WRITE_DECISION.FAILED, error: 'WRITE_FAILED_WITH_DEPENDENCY' };
+    }
+
     if (entityType === 'payment' && record.receivable_id) {
       const recv = (db?.accountsReceivable || []).find((item) => item.id === record.receivable_id);
       if (recv && !store.get('receivables', tenantId, recv.id)) {
+        if (!fabricateDependencies) {
+          return { decision: SHADOW_WRITE_DECISION.FAILED, error: 'WRITE_FAILED_WITH_DEPENDENCY' };
+        }
         shadowWriteFinancialRecord({
           entityType: 'receivable', record: recv, db, store, enabled: true, projectRef,
         });
@@ -167,6 +181,9 @@ export function shadowWriteFinancialRecord({
       const originalId = record.reverses_payment_id || record.reversesPaymentId;
       const original = (db?.receivablePayments || []).find((item) => item.id === originalId);
       if (original && !store.get('payments', tenantId, original.id)) {
+        if (!fabricateDependencies) {
+          return { decision: SHADOW_WRITE_DECISION.FAILED, error: 'WRITE_FAILED_WITH_DEPENDENCY' };
+        }
         shadowWriteFinancialRecord({
           entityType: 'payment', record: original, db, store, enabled: true, projectRef,
         });
@@ -175,6 +192,9 @@ export function shadowWriteFinancialRecord({
     if (entityType === 'charge' && record.receivable_id) {
       const recv = (db?.accountsReceivable || []).find((item) => item.id === record.receivable_id);
       if (recv && !store.get('receivables', tenantId, recv.id)) {
+        if (!fabricateDependencies) {
+          return { decision: SHADOW_WRITE_DECISION.FAILED, error: 'WRITE_FAILED_WITH_DEPENDENCY' };
+        }
         shadowWriteFinancialRecord({
           entityType: 'receivable', record: recv, db, store, enabled: true, projectRef,
         });
@@ -231,20 +251,35 @@ export function runFinancialV2ShadowParity(db, { store, enabled = true, projectR
   return { store: target, results, stats };
 }
 
+let runtimeShadowEnqueue = null;
+
+export function registerFinancialV2RuntimeShadowEnqueue(enqueue) {
+  runtimeShadowEnqueue = typeof enqueue === 'function' ? enqueue : null;
+}
+
 export function scheduleFinancialV2ShadowWrite({ entityType, record }) {
-  if (!isFinancialV2ShadowWriteEnabled()) return;
-  queueMicrotask(() => {
+  if (isFinancialV2ShadowWriteEnabled()) {
+    queueMicrotask(() => {
+      try {
+        shadowWriteFinancialRecord({
+          entityType,
+          record,
+          db: peekDb(),
+          store: activeStore,
+        });
+      } catch {
+        /* IDB permanece SSOT */
+      }
+    });
+    return;
+  }
+  if (runtimeShadowEnqueue) {
     try {
-      shadowWriteFinancialRecord({
-        entityType,
-        record,
-        db: peekDb(),
-        store: activeStore,
-      });
+      runtimeShadowEnqueue({ entityType, record });
     } catch {
       /* IDB permanece SSOT */
     }
-  });
+  }
 }
 
 export function assertV3FlagsRemainOffForShadow(flags = FINANCIAL_REPOSITORY_FLAG_DEFAULTS) {

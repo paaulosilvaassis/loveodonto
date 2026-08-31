@@ -41,6 +41,7 @@ import {
   scheduleFinancialDualWriteUpdateReceivable,
 } from './financialWriteAdapter.js';
 import { scheduleFinancialV2ShadowWrite } from './financialV2ShadowWrite.js';
+import './financialV2RuntimeShadow.js';
 import {
   scheduleReceivableCreatedDomainEvent,
   scheduleReceivableUpdatedDomainEvent,

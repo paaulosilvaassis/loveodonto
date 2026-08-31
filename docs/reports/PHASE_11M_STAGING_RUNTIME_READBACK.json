@@ -1,0 +1,34 @@
+{
+  "environment": "STAGING",
+  "projectRef": "tckdjyunwmdpqmewrwvt",
+  "productionRefTouched": false,
+  "syntheticPrefix": "phase11m-",
+  "operationalAuth": "TENANT_SCOPED",
+  "executorRoleForSetupCleanup": "postgres_or_service_role",
+  "runtimeInsertRole": "authenticated",
+  "jwtClaimsUsed": ["sub", "tenant_id"],
+  "livePathA": {
+    "source_id": "recv-phase11m-runtime-a1",
+    "tenant_id": "c11c11c1-1111-4111-8111-c11c11c1111c",
+    "origin_type": "treatment_plan",
+    "status": "upcoming",
+    "total_cents": 9000,
+    "legacy_net_amount": 90,
+    "compareFinancialShadow": "MATCH"
+  },
+  "cleanupComplete": true,
+  "leftoverCounts": {
+    "receivables": 0,
+    "payments": 0,
+    "financings": 0,
+    "charges": 0,
+    "tenants": 0,
+    "tenant_users": 0
+  },
+  "notes": [
+    "Runtime insert used SET ROLE authenticated + request.jwt.claim.sub / tenant_id.",
+    "Service role used only for tenant_users/tenant fixture setup and cleanup.",
+    "Production uoepkwhqztmsjnzirpev was not touched.",
+    "App writers remain default OFF. No real-user observation window."
+  ]
+}
