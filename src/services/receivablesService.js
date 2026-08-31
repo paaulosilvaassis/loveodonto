@@ -96,6 +96,22 @@ export function findPathAObligationReceivable(records, { tenantId, originId, ins
   }) || null;
 }
 
+export function findPathBObligationReceivable(records, { tenantId, financingId, installmentNumber }) {
+  const tid = String(tenantId || '').trim();
+  const fid = String(financingId || '').trim();
+  if (!tid || !fid) return null;
+  const inst = normalizeInstallmentNumber(installmentNumber, 0);
+  const items = Array.isArray(records) ? records : [];
+  return items.find((row) => {
+    const rowTenant = String(row?.tenant_id || row?.tenantId || '').trim();
+    if (rowTenant !== tid) return false;
+    if (row.origin_type !== RECEIVABLE_ORIGIN_TYPE.FINANCING) return false;
+    const rowOrigin = String(row.origin_id || row.financing_id || '').trim();
+    if (rowOrigin !== fid) return false;
+    return normalizeInstallmentNumber(row.installment_number, 0) === inst;
+  }) || null;
+}
+
 export const RECEIVABLE_PAYMENT_METHODS = [
   { value: FINANCIAL_PAYMENT_METHOD.CASH, label: 'Dinheiro' },
   { value: FINANCIAL_PAYMENT_METHOD.PIX, label: 'PIX' },
@@ -295,6 +311,15 @@ export const createReceivable = (user, payload) => {
       installmentNumber,
     });
     if (existing) return existing;
+  }
+
+  if (originType === RECEIVABLE_ORIGIN_TYPE.FINANCING && originId) {
+    const existingPathB = findPathBObligationReceivable(loadDb().accountsReceivable, {
+      tenantId,
+      financingId: originId,
+      installmentNumber,
+    });
+    if (existingPathB) return existingPathB;
   }
 
   const {

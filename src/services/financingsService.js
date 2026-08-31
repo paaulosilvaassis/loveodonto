@@ -12,6 +12,21 @@ import {
 } from './financialDomainEventPublisher.js';
 import { resolveTenantIdForWrite } from './tenantWriteGuard.js';
 import {
+  FINANCING_CREATE_PERMISSION,
+  FINANCING_APPROVE_PERMISSION,
+  FINANCING_CANCEL_PERMISSION,
+  FINANCING_EDIT_PERMISSION,
+  assertFinancingWriteOwnership,
+  assertPatientTenantForWrite,
+  findActiveFinancingForBudget,
+  findBudgetRecord,
+  financingMatchesListTenant,
+  resolveListTenantId,
+} from './financingOwnership.js';
+import { applyFinancingReconciliation, listReceivablesForFinancing, reconcileFinancingFromReceivables } from './financingReconciliation.js';
+import { sumEffectivePaidCents } from './receivableReconciliation.js';
+import { toCents } from './receivableMoney.js';
+import {
   calculateFinancingSummary,
   buildInstallmentsSchedule,
   normalizeFinancingFrequency,
@@ -33,6 +48,7 @@ import {
   PAYMENT_RECEIVE_PERMISSION,
   RECEIVABLE_ORIGIN_TYPE,
   cancelReceivable,
+  findPathBObligationReceivable,
 } from './receivablesService.js';
 import { createBoletoCharge, listBoletoCharges, BOLETO_CHARGE_STATUS } from './boletoChargesService.js';
 import {
@@ -70,6 +86,42 @@ export const FINANCING_ANALYSIS_STATUS = {
   APPROVED: 'approved',
   REJECTED: 'rejected',
 };
+
+export {
+  FINANCING_CREATE_PERMISSION,
+  FINANCING_APPROVE_PERMISSION,
+  FINANCING_CANCEL_PERMISSION,
+  FINANCING_EDIT_PERMISSION,
+};
+
+const FINANCING_ENTRY_OPERATION_PREFIX = 'payop:fin-entry:';
+
+let financingApproveFaultHook = null;
+
+export function __setFinancingApproveFaultForTest(hook) {
+  financingApproveFaultHook = typeof hook === 'function' ? hook : null;
+}
+
+function maybeThrowFinancingApproveFault(phase, context = {}) {
+  if (typeof financingApproveFaultHook === 'function') {
+    financingApproveFaultHook(phase, context);
+  }
+}
+
+function pathBReceivablePayload(user, financing, extras) {
+  return {
+    tenant_id: financing.tenant_id || resolveTenantIdForWrite(user),
+    patient_id: financing.patient_id,
+    financial_responsible_id: financing.financial_responsible_id,
+    origin_type: RECEIVABLE_ORIGIN_TYPE.FINANCING,
+    origin_id: financing.id,
+    financing_id: financing.id,
+    contract_id: financing.contract_id,
+    treatment_plan_id: financing.treatment_plan_id,
+    professional_id: financing.professional_id,
+    ...extras,
+  };
+}
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
@@ -116,14 +168,30 @@ export const listFinancings = (filters = {}) => {
   let items = fromRepo !== null
     ? [...fromRepo]
     : (Array.isArray(db.financings) ? [...db.financings] : []);
-  const installments = Array.isArray(db.financingInstallments) ? db.financingInstallments : [];
 
   items = items.map((item) => {
-    if (item.status === FINANCING_STATUS.CANCELED || item.status === FINANCING_STATUS.RENEGOTIATED) return item;
-    const linked = installments.filter((ins) => ins.financing_id === item.id);
-    const derivedStatus = computeFinancingStatusFromInstallments(linked);
-    return { ...item, status: derivedStatus };
+    if (item.status === FINANCING_STATUS.CANCELED || item.status === FINANCING_STATUS.RENEGOTIATED) {
+      return item;
+    }
+    const recon = reconcileFinancingFromReceivables(item, db);
+    if ((db.accountsReceivable || []).every((row) => (
+      String(row.financing_id || '') !== item.id
+      && !(row.origin_type === 'financing' && String(row.origin_id || '') === item.id)
+    ))) {
+      return item;
+    }
+    return {
+      ...item,
+      status: recon.status,
+      total_paid_amount: recon.total_paid_amount,
+      total_open_amount: recon.total_open_amount,
+    };
   });
+
+  const tenantId = resolveListTenantId(filters);
+  if (tenantId) {
+    items = items.filter((item) => financingMatchesListTenant(item, tenantId, db));
+  }
 
   if (filters.status && Object.values(FINANCING_STATUS).includes(filters.status)) {
     items = items.filter((item) => item.status === filters.status);
@@ -164,8 +232,8 @@ export const getFinancingTimeline = (financingId, filters = {}) => {
   return list.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
 };
 
-export const getFinancingsKPIs = () => {
-  const items = listFinancings();
+export const getFinancingsKPIs = (filters = {}) => {
+  const items = listFinancings(filters);
   const nowPrefix = todayIso().slice(0, 7);
   const monthItems = items.filter((item) => (item.created_at || '').slice(0, 7) === nowPrefix);
   const totalFinancedMonth = monthItems.reduce((sum, item) => sum + Number(item.net_financed_amount || 0), 0);
@@ -195,12 +263,11 @@ export const getFinancingsKPIs = () => {
 const assertFinancingCreatePermission = (user, options = {}) => {
   if (options.source === 'clinical_budget') {
     const allowed = can(user, 'prontuario_orcamentos:approve')
-      || can(user, 'financeiro_financiamentos:create')
-      || can(user, 'finance:write');
-    if (!allowed) requirePermission(user, 'financeiro_financiamentos:create');
+      || can(user, FINANCING_CREATE_PERMISSION);
+    if (!allowed) requirePermission(user, FINANCING_CREATE_PERMISSION);
     return;
   }
-  requirePermission(user, 'finance:write');
+  requirePermission(user, FINANCING_CREATE_PERMISSION);
 };
 
 export const createFinancingProposal = (user, payload, options = {}) => {
@@ -222,6 +289,34 @@ export const createFinancingProposal = (user, payload, options = {}) => {
   if (payload.status !== undefined) {
     assertEnumValue('status', FINANCING_STATUS, payload.status);
   }
+
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
+  assertPatientTenantForWrite(user, payload.patient_id);
+
+  const budgetId = payload.budget_id || payload.treatment_plan_id || null;
+  if (budgetId) {
+    const found = findBudgetRecord(budgetId);
+    if (found) {
+      if (found.patientId && found.patientId !== payload.patient_id) {
+        const error = new Error('Orçamento não pertence ao paciente informado.');
+        error.code = 'BUDGET_PATIENT_MISMATCH';
+        throw error;
+      }
+      if (found.patientId) assertPatientTenantForWrite(user, found.patientId);
+    }
+    const existingForBudget = findActiveFinancingForBudget(loadDb(), { tenantId, budgetId });
+    if (existingForBudget) return existingForBudget;
+  }
+
+  const operationId = payload.operation_id || payload.idempotencyKey || null;
+  if (operationId) {
+    const existingByOp = (loadDb().financings || []).find((row) => (
+      String(row.operation_id || '') === String(operationId)
+      && String(row.tenant_id || row.tenantId || '') === tenantId
+    ));
+    if (existingByOp) return existingByOp;
+  }
+
   const summary = calculateFinancingSummary({
     total_amount: payload.total_amount,
     entry_amount: payload.entry_amount,
@@ -239,6 +334,7 @@ export const createFinancingProposal = (user, payload, options = {}) => {
   const frequency = normalizedFrequency;
   const record = {
     id,
+    tenant_id: tenantId,
     patient_id: payload.patient_id,
     financial_responsible_id: payload.financial_responsible_id || null,
     contract_id: payload.contract_id || null,
@@ -284,6 +380,7 @@ export const createFinancingProposal = (user, payload, options = {}) => {
     patient_document: payload.patient_document || '',
     budget_approved_at: payload.budget_approved_at || null,
     budget_approved_by: payload.budget_approved_by || null,
+    operation_id: operationId,
     created_by: user?.id || null,
     approved_by: null,
     created_at: now,
@@ -325,13 +422,15 @@ const createInstallmentsAndReceivables = (user, financing) => {
     firstDueDate: financing.first_due_date,
     frequency: financing.installment_frequency,
   });
+  const existingInstallments = listFinancingInstallments({ financing_id: financing.id });
   const createdInstallments = [];
   for (const item of schedule) {
-    const receivable = createReceivable(user, {
-      patient_id: financing.patient_id,
-      financial_responsible_id: financing.financial_responsible_id,
-      origin_type: RECEIVABLE_ORIGIN_TYPE.FINANCING,
-      origin_id: financing.id,
+    const already = existingInstallments.find((row) => Number(row.installment_number) === Number(item.installment_number));
+    if (already) {
+      createdInstallments.push(already);
+      continue;
+    }
+    const receivable = createReceivable(user, pathBReceivablePayload(user, financing, {
       description: `${financing.description} - Parcela ${item.installment_number}/${schedule.length}`,
       installment_number: item.installment_number,
       total_installments: schedule.length,
@@ -343,12 +442,8 @@ const createInstallmentsAndReceivables = (user, financing) => {
       fine_amount: 0,
       payment_method_expected: FINANCIAL_PAYMENT_METHOD.BOLETO,
       charge_method: RECEIVABLE_CHARGE_TYPE.BOLETO,
-      contract_id: financing.contract_id,
-      treatment_plan_id: financing.treatment_plan_id,
-      professional_id: financing.professional_id,
       notes: `Gerado automaticamente pelo financiamento ${financing.id}.`,
-      financing_id: financing.id,
-    });
+    }));
     const installment = createFinancingInstallment({
       financing_id: financing.id,
       receivable_id: receivable.id,
@@ -360,6 +455,10 @@ const createInstallmentsAndReceivables = (user, financing) => {
       boleto_enabled: true,
     });
     createdInstallments.push(installment);
+    maybeThrowFinancingApproveFault('after_installment', {
+      financingId: financing.id,
+      installmentNumber: item.installment_number,
+    });
   }
   return createdInstallments;
 };
@@ -367,11 +466,14 @@ const createInstallmentsAndReceivables = (user, financing) => {
 const createEntryReceivableIfNeeded = (user, financing) => {
   const entry = Number(financing.entry_amount || 0);
   if (entry <= 0) return null;
-  return createReceivable(user, {
-    patient_id: financing.patient_id,
-    financial_responsible_id: financing.financial_responsible_id,
-    origin_type: RECEIVABLE_ORIGIN_TYPE.FINANCING,
-    origin_id: financing.id,
+  const tenantId = financing.tenant_id || resolveTenantIdForWrite(user);
+  const existing = findPathBObligationReceivable(loadDb().accountsReceivable, {
+    tenantId,
+    financingId: financing.id,
+    installmentNumber: 0,
+  });
+  if (existing) return existing;
+  const created = createReceivable(user, pathBReceivablePayload(user, financing, {
     description: `${financing.description} - Entrada`,
     installment_number: 0,
     total_installments: Number(financing.installments_count || 1),
@@ -380,42 +482,69 @@ const createEntryReceivableIfNeeded = (user, financing) => {
     original_amount: entry,
     payment_method_expected: FINANCIAL_PAYMENT_METHOD.OTHERS,
     charge_method: RECEIVABLE_CHARGE_TYPE.NONE,
-    contract_id: financing.contract_id,
-    treatment_plan_id: financing.treatment_plan_id,
-    professional_id: financing.professional_id,
     notes: 'Título de entrada do financiamento.',
-    financing_id: financing.id,
+  }));
+  maybeThrowFinancingApproveFault('after_entry', { financingId: financing.id, receivableId: created.id });
+  return created;
+};
+
+const persistFinancingApproval = (user, financingId, current, options = {}) => {
+  const now = new Date().toISOString();
+  let saved = null;
+  withDb((db) => {
+    const list = Array.isArray(db.financings) ? db.financings : [];
+    const index = list.findIndex((item) => item.id === financingId);
+    if (index < 0) throw new Error('Financiamento não encontrado.');
+    const recvs = listReceivablesForFinancing(db, financingId);
+    const recon = reconcileFinancingFromReceivables(list[index], db);
+    saved = {
+      ...list[index],
+      status: recvs.length > 0 ? recon.status : FINANCING_STATUS.APPROVED,
+      approval_status: FINANCING_APPROVAL_STATUS.APPROVED,
+      credit_analysis_status: options.credit_analysis_status
+        || list[index].credit_analysis_status
+        || FINANCING_ANALYSIS_STATUS.APPROVED,
+      approved_by: list[index].approved_by || user?.id || null,
+      approved_at: list[index].approved_at || now,
+      updated_at: now,
+    };
+    if (saved.status === FINANCING_STATUS.DRAFT || saved.status === FINANCING_STATUS.PENDING_ANALYSIS) {
+      saved.status = FINANCING_STATUS.APPROVED;
+    }
+    list[index] = saved;
+    db.financings = list;
+    return db;
   });
+  return saved;
 };
 
 export const approveFinancing = (user, financingId, options = {}) => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, FINANCING_APPROVE_PERMISSION);
   const current = getFinancingById(financingId);
   if (!current) throw new Error('Financiamento não encontrado.');
+  assertFinancingWriteOwnership(user, current);
   if ([FINANCING_STATUS.CANCELED, FINANCING_STATUS.RENEGOTIATED].includes(current.status)) {
     throw new Error('Não é possível aprovar um financiamento encerrado.');
   }
   if (options.credit_analysis_status !== undefined) {
     assertEnumValue('credit_analysis_status', FINANCING_ANALYSIS_STATUS, options.credit_analysis_status);
   }
-  const updated = {
-    ...current,
-    status: FINANCING_STATUS.APPROVED,
-    approval_status: FINANCING_APPROVAL_STATUS.APPROVED,
-    credit_analysis_status: options.credit_analysis_status || current.credit_analysis_status || FINANCING_ANALYSIS_STATUS.APPROVED,
-    approved_by: user?.id || null,
-    approved_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
 
-  withDb((db) => {
-    const list = Array.isArray(db.financings) ? db.financings : [];
-    const index = list.findIndex((item) => item.id === financingId);
-    if (index < 0) throw new Error('Financiamento não encontrado.');
-    list[index] = updated;
-    db.financings = list;
-    return db;
-  });
+  const entryReceivable = createEntryReceivableIfNeeded(user, current);
+  if (entryReceivable && options.entry_received_now) {
+    registerReceivablePayment(user, entryReceivable.id, {
+      payment_date: todayIso(),
+      amount_received: Number(current.entry_amount || 0),
+      payment_method: options.entry_payment_method || 'dinheiro',
+      notes: 'Entrada recebida no ato da aprovação.',
+      operation_id: `${FINANCING_ENTRY_OPERATION_PREFIX}${financingId}`,
+    });
+  }
+
+  const installments = createInstallmentsAndReceivables(user, current);
+  maybeThrowFinancingApproveFault('before_status', { financingId });
+
+  persistFinancingApproval(user, financingId, current, options);
 
   logEvent({
     financing_id: financingId,
@@ -424,8 +553,6 @@ export const approveFinancing = (user, financingId, options = {}) => {
     description: 'A proposta foi aprovada internamente.',
     actor_id: user?.id || null,
   });
-
-  const entryReceivable = createEntryReceivableIfNeeded(user, updated);
   if (entryReceivable) {
     logEvent({
       financing_id: financingId,
@@ -436,12 +563,6 @@ export const approveFinancing = (user, financingId, options = {}) => {
       actor_id: user?.id || null,
     });
     if (options.entry_received_now) {
-      registerReceivablePayment(user, entryReceivable.id, {
-        payment_date: todayIso(),
-        amount_received: Number(updated.entry_amount || 0),
-        payment_method: options.entry_payment_method || 'dinheiro',
-        notes: 'Entrada recebida no ato da aprovação.',
-      });
       logEvent({
         financing_id: financingId,
         event_type: FINANCING_TIMELINE_EVENT.ENTRY_RECEIVED,
@@ -452,8 +573,6 @@ export const approveFinancing = (user, financingId, options = {}) => {
       });
     }
   }
-
-  const installments = createInstallmentsAndReceivables(user, updated);
   logEvent({
     financing_id: financingId,
     event_type: FINANCING_TIMELINE_EVENT.INSTALLMENTS_GENERATED,
@@ -463,60 +582,57 @@ export const approveFinancing = (user, financingId, options = {}) => {
   });
 
   let boletoCount = 0;
-  if (updated.boleto_auto_generate !== false) {
-    for (const installment of installments) {
-      const boleto = createBoletoCharge(user, {
-        financing_id: financingId,
-        installment_id: installment.id,
-        receivable_id: installment.receivable_id,
-        patient_id: updated.patient_id,
-        charge_type: BOLETO_CHARGE_TYPE.BOLETO,
-        issue_date: todayIso(),
-        due_date: installment.due_date,
-        amount: installment.net_amount,
-        recipient_name: updated.payer_data?.recipient_name || '',
-        recipient_document: updated.payer_data?.recipient_document || '',
-        recipient_email: updated.payer_data?.recipient_email || '',
-        recipient_phone: updated.payer_data?.recipient_phone || '',
-        payer_name: updated.payer_data?.payer_name || '',
-        payer_document: updated.payer_data?.payer_document || '',
-        payer_email: updated.payer_data?.payer_email || '',
-        payer_phone: updated.payer_data?.payer_phone || '',
-        payer_zip_code: updated.payer_data?.payer_zip_code || '',
-        payer_street: updated.payer_data?.payer_street || '',
-        payer_number: updated.payer_data?.payer_number || '',
-        payer_complement: updated.payer_data?.payer_complement || '',
-        payer_district: updated.payer_data?.payer_district || '',
-        payer_city: updated.payer_data?.payer_city || '',
-        payer_state: updated.payer_data?.payer_state || '',
-        instructions: updated.instructions || '',
-      });
-      boletoCount += 1;
-      logEvent({
-        financing_id: financingId,
-        installment_id: installment.id,
-        boleto_charge_id: boleto.id,
-        receivable_id: installment.receivable_id,
-        event_type: FINANCING_TIMELINE_EVENT.BOLETO_GENERATED,
-        title: 'Boleto emitido',
-        description: `Cobrança de boleto emitida para parcela ${installment.installment_number}.`,
-        actor_id: user?.id || null,
-      });
+  const approvedSnapshot = getFinancingById(financingId);
+  if (approvedSnapshot.boleto_auto_generate !== false) {
+    try {
+      const existingCharges = listBoletoCharges({ financing_id: financingId });
+      for (const installment of installments) {
+        if (existingCharges.some((row) => row.installment_id === installment.id)) continue;
+        const boleto = createBoletoCharge(user, {
+          financing_id: financingId,
+          installment_id: installment.id,
+          receivable_id: installment.receivable_id,
+          patient_id: approvedSnapshot.patient_id,
+          charge_type: BOLETO_CHARGE_TYPE.BOLETO,
+          issue_date: todayIso(),
+          due_date: installment.due_date,
+          amount: installment.net_amount,
+          recipient_name: approvedSnapshot.payer_data?.recipient_name || '',
+          recipient_document: approvedSnapshot.payer_data?.recipient_document || '',
+          recipient_email: approvedSnapshot.payer_data?.recipient_email || '',
+          recipient_phone: approvedSnapshot.payer_data?.recipient_phone || '',
+          payer_name: approvedSnapshot.payer_data?.payer_name || '',
+          payer_document: approvedSnapshot.payer_data?.payer_document || '',
+          payer_email: approvedSnapshot.payer_data?.payer_email || '',
+          payer_phone: approvedSnapshot.payer_data?.payer_phone || '',
+          payer_zip_code: approvedSnapshot.payer_data?.payer_zip_code || '',
+          payer_street: approvedSnapshot.payer_data?.payer_street || '',
+          payer_number: approvedSnapshot.payer_data?.payer_number || '',
+          payer_complement: approvedSnapshot.payer_data?.payer_complement || '',
+          payer_district: approvedSnapshot.payer_data?.payer_district || '',
+          payer_city: approvedSnapshot.payer_data?.payer_city || '',
+          payer_state: approvedSnapshot.payer_data?.payer_state || '',
+          instructions: approvedSnapshot.instructions || '',
+        });
+        boletoCount += 1;
+        logEvent({
+          financing_id: financingId,
+          installment_id: installment.id,
+          boleto_charge_id: boleto.id,
+          receivable_id: installment.receivable_id,
+          event_type: FINANCING_TIMELINE_EVENT.BOLETO_GENERATED,
+          title: 'Boleto emitido',
+          description: `Cobrança de boleto emitida para parcela ${installment.installment_number}.`,
+          actor_id: user?.id || null,
+        });
+      }
+    } catch {
+      /* boleto catalog permanece fora do núcleo PATH B; obrigação já materializada */
     }
   }
 
-  const activeStatus = computeFinancingStatusFromInstallments(installments);
   withDb((db) => {
-    const list = Array.isArray(db.financings) ? db.financings : [];
-    const index = list.findIndex((item) => item.id === financingId);
-    if (index >= 0) {
-      list[index] = {
-        ...list[index],
-        status: activeStatus,
-        updated_at: new Date().toISOString(),
-      };
-      db.financings = list;
-    }
+    applyFinancingReconciliation(db, financingId);
     return db;
   });
 
@@ -538,7 +654,10 @@ export const approveFinancing = (user, financingId, options = {}) => {
 };
 
 export const rejectFinancing = (user, financingId, reason = '') => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, FINANCING_APPROVE_PERMISSION);
+  const current = getFinancingById(financingId);
+  if (!current) throw new Error('Financiamento não encontrado.');
+  assertFinancingWriteOwnership(user, current);
   let output = null;
   withDb((db) => {
     const list = Array.isArray(db.financings) ? db.financings : [];
@@ -576,6 +695,13 @@ export const registerFinancingPayment = (user, payload) => {
   const installment = payload.installment_id ? listFinancingInstallments({}).find((i) => i.id === payload.installment_id) : null;
   const receivableId = payload.receivable_id || installment?.receivable_id;
   if (!receivableId) throw new Error('Parcela/recebível é obrigatório para baixa.');
+  const financingId = installment?.financing_id
+    || listFinancingInstallments({}).find((i) => i.receivable_id === receivableId)?.financing_id
+    || getFinancingById(payload.financing_id)?.id;
+  if (financingId) {
+    const financing = getFinancingById(financingId);
+    if (financing) assertFinancingWriteOwnership(user, financing);
+  }
   const result = registerReceivablePayment(user, receivableId, {
     payment_date: payload.payment_date || todayIso(),
     amount_received: Number(payload.amount_received || 0),
@@ -592,20 +718,16 @@ export const registerFinancingPayment = (user, payload) => {
   });
   if (result.replayed) return result;
 
-  const linkedInstallment = installment || listFinancingInstallments({}).find((i) => i.receivable_id === receivableId);
+  const linkedInstallment = listFinancingInstallments({}).find((i) => (
+    i.id === payload.installment_id || i.receivable_id === receivableId
+  ));
   if (linkedInstallment) {
     const net = Number(linkedInstallment.net_amount || 0);
-    const paid = Number(linkedInstallment.paid_amount || 0) + Number(payload.amount_received || 0);
+    const paid = Number(linkedInstallment.paid_amount || 0);
     const isTotalSettlement = paid >= net && net > 0;
     const allocationType = isTotalSettlement
       ? FINANCING_PAYMENT_ALLOCATION_TYPE.TOTAL_SETTLEMENT
       : FINANCING_PAYMENT_ALLOCATION_TYPE.PARTIAL_PAYMENT;
-    patchFinancingInstallment(linkedInstallment.id, {
-      paid_amount: paid,
-      remaining_amount: Math.max(net - paid, 0),
-      last_payment_at: new Date().toISOString(),
-      notes: payload.notes || linkedInstallment.notes || '',
-    });
     if (result.payment?.id) {
       createFinancingPaymentAllocation({
         financing_id: linkedInstallment.financing_id,
@@ -702,53 +824,64 @@ export const reverseFinancingPaymentAudit = (user, payload) => {
 };
 
 export const refreshFinancingTotals = (financingId) => {
-  const installments = listFinancingInstallments({ financing_id: financingId });
-  const totalInstallments = installments.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
-  const paidInstallments = installments.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0);
-  const openInstallments = Math.max(totalInstallments - paidInstallments, 0);
-  const nextStatus = computeFinancingStatusFromInstallments(installments);
   let out = null;
   withDb((db) => {
-    const list = Array.isArray(db.financings) ? db.financings : [];
-    const index = list.findIndex((item) => item.id === financingId);
-    if (index < 0) return db;
-    const current = list[index];
-    out = {
-      ...current,
-      status: nextStatus,
-      total_paid_amount: paidInstallments,
-      total_open_amount: openInstallments,
-      updated_at: new Date().toISOString(),
-    };
-    list[index] = out;
-    db.financings = list;
+    out = applyFinancingReconciliation(db, financingId);
     return db;
   });
   return out;
 };
 
 export const cancelFinancing = (user, financingId, reason = '') => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, FINANCING_CANCEL_PERMISSION);
   const financing = getFinancingById(financingId);
   if (!financing) throw new Error('Financiamento não encontrado.');
-  const installments = listFinancingInstallments({ financing_id: financingId })
-    .filter((item) => ![FINANCING_INSTALLMENT_STATUS.PAID, FINANCING_INSTALLMENT_STATUS.CANCELED, FINANCING_INSTALLMENT_STATUS.RENEGOTIATED].includes(item.status));
+  assertFinancingWriteOwnership(user, financing);
+  if (financing.status === FINANCING_STATUS.CANCELED) return financing;
+
+  const db = loadDb();
+  const linked = listReceivablesForFinancing(db, financingId);
+  let paidCents = 0;
+  let remainingCents = 0;
+  for (const row of linked) {
+    if (row.status === FINANCING_STATUS.CANCELED) continue;
+    const paid = sumEffectivePaidCents(db.receivablePayments || [], row.id);
+    const net = toCents(row.net_amount || 0);
+    paidCents += paid;
+    if (row.status === 'canceled' || row.status === 'renegotiated') continue;
+    remainingCents += Math.max(net - paid, 0);
+  }
+
+  if (paidCents > 0 && remainingCents <= 0) {
+    const error = new Error('Financiamento quitado não pode ser cancelado. Histórico financeiro é preservado.');
+    error.code = 'FINANCING_PAID_OFF_CANCEL_DENIED';
+    throw error;
+  }
+  if (paidCents > 0 && remainingCents > 0) {
+    const error = new Error(
+      'Cancelamento de financiamento parcialmente pago exige decisão de produto (estorno, crédito ou baixa do saldo). Operação bloqueada.',
+    );
+    error.code = 'PARTIALLY_PAID_CANCEL_REQUIRES_PRODUCT_DECISION';
+    throw error;
+  }
+
+  const installments = listFinancingInstallments({ financing_id: financingId });
   for (const installment of installments) {
-    patchFinancingInstallment(installment.id, {
-      status: FINANCING_INSTALLMENT_STATUS.CANCELED,
-      notes: reason || 'Financiamento cancelado.',
-    });
-    if (installment.receivable_id) {
-      try {
-        cancelReceivable(user, installment.receivable_id, reason || 'Financiamento cancelado.');
-      } catch {
-        // Evita quebrar o fluxo se o título já estiver encerrado.
-      }
+    if (![FINANCING_INSTALLMENT_STATUS.PAID, FINANCING_INSTALLMENT_STATUS.CANCELED, FINANCING_INSTALLMENT_STATUS.RENEGOTIATED].includes(installment.status)) {
+      patchFinancingInstallment(installment.id, {
+        status: FINANCING_INSTALLMENT_STATUS.CANCELED,
+        notes: reason || 'Financiamento cancelado.',
+      });
     }
   }
+  for (const row of linked) {
+    if (row.status === 'canceled' || row.status === 'renegotiated' || row.status === 'paid') continue;
+    cancelReceivable(user, row.id, reason || 'Financiamento cancelado.');
+  }
+
   let output = null;
-  withDb((db) => {
-    const list = Array.isArray(db.financings) ? db.financings : [];
+  withDb((state) => {
+    const list = Array.isArray(state.financings) ? state.financings : [];
     const index = list.findIndex((item) => item.id === financingId);
     if (index < 0) throw new Error('Financiamento não encontrado.');
     output = {
@@ -759,8 +892,8 @@ export const cancelFinancing = (user, financingId, reason = '') => {
       updated_at: new Date().toISOString(),
     };
     list[index] = output;
-    db.financings = list;
-    return db;
+    state.financings = list;
+    return state;
   });
   logEvent({
     financing_id: financingId,
@@ -784,9 +917,10 @@ export const cancelFinancing = (user, financingId, reason = '') => {
 };
 
 export const generateBoletoCarne = (user, financingId) => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, FINANCING_EDIT_PERMISSION);
   const financing = getFinancingById(financingId);
   if (!financing) throw new Error('Financiamento não encontrado.');
+  assertFinancingWriteOwnership(user, financing);
   const installments = listFinancingInstallments({ financing_id: financingId })
     .filter((item) => ![FINANCING_INSTALLMENT_STATUS.PAID, FINANCING_INSTALLMENT_STATUS.CANCELED, FINANCING_INSTALLMENT_STATUS.RENEGOTIATED].includes(item.status));
   const boletos = installments.map((item) =>
@@ -911,9 +1045,10 @@ export const listBoletoReminderEvents = (filters = {}) => {
 };
 
 export const renegotiateFinancing = (user, financingId, payload) => {
-  requirePermission(user, 'finance:write');
+  requirePermission(user, FINANCING_EDIT_PERMISSION);
   const financing = getFinancingById(financingId);
   if (!financing) throw new Error('Financiamento não encontrado.');
+  assertFinancingWriteOwnership(user, financing);
   const selected = Array.isArray(payload.installment_ids) ? payload.installment_ids : [];
   if (selected.length === 0) throw new Error('Selecione ao menos uma parcela para renegociação.');
   const installments = listFinancingInstallments({ financing_id: financingId })

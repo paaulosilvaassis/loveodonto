@@ -136,8 +136,7 @@ export function createFinancingFromApprovedBudget(user, {
   }
 
   const canCreate = can(user, 'prontuario_orcamentos:approve')
-    || can(user, 'financeiro_financiamentos:create')
-    || can(user, 'finance:write');
+    || can(user, 'financeiro_financiamentos:create');
   if (!canCreate) {
     const error = new Error('Permissão insuficiente para criar financiamento.');
     error.code = 'PERMISSION_DENIED';

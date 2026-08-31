@@ -10,15 +10,41 @@ import {
 } from './receivableObligationLifecycle.js';
 import { isReceivableCollectible, sumEffectivePaidCents } from './receivableReconciliation.js';
 import { toCents } from './receivableMoney.js';
+import { listReceivablesForFinancing } from './financingReconciliation.js';
+import { cancelFinancing } from './financingsService.js';
 
 /**
  * BUDGET_HISTORICO_FINANCIAL_EFFECT = NONE
  * Novo ciclo (createNewBudgetForAppointment) não cancela nem altera títulos.
  *
  * BUDGET_CANCELADO_FINANCIAL_EFFECT = CANCEL_UNPAID_PATH_A_OR_FAIL_CLOSED
- * Cancelamento formal do orçamento é uma cerimônia financeira explícita.
- * PATH B ativo: FAIL CLOSED (lifecycle de financing deferred).
+ * PATH B pré-aprovação (não materializado): cancela o financing draft.
+ * PATH B pós-aprovação (obrigação materializada): NÃO apaga o financing; orçamento pode ir a CANCELADO.
  */
+
+const MATERIALIZED_FINANCING_STATUSES = new Set([
+  'approved',
+  'active',
+  'partially_paid',
+  'paid_off',
+  'overdue',
+  'defaulted',
+]);
+
+function findFinancingForBudget(budgetId, db = loadDb()) {
+  const oid = String(budgetId || '').trim();
+  if (!oid) return null;
+  return (db.financings || []).find((row) => (
+    String(row.budget_id || '') === oid || String(row.treatment_plan_id || '') === oid
+  )) || null;
+}
+
+function isFinancingMaterialized(financing, db = loadDb()) {
+  if (!financing) return false;
+  if (listReceivablesForFinancing(db, financing.id).length > 0) return true;
+  return MATERIALIZED_FINANCING_STATUSES.has(financing.status);
+}
+
 export function cancelApprovedBudgetWithFinance(user, appointmentId, reason = '') {
   requirePermission(user, RECEIVABLE_CANCEL_PERMISSION);
   if (!appointmentId) throw new Error('Atendimento é obrigatório.');
@@ -33,11 +59,10 @@ export function cancelApprovedBudgetWithFinance(user, appointmentId, reason = ''
   }
 
   if (hasRealFinancingLinkedToBudget(budget.id)) {
-    const error = new Error(
-      'Orçamento com financiamento ativo não pode ser cancelado nesta fase. Lifecycle PATH B permanece deferred.',
-    );
-    error.code = 'FINANCING_LIFECYCLE_DEFERRED';
-    throw error;
+    const financing = findFinancingForBudget(budget.id, db);
+    if (financing && !isFinancingMaterialized(financing, db)) {
+      cancelFinancing(user, financing.id, reason || 'Orçamento cancelado antes da materialização PATH B.');
+    }
   }
 
   const linked = listPathAReceivablesForBudget(budget.id, db);

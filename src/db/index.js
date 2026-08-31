@@ -55,6 +55,7 @@ const TENANT_GUARDED_COLLECTIONS = [
   'transactions',
   'accountsReceivable',
   'receivablePayments',
+  'financings',
   'payables',
   'cashTransactions',
   'crmLeads',

@@ -1,5 +1,6 @@
 import { RECEIVABLE_STATUS } from './auditEventCatalog.js';
 import { fromCents, toCents } from './receivableMoney.js';
+import { applyFinancingReconciliation } from './financingReconciliation.js';
 
 export const RECEIVABLE_PAYMENT_KIND = {
   PAYMENT: 'payment',
@@ -127,28 +128,5 @@ export function refreshFinancingFromReceivable(db, receivable) {
       updated_at: new Date().toISOString(),
     };
   }
-  if (!Array.isArray(db.financings)) return;
-  const financingIndex = db.financings.findIndex((item) => item.id === financingId);
-  if (financingIndex < 0) return;
-  const linkedInstallments = (Array.isArray(db.financingInstallments) ? db.financingInstallments : [])
-    .filter((item) => item.financing_id === financingId);
-  const totalNet = linkedInstallments.reduce((sum, item) => sum + Number(item.net_amount || 0), 0);
-  const totalPaid = linkedInstallments.reduce((sum, item) => sum + Number(item.paid_amount || 0), 0);
-  const totalOpen = Math.max(totalNet - totalPaid, 0);
-  const hasOverdue = linkedInstallments.some((item) => item.status === RECEIVABLE_STATUS.OVERDUE);
-  const allPaid = linkedInstallments.length > 0
-    && linkedInstallments.every((item) => item.status === RECEIVABLE_STATUS.PAID);
-  const hasPartial = linkedInstallments.some((item) => item.status === RECEIVABLE_STATUS.PARTIALLY_PAID);
-  let nextStatus = db.financings[financingIndex].status || 'active';
-  if (allPaid) nextStatus = 'paid_off';
-  else if (hasOverdue) nextStatus = 'overdue';
-  else if (hasPartial || totalPaid > 0) nextStatus = 'partially_paid';
-  else nextStatus = 'active';
-  db.financings[financingIndex] = {
-    ...db.financings[financingIndex],
-    status: nextStatus,
-    total_paid_amount: totalPaid,
-    total_open_amount: totalOpen,
-    updated_at: new Date().toISOString(),
-  };
+  applyFinancingReconciliation(db, financingId);
 }

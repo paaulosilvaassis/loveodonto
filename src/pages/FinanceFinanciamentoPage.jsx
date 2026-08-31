@@ -114,6 +114,7 @@ export default function FinanceFinanciamentoPage() {
   const financings = useMemo(() => {
     let base = listFinancings({
       ...filters,
+      user,
       minValue: filters.minValue ? Number(filters.minValue) : undefined,
       maxValue: filters.maxValue ? Number(filters.maxValue) : undefined,
     });
@@ -126,9 +127,9 @@ export default function FinanceFinanciamentoPage() {
     }
     if (activeTab === 'all') return base;
     return base.filter((item) => item.status === activeTab);
-  }, [activeTab, filters, refreshKey]);
+  }, [activeTab, filters, refreshKey, user]);
 
-  const kpis = useMemo(() => getFinancingsKPIs(), [refreshKey]);
+  const kpis = useMemo(() => getFinancingsKPIs({ user }), [refreshKey, user]);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
