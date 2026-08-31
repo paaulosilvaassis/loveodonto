@@ -23,7 +23,7 @@ export function ReissueContractSecureModal({
   const [confirmPhrase, setConfirmPhrase] = useState('');
   const [error, setError] = useState('');
   const phrase = mode === 'void' ? CONTRACT_VOID_CONFIRM_PHRASE : CONTRACT_REISSUE_CONFIRM_PHRASE;
-  const title = mode === 'void' ? 'Invalidar contrato assinado?' : 'Reemitir contrato?';
+  const title = mode === 'void' ? 'Invalidar contrato assinado' : 'Reemitir contrato';
 
   const handleClose = () => {
     if (busy) return;
@@ -48,24 +48,28 @@ export function ReissueContractSecureModal({
       await onConfirm({ reason, confirmPhrase });
       handleClose();
     } catch (err) {
-      setError(err?.message || 'Falha na operação jurídica.');
+      setError(err?.mappedMessage || err?.message || 'Falha na operação jurídica.');
     }
   };
 
   return (
     <ModalRoot open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
-      <ModalContent size="md" onInteractOutside={(e) => e.preventDefault()}>
+      <ModalContent
+        size="md"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
+      >
         <form id="reissue-contract-secure-form" onSubmit={handleSubmit}>
           <ModalHeader>
             <ModalTitle>{title}</ModalTitle>
             <ModalDescription>
               {mode === 'void'
-                ? 'O contrato assinado permanece preservado como evidência. Nenhum PDF, assinatura ou manifesto é apagado. Esta ação não altera o financeiro.'
-                : 'Um novo contrato será criado. Assinaturas, manifesto, tokens e artefato final do contrato original não são copiados.'}
+                ? 'O contrato original permanece armazenado; as assinaturas permanecem; as evidências permanecem; o PDF permanece. O contrato não poderá mais ser utilizado como vigente. O financeiro não será alterado automaticamente.'
+                : 'Será criado um novo contrato, com novo identificador. Novas assinaturas serão necessárias; a assinatura antiga não será copiada. O PDF antigo permanece histórico. O financeiro não muda automaticamente.'}
             </ModalDescription>
           </ModalHeader>
           <ModalBody className="space-y-3">
-            {error ? <p className="clinical-inline-error">{error}</p> : null}
+            {error ? <p className="clinical-inline-error" role="alert">{error}</p> : null}
             <label className="block text-sm">
               <span className="font-medium">Motivo jurídico</span>
               <textarea
@@ -90,7 +94,7 @@ export function ReissueContractSecureModal({
             <button type="button" className="button secondary" onClick={handleClose} disabled={busy}>
               Voltar
             </button>
-            <button type="submit" className="button danger" disabled={busy}>
+            <button type="submit" className="button danger" disabled={busy} aria-busy={busy}>
               {busy ? 'Processando…' : (mode === 'void' ? 'Confirmar invalidação' : 'Confirmar reemissão')}
             </button>
           </ModalFooter>

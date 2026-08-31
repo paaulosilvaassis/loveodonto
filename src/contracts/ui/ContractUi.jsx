@@ -1,5 +1,16 @@
 import { formatCurrencyBRL } from '../../utils/currency.js';
-import { CONTRACT_STATUS_LABELS, CONTRACT_STATUS_VARIANT } from '../contractConstants.js';
+import { contractLifecycleUiLabel } from '../lifecycle/uiLabels.js';
+import { normalizeContractLifecycleStatus } from '../lifecycle/normalize.js';
+
+const LIFECYCLE_BADGE_VARIANT = {
+  draft: 'muted',
+  generated: 'info',
+  partially_signed: 'warning',
+  signed: 'success',
+  cancelled: 'muted',
+  voided: 'danger',
+  superseded: 'muted',
+};
 
 export function ContractKpiGrid({ items }) {
   return (
@@ -15,8 +26,9 @@ export function ContractKpiGrid({ items }) {
 }
 
 export function ContractStatusBadge({ status }) {
-  const label = CONTRACT_STATUS_LABELS[status] || status;
-  const variant = CONTRACT_STATUS_VARIANT[status] || 'muted';
+  const normalized = normalizeContractLifecycleStatus(status);
+  const label = contractLifecycleUiLabel(status);
+  const variant = LIFECYCLE_BADGE_VARIANT[normalized] || 'muted';
   return <span className={`ctr-badge ctr-badge--${variant}`}>{label}</span>;
 }
 

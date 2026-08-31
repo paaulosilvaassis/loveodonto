@@ -18,6 +18,12 @@ import {
   sendContractForSignature,
   finalizeGeneratedContract,
 } from '../../services/contractModuleService.js';
+import { resendSigningAccess } from '../../services/contractSigningAccessCommandService.js';
+import {
+  getContractLifecycleUiPolicy,
+  getSigningAccessSnapshot,
+  mapLifecycleUiError,
+} from '../../contracts/lifecycle/index.js';
 import {
   UX_MESSAGES,
   formatUxMessage,
@@ -67,14 +73,37 @@ export default function ContractsFilaPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  const runCta = (row) => {
+  const runCta = async (row) => {
     const key = row.cta?.key;
     try {
       if (key === 'send') {
+        const snapshot = getSigningAccessSnapshot(row.id);
+        const policy = getContractLifecycleUiPolicy({
+          contract: row,
+          actor: user,
+          request: snapshot.request,
+          link: snapshot.link,
+        });
+        if (policy.canResendAccess) {
+          await resendSigningAccess({
+            user,
+            contractId: row.id,
+            requestId: snapshot.request?.id,
+            origin: typeof window !== 'undefined' ? window.location.origin : '',
+            deliverEmail: false,
+          });
+          setRefresh((x) => x + 1);
+          showToast('Acesso reenviado.');
+          return;
+        }
+        if (!policy.canSendForSignature) {
+          showToast(mapLifecycleUiError({ code: 'CONTRACT_NOT_SIGNABLE' }), 'error');
+          return;
+        }
         sendContractForSignature(user, row.id);
         recordContractsRolloutMetric('signature_link_generated', user);
         setRefresh((x) => x + 1);
-        showToast('Link de assinatura gerado. Envie ao paciente pelo canal da clínica (simulação em staging).');
+        showToast('Solicitação de assinatura criada.');
         return;
       }
       if (key === 'continue' || key === 'review' || key === 'resolve') {
@@ -97,10 +126,11 @@ export default function ContractsFilaPage() {
       }
       setSelectedView(buildContractViewIdentity(row));
     } catch (e) {
+      const mapped = mapLifecycleUiError(e);
       const msg = String(e?.message || '');
       if (/permiss/i.test(msg)) showToast(formatUxMessage('PERMISSION_DENIED'), 'error');
       else if (/contato|e-mail|email|telefone/i.test(msg)) showToast(formatUxMessage('SIGNER_WITHOUT_CONTACT'), 'error');
-      else showToast(msg || formatUxMessage('LOAD_FAILED'), 'error');
+      else showToast(mapped || formatUxMessage('LOAD_FAILED'), 'error');
     }
   };
 

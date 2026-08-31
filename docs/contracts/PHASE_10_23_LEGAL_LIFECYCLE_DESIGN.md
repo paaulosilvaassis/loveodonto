@@ -897,3 +897,20 @@ Invariante: no máximo **um** link signable (`pending` ∧ não expirado) por `r
 Authz ROTATE: SENSITIVE + profissional da cerimônia. RESEND: OPERATIONAL (inclui recepção). Reason obrigatório só no ROTATE.
 
 Audit: `SIGN_LINK_ROTATED`, `SIGN_LINK_EXPIRED`, `SIGN_INVITE_RESENT`. Sem raw token.
+
+---
+
+## 10.23H — UI / RBAC / operator safety (implementados)
+
+Autoridade de capacidades: `src/contracts/lifecycle/uiPolicy.js` (`getContractLifecycleUiPolicy`).
+Rótulos: `uiLabels.js`. Erros: `uiErrors.js`. Progresso: `ceremonyProgress.js`.
+Snapshot de acesso: `uiQuery.js`. Página pública: `publicSigningUi.js`.
+
+Writers 10.23C–G permanecem a fronteira de segurança. Botão oculto ≠ autorização.
+
+Sem novos permission bits (evita backfill). VOID/REISSUE = `canPerformLegalHighImpact` (admin/master).
+Cancel/abort/revoke = `canPerformSensitiveLifecycle`. RESEND = operacional. ROTATE = sensitive + profissional.
+
+Contrato **nunca** é rotulado Expirado. Expiração pertence ao acesso de assinatura (relógio confiável).
+
+`createContractNewVersion` permanece bloqueado. Sem `Nova versão` em ciclo jurídico assinado.

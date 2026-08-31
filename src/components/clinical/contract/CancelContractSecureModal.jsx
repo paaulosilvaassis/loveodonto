@@ -47,13 +47,17 @@ export function CancelContractSecureModal({
       await onConfirm({ password, reason, confirmPhrase, financialAction });
       handleClose();
     } catch (err) {
-      setError(err?.message || 'Falha ao cancelar contrato.');
+      setError(err?.mappedMessage || err?.message || 'Falha ao cancelar contrato.');
     }
   };
 
   return (
     <ModalRoot open={open} onOpenChange={(next) => { if (!next) handleClose(); }}>
-      <ModalContent size="md" onInteractOutside={(e) => e.preventDefault()}>
+      <ModalContent
+        size="md"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => { if (busy) e.preventDefault(); }}
+      >
         <form id="cancel-contract-secure-form" onSubmit={handleSubmit}>
           <ModalHeader>
             <ModalTitle>
@@ -61,12 +65,12 @@ export function CancelContractSecureModal({
             </ModalTitle>
             <ModalDescription>
               {variant === 'abort'
-                ? 'As assinaturas e evidências já coletadas permanecem preservadas. Nenhum signatário pendente poderá concluir depois. Esta ação é sensível e ficará registrada no histórico de auditoria.'
-                : 'Esta ação é sensível e ficará registrada no histórico de auditoria.'}
+                ? 'As assinaturas já realizadas permanecerão registradas como evidência. O contrato será cancelado e os acessos pendentes serão revogados.'
+                : 'O contrato será cancelado e não poderá ser assinado. Informe o motivo e confirme. Esta ação ficará registrada no histórico de auditoria.'}
             </ModalDescription>
           </ModalHeader>
           <ModalBody className="space-y-3">
-            {error ? <p className="clinical-inline-error">{error}</p> : null}
+            {error ? <p className="clinical-inline-error" role="alert">{error}</p> : null}
             <label className="block text-sm">
               <span className="font-medium">Senha do administrador</span>
               <input
@@ -119,7 +123,7 @@ export function CancelContractSecureModal({
             <button type="button" className="button secondary" onClick={handleClose} disabled={busy}>
               Voltar
             </button>
-            <button type="submit" className="button danger" disabled={busy}>
+            <button type="submit" className="button danger" disabled={busy} aria-busy={busy}>
               {busy ? 'Cancelando…' : 'Confirmar cancelamento'}
             </button>
           </ModalFooter>

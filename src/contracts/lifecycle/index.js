@@ -79,6 +79,28 @@ export {
 } from './ceremony.js';
 
 export {
+  CONTRACT_LIFECYCLE_UI_LABELS,
+  SIGNING_ACCESS_UI_LABELS,
+  contractLifecycleUiLabel,
+  describeSigningAccessUi,
+  lifecycleAuditUiLabel,
+} from './uiLabels.js';
+
+export { mapLifecycleUiError } from './uiErrors.js';
+
+export { deriveCeremonyProgress } from './ceremonyProgress.js';
+
+export { getContractLifecycleUiPolicy } from './uiPolicy.js';
+
+export {
+  getSigningAccessSnapshot,
+  describeContractLineage,
+  listLifecycleArchiveContracts,
+} from './uiQuery.js';
+
+export { describePublicSigningAccessFailure } from './publicSigningUi.js';
+
+export {
   actorTenantId,
   assertLegalHighImpactAuth,
   assertLegalReason,

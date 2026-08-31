@@ -5,7 +5,12 @@ import ClinicalDocumentPackagePanel from '../contracts/operational/ClinicalDocum
 import ContractSignModal from '../contracts/ContractSignModal.jsx';
 import SendContractSignatureModal from '../contracts/SendContractSignatureModal.jsx';
 import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
-import { CONTRACT_STATUS_LABELS, CONTRACT_STATUS } from '../../contracts/contractConstants.js';
+import { CONTRACT_STATUS } from '../../contracts/contractConstants.js';
+import { contractLifecycleUiLabel } from '../../contracts/lifecycle/uiLabels.js';
+import { deriveCeremonyProgress } from '../../contracts/lifecycle/ceremonyProgress.js';
+import { getContractLifecycleUiPolicy } from '../../contracts/lifecycle/uiPolicy.js';
+import { getSigningAccessSnapshot } from '../../contracts/lifecycle/uiQuery.js';
+import { mapLifecycleUiError } from '../../contracts/lifecycle/uiErrors.js';
 import {
   evaluateClinicalSignatureReadiness,
   CLINICAL_SIGNATURE_STEP,
@@ -23,10 +28,11 @@ import { getPatient } from '../../services/patientService.js';
 import { resolvePatientFullName } from '../../utils/patientIdentity.js';
 import { SIGNATURE_INVITE_SENT_MSG } from '../../services/signatureInviteEmailService.js';
 import {
-  cancelSignatureRequest,
   getActivePatientSignatureInvite,
 } from '../../services/signatureProviderService.js';
-import { resendSigningAccess } from '../../services/contractSigningAccessCommandService.js';
+import { resendSigningAccess, rotateSigningAccess } from '../../services/contractSigningAccessCommandService.js';
+import { revokeSigningAccess } from '../../services/contractLifecycleCommandService.js';
+import { SigningAccessSecureModal } from './contract/SigningAccessSecureModal.jsx';
 import {
   PatientRemoteInviteActions,
   patientRemoteStatusLabel,
@@ -48,6 +54,7 @@ export function ClinicalSignatureSection({
   const [witnessName, setWitnessName] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState(null);
+  const [accessModal, setAccessModal] = useState({ open: false, mode: 'resend' });
 
   const readiness = useMemo(
     () => evaluateClinicalSignatureReadiness({
@@ -141,9 +148,18 @@ export function ClinicalSignatureSection({
   const signers = ceremony?.requiredSigners || [];
   const canOpenCeremony = readiness.canSignNow;
   const patientInvite = contract?.id ? getActivePatientSignatureInvite(contract.id) : null;
+  const accessSnapshot = contract?.id ? getSigningAccessSnapshot(contract.id) : { request: null, link: null };
+  const lifecyclePolicy = getContractLifecycleUiPolicy({
+    contract,
+    ceremony,
+    request: accessSnapshot.request,
+    link: accessSnapshot.link,
+    actor: user,
+  });
+  const ceremonyProgress = deriveCeremonyProgress({ contract, ceremony });
 
   const handleCopyLink = async () => {
-    if (!patientInvite?.signUrl) return;
+    if (!patientInvite?.signUrl || !lifecyclePolicy.canResendAccess) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     try {
       await navigator.clipboard.writeText(`${origin}${patientInvite.signUrl}`);
@@ -153,33 +169,47 @@ export function ClinicalSignatureSection({
     }
   };
 
-  const handleResendInvite = async () => {
-    if (!patientInvite?.request?.id || !contract?.id || !user) return;
-    setBusy(true);
-    try {
-      await resendSigningAccess({
-        user,
-        contractId: contract.id,
-        requestId: patientInvite.request.id,
-        origin: typeof window !== 'undefined' ? window.location.origin : '',
-      });
-      bump();
-      showMsg(SIGNATURE_INVITE_SENT_MSG);
-    } catch (e) {
-      showMsg(e?.message || 'Não foi possível reenviar o convite.', 'error');
-    } finally {
-      setBusy(false);
-    }
+  const handleResendInvite = () => {
+    if (!lifecyclePolicy.canResendAccess) return;
+    setAccessModal({ open: true, mode: 'resend' });
   };
 
   const handleCancelInvite = () => {
-    if (!patientInvite?.request?.id || !user) return;
+    if (!lifecyclePolicy.canRevokeAccess) return;
+    setAccessModal({ open: true, mode: 'revoke' });
+  };
+
+  const handleRotateAccess = () => {
+    if (!lifecyclePolicy.canRotateAccess) return;
+    setAccessModal({ open: true, mode: 'rotate' });
+  };
+
+  const handleAccessConfirm = async ({ reason }) => {
+    if (!contract?.id || !user || busy) return;
+    setBusy(true);
     try {
-      cancelSignatureRequest({ user, requestId: patientInvite.request.id, reason: 'cancelado pela clínica' });
+      const requestId = accessSnapshot.request?.id || patientInvite?.request?.id;
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      if (accessModal.mode === 'resend') {
+        await resendSigningAccess({ user, contractId: contract.id, requestId, origin });
+        bump();
+        showMsg('Acesso reenviado.');
+        return;
+      }
+      if (accessModal.mode === 'rotate') {
+        await rotateSigningAccess({ user, contractId: contract.id, requestId, reason });
+        bump();
+        showMsg('Novo acesso de assinatura gerado.');
+        return;
+      }
+      await revokeSigningAccess({ user, contractId: contract.id, requestId, reason });
       bump();
-      showMsg('Solicitação de assinatura cancelada.');
+      showMsg('Acesso revogado.');
     } catch (e) {
-      showMsg(e?.message || 'Não foi possível cancelar a solicitação.', 'error');
+      showMsg(mapLifecycleUiError(e), 'error');
+      throw e;
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -199,10 +229,11 @@ export function ClinicalSignatureSection({
         <div className="clinical-signature-summary" data-testid="clinical-signature-step" data-step={readiness.step}>
           <p><strong>Contrato:</strong> {formatFriendlyContractNumber(contract?.contractNumber, 1)}</p>
           <p><strong>Paciente:</strong> {patientName}</p>
-          <p><strong>Status do contrato:</strong> {CONTRACT_STATUS_LABELS[contract?.status] || (contract?.status === CONTRACT_STATUS.GENERATED ? 'Finalizado' : contract?.status || 'Ausente')}</p>
+          <p><strong>Status do contrato:</strong> {contractLifecycleUiLabel(contract?.status) || (contract?.status === CONTRACT_STATUS.GENERATED ? 'Gerado' : contract?.status || 'Ausente')}</p>
+          <p><strong>Acesso remoto:</strong> {lifecyclePolicy.access.label}</p>
           <p><strong>Manifest:</strong> {readiness.manifestLabel}</p>
           <p><strong>Status:</strong> {readiness.label}</p>
-          {ceremony?.requiredCount ? <p data-testid="clinical-signature-progress"><strong>Progresso:</strong> {ceremony.progressLabel}</p> : null}
+          {ceremonyProgress.requiredCount ? <p data-testid="clinical-signature-progress"><strong>Progresso:</strong> {ceremonyProgress.label}</p> : null}
           {readiness.legacySignedBeforeManifest ? (
             <p className="clinical-signature-legacy">Assinatura anterior ao manifesto/cerimônia multi-signer atual. Evidência histórica preservada.</p>
           ) : null}
@@ -231,13 +262,13 @@ export function ClinicalSignatureSection({
               {slot.cro ? <p>CRO{slot.uf ? `-${slot.uf}` : ''} {slot.cro}</p> : null}
               <p data-testid={`clinical-signer-status-${String(slot.role).toLowerCase()}`}>
                 {slot.role === CLINICAL_SIGNER_ROLE.PATIENT
-                  ? patientRemoteStatusLabel(slot, patientInvite)
+                  ? patientRemoteStatusLabel(slot, patientInvite, lifecyclePolicy.access)
                   : (slot.status === 'signed' ? 'Assinado' : (canAuthenticatedUserSignSlot(user, slot).waitingLabel || 'Pendente'))}
               </p>
               {slot.satisfiedBySameProfessional ? (
                 <p>Satisfeito pela mesma assinatura profissional</p>
               ) : null}
-              {canOpenCeremony && slot.status !== 'signed' && isOperatorCollectedRole(slot.role) ? (
+              {canOpenCeremony && lifecyclePolicy.canSignOnScreen && slot.status !== 'signed' && isOperatorCollectedRole(slot.role) ? (
                 <>
                   <ClinicalBtn
                     variant="secondary"
@@ -250,11 +281,17 @@ export function ClinicalSignatureSection({
                   <PatientRemoteInviteActions
                     slot={slot}
                     invite={patientInvite}
-                    canSend={readiness.canSend}
+                    canSend={readiness.canSend && lifecyclePolicy.canSendForSignature}
+                    canResend={lifecyclePolicy.canResendAccess}
+                    canRotate={lifecyclePolicy.canRotateAccess}
+                    canRevoke={lifecyclePolicy.canRevokeAccess}
+                    busy={busy}
                     onSend={() => setSendOpen(true)}
                     onResend={handleResendInvite}
                     onCopyLink={handleCopyLink}
                     onCancel={handleCancelInvite}
+                    onRotate={handleRotateAccess}
+                    onRevoke={handleCancelInvite}
                   />
                 </>
               ) : null}
@@ -331,7 +368,7 @@ export function ClinicalSignatureSection({
         open={sendOpen}
         onOpenChange={setSendOpen}
         user={user}
-        contract={readiness.canSend ? contract : null}
+        contract={readiness.canSend && lifecyclePolicy.canSendForSignature ? contract : null}
         budget={null}
         professional={professional}
         treatmentName={readiness.package?.treatmentName}
@@ -344,6 +381,13 @@ export function ClinicalSignatureSection({
           }
           showMsg(SIGNATURE_INVITE_SENT_MSG);
         }}
+      />
+      <SigningAccessSecureModal
+        open={accessModal.open}
+        mode={accessModal.mode}
+        busy={busy}
+        onOpenChange={(open) => setAccessModal((prev) => ({ ...prev, open }))}
+        onConfirm={handleAccessConfirm}
       />
     </>
   );

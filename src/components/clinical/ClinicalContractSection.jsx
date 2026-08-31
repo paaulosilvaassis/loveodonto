@@ -46,9 +46,12 @@ import {
 } from './contract/finalizeClinicalContractDraft.js';
 import {
   CONTRACT_STATUS,
-  CONTRACT_STATUS_LABELS,
 } from '../../contracts/contractConstants.js';
-import { normalizeContractLifecycleStatus } from '../../contracts/contractLifecycleGuard.js';
+import { contractLifecycleUiLabel, lifecycleAuditUiLabel } from '../../contracts/lifecycle/uiLabels.js';
+import { getContractLifecycleUiPolicy } from '../../contracts/lifecycle/uiPolicy.js';
+import { getSigningAccessSnapshot, listLifecycleAudits } from '../../contracts/lifecycle/uiQuery.js';
+import { mapLifecycleUiError } from '../../contracts/lifecycle/uiErrors.js';
+import { normalizeContractLifecycleStatus } from '../../contracts/lifecycle/normalize.js';
 import { formatCurrencyBRL } from '../../utils/currency.js';
 import { formatCnpj } from '../../utils/validators.js';
 import { formatCivilCpf } from '../../utils/patientCpfIdentity.js';
@@ -144,26 +147,21 @@ function resolveUiStatus({ contractAccessible, linkedContract, contractReadiness
   if (!contractAccessible && !linkedContract) {
     return { key: 'blocked', label: 'Bloqueado', tone: 'blocked' };
   }
-  if (linkedContract?.status === CONTRACT_STATUS.DRAFT) {
-    return { key: 'draft', label: 'Em edição', tone: 'draft' };
-  }
-  if (linkedContract && [CONTRACT_STATUS.SENT, CONTRACT_STATUS.VIEWED, CONTRACT_STATUS.SIGNED_BY_PATIENT, CONTRACT_STATUS.SIGNED_BY_CLINIC].includes(linkedContract.status)) {
-    return { key: 'waiting', label: 'Aguardando assinatura', tone: 'waiting' };
-  }
-  if ([CONTRACT_STATUS.SIGNED, CONTRACT_STATUS.COMPLETED].includes(linkedContract?.status)) {
-    return { key: 'signed', label: 'Assinado', tone: 'signed' };
-  }
-  if (linkedContract?.status === CONTRACT_STATUS.CANCELED) {
-    return { key: 'canceled', label: 'Cancelado', tone: 'canceled' };
-  }
-  if (linkedContract?.status === CONTRACT_STATUS.GENERATED) {
-    return { key: 'generated', label: 'Gerado', tone: 'ready' };
-  }
   if (linkedContract) {
+    const normalized = normalizeContractLifecycleStatus(linkedContract.status);
+    const toneByState = {
+      draft: 'draft',
+      generated: 'ready',
+      partially_signed: 'waiting',
+      signed: 'signed',
+      cancelled: 'canceled',
+      voided: 'canceled',
+      superseded: 'canceled',
+    };
     return {
-      key: linkedContract.status,
-      label: CONTRACT_STATUS_LABELS[linkedContract.status] || 'Em andamento',
-      tone: 'draft',
+      key: normalized,
+      label: contractLifecycleUiLabel(linkedContract.status),
+      tone: toneByState[normalized] || 'draft',
     };
   }
   if (contractReadiness && !contractReadiness.canGenerate) {
@@ -607,13 +605,20 @@ export function ClinicalContractSection({
   };
 
   const handleConfirmCancelContract = async (payload) => {
-    if (!linkedContract?.id || !user) return;
+    if (!linkedContract?.id || !user || cancelBusy) return;
     setCancelBusy(true);
     try {
       await cancelContractSecure(user, linkedContract.id, payload);
       setCancelModalOpen(false);
       setHistoryKey((k) => k + 1);
-      showToast('Contrato cancelado e registrado na auditoria.');
+      showToast(
+        lifecycleStatus === 'partially_signed'
+          ? 'Cerimônia cancelada. Evidências preservadas.'
+          : 'Contrato cancelado e registrado na auditoria.',
+      );
+    } catch (err) {
+      err.mappedMessage = mapLifecycleUiError(err);
+      throw err;
     } finally {
       setCancelBusy(false);
     }
@@ -650,9 +655,15 @@ export function ClinicalContractSection({
     showToast('Contrato finalizado. Documentos e Assinatura foram reavaliados.');
   };
 
-  const historyEvents = (contractDetails?.events || [])
-    .map((event) => ({ event, label: formatContractEventLabel(event) }))
-    .filter((item) => item.label);
+  const historyEvents = [
+    ...(contractDetails?.events || []).map((event) => ({ event, label: formatContractEventLabel(event) })),
+    ...((linkedContract?.id ? listLifecycleAudits(linkedContract.id) : [])).map((event) => ({
+      event: { id: event.id, createdAt: event.actedAt || event.createdAt },
+      label: lifecycleAuditUiLabel(event.eventType),
+    })),
+  ]
+    .filter((item) => item.label)
+    .sort((a, b) => new Date(b.event.createdAt || 0) - new Date(a.event.createdAt || 0));
 
   const canCancelAsAdmin = Boolean(
     user && (user.role === 'admin' || user.isMaster || can(user, 'admin_contratos:cancel')),
@@ -662,19 +673,24 @@ export function ClinicalContractSection({
     && !linkedContract
     && (contractReadiness?.canGenerate ?? false);
   const lifecycleStatus = normalizeContractLifecycleStatus(linkedContract?.status);
+  const accessSnapshot = linkedContract?.id ? getSigningAccessSnapshot(linkedContract.id) : { request: null, link: null };
+  const lifecyclePolicy = getContractLifecycleUiPolicy({
+    contract: linkedContract,
+    actor: user,
+    request: accessSnapshot.request,
+    link: accessSnapshot.link,
+  });
   const canEdit = linkedContract?.status === CONTRACT_STATUS.DRAFT;
-  const isCanceled = lifecycleStatus === 'cancelled';
+  const isCanceled = lifecycleStatus === 'cancelled' || lifecycleStatus === 'voided' || lifecycleStatus === 'superseded';
   const canFinalize = canShowFinalizeClinicalContractCta(linkedContract)
     && canFinalizeClinicalContract(user)
     && !isCanceled;
   const canView = Boolean(linkedContract?.renderedHtml || linkedContract?.editedHtml || contractAccessible);
   const canPreview = contractAccessible && ((contractReadiness?.canGenerate ?? false) || linkedContract);
-  const canSend = canSendContractForSignature({ contract: linkedContract, budget: effectiveBudget });
-  const canCancel = canCancelAsAdmin
-    && linkedContract
-    && (lifecycleStatus === 'draft'
-      || lifecycleStatus === 'generated'
-      || lifecycleStatus === 'partially_signed');
+  const canSend = canSendContractForSignature({ contract: linkedContract, budget: effectiveBudget })
+    && lifecyclePolicy.canSendForSignature;
+  const canCancel = (lifecyclePolicy.canCancelUnsigned || lifecyclePolicy.canAbortPartial)
+    && canCancelAsAdmin;
 
   return (
     <>
@@ -765,12 +781,18 @@ export function ClinicalContractSection({
               <div className="clinical-contract-canceled-banner" role="status">
                 <XCircle size={18} aria-hidden />
                 <div>
-                  <strong>Contrato cancelado</strong>
-                  {linkedContract?.cancelReason ? (
-                    <p>Motivo: {linkedContract.cancelReason}</p>
+                  <strong>
+                    {lifecycleStatus === 'voided'
+                      ? 'Contrato invalidado'
+                      : lifecycleStatus === 'superseded'
+                        ? 'Contrato substituído'
+                        : 'Contrato cancelado'}
+                  </strong>
+                  {linkedContract?.cancelReason || linkedContract?.voidReason ? (
+                    <p>Motivo: {linkedContract.cancelReason || linkedContract.voidReason}</p>
                   ) : null}
-                  {linkedContract?.canceledByName ? (
-                    <p>Responsável: {linkedContract.canceledByName}</p>
+                  {linkedContract?.canceledByName || linkedContract?.voidedByName ? (
+                    <p>Responsável: {linkedContract.canceledByName || linkedContract.voidedByName}</p>
                   ) : null}
                 </div>
               </div>
@@ -789,6 +811,9 @@ export function ClinicalContractSection({
               <div>
                 <strong>Status do contrato</strong>
                 <span>{uiStatus.label}</span>
+                {linkedContract?.id ? (
+                  <em>Acesso remoto: {lifecyclePolicy.access.label}</em>
+                ) : null}
                 {linkedContract?.contractNumber ? (
                   <em>Nº {linkedContract.contractNumber}</em>
                 ) : null}

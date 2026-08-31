@@ -33,10 +33,20 @@ import { withDb } from '../../db/index.js';
 import { fetchSigningClientContext } from '../../services/signingClientContextService.js';
 import { collectPresentedConsents } from '../../contracts/remoteSignatureEvidence.js';
 import { getPatient } from '../../services/patientService.js';
+import {
+  describePublicSigningAccessFailure,
+  PUBLIC_SIGNING_FAILURE_COPY,
+} from '../../contracts/lifecycle/publicSigningUi.js';
 
 export default function ContractSignPublicPage() {
   const { token } = useParams();
   const resolved = useMemo(() => (token ? getContractBySignToken(token) : null), [token]);
+  const publicFailure = useMemo(() => {
+    if (resolved?.expired) return { kind: 'expired' };
+    if (resolved?.replay) return { kind: 'replay' };
+    if (resolved) return null;
+    return describePublicSigningAccessFailure(token);
+  }, [token, resolved]);
   const summary = useMemo(
     () => buildPublicSigningSummaryFromV1Contract(resolved?.contract),
     [resolved],
@@ -106,6 +116,36 @@ export default function ContractSignPublicPage() {
     return () => { cancelled = true; };
   }, []);
 
+  if (resolved?.expired || publicFailure?.kind === 'expired') {
+    const copy = PUBLIC_SIGNING_FAILURE_COPY.expired;
+    return (
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-expired">
+        <h1>{copy.title}</h1>
+        <p>{copy.body}</p>
+      </div>
+    );
+  }
+
+  if (publicFailure?.kind === 'revoked') {
+    const copy = PUBLIC_SIGNING_FAILURE_COPY.revoked;
+    return (
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-revoked">
+        <h1>{copy.title}</h1>
+        <p>{copy.body}</p>
+      </div>
+    );
+  }
+
+  if (publicFailure?.kind === 'unavailable') {
+    const copy = PUBLIC_SIGNING_FAILURE_COPY.unavailable;
+    return (
+      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-unavailable">
+        <h1>{copy.title}</h1>
+        <p>{copy.body}</p>
+      </div>
+    );
+  }
+
   if (!resolved) {
     return (
       <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-invalid">
@@ -115,20 +155,12 @@ export default function ContractSignPublicPage() {
     );
   }
 
-  if (resolved.expired) {
-    return (
-      <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-expired">
-        <h1>{UX_MESSAGES.LINK_EXPIRED.title}</h1>
-        <p>{UX_MESSAGES.LINK_EXPIRED.body}</p>
-      </div>
-    );
-  }
-
-  if (resolved.replay) {
+  if (resolved.replay || publicFailure?.kind === 'replay') {
+    const copy = PUBLIC_SIGNING_FAILURE_COPY.replay;
     return (
       <div className="ctr-public-sign ctr-public-sign--v2ux" data-testid="public-sign-replay">
-        <h1>Este documento já foi assinado</h1>
-        <p>O link de assinatura já foi utilizado e não pode ser reutilizado.</p>
+        <h1>{copy.title}</h1>
+        <p>{copy.body}</p>
       </div>
     );
   }
