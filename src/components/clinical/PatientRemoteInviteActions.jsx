@@ -16,6 +16,7 @@ export function PatientRemoteInviteActions({
   canResend = false,
   canRotate = false,
   canRevoke = false,
+  canReplace = false,
   busy = false,
   onSend,
   onResend,
@@ -23,9 +24,10 @@ export function PatientRemoteInviteActions({
   onCancel,
   onRotate,
   onRevoke,
+  onReplace,
 }) {
   if (slot?.role !== CLINICAL_SIGNER_ROLE.PATIENT || slot?.status === 'signed') return null;
-  if (!canSend && !invite && !canResend && !canRotate && !canRevoke) return null;
+  if (!canSend && !invite && !canResend && !canRotate && !canRevoke && !canReplace) return null;
 
   if (canResend || invite?.signUrl) {
     return (
@@ -67,6 +69,20 @@ export function PatientRemoteInviteActions({
   if (canRotate) {
     return (
       <ClinicalBtn variant="secondary" icon={RefreshCw} data-testid="clinical-rotate-signature-cta" disabled={busy} onClick={onRotate}>
+        Gerar novo acesso
+      </ClinicalBtn>
+    );
+  }
+
+  if (canReplace) {
+    return (
+      <ClinicalBtn
+        variant="secondary"
+        icon={RefreshCw}
+        data-testid="clinical-replace-revoked-access-cta"
+        disabled={busy}
+        onClick={onReplace}
+      >
         Gerar novo acesso
       </ClinicalBtn>
     );

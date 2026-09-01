@@ -31,6 +31,13 @@ const COPY = {
     pending: 'Revogando…',
     requireReason: true,
   },
+  replace: {
+    title: 'Gerar novo acesso de assinatura?',
+    description: 'O acesso anterior continuará revogado e não poderá ser utilizado. Um novo link seguro será criado para este signatário.',
+    submit: 'Gerar novo acesso',
+    pending: 'Gerando…',
+    requireReason: true,
+  },
 };
 
 export function SigningAccessSecureModal({

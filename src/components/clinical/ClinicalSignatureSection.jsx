@@ -31,6 +31,7 @@ import {
   getActivePatientSignatureInvite,
 } from '../../services/signatureProviderService.js';
 import { resendSigningAccess, rotateSigningAccess } from '../../services/contractSigningAccessCommandService.js';
+import { replaceRevokedSigningAccessAndInvite } from '../../services/contractSigningAccessReplacementService.js';
 import { revokeSigningAccess } from '../../services/contractLifecycleCommandService.js';
 import { SigningAccessSecureModal } from './contract/SigningAccessSecureModal.jsx';
 import {
@@ -184,6 +185,11 @@ export function ClinicalSignatureSection({
     setAccessModal({ open: true, mode: 'rotate' });
   };
 
+  const handleReplaceRevokedAccess = () => {
+    if (!lifecyclePolicy.canReplaceRevokedAccess) return;
+    setAccessModal({ open: true, mode: 'replace' });
+  };
+
   const handleAccessConfirm = async ({ reason }) => {
     if (!contract?.id || !user || busy) return;
     setBusy(true);
@@ -199,6 +205,18 @@ export function ClinicalSignatureSection({
       if (accessModal.mode === 'rotate') {
         await rotateSigningAccess({ user, contractId: contract.id, requestId, reason });
         bump();
+        showMsg('Novo acesso de assinatura gerado.');
+        return;
+      }
+      if (accessModal.mode === 'replace') {
+        const replaced = await replaceRevokedSigningAccessAndInvite({
+          user, contractId: contract.id, requestId, reason, origin,
+        });
+        bump();
+        if (replaced.emailFailed) {
+          showMsg('Novo acesso criado, mas o e-mail não pôde ser enviado.', 'error');
+          return;
+        }
         showMsg('Novo acesso de assinatura gerado.');
         return;
       }
@@ -268,16 +286,20 @@ export function ClinicalSignatureSection({
               {slot.satisfiedBySameProfessional ? (
                 <p>Satisfeito pela mesma assinatura profissional</p>
               ) : null}
-              {canOpenCeremony && lifecyclePolicy.canSignOnScreen && slot.status !== 'signed' && isOperatorCollectedRole(slot.role) ? (
+              {(canOpenCeremony && lifecyclePolicy.canSignOnScreen && slot.status !== 'signed' && isOperatorCollectedRole(slot.role))
+                || (slot.role === CLINICAL_SIGNER_ROLE.PATIENT && slot.status !== 'signed' && lifecyclePolicy.canReplaceRevokedAccess)
+                ? (
                 <>
-                  <ClinicalBtn
-                    variant="secondary"
-                    icon={PenLine}
-                    data-testid={slot.role === CLINICAL_SIGNER_ROLE.PATIENT ? 'clinical-sign-now-cta' : `clinical-sign-${String(slot.role).toLowerCase()}-cta`}
-                    onClick={() => setSignTarget(slot)}
-                  >
-                    Assinar agora
-                  </ClinicalBtn>
+                  {canOpenCeremony && lifecyclePolicy.canSignOnScreen && isOperatorCollectedRole(slot.role) ? (
+                    <ClinicalBtn
+                      variant="secondary"
+                      icon={PenLine}
+                      data-testid={slot.role === CLINICAL_SIGNER_ROLE.PATIENT ? 'clinical-sign-now-cta' : `clinical-sign-${String(slot.role).toLowerCase()}-cta`}
+                      onClick={() => setSignTarget(slot)}
+                    >
+                      Assinar agora
+                    </ClinicalBtn>
+                  ) : null}
                   <PatientRemoteInviteActions
                     slot={slot}
                     invite={patientInvite}
@@ -285,6 +307,7 @@ export function ClinicalSignatureSection({
                     canResend={lifecyclePolicy.canResendAccess}
                     canRotate={lifecyclePolicy.canRotateAccess}
                     canRevoke={lifecyclePolicy.canRevokeAccess}
+                    canReplace={lifecyclePolicy.canReplaceRevokedAccess}
                     busy={busy}
                     onSend={() => setSendOpen(true)}
                     onResend={handleResendInvite}
@@ -292,6 +315,7 @@ export function ClinicalSignatureSection({
                     onCancel={handleCancelInvite}
                     onRotate={handleRotateAccess}
                     onRevoke={handleCancelInvite}
+                    onReplace={handleReplaceRevokedAccess}
                   />
                 </>
               ) : null}

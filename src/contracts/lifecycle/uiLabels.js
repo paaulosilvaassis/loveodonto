@@ -41,6 +41,7 @@ export const LIFECYCLE_AUDIT_UI_LABELS = Object.freeze({
   [LIFECYCLE_AUDIT_EVENTS.SIGN_LINK_ROTATED]: 'Acesso substituído',
   [LIFECYCLE_AUDIT_EVENTS.SIGN_LINK_EXPIRED]: 'Acesso expirado',
   [LIFECYCLE_AUDIT_EVENTS.SIGN_INVITE_RESENT]: 'Acesso reenviado',
+  [LIFECYCLE_AUDIT_EVENTS.SIGNING_ACCESS_REPLACED]: 'Novo acesso gerado após revogação',
   CONTRACT_GENERATED: 'Contrato gerado',
   SENT: 'Solicitação enviada',
   SIGNED: 'Assinatura registrada',

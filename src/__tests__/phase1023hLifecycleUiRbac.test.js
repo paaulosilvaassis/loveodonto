@@ -182,6 +182,10 @@ describe('PHASE_10.23H lifecycle UI / RBAC', () => {
 
     const revokedPolicy = policyFor('generated', admin, { requestStatus: 'revoked', linkStatus: 'revoked' });
     expect(revokedPolicy.canResendAccess).toBe(false);
+    expect(revokedPolicy.canRotateAccess).toBe(false);
+    expect(revokedPolicy.canSendForSignature).toBe(false);
+    expect(revokedPolicy.canReplaceRevokedAccess).toBe(true);
+    expect(policyFor('generated', reception, { requestStatus: 'revoked', linkStatus: 'revoked' }).canReplaceRevokedAccess).toBe(false);
 
     const uiFiles = [
       'src/pages/contratos/ContractsAssinadosPage.jsx',

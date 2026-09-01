@@ -5,6 +5,7 @@
 import {
   canPerformLegalHighImpact,
   canPerformOperationalSigningAccess,
+  canPerformReplaceRevokedSigningAccess,
   canPerformRotateSigningAccess,
   canPerformSensitiveLifecycle,
 } from './commandAuth.js';
@@ -42,6 +43,7 @@ export function getContractLifecycleUiPolicy({
     sensitive: canPerformSensitiveLifecycle(actor),
     rotate: canPerformRotateSigningAccess(actor),
     resend: canPerformOperationalSigningAccess(actor),
+    replaceRevoked: canPerformReplaceRevokedSigningAccess(actor),
   };
 
   const canCancelUnsigned = auth.sensitive && (flags.isDraft || flags.isGenerated);
@@ -52,6 +54,10 @@ export function getContractLifecycleUiPolicy({
   const canRotateAccess = signable && auth.rotate && hasRequest
     && (access.kind === 'signable' || access.kind === 'expired' || access.kind === 'pending');
   const canRevokeAccess = signable && auth.sensitive && access.kind === 'signable';
+  const canReplaceRevokedAccess = signable
+    && auth.replaceRevoked
+    && (flags.isGenerated || flags.isPartial)
+    && access.kind === 'revoked';
   const canVoidSigned = flags.isSigned && auth.legalHigh;
   const canReissue = auth.legalHigh && (flags.isSigned || flags.isVoided || flags.isCancelled);
   const canViewEvidence = flags.isSigned || flags.isVoided || flags.isSuperseded || flags.isCancelled || flags.isPartial;
@@ -68,6 +74,7 @@ export function getContractLifecycleUiPolicy({
     canCancelUnsigned,
     canAbortPartial,
     canRevokeAccess,
+    canReplaceRevokedAccess,
     canRotateAccess,
     canResendAccess,
     canVoidSigned,
