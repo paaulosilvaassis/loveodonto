@@ -98,10 +98,16 @@ function findRotatablePatientArtifacts(db, contractId, now = Date.now()) {
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   const request = requests[0] || null;
   if (!request) return null;
-  const link = (db.contractSignLinks || []).find((row) => row.requestId === request.id) || null;
-  const expired = !isReusableRequest(request, now) || isLinkExpired(link, now);
-  if (!expired) return null;
-  return { request, link };
+  const links = (db.contractSignLinks || []).filter((row) => row.requestId === request.id);
+  const signable = links.find((row) => row.status === 'pending' && row.token && !isLinkExpired(row, now));
+  if (signable) return null;
+  const clockDead = !isReusableRequest(request, now)
+    || links.some((row) => isLinkExpired(row, now) || row.status === 'expired');
+  if (!clockDead) return null;
+  const sourceLink = [...links].sort(
+    (a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0),
+  )[0] || null;
+  return { request, link: sourceLink };
 }
 
 function bindPatientLink(link, contract) {

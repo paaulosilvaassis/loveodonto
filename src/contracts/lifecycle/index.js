@@ -33,6 +33,9 @@ export {
   ROTATION_RACE,
   ROTATE_NOT_ALLOWED,
   RESEND_NOT_ALLOWED,
+  ACCESS_REPLACEMENT_NOT_ALLOWED,
+  SIGNING_ACCESS_NOT_REPLACEABLE,
+  SIGNING_PARTY_ALREADY_SIGNED,
 } from './constants.js';
 
 export { createLifecycleError } from './errors.js';
@@ -107,10 +110,12 @@ export {
   assertLifecycleActor,
   assertLifecycleTenant,
   assertOperationalSigningAccess,
+  assertReplaceRevokedSigningAccessAuth,
   assertRotateSigningAccessAuth,
   assertSensitiveLifecycleAuth,
   canPerformLegalHighImpact,
   canPerformOperationalSigningAccess,
+  canPerformReplaceRevokedSigningAccess,
   canPerformRotateSigningAccess,
   canPerformSensitiveLifecycle,
   entityTenantId,

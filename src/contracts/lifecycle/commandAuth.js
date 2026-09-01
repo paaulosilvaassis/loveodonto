@@ -12,6 +12,7 @@ import {
   RESEND_NOT_ALLOWED,
   ROTATE_NOT_ALLOWED,
   VOID_NOT_ALLOWED,
+  ACCESS_REPLACEMENT_NOT_ALLOWED,
 } from './constants.js';
 import { createLifecycleError } from './errors.js';
 
@@ -151,6 +152,19 @@ export function assertRotateSigningAccessAuth(user, extra = {}) {
   throw createLifecycleError(
     extra.failureCode || ROTATE_NOT_ALLOWED,
     'Sem autorização para rotacionar o link de assinatura.',
+    extra,
+  );
+}
+
+export function canPerformReplaceRevokedSigningAccess(user) {
+  return canPerformSensitiveLifecycle(user);
+}
+
+export function assertReplaceRevokedSigningAccessAuth(user, extra = {}) {
+  if (canPerformReplaceRevokedSigningAccess(user)) return true;
+  throw createLifecycleError(
+    extra.failureCode || ACCESS_REPLACEMENT_NOT_ALLOWED,
+    'Somente administradores autorizados podem gerar um novo acesso após revogação.',
     extra,
   );
 }

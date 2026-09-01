@@ -18,6 +18,7 @@ import {
   resendSigningAccess,
   rotateSigningAccess,
 } from '../../services/contractSigningAccessCommandService.js';
+import { replaceRevokedSigningAccessAndInvite } from '../../services/contractSigningAccessReplacementService.js';
 import { revokeSigningAccess } from '../../services/contractLifecycleCommandService.js';
 import {
   deriveCeremonyProgress,
@@ -162,6 +163,18 @@ export default function ContractsPendentesPage() {
                       Gerar novo acesso
                     </button>
                   ) : null}
+                  {r.policy.canReplaceRevokedAccess ? (
+                    <button
+                      type="button"
+                      className="button small secondary"
+                      disabled={pending}
+                      onClick={() => setAccessModal({
+                        open: true, mode: 'replace', contract: r, requestId: r.snapshot.request?.id,
+                      })}
+                    >
+                      Gerar novo acesso
+                    </button>
+                  ) : null}
                   {r.policy.canRevokeAccess ? (
                     <button
                       type="button"
@@ -249,6 +262,27 @@ export default function ContractsPendentesPage() {
             await runBusy(contract.id, () => rotateSigningAccess({
               user, contractId: contract.id, requestId: accessModal.requestId, reason,
             }), 'Novo acesso de assinatura gerado.');
+            return;
+          }
+          if (accessModal.mode === 'replace') {
+            if (busyId) return;
+            setBusyId(contract.id);
+            try {
+              const replaced = await replaceRevokedSigningAccessAndInvite({
+                user, contractId: contract.id, requestId: accessModal.requestId, reason, origin,
+              });
+              setRefresh((x) => x + 1);
+              if (replaced.emailFailed) {
+                showToast('Novo acesso criado, mas o e-mail não pôde ser enviado.', 'error');
+                return;
+              }
+              showToast('Novo acesso de assinatura gerado.');
+            } catch (e) {
+              showToast(mapLifecycleUiError(e), 'error');
+              throw e;
+            } finally {
+              setBusyId(null);
+            }
             return;
           }
           await runBusy(contract.id, () => revokeSigningAccess({
