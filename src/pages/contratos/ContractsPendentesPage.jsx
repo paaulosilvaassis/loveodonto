@@ -151,22 +151,10 @@ export default function ContractsPendentesPage() {
                       Reenviar acesso
                     </button>
                   ) : null}
-                  {r.policy.canRotateAccess ? (
-                    <button
-                      type="button"
-                      className="button small secondary"
-                      disabled={pending}
-                      onClick={() => setAccessModal({
-                        open: true, mode: 'rotate', contract: r, requestId: r.snapshot.request?.id,
-                      })}
-                    >
-                      Gerar novo acesso
-                    </button>
-                  ) : null}
                   {r.policy.canReplaceRevokedAccess ? (
                     <button
                       type="button"
-                      className="button small secondary"
+                      className="button small primary"
                       disabled={pending}
                       onClick={() => setAccessModal({
                         open: true, mode: 'replace', contract: r, requestId: r.snapshot.request?.id,
@@ -175,17 +163,48 @@ export default function ContractsPendentesPage() {
                       Gerar novo acesso
                     </button>
                   ) : null}
-                  {r.policy.canRevokeAccess ? (
+                  {r.policy.canRotateAccess && !r.policy.canResendAccess ? (
                     <button
                       type="button"
                       className="button small secondary"
                       disabled={pending}
                       onClick={() => setAccessModal({
-                        open: true, mode: 'revoke', contract: r, requestId: r.snapshot.request?.id,
+                        open: true, mode: 'rotate', contract: r, requestId: r.snapshot.request?.id,
                       })}
                     >
-                      Revogar acesso
+                      Substituir link de assinatura
                     </button>
+                  ) : null}
+                  {(r.policy.canRevokeAccess || (r.policy.canRotateAccess && r.policy.canResendAccess)) ? (
+                    <details className="ctr-access-more">
+                      <summary className="button small secondary">Mais ações</summary>
+                      <div className="ctr-access-more-panel">
+                        {r.policy.canRotateAccess && r.policy.canResendAccess ? (
+                          <button
+                            type="button"
+                            className="button small secondary"
+                            disabled={pending}
+                            onClick={() => setAccessModal({
+                              open: true, mode: 'rotate', contract: r, requestId: r.snapshot.request?.id,
+                            })}
+                          >
+                            Substituir link de assinatura
+                          </button>
+                        ) : null}
+                        {r.policy.canRevokeAccess ? (
+                          <button
+                            type="button"
+                            className="button small danger"
+                            disabled={pending}
+                            onClick={() => setAccessModal({
+                              open: true, mode: 'revoke', contract: r, requestId: r.snapshot.request?.id,
+                            })}
+                          >
+                            Revogar acesso
+                          </button>
+                        ) : null}
+                      </div>
+                    </details>
                   ) : null}
                   {r.policy.canCancelUnsigned || r.policy.canAbortPartial ? (
                     <button

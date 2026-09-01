@@ -16,13 +16,15 @@ const COPY = {
     submit: 'Reenviar acesso',
     pending: 'Reenviando…',
     requireReason: false,
+    tone: 'normal',
   },
   rotate: {
-    title: 'Gerar novo acesso',
-    description: 'O acesso anterior deixará de funcionar e um novo acesso será criado.',
-    submit: 'Gerar novo acesso',
-    pending: 'Gerando…',
+    title: 'Substituir link de assinatura?',
+    description: 'O link atual deixará de funcionar e um novo link será criado. O prazo do request original não será ampliado.',
+    submit: 'Substituir link de assinatura',
+    pending: 'Substituindo…',
     requireReason: true,
+    tone: 'sensitive',
   },
   revoke: {
     title: 'Revogar acesso',
@@ -30,13 +32,15 @@ const COPY = {
     submit: 'Revogar acesso',
     pending: 'Revogando…',
     requireReason: true,
+    tone: 'danger',
   },
   replace: {
     title: 'Gerar novo acesso de assinatura?',
-    description: 'O acesso anterior continuará revogado e não poderá ser utilizado. Um novo link seguro será criado para este signatário.',
+    description: 'O acesso anterior continuará revogado e não poderá ser utilizado. Um novo request, link e token serão criados para este signatário.',
     submit: 'Gerar novo acesso',
     pending: 'Gerando…',
     requireReason: true,
+    tone: 'sensitive',
   },
 };
 
@@ -103,7 +107,12 @@ export function SigningAccessSecureModal({
             <button type="button" className="button secondary" onClick={handleClose} disabled={busy}>
               Voltar
             </button>
-            <button type="submit" className="button danger" disabled={busy} aria-busy={busy}>
+            <button
+              type="submit"
+              className={copy.tone === 'danger' ? 'button danger' : 'button primary'}
+              disabled={busy}
+              aria-busy={busy}
+            >
               {busy ? copy.pending : copy.submit}
             </button>
           </ModalFooter>
