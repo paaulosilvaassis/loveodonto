@@ -14,6 +14,10 @@ import {
   isRealPatientCpf,
 } from '../utils/patientCpfIdentity.js';
 import { resolveTenantIdForWrite, resolveUserTenantId } from './tenantWriteGuard.js';
+import {
+  buildIdentityChangeAudit,
+  resolveIdentityFieldValue,
+} from './patientIdentityIntegrity.js';
 
 const LEGACY_LOCAL_TENANT_ID = 'tenant-1';
 
@@ -768,9 +772,10 @@ export const createPatientFromLead = (user, lead) => {
   return { patientId, profile: created.profile };
 };
 
-export const updatePatientProfile = (user, patientId, payload) => {
+export const updatePatientProfile = (user, patientId, payload, options = {}) => {
   requirePermission(user, 'patients:write');
   const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
+  const dirtyIdentityFields = options.dirtyIdentityFields;
   const result = withDbResult((db) => {
     const existing = db.patients.find((item) => item.id === patientId);
     const basePatient = existing || {
@@ -791,9 +796,9 @@ export const updatePatientProfile = (user, patientId, payload) => {
     };
     const next = {
       ...basePatient,
-      full_name: normalizeText(payload.full_name ?? basePatient.full_name),
-      nickname: normalizeText(payload.nickname ?? basePatient.nickname),
-      social_name: normalizeText(payload.social_name ?? basePatient.social_name),
+      full_name: resolveIdentityFieldValue('full_name', payload, basePatient, dirtyIdentityFields),
+      nickname: resolveIdentityFieldValue('nickname', payload, basePatient, dirtyIdentityFields),
+      social_name: resolveIdentityFieldValue('social_name', payload, basePatient, dirtyIdentityFields),
       sex: normalizeText(payload.sex ?? basePatient.sex),
       birth_date: normalizeText(payload.birth_date ?? basePatient.birth_date),
       cpf: normalizeCpf(payload.cpf ?? basePatient.cpf),
@@ -835,7 +840,13 @@ export const updatePatientProfile = (user, patientId, payload) => {
       db.patients.push(next);
     }
     recalcPendingData(db, patientId);
-    logAction('patients:update-profile', { patientId, userId: user.id });
+    logAction('patients:update-profile', buildIdentityChangeAudit({
+      patientId,
+      actorId: user.id,
+      source: options.source || null,
+      beforePatient: basePatient,
+      afterPatient: next,
+    }));
     return next;
   });
   clearPatientSuggestCache();

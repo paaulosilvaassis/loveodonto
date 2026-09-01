@@ -4,6 +4,7 @@
 import { withDb, loadDb } from '../db/index.js';
 import { createId } from './helpers.js';
 import { getPatient } from './patientService.js';
+import { assertLegalPatientIdentityConsistency } from './patientIdentityIntegrity.js';
 import { resolvePatientEmail, PATIENT_EMAIL_REQUIRED_MSG } from './patientEmail.js';
 import { formatCivilCpf } from '../utils/patientCpfIdentity.js';
 import { getGeneratedContract } from './contractService.js';
@@ -216,6 +217,12 @@ export async function sendContractForDigitalSignature(user, contractId, formData
   if (!SENDABLE_CONTRACT_STATUSES.has(contract.status)) {
     throw new Error('Este contrato não pode ser enviado para assinatura remota no status atual.');
   }
+  assertLegalPatientIdentityConsistency({
+    patientId: contract.patientId,
+    liveFullName: contract.patientId ? getPatient(contract.patientId)?.profile?.full_name : '',
+    snapshotFullName: contract.patientSnapshotJson?.full_name,
+    recipientPatientName: formData.patientName,
+  });
   if (contract.quoteSource === 'clinical_budget') {
     assertClinicalSignatureReady({
       appointmentId: contract.quoteId,

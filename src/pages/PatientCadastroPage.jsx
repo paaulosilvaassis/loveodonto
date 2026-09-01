@@ -10,7 +10,6 @@ import {
   addPatientAddress,
   addPatientInsurance,
   addPatientPhone,
-  createPatientQuick,
   getPatient,
   PENDING_FIELDS_MAP,
   recalcAndPersistPendingData,
@@ -21,12 +20,12 @@ import {
   updatePatientDocuments,
   updatePatientEducation,
   updatePatientPhone,
-  updatePatientProfile,
   updatePatientRelationships,
   updatePatientStatus,
   uploadPatientPhoto,
 } from '../services/patientService.js';
 import { getPatientRecord, updatePatientRecord } from '../services/patientRecordService.js';
+import { commitPatientCadastroProfile } from '../services/patientCadastroIdentityCommit.js';
 import { formatCep, formatCpf, formatPhone, onlyDigits } from '../utils/validators.js';
 import PatientBudgetsContractsTab from '../components/budgets/PatientBudgetsContractsTab.jsx';
 import { isSafeClinicalReturnUrl } from '../contracts/contractPrerequisitesResolution.js';
@@ -51,6 +50,8 @@ const TAB_CONFIG = [
 ];
 
 const emptyDraft = () => ({
+  __patientId: null,
+  __identityReady: true,
   profile: {
     full_name: '',
     nickname: '',
@@ -163,6 +164,8 @@ const mapPatientToDraft = (patient, record) => {
   const phones = mapPhones(patient.phones || []);
   const address = patient.addresses?.[0] || {};
   return {
+    __patientId: patient.profile?.id || null,
+    __identityReady: Boolean(patient.profile?.id),
     profile: {
       ...emptyDraft().profile,
       full_name: patient.profile?.full_name || '',
@@ -354,7 +357,9 @@ export default function PatientCadastroPage() {
   useEffect(() => {
     if (!patientId) {
       const next = emptyDraft();
-      // Pré-preencher nome se vier da agenda
+      next.__patientId = null;
+      next.__identityReady = true;
+      // Pré-preencher nome apenas na criação, a partir da agenda — nunca do usuário autenticado.
       if (prefillName) {
         next.profile.full_name = prefillName;
       }
@@ -369,12 +374,19 @@ export default function PatientCadastroPage() {
     }
     const patient = getPatient(patientId);
     if (!patient) {
+      const blocked = emptyDraft();
+      blocked.__patientId = patientId;
+      blocked.__identityReady = false;
+      originalRef.current = blocked;
+      setDraft(blocked);
       setStatus({ error: 'Paciente não encontrado.', success: '' });
       setEditMode(false);
       return;
     }
     const record = getPatientRecord(patientId);
     const next = mapPatientToDraft(patient, record);
+    next.__patientId = patientId;
+    next.__identityReady = true;
     originalRef.current = next;
     setDraft(next);
     const rawFields = Array.isArray(patient.profile?.pendingFields) ? patient.profile.pendingFields : [];
@@ -508,48 +520,18 @@ export default function PatientCadastroPage() {
         setStatus({ error: 'Usuário não autenticado.', success: '' });
         return;
       }
-      const payloadProfile = {
-        full_name: draft.profile.full_name,
-        nickname: draft.profile.nickname,
-        social_name: draft.profile.social_name,
-        sex: draft.profile.sex,
-        birth_date: draft.profile.birth_date,
-        cpf: draft.profile.cpf,
-        has_financial_responsible: Boolean(draft.profile.has_financial_responsible),
-        dependent_full_name: draft.profile.dependent_full_name,
-      };
-      if (!payloadProfile.full_name || !payloadProfile.sex || !payloadProfile.birth_date || !payloadProfile.cpf) {
-        setStatus({ error: 'Preencha os campos obrigatórios: Nome, Sexo, Data de nascimento e CPF.', success: '' });
-        return;
-      }
-
-      const existingPatient = patientId ? getPatient(patientId) : null;
-      let createdFromScratch = !patientId || !existingPatient;
-      let nextPatientId = patientId;
-      if (createdFromScratch) {
-        const created = createPatientQuick(user, {
-          full_name: payloadProfile.full_name,
-          sex: payloadProfile.sex,
-          birth_date: payloadProfile.birth_date,
-          cpf: payloadProfile.cpf,
-          nickname: payloadProfile.nickname,
-          social_name: payloadProfile.social_name,
-          has_financial_responsible: payloadProfile.has_financial_responsible,
-          dependent_full_name: payloadProfile.dependent_full_name,
-        });
-        nextPatientId = created.patientId || created.id;
-        // Garantir que o paciente foi persistido antes de continuar
-        const verifyPatient = getPatient(nextPatientId);
-        if (!verifyPatient) {
-          throw new Error('Erro ao criar paciente. Tente novamente.');
-        }
-      } else {
-        updatePatientProfile(user, patientId, payloadProfile);
-        // Garantir que o paciente existe após update
-        const verifyPatient = getPatient(patientId);
-        if (!verifyPatient) {
-          throw new Error('Erro ao atualizar paciente. Tente novamente.');
-        }
+      const createdFromScratch = !patientId;
+      const committed = commitPatientCadastroProfile(user, {
+        routePatientId: patientId || null,
+        draft,
+        originalProfile: originalRef.current?.profile || null,
+      });
+      const nextPatientId = committed.patientId;
+      const verifyPatient = getPatient(nextPatientId);
+      if (!verifyPatient) {
+        throw new Error(createdFromScratch
+          ? 'Erro ao criar paciente. Tente novamente.'
+          : 'Erro ao atualizar paciente. Tente novamente.');
       }
 
 
@@ -752,7 +734,12 @@ export default function PatientCadastroPage() {
                 </button>
               ) : (
                 <>
-                  <button type="button" className="button primary" onClick={handleSave}>
+                  <button
+                    type="button"
+                    className="button primary"
+                    onClick={handleSave}
+                    disabled={Boolean(patientId) && (draft.__identityReady !== true || draft.__patientId !== patientId)}
+                  >
                     Salvar
                   </button>
                   <button type="button" className="button secondary" onClick={handleCancel}>
@@ -900,6 +887,10 @@ export default function PatientCadastroPage() {
                 <label>Nome Completo *</label>
                 <input
                   type="text"
+                  name={`patient-identity-full-name-${patientId || 'new'}`}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={draft.profile.full_name}
                   onChange={(event) => updateDraft('profile', 'full_name', event.target.value)}
                   disabled={!editMode}
@@ -909,6 +900,10 @@ export default function PatientCadastroPage() {
                 <label>Apelido / Nome Social</label>
                 <input
                   type="text"
+                  name={`patient-identity-nickname-${patientId || 'new'}`}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={draft.profile.nickname}
                   onChange={(event) => {
                     const value = event.target.value;
