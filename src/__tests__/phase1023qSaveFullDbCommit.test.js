@@ -1,5 +1,6 @@
 /**
  * PATCH B.2Q — saveFullDb resolve/reject only after transaction terminal state.
+ * PATCH B.2U — get() de metadata no mesmo readwrite transaction.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
@@ -8,15 +9,34 @@ function createFakeIndexedDb({ mode = 'complete' } = {}) {
   const db = {
     objectStoreNames: { contains: () => true },
     transaction() {
+      const pending = [];
+      let requestCount = 0;
       const tx = {
         error: null,
+        aborted: false,
         oncomplete: null,
         onerror: null,
         onabort: null,
+        abort() {
+          this.aborted = true;
+          this.error = this.error || Object.assign(new Error('aborted'), { name: 'AbortError' });
+        },
         objectStore() {
           return {
+            get(key) {
+              const req = { result: undefined, error: null, onerror: null, onsuccess: null };
+              requestCount += 1;
+              queueMicrotask(() => {
+                if (tx.aborted) return;
+                if (storeData.has(key)) req.result = { k: key, v: storeData.get(key) };
+                if (typeof req.onsuccess === 'function') req.onsuccess();
+                finishRequest();
+              });
+              return req;
+            },
             put(row) {
               const req = { error: null, onerror: null, onsuccess: null };
+              requestCount += 1;
               queueMicrotask(() => {
                 if (mode === 'put-error') {
                   req.error = Object.assign(new Error('put failed'), { name: 'UnknownError' });
@@ -25,27 +45,42 @@ function createFakeIndexedDb({ mode = 'complete' } = {}) {
                   if (typeof tx.onerror === 'function') tx.onerror();
                   return;
                 }
-                storeData.set(row.k, row.v);
+                pending.push(row);
                 if (typeof req.onsuccess === 'function') req.onsuccess();
-                queueMicrotask(() => {
-                  if (mode === 'abort') {
-                    tx.error = Object.assign(new Error('aborted'), { name: 'AbortError' });
-                    if (typeof tx.onabort === 'function') tx.onabort();
-                    return;
-                  }
-                  if (mode === 'error') {
-                    tx.error = Object.assign(new Error('tx failed'), { name: 'UnknownError' });
-                    if (typeof tx.onerror === 'function') tx.onerror();
-                    return;
-                  }
-                  if (typeof tx.oncomplete === 'function') tx.oncomplete();
-                });
+                finishRequest();
               });
               return req;
             },
           };
         },
       };
+
+      const finishRequest = () => {
+        requestCount -= 1;
+        queueMicrotask(() => {
+          queueMicrotask(() => {
+            if (requestCount > 0 || tx.settled) return;
+            tx.settled = true;
+            if (tx.aborted) {
+              if (typeof tx.onabort === 'function') tx.onabort();
+              return;
+            }
+            if (mode === 'abort') {
+              tx.error = Object.assign(new Error('aborted'), { name: 'AbortError' });
+              if (typeof tx.onabort === 'function') tx.onabort();
+              return;
+            }
+            if (mode === 'error') {
+              tx.error = Object.assign(new Error('tx failed'), { name: 'UnknownError' });
+              if (typeof tx.onerror === 'function') tx.onerror();
+              return;
+            }
+            pending.forEach((row) => storeData.set(row.k, row.v));
+            if (typeof tx.oncomplete === 'function') tx.oncomplete();
+          });
+        });
+      };
+
       return tx;
     },
   };
@@ -89,15 +124,20 @@ describe('PHASE_10.23Q — saveFullDb transaction completion', () => {
     globalThis.indexedDB = fake.indexedDB;
     const saveFullDb = await loadSaveFullDb();
     const defaultState = { patients: [], generatedContracts: [] };
-    await saveFullDb({ patients: [{ id: 'p1' }], generatedContracts: [] }, defaultState);
+    await saveFullDb({ patients: [{ id: 'p1' }], generatedContracts: [] }, defaultState, {
+      expectedRevision: 0,
+    });
     expect(fake.storeData.get('patients')).toEqual([{ id: 'p1' }]);
+    expect(fake.storeData.get('__db_meta__')?.revision).toBe(1);
   });
 
   it('rejects on transaction onerror', async () => {
     globalThis.indexedDB = createFakeIndexedDb({ mode: 'error' }).indexedDB;
     const saveFullDb = await loadSaveFullDb();
     await expect(
-      saveFullDb({ patients: [], generatedContracts: [] }, { patients: [], generatedContracts: [] }),
+      saveFullDb({ patients: [], generatedContracts: [] }, { patients: [], generatedContracts: [] }, {
+        expectedRevision: 0,
+      }),
     ).rejects.toMatchObject({ message: 'tx failed' });
   });
 
@@ -105,7 +145,9 @@ describe('PHASE_10.23Q — saveFullDb transaction completion', () => {
     globalThis.indexedDB = createFakeIndexedDb({ mode: 'abort' }).indexedDB;
     const saveFullDb = await loadSaveFullDb();
     await expect(
-      saveFullDb({ patients: [], generatedContracts: [] }, { patients: [], generatedContracts: [] }),
+      saveFullDb({ patients: [], generatedContracts: [] }, { patients: [], generatedContracts: [] }, {
+        expectedRevision: 0,
+      }),
     ).rejects.toMatchObject({ name: 'AbortError' });
   });
 
@@ -113,7 +155,9 @@ describe('PHASE_10.23Q — saveFullDb transaction completion', () => {
     globalThis.indexedDB = createFakeIndexedDb({ mode: 'put-error' }).indexedDB;
     const saveFullDb = await loadSaveFullDb();
     await expect(
-      saveFullDb({ patients: [], generatedContracts: [] }, { patients: [], generatedContracts: [] }),
+      saveFullDb({ patients: [], generatedContracts: [] }, { patients: [], generatedContracts: [] }, {
+        expectedRevision: 0,
+      }),
     ).rejects.toMatchObject({ message: 'put failed' });
   });
 });

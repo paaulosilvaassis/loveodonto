@@ -6,6 +6,14 @@ import { defaultDbState, DB_VERSION } from './schema.js';
 import { migrateDb, getSeedCrmTags, DEFAULT_EXPENSE_CATEGORIES } from './migrations.js';
 import { createId } from '../services/helpers.js';
 import * as idb from './idbStorage.js';
+import {
+  createReloadBlockedError,
+  createStaleSnapshotError,
+  IDB_STALE_SNAPSHOT,
+  REVISION_BROADCAST_CHANNEL,
+} from './idbRevision.js';
+
+export { IDB_STALE_SNAPSHOT, DB_META_KEY } from './idbRevision.js';
 
 const resolveStorageKey = () => {
   const dbUrl = import.meta?.env?.VITE_DATABASE_URL || '';
@@ -111,41 +119,106 @@ function validateTenantIntegrityOnWrite(previousDb, nextDb) {
  * instância — sem singleton, generatedContracts "some" entre imports.
  */
 const DB_RUNTIME_KEY = '__LOVE_ODONTO_DB_RUNTIME_V1__';
+
+export function createEmptyDbRuntime() {
+  return {
+    cachedDb: null,
+    initDbPromise: null,
+    loadDbWorker: null,
+    saveEpoch: 0,
+    lastCommittedEpoch: 0,
+    basePersistedRevision: 0,
+    lastCommittedRevision: 0,
+    stale: false,
+    persistenceGeneration: 0,
+    latestPersistPayload: null,
+    flushChain: Promise.resolve(),
+    flushInFlight: null,
+    lastPersistError: null,
+    withDbDepth: 0,
+    activeWriteDb: null,
+  };
+}
+
+function ensureRuntimeRevisionFields(runtime) {
+  if (typeof runtime.lastCommittedEpoch !== 'number') runtime.lastCommittedEpoch = 0;
+  if (typeof runtime.basePersistedRevision !== 'number') runtime.basePersistedRevision = 0;
+  if (typeof runtime.lastCommittedRevision !== 'number') runtime.lastCommittedRevision = 0;
+  if (typeof runtime.stale !== 'boolean') runtime.stale = false;
+  if (!Object.prototype.hasOwnProperty.call(runtime, 'lastPersistError')) runtime.lastPersistError = null;
+  return runtime;
+}
+
+export function useDbRuntime(runtime) {
+  const root = typeof globalThis !== 'undefined' ? globalThis : {};
+  root[DB_RUNTIME_KEY] = ensureRuntimeRevisionFields(runtime || createEmptyDbRuntime());
+  attachRevisionBroadcast(root[DB_RUNTIME_KEY]);
+  return root[DB_RUNTIME_KEY];
+}
+
 function getDbRuntime() {
   const root = typeof globalThis !== 'undefined' ? globalThis : {};
   if (!root[DB_RUNTIME_KEY]) {
-    root[DB_RUNTIME_KEY] = {
-      cachedDb: null,
-      initDbPromise: null,
-      loadDbWorker: null,
-      saveEpoch: 0,
-      lastCommittedEpoch: 0,
-      persistenceGeneration: 0,
-      latestPersistPayload: null,
-      flushChain: Promise.resolve(),
-      flushInFlight: null,
-      lastPersistError: null,
-      withDbDepth: 0,
-      activeWriteDb: null,
-    };
+    root[DB_RUNTIME_KEY] = createEmptyDbRuntime();
   }
-  const runtime = root[DB_RUNTIME_KEY];
-  if (typeof runtime.lastCommittedEpoch !== 'number') runtime.lastCommittedEpoch = 0;
-  if (!Object.prototype.hasOwnProperty.call(runtime, 'lastPersistError')) runtime.lastPersistError = null;
+  const runtime = ensureRuntimeRevisionFields(root[DB_RUNTIME_KEY]);
+  attachRevisionBroadcast(runtime);
   return runtime;
 }
 const rt = () => getDbRuntime();
 
+function attachRevisionBroadcast(runtime) {
+  if (!runtime || runtime.__revisionChannelBound) return;
+  runtime.__revisionChannelBound = true;
+  if (typeof BroadcastChannel === 'undefined') return;
+  try {
+    const channel = new BroadcastChannel(REVISION_BROADCAST_CHANNEL);
+    runtime.__revisionChannel = channel;
+    channel.onmessage = (event) => {
+      const incoming = Number(event?.data?.revision);
+      if (!Number.isFinite(incoming)) return;
+      if (incoming > (runtime.basePersistedRevision || 0)) {
+        markRuntimeStale(runtime, createStaleSnapshotError({
+          expectedRevision: runtime.basePersistedRevision || 0,
+          actualRevision: incoming,
+        }));
+      }
+    };
+  } catch (_) { /* BroadcastChannel é notificação opcional */ }
+}
+
+function broadcastCommittedRevision(revision) {
+  if (typeof BroadcastChannel === 'undefined') return;
+  try {
+    const channel = new BroadcastChannel(REVISION_BROADCAST_CHANNEL);
+    channel.postMessage({ type: 'revision', revision });
+    channel.close();
+  } catch (_) { /* ausência do canal não autoriza commit stale */ }
+}
+
+function markRuntimeStale(runtime, cause) {
+  runtime.stale = true;
+  runtime.latestPersistPayload = null;
+  runtime.lastPersistError = snapshotPersistError(
+    cause,
+    runtime.saveEpoch,
+    runtime.persistenceGeneration,
+  );
+}
+
 function snapshotPersistError(cause, epoch, generation) {
   const name = cause?.name || 'PersistError';
   const message = String(cause?.message || cause || 'IndexedDB persistence failed');
-  return {
+  const info = {
     name,
     message,
-    timestamp: new Date().toISOString(),
+    timestamp: cause?.timestamp || new Date().toISOString(),
     epoch,
     generation,
   };
+  if (Number.isFinite(Number(cause?.expectedRevision))) info.expectedRevision = Number(cause.expectedRevision);
+  if (Number.isFinite(Number(cause?.actualRevision))) info.actualRevision = Number(cause.actualRevision);
+  return info;
 }
 
 function toPersistError(cause, epoch, generation) {
@@ -167,10 +240,13 @@ export function getDbPersistenceStatus() {
   return {
     saveEpoch: r.saveEpoch,
     lastCommittedEpoch: r.lastCommittedEpoch || 0,
+    basePersistedRevision: r.basePersistedRevision || 0,
+    lastCommittedRevision: r.lastCommittedRevision || 0,
+    stale: Boolean(r.stale),
     persistenceGeneration: r.persistenceGeneration,
     pending: r.latestPersistPayload != null,
     inFlight: r.flushInFlight != null,
-    dirty: r.saveEpoch > (r.lastCommittedEpoch || 0) || r.latestPersistPayload != null,
+    dirty: r.saveEpoch > (r.lastCommittedEpoch || 0) || r.latestPersistPayload != null || Boolean(r.stale),
     lastPersistError: lastError
       ? {
           name: lastError.name,
@@ -178,6 +254,12 @@ export function getDbPersistenceStatus() {
           timestamp: lastError.timestamp,
           epoch: lastError.epoch,
           generation: lastError.generation,
+          ...(Number.isFinite(Number(lastError.expectedRevision))
+            ? { expectedRevision: Number(lastError.expectedRevision) }
+            : {}),
+          ...(Number.isFinite(Number(lastError.actualRevision))
+            ? { actualRevision: Number(lastError.actualRevision) }
+            : {}),
         }
       : null,
   };
@@ -196,17 +278,34 @@ const getLoadDbWorker = () => {
  * O payload pendente só sai da fila após commit comprovado.
  * Falha rejeita a cadeia e reenfileira o latest (nunca um snapshot mais velho).
  */
+function rejectIfRuntimeStale(runtime = rt()) {
+  if (!runtime.stale) return null;
+  return toPersistError(
+    createStaleSnapshotError({
+      expectedRevision: runtime.basePersistedRevision || 0,
+      actualRevision: Number(runtime.lastPersistError?.actualRevision) || (runtime.basePersistedRevision || 0) + 1,
+    }),
+    runtime.saveEpoch,
+    runtime.persistenceGeneration,
+  );
+}
+
 function scheduleIdbFlush() {
-  if (rt().flushInFlight) return rt().flushInFlight;
-  const genAtSchedule = rt().persistenceGeneration;
+  const runtime = rt();
+  const alreadyStale = rejectIfRuntimeStale(runtime);
+  if (alreadyStale) return Promise.reject(alreadyStale);
+  if (runtime.flushInFlight) return runtime.flushInFlight;
+  const genAtSchedule = runtime.persistenceGeneration;
 
   const work = async () => {
     try {
-      while (rt().latestPersistPayload && genAtSchedule === rt().persistenceGeneration) {
-        const payload = rt().latestPersistPayload;
-        const epochAtStart = rt().saveEpoch;
-        if (rt().latestPersistPayload === payload) {
-          rt().latestPersistPayload = null;
+      while (runtime.latestPersistPayload && genAtSchedule === runtime.persistenceGeneration) {
+        if (runtime.stale) throw rejectIfRuntimeStale(runtime);
+        const payload = runtime.latestPersistPayload;
+        const epochAtStart = runtime.saveEpoch;
+        const expectedRevision = runtime.basePersistedRevision || 0;
+        if (runtime.latestPersistPayload === payload) {
+          runtime.latestPersistPayload = null;
         }
         const defaultState = defaultDbState();
         if (typeof window !== 'undefined' && import.meta?.env?.DEV) {
@@ -223,31 +322,43 @@ function scheduleIdbFlush() {
           } catch (_) { /* ignore */ }
         }
         try {
-          await idb.saveFullDb(payload, defaultState);
+          const committed = await idb.saveFullDb(payload, defaultState, { expectedRevision });
+          const revision = Number(committed?.revision);
+          if (Number.isFinite(revision)) {
+            runtime.basePersistedRevision = revision;
+            runtime.lastCommittedRevision = revision;
+            broadcastCommittedRevision(revision);
+          }
         } catch (err) {
-          if (rt().saveEpoch === epochAtStart && rt().latestPersistPayload == null) {
-            rt().latestPersistPayload = payload;
+          if (err?.name === IDB_STALE_SNAPSHOT) {
+            markRuntimeStale(runtime, err);
+            const persistErr = toPersistError(err, epochAtStart, genAtSchedule);
+            console.error('Erro ao persistir no IndexedDB:', persistErr);
+            throw persistErr;
+          }
+          if (runtime.saveEpoch === epochAtStart && runtime.latestPersistPayload == null) {
+            runtime.latestPersistPayload = payload;
           }
           const persistErr = toPersistError(err, epochAtStart, genAtSchedule);
-          rt().lastPersistError = persistErr.persistDiagnostics;
+          runtime.lastPersistError = persistErr.persistDiagnostics;
           console.error('Erro ao persistir no IndexedDB:', persistErr);
           throw persistErr;
         }
-        if (genAtSchedule !== rt().persistenceGeneration) return;
-        if ((rt().lastCommittedEpoch || 0) < epochAtStart) {
-          rt().lastCommittedEpoch = epochAtStart;
+        if (genAtSchedule !== runtime.persistenceGeneration) return;
+        if ((runtime.lastCommittedEpoch || 0) < epochAtStart) {
+          runtime.lastCommittedEpoch = epochAtStart;
         }
-        rt().lastPersistError = null;
-        if (rt().saveEpoch === epochAtStart && !rt().latestPersistPayload) break;
+        runtime.lastPersistError = null;
+        if (runtime.saveEpoch === epochAtStart && !runtime.latestPersistPayload) break;
       }
     } finally {
-      rt().flushInFlight = null;
+      runtime.flushInFlight = null;
     }
   };
 
-  const next = Promise.resolve(rt().flushChain).catch(() => undefined).then(work);
-  rt().flushChain = next;
-  rt().flushInFlight = next;
+  const next = Promise.resolve(runtime.flushChain).catch(() => undefined).then(work);
+  runtime.flushChain = next;
+  runtime.flushInFlight = next;
   return next;
 }
 
@@ -256,9 +367,39 @@ function scheduleIdbFlush() {
  * Resolve somente após commit IDB. Rejeita se a transação falhar/abortar.
  */
 export function flushDbPersistence() {
+  const alreadyStale = rejectIfRuntimeStale();
+  if (alreadyStale) return Promise.reject(alreadyStale);
   if (rt().latestPersistPayload) scheduleIdbFlush();
   if (rt().flushInFlight) return rt().flushInFlight.then(() => undefined);
   return Promise.resolve();
+}
+
+/**
+ * Rebase explícito a partir do snapshot persistido + revision (sem write).
+ * Recusa descartar edições locais não commitadas sem discardLocalRuntime=true.
+ */
+export async function reloadDbFromPersistence({ discardLocalRuntime = false } = {}) {
+  const r = rt();
+  const hasUncommittedLocalEdits =
+    r.saveEpoch > (r.lastCommittedEpoch || 0) || r.latestPersistPayload != null;
+  if (hasUncommittedLocalEdits && !discardLocalRuntime) {
+    throw createReloadBlockedError();
+  }
+
+  r.persistenceGeneration += 1;
+  r.latestPersistPayload = null;
+  r.flushInFlight = null;
+  r.flushChain = Promise.resolve();
+
+  const snap = await idb.getFullDbSnapshot(defaultDbState());
+  r.cachedDb = applyPostMigrationFixes(clone(snap.db));
+  r.basePersistedRevision = snap.revision;
+  r.lastCommittedRevision = snap.revision;
+  r.lastCommittedEpoch = r.saveEpoch;
+  r.stale = false;
+  r.lastPersistError = null;
+  r.initDbPromise = null;
+  return r.cachedDb;
 }
 
 
@@ -342,13 +483,17 @@ function applyPostMigrationFixes(migrated) {
  * Aplica estado hidratado somente se o cache vivo ainda estiver vazio.
  * Nunca sobrescreve generatedContracts / dados clínicos já escritos durante o await.
  */
-function adoptHydratedDbIfCacheEmpty(hydrated) {
+function adoptHydratedDbIfCacheEmpty(hydrated, revision) {
   if (rt().cachedDb !== null) {
     // Cache vivo venceu a corrida (save durante init). Garante flush do vivo.
     scheduleIdbFlush();
     return rt().cachedDb;
   }
   rt().cachedDb = applyPostMigrationFixes(hydrated);
+  if (Number.isFinite(Number(revision))) {
+    rt().basePersistedRevision = Number(revision);
+    rt().lastCommittedRevision = Number(revision);
+  }
   return rt().cachedDb;
 }
 
@@ -384,18 +529,18 @@ export async function initDb() {
           worker.removeEventListener('error', onError);
           const { ok, db: dbFromWorker } = e.data || {};
           if (ok && dbFromWorker) {
-            idb.saveFullDb(dbFromWorker, defaultState).then(() => {
+            idb.saveFullDb(dbFromWorker, defaultState, { expectedRevision: 0 }).then((committed) => {
               try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
-              adoptHydratedDbIfCacheEmpty(dbFromWorker);
+              adoptHydratedDbIfCacheEmpty(dbFromWorker, committed?.revision ?? 1);
               resolve(rt().cachedDb);
             }).catch(reject);
           } else {
             try {
               const parsed = JSON.parse(raw);
               const migrated = migrateDb(parsed);
-              idb.saveFullDb(migrated, defaultState).then(() => {
+              idb.saveFullDb(migrated, defaultState, { expectedRevision: 0 }).then((committed) => {
                 try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
-                adoptHydratedDbIfCacheEmpty(migrated);
+                adoptHydratedDbIfCacheEmpty(migrated, committed?.revision ?? 1);
                 resolve(rt().cachedDb);
               }).catch(reject);
             } catch (err) {
@@ -409,9 +554,9 @@ export async function initDb() {
           try {
             const parsed = JSON.parse(raw);
             const migrated = migrateDb(parsed);
-            idb.saveFullDb(migrated, defaultState).then(() => {
+            idb.saveFullDb(migrated, defaultState, { expectedRevision: 0 }).then((committed) => {
               try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
-              adoptHydratedDbIfCacheEmpty(migrated);
+              adoptHydratedDbIfCacheEmpty(migrated, committed?.revision ?? 1);
               resolve(rt().cachedDb);
             }).catch(reject);
           } catch (err) {
@@ -424,13 +569,14 @@ export async function initDb() {
       });
     }
 
-    const db = await idb.getFullDb(defaultState);
+    const snap = await idb.getFullDbSnapshot(defaultState);
     if (rt().cachedDb !== null) {
       scheduleIdbFlush();
       return rt().cachedDb;
     }
+    const db = snap.db;
     const hadEmptyCategories = !Array.isArray(db.expenseCategories) || db.expenseCategories.length === 0;
-    adoptHydratedDbIfCacheEmpty(db);
+    adoptHydratedDbIfCacheEmpty(db, snap.revision);
     if (hadEmptyCategories && rt().cachedDb) saveDb(rt().cachedDb);
     return rt().cachedDb;
   })();
@@ -502,9 +648,14 @@ export const saveDb = (db) => {
   }
   // Cache síncrono primeiro — leitores imediatos veem o contrato.
   rt().cachedDb = db;
-  rt().latestPersistPayload = db;
   rt().saveEpoch += 1;
-  scheduleIdbFlush();
+  if (rt().stale) {
+    // Runtime já reconciliável: mutação em memória ok; persistência fail-closed.
+    rt().latestPersistPayload = null;
+  } else {
+    rt().latestPersistPayload = db;
+    scheduleIdbFlush();
+  }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('db:updated'));
   }
@@ -519,6 +670,9 @@ export const resetDb = () => {
   rt().flushChain = Promise.resolve();
   rt().lastPersistError = null;
   rt().lastCommittedEpoch = 0;
+  rt().basePersistedRevision = 0;
+  rt().lastCommittedRevision = 0;
+  rt().stale = false;
   idb.clearIdb().catch(() => {});
   if (typeof localStorage !== 'undefined') {
     try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}

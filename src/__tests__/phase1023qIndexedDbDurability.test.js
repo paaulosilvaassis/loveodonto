@@ -10,17 +10,29 @@ let nextSaveResult = 'succeed';
 const committedEpochMarkers = [];
 
 vi.mock('../db/idbStorage.js', () => {
-  const keysOf = (defaultState) => Object.keys(defaultState || {});
+  const META = '__db_meta__';
+  const keysOf = (defaultState) => Object.keys(defaultState || {}).filter((key) => key !== META);
+  const revisionOf = () => {
+    const meta = memoryStore.get(META);
+    const revision = Number(meta?.revision);
+    return Number.isFinite(revision) && revision > 0 ? Math.floor(revision) : 0;
+  };
+  const readDb = (defaultState) => {
+    const result = { ...defaultState };
+    for (const key of keysOf(defaultState)) {
+      if (memoryStore.has(key)) result[key] = memoryStore.get(key);
+    }
+    return result;
+  };
 
   return {
     async getFullDb(defaultState) {
-      const result = { ...defaultState };
-      for (const key of keysOf(defaultState)) {
-        if (memoryStore.has(key)) result[key] = memoryStore.get(key);
-      }
-      return result;
+      return readDb(defaultState);
     },
-    async saveFullDb(db, defaultState) {
+    async getFullDbSnapshot(defaultState) {
+      return { db: readDb(defaultState), revision: revisionOf() };
+    },
+    async saveFullDb(db, defaultState, options = {}) {
       saveCallCount += 1;
       const marker = db?.__persistMarker || db?.generatedContracts?.[0]?.id || `save-${saveCallCount}`;
       if (nextSaveResult === 'block') {
@@ -36,11 +48,26 @@ vi.mock('../db/idbStorage.js', () => {
         error.name = 'AbortError';
         throw error;
       }
+      const expectedRevision = Number.isFinite(Number(options.expectedRevision))
+        ? Number(options.expectedRevision)
+        : 0;
+      const actualRevision = revisionOf();
+      if (actualRevision !== expectedRevision) {
+        const error = new Error('IndexedDB snapshot is stale; another tab committed a newer revision.');
+        error.name = 'IDB_STALE_SNAPSHOT';
+        error.expectedRevision = expectedRevision;
+        error.actualRevision = actualRevision;
+        error.timestamp = new Date().toISOString();
+        throw error;
+      }
       for (const key of keysOf(defaultState)) {
         const value = db[key];
         memoryStore.set(key, value === undefined ? defaultState[key] : value);
       }
+      const revision = actualRevision + 1;
+      memoryStore.set(META, { revision, committedAt: new Date().toISOString() });
       committedEpochMarkers.push(marker);
+      return { revision };
     },
     async clearIdb() {
       memoryStore = new Map();

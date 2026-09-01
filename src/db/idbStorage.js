@@ -3,7 +3,16 @@
  * Nunca salvar o banco inteiro como um único JSON no localStorage.
  * Cada chave de primeiro nível é gravada como registro separado no IndexedDB.
  * Em ambiente sem IndexedDB (ex.: Node em testes), usa apenas memória (fallback).
+ *
+ * B.2U: commit full-snapshot usa CAS de revision no mesmo readwrite transaction.
  */
+
+import {
+  DB_META_KEY,
+  createRevisionMeta,
+  createStaleSnapshotError,
+  parsePersistedRevision,
+} from './idbRevision.js';
 
 const DB_NAME = 'appgestaoodonto';
 const STORE_NAME = 'data';
@@ -11,6 +20,7 @@ const DB_VERSION = 1;
 
 let dbInstance = null;
 const memoryFallback = new Map();
+let memoryWriteChain = Promise.resolve();
 
 function hasIdb() {
   return typeof indexedDB !== 'undefined';
@@ -35,51 +45,86 @@ function openDb() {
   });
 }
 
-/**
- * Retorna todas as chaves de primeiro nível que existem no estado padrão do DB.
- */
 function getTopLevelKeys(defaultState) {
-  return Object.keys(defaultState);
+  return Object.keys(defaultState || {}).filter((key) => key !== DB_META_KEY);
+}
+
+function unwrapRecord(rec) {
+  if (!rec || rec.v === undefined) return undefined;
+  try {
+    return typeof rec.v === 'string' ? JSON.parse(rec.v) : rec.v;
+  } catch {
+    return rec.v;
+  }
+}
+
+function readMemorySnapshot(defaultState) {
+  const keys = getTopLevelKeys(defaultState);
+  const db = { ...defaultState };
+  keys.forEach((key) => {
+    if (!memoryFallback.has(key)) return;
+    try {
+      const raw = memoryFallback.get(key);
+      db[key] = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      db[key] = defaultState[key];
+    }
+  });
+  return {
+    db,
+    revision: parsePersistedRevision(memoryFallback.get(DB_META_KEY)),
+  };
+}
+
+function withMemoryWriteLock(work) {
+  const next = memoryWriteChain.then(work, work);
+  memoryWriteChain = next.then(() => undefined, () => undefined);
+  return next;
 }
 
 /**
- * Carrega o banco completo a partir do IndexedDB (um registro por chave).
- * Sem IndexedDB: lê do fallback em memória.
+ * Carrega snapshot + revision na mesma transação readonly (ou no fallback).
  */
-export async function getFullDb(defaultState) {
+export async function getFullDbSnapshot(defaultState) {
   const keys = getTopLevelKeys(defaultState);
   const result = { ...defaultState };
 
   if (!hasIdb()) {
-    keys.forEach((key) => {
-      if (memoryFallback.has(key)) {
-        try {
-          result[key] = typeof memoryFallback.get(key) === 'string' ? JSON.parse(memoryFallback.get(key)) : memoryFallback.get(key);
-        } catch {
-          result[key] = defaultState[key];
-        }
-      }
-    });
-    return result;
+    return readMemorySnapshot(defaultState);
   }
 
-  const db = await openDb();
-  if (!db) return result;
+  const idb = await openDb();
+  if (!idb) return { db: result, revision: 0 };
 
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
+    const tx = idb.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
+    let revision = 0;
+    let pending = keys.length + 1;
+    let settled = false;
 
-    let pending = keys.length;
-    if (pending === 0) {
-      resolve(result);
-      return;
-    }
-
-    const onDone = () => {
+    const finish = () => {
       pending -= 1;
-      if (pending === 0) resolve(result);
+      if (pending === 0 && !settled) {
+        settled = true;
+        resolve({ db: result, revision });
+      }
     };
+
+    tx.onerror = () => {
+      if (settled) return;
+      settled = true;
+      reject(tx.error || new Error('IndexedDB read failed'));
+    };
+
+    const metaReq = store.get(DB_META_KEY);
+    metaReq.onsuccess = () => {
+      revision = parsePersistedRevision(unwrapRecord(metaReq.result));
+      finish();
+    };
+    metaReq.onerror = () => finish();
+
+    if (keys.length === 0) return;
 
     keys.forEach((key) => {
       const req = store.get(key);
@@ -91,28 +136,67 @@ export async function getFullDb(defaultState) {
             result[key] = defaultState[key];
           }
         }
-        onDone();
+        finish();
       };
-      req.onerror = () => onDone();
+      req.onerror = () => finish();
     });
   });
 }
 
 /**
- * Persiste o banco no IndexedDB por chave (não um JSON único).
- * Sem IndexedDB: grava no fallback em memória.
+ * Compat: só o snapshot. Preferir getFullDbSnapshot no boot.
  */
-export async function saveFullDb(db, defaultState) {
+export async function getFullDb(defaultState) {
+  const snap = await getFullDbSnapshot(defaultState);
+  return snap.db;
+}
+
+export async function readPersistedRevisionMeta() {
+  if (!hasIdb()) {
+    const raw = memoryFallback.get(DB_META_KEY);
+    return raw && typeof raw === 'object' ? { ...raw } : null;
+  }
+  const idb = await openDb();
+  if (!idb) return null;
+  return new Promise((resolve, reject) => {
+    const tx = idb.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(DB_META_KEY);
+    req.onsuccess = () => {
+      const value = unwrapRecord(req.result);
+      resolve(value && typeof value === 'object' ? { ...value } : null);
+    };
+    req.onerror = () => reject(req.error || new Error('IndexedDB meta read failed'));
+  });
+}
+
+function writeSnapshotToMemory(db, defaultState, expectedRevision) {
+  const actualRevision = parsePersistedRevision(memoryFallback.get(DB_META_KEY));
+  if (actualRevision !== expectedRevision) {
+    throw createStaleSnapshotError({ expectedRevision, actualRevision });
+  }
+  const keys = getTopLevelKeys(defaultState);
+  keys.forEach((key) => {
+    const value = db[key];
+    memoryFallback.set(key, value === undefined ? defaultState[key] : value);
+  });
+  const committedRevision = actualRevision + 1;
+  memoryFallback.set(DB_META_KEY, createRevisionMeta(committedRevision));
+  return { revision: committedRevision };
+}
+
+/**
+ * Persiste o banco no IndexedDB por chave, com CAS de revision.
+ * Resolve só em tx.oncomplete. Retorna { revision }.
+ */
+export async function saveFullDb(db, defaultState, options = {}) {
   if (!db || typeof db !== 'object') throw new Error('Banco inválido para persistência');
+  const expectedRevision = Number.isFinite(Number(options.expectedRevision))
+    ? Number(options.expectedRevision)
+    : 0;
   const keys = getTopLevelKeys(defaultState);
 
   if (!hasIdb()) {
-    keys.forEach((key) => {
-      const value = db[key];
-      const toStore = value === undefined ? defaultState[key] : value;
-      memoryFallback.set(key, toStore);
-    });
-    return;
+    return withMemoryWriteLock(() => writeSnapshotToMemory(db, defaultState, expectedRevision));
   }
 
   const idb = await openDb();
@@ -140,25 +224,49 @@ export async function saveFullDb(db, defaultState) {
     }
 
     const store = tx.objectStore(STORE_NAME);
+    let committedRevision = null;
+
     tx.oncomplete = () => {
       if (settled) return;
       settled = true;
-      resolve();
+      resolve({ revision: committedRevision });
     };
-    tx.onerror = () => fail(tx.error || new Error('IndexedDB transaction error'));
-    tx.onabort = () => fail(tx.error || new Error('IndexedDB transaction aborted'));
+    tx.onerror = () => {
+      if (settled) return;
+      fail(tx.error || new Error('IndexedDB transaction error'));
+    };
+    tx.onabort = () => {
+      if (settled) return;
+      fail(tx.error || new Error('IndexedDB transaction aborted'));
+    };
 
-    try {
-      keys.forEach((key) => {
-        const value = db[key];
-        const toStore = value === undefined ? defaultState[key] : value;
-        const req = store.put({ k: key, v: toStore });
-        req.onerror = () => fail(req.error || new Error('IndexedDB put failed'));
-      });
-    } catch (err) {
-      try { tx.abort(); } catch (_) { /* abort already failing */ }
-      fail(err);
-    }
+    const metaReq = store.get(DB_META_KEY);
+    metaReq.onerror = () => fail(metaReq.error || new Error('IndexedDB meta read failed'));
+    metaReq.onsuccess = () => {
+      if (settled) return;
+      const actualRevision = parsePersistedRevision(unwrapRecord(metaReq.result));
+      if (actualRevision !== expectedRevision) {
+        const stale = createStaleSnapshotError({ expectedRevision, actualRevision });
+        try { tx.abort(); } catch (_) { /* already failing */ }
+        fail(stale);
+        return;
+      }
+
+      try {
+        keys.forEach((key) => {
+          const value = db[key];
+          const toStore = value === undefined ? defaultState[key] : value;
+          const req = store.put({ k: key, v: toStore });
+          req.onerror = () => fail(req.error || new Error('IndexedDB put failed'));
+        });
+        committedRevision = actualRevision + 1;
+        const metaPut = store.put({ k: DB_META_KEY, v: createRevisionMeta(committedRevision) });
+        metaPut.onerror = () => fail(metaPut.error || new Error('IndexedDB meta put failed'));
+      } catch (err) {
+        try { tx.abort(); } catch (_) { /* abort already failing */ }
+        fail(err);
+      }
+    };
   });
 }
 
@@ -186,7 +294,7 @@ export async function migrateFromLocalStorage(storageKey, defaultState, migrateD
     }
   }
 
-  await saveFullDb(migrated, defaultState);
+  await saveFullDb(migrated, defaultState, { expectedRevision: 0 });
   try {
     localStorage.removeItem(storageKey);
   } catch (e) {
