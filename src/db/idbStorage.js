@@ -116,20 +116,49 @@ export async function saveFullDb(db, defaultState) {
   }
 
   const idb = await openDb();
-  if (!idb) return;
+  if (!idb) {
+    const error = new Error('IndexedDB unavailable');
+    error.name = 'IDB_UNAVAILABLE';
+    throw error;
+  }
 
   return new Promise((resolve, reject) => {
-    const tx = idb.transaction(STORE_NAME, 'readwrite');
+    let settled = false;
+    const fail = (cause) => {
+      if (settled) return;
+      settled = true;
+      const error = cause instanceof Error ? cause : new Error(String(cause || 'IndexedDB transaction failed'));
+      reject(error);
+    };
+
+    let tx;
+    try {
+      tx = idb.transaction(STORE_NAME, 'readwrite');
+    } catch (err) {
+      fail(err);
+      return;
+    }
+
     const store = tx.objectStore(STORE_NAME);
+    tx.oncomplete = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    tx.onerror = () => fail(tx.error || new Error('IndexedDB transaction error'));
+    tx.onabort = () => fail(tx.error || new Error('IndexedDB transaction aborted'));
 
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-
-    keys.forEach((key) => {
-      const value = db[key];
-      const toStore = value === undefined ? defaultState[key] : value;
-      store.put({ k: key, v: toStore });
-    });
+    try {
+      keys.forEach((key) => {
+        const value = db[key];
+        const toStore = value === undefined ? defaultState[key] : value;
+        const req = store.put({ k: key, v: toStore });
+        req.onerror = () => fail(req.error || new Error('IndexedDB put failed'));
+      });
+    } catch (err) {
+      try { tx.abort(); } catch (_) { /* abort already failing */ }
+      fail(err);
+    }
   });
 }
 
@@ -171,8 +200,12 @@ export async function migrateFromLocalStorage(storageKey, defaultState, migrateD
  */
 export async function clearIdb() {
   memoryFallback.clear();
-  if (!hasIdb()) return;
+  if (!hasIdb()) {
+    dbInstance = null;
+    return;
+  }
   const idb = await openDb();
+  dbInstance = null;
   if (!idb) return;
   return new Promise((resolve, reject) => {
     const tx = idb.transaction(STORE_NAME, 'readwrite');

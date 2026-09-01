@@ -119,17 +119,69 @@ function getDbRuntime() {
       initDbPromise: null,
       loadDbWorker: null,
       saveEpoch: 0,
+      lastCommittedEpoch: 0,
       persistenceGeneration: 0,
       latestPersistPayload: null,
       flushChain: Promise.resolve(),
       flushInFlight: null,
+      lastPersistError: null,
       withDbDepth: 0,
       activeWriteDb: null,
     };
   }
-  return root[DB_RUNTIME_KEY];
+  const runtime = root[DB_RUNTIME_KEY];
+  if (typeof runtime.lastCommittedEpoch !== 'number') runtime.lastCommittedEpoch = 0;
+  if (!Object.prototype.hasOwnProperty.call(runtime, 'lastPersistError')) runtime.lastPersistError = null;
+  return runtime;
 }
 const rt = () => getDbRuntime();
+
+function snapshotPersistError(cause, epoch, generation) {
+  const name = cause?.name || 'PersistError';
+  const message = String(cause?.message || cause || 'IndexedDB persistence failed');
+  return {
+    name,
+    message,
+    timestamp: new Date().toISOString(),
+    epoch,
+    generation,
+  };
+}
+
+function toPersistError(cause, epoch, generation) {
+  const info = snapshotPersistError(cause, epoch, generation);
+  const error = new Error(info.message);
+  error.name = info.name === 'Error' ? 'PersistError' : info.name;
+  error.persistDiagnostics = info;
+  if (cause && cause !== error) error.cause = cause;
+  return error;
+}
+
+/**
+ * Diagnóstico de durabilidade — sem payload/PII.
+ * dirty = memória à frente do último commit IDB comprovado.
+ */
+export function getDbPersistenceStatus() {
+  const r = rt();
+  const lastError = r.lastPersistError;
+  return {
+    saveEpoch: r.saveEpoch,
+    lastCommittedEpoch: r.lastCommittedEpoch || 0,
+    persistenceGeneration: r.persistenceGeneration,
+    pending: r.latestPersistPayload != null,
+    inFlight: r.flushInFlight != null,
+    dirty: r.saveEpoch > (r.lastCommittedEpoch || 0) || r.latestPersistPayload != null,
+    lastPersistError: lastError
+      ? {
+          name: lastError.name,
+          message: lastError.message,
+          timestamp: lastError.timestamp,
+          epoch: lastError.epoch,
+          generation: lastError.generation,
+        }
+      : null,
+  };
+}
 
 const getLoadDbWorker = () => {
   const r = rt();
@@ -141,17 +193,21 @@ const getLoadDbWorker = () => {
 
 /**
  * Agenda persistência IDB serializada e coalescida.
- * Várias saveDb rápidas → um ou poucos writes do snapshot mais recente (nunca write antigo após novo).
+ * O payload pendente só sai da fila após commit comprovado.
+ * Falha rejeita a cadeia e reenfileira o latest (nunca um snapshot mais velho).
  */
 function scheduleIdbFlush() {
   if (rt().flushInFlight) return rt().flushInFlight;
   const genAtSchedule = rt().persistenceGeneration;
-  rt().flushInFlight = rt().flushChain = rt().flushChain.then(async () => {
+
+  const work = async () => {
     try {
       while (rt().latestPersistPayload && genAtSchedule === rt().persistenceGeneration) {
         const payload = rt().latestPersistPayload;
         const epochAtStart = rt().saveEpoch;
-        rt().latestPersistPayload = null;
+        if (rt().latestPersistPayload === payload) {
+          rt().latestPersistPayload = null;
+        }
         const defaultState = defaultDbState();
         if (typeof window !== 'undefined' && import.meta?.env?.DEV) {
           try {
@@ -166,27 +222,43 @@ function scheduleIdbFlush() {
             if (window.__STAGING_DB_TRACE__.length > 80) window.__STAGING_DB_TRACE__.shift();
           } catch (_) { /* ignore */ }
         }
-        await idb.saveFullDb(payload, defaultState);
+        try {
+          await idb.saveFullDb(payload, defaultState);
+        } catch (err) {
+          if (rt().saveEpoch === epochAtStart && rt().latestPersistPayload == null) {
+            rt().latestPersistPayload = payload;
+          }
+          const persistErr = toPersistError(err, epochAtStart, genAtSchedule);
+          rt().lastPersistError = persistErr.persistDiagnostics;
+          console.error('Erro ao persistir no IndexedDB:', persistErr);
+          throw persistErr;
+        }
         if (genAtSchedule !== rt().persistenceGeneration) return;
-        // Novo save durante o await: loop e grava o latest novamente.
+        if ((rt().lastCommittedEpoch || 0) < epochAtStart) {
+          rt().lastCommittedEpoch = epochAtStart;
+        }
+        rt().lastPersistError = null;
         if (rt().saveEpoch === epochAtStart && !rt().latestPersistPayload) break;
       }
-    } catch (err) {
-      console.error('Erro ao persistir no IndexedDB:', err);
     } finally {
       rt().flushInFlight = null;
-      if (rt().latestPersistPayload && genAtSchedule === rt().persistenceGeneration) {
-        scheduleIdbFlush();
-      }
     }
-  });
-  return rt().flushInFlight;
+  };
+
+  const next = Promise.resolve(rt().flushChain).catch(() => undefined).then(work);
+  rt().flushChain = next;
+  rt().flushInFlight = next;
+  return next;
 }
 
-/** Aguarda drenar a fila de persistência (testes / init / HMR). */
+/**
+ * Barreira de durabilidade.
+ * Resolve somente após commit IDB. Rejeita se a transação falhar/abortar.
+ */
 export function flushDbPersistence() {
   if (rt().latestPersistPayload) scheduleIdbFlush();
-  return rt().flushChain.then(() => undefined);
+  if (rt().flushInFlight) return rt().flushInFlight.then(() => undefined);
+  return Promise.resolve();
 }
 
 
@@ -445,6 +517,8 @@ export const resetDb = () => {
   rt().latestPersistPayload = null;
   rt().flushInFlight = null;
   rt().flushChain = Promise.resolve();
+  rt().lastPersistError = null;
+  rt().lastCommittedEpoch = 0;
   idb.clearIdb().catch(() => {});
   if (typeof localStorage !== 'undefined') {
     try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
