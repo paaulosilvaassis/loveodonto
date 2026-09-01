@@ -287,12 +287,18 @@ export function ClinicalSignatureSection({
                 <p>Satisfeito pela mesma assinatura profissional</p>
               ) : null}
               {(canOpenCeremony && lifecyclePolicy.canSignOnScreen && slot.status !== 'signed' && isOperatorCollectedRole(slot.role))
-                || (slot.role === CLINICAL_SIGNER_ROLE.PATIENT && slot.status !== 'signed' && lifecyclePolicy.canReplaceRevokedAccess)
+                || (slot.role === CLINICAL_SIGNER_ROLE.PATIENT && slot.status !== 'signed' && (
+                  lifecyclePolicy.canReplaceRevokedAccess
+                  || lifecyclePolicy.canResendAccess
+                  || lifecyclePolicy.canRotateAccess
+                  || lifecyclePolicy.canRevokeAccess
+                  || (readiness.canSend && lifecyclePolicy.canSendForSignature)
+                ))
                 ? (
-                <>
+                <div className="clinical-signer-actions">
                   {canOpenCeremony && lifecyclePolicy.canSignOnScreen && isOperatorCollectedRole(slot.role) ? (
                     <ClinicalBtn
-                      variant="secondary"
+                      variant="primary"
                       icon={PenLine}
                       data-testid={slot.role === CLINICAL_SIGNER_ROLE.PATIENT ? 'clinical-sign-now-cta' : `clinical-sign-${String(slot.role).toLowerCase()}-cta`}
                       onClick={() => setSignTarget(slot)}
@@ -302,7 +308,6 @@ export function ClinicalSignatureSection({
                   ) : null}
                   <PatientRemoteInviteActions
                     slot={slot}
-                    invite={patientInvite}
                     canSend={readiness.canSend && lifecyclePolicy.canSendForSignature}
                     canResend={lifecyclePolicy.canResendAccess}
                     canRotate={lifecyclePolicy.canRotateAccess}
@@ -312,12 +317,11 @@ export function ClinicalSignatureSection({
                     onSend={() => setSendOpen(true)}
                     onResend={handleResendInvite}
                     onCopyLink={handleCopyLink}
-                    onCancel={handleCancelInvite}
                     onRotate={handleRotateAccess}
                     onRevoke={handleCancelInvite}
                     onReplace={handleReplaceRevokedAccess}
                   />
-                </>
+                </div>
               ) : null}
               {canOpenCeremony && slot.status !== 'signed' && isAuthenticatedIdentityRole(slot.role) ? (
                 canAuthenticatedUserSignSlot(user, slot).canSignElectronically ? (

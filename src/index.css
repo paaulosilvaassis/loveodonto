@@ -30956,6 +30956,58 @@ a.button {
   font-size: 0.875rem;
 }
 
+.clinical-signer-actions,
+.clinical-signer-access-ops {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-top: 0.45rem;
+}
+
+.clinical-access-more {
+  position: relative;
+}
+
+.clinical-access-more > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.clinical-access-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.clinical-access-more-panel,
+.ctr-access-more-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  padding: 0.4rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  min-width: 12.5rem;
+}
+
+.ctr-access-more {
+  display: inline-block;
+}
+
+.ctr-access-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.ctr-access-more > summary::-webkit-details-marker {
+  display: none;
+}
+
 .clinical-signature-legacy {
   color: #92400e;
   font-size: 0.8125rem;

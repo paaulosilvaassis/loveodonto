@@ -202,7 +202,7 @@ describe('PHASE_10.23H lifecycle UI / RBAC', () => {
     expect(readSrc('src/components/clinical/contract/SigningAccessSecureModal.jsx'))
       .toContain('O mesmo acesso válido será reenviado. O prazo de validade não será alterado.');
     expect(readSrc('src/components/clinical/contract/SigningAccessSecureModal.jsx'))
-      .toContain('O acesso anterior deixará de funcionar e um novo acesso será criado.');
+      .toContain('O link atual deixará de funcionar e um novo link será criado. O prazo do request original não será ampliado.');
   });
 
   it('H41–H47 lineage and high-impact copy', () => {
