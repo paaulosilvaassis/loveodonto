@@ -4,6 +4,7 @@ import { notifyClinicalBudgetUpdated } from './clinicalBudgetApprovedService.js'
 import { addFile } from './patientFilesService.js';
 import { createId } from './helpers.js';
 import { getPatient } from './patientService.js';
+import { assertLegalPatientIdentityConsistency } from './patientIdentityIntegrity.js';
 import { buildContractContext } from './contractRenderService.js';
 import { seedDefaultContractsForDb } from '../contracts/defaultContractSeed.js';
 import { seedTreatmentContractTemplates } from '../contracts/treatmentContractSeed.js';
@@ -296,12 +297,6 @@ export function createContractDraft(user, payload) {
     }
   }
   ensureContractsModuleSeeded();
-  const row = createGeneratedContractDraft(user, payload);
-  const tpl = getContractTemplate(payload.templateId);
-  const attachedTcleIds = mergeContractAttachedTcleIds(
-    { metadata: {} },
-    { patientId: payload.patientId, appointmentId: payload.quoteId },
-  );
   const snaps = buildSnapshots({
     quoteSource: payload.quoteSource,
     quoteId: payload.quoteId,
@@ -309,6 +304,18 @@ export function createContractDraft(user, payload) {
     currentUser: user,
     budgetId: payload.budgetId || null,
   });
+  assertLegalPatientIdentityConsistency({
+    patientId: payload.patientId,
+    liveFullName: getPatient(payload.patientId)?.profile?.full_name,
+    snapshotFullName: snaps.patientSnapshotJson?.full_name,
+    requireLiveAndSnapshot: true,
+  });
+  const row = createGeneratedContractDraft(user, payload);
+  const tpl = getContractTemplate(payload.templateId);
+  const attachedTcleIds = mergeContractAttachedTcleIds(
+    { metadata: {} },
+    { patientId: payload.patientId, appointmentId: payload.quoteId },
+  );
   return withDb((db) => {
     const arr = db.generatedContracts || [];
     const idx = arr.findIndex((c) => c.id === row.id);
@@ -450,6 +457,14 @@ function createBoundPatientSignAccess(db, { user, contract, token, expiresAt }) 
 }
 
 export function sendContractForSignature(user, contractId) {
+  const existing = getGeneratedContract(contractId);
+  if (existing) {
+    assertLegalPatientIdentityConsistency({
+      patientId: existing.patientId,
+      liveFullName: existing.patientId ? getPatient(existing.patientId)?.profile?.full_name : '',
+      snapshotFullName: existing.patientSnapshotJson?.full_name,
+    });
+  }
   const settings = getContractSettings(user);
   const days = Number(settings.signLinkExpiryDays || 7);
   const expiresAt = new Date(Date.now() + days * 86400000).toISOString();

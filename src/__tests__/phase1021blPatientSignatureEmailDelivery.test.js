@@ -252,7 +252,7 @@ describe('PHASE_10.21BL patient signature email delivery', () => {
     await freezeAndSignJuliana();
     deliverSignatureInviteEmail.mockRejectedValueOnce(new Error('O provedor de e-mail recusou o disparo. O link não foi enviado.'));
     await expect(sendContractForDigitalSignature(julianaUser, CTR3, {
-      patientName: 'Paulo',
+      patientName: 'Paulo Henrique Silva de Assis',
       patientEmail: PATIENT_EMAIL,
       patientCpf: '39053344705',
     })).rejects.toThrow(/provedor|enviado/i);
@@ -265,12 +265,12 @@ describe('PHASE_10.21BL patient signature email delivery', () => {
     seed();
     await freezeAndSignJuliana();
     const first = await sendContractForDigitalSignature(julianaUser, CTR3, {
-      patientName: 'Paulo',
+      patientName: 'Paulo Henrique Silva de Assis',
       patientEmail: PATIENT_EMAIL,
       patientCpf: '39053344705',
     });
     const second = await sendContractForDigitalSignature(julianaUser, CTR3, {
-      patientName: 'Paulo',
+      patientName: 'Paulo Henrique Silva de Assis',
       patientEmail: PATIENT_EMAIL,
       patientCpf: '39053344705',
     });
