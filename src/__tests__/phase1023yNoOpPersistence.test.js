@@ -22,6 +22,8 @@ import { syncTenantClinicProfileToLocalDb } from '../services/tenantClinicProfil
 import { ensureFinancialPartnersSeeded } from '../services/financialPartnersService.js';
 import { ensureClinicalGuidesSeeded } from '../services/clinicalGuide/clinicalGuideService.js';
 import { cancelUnsignedContract } from '../services/contractLifecycleCommandService.js';
+import { ensureContractsModuleSeeded } from '../services/contractModuleService.js';
+import { TREATMENT_TYPES } from '../contracts/contractConstants.js';
 
 const TENANT_ID = 'b2f95268-101c-42cb-8a8e-8d3681aa7dfa';
 const SERVER_PROFILE = {
@@ -268,5 +270,102 @@ describe('PHASE_10.23Y — no-op automatic persistence', () => {
       return db;
     });
     await expect(flushDbPersistence()).rejects.toMatchObject({ name: IDB_STALE_SNAPSHOT });
+  });
+
+  function putFullySeededContractStructures(db, extras = {}) {
+    const clinicId = db.clinicProfile?.id || 'clinic-1';
+    db.contractTemplates = [
+      { id: 'ctpl-sys', clinicId, type: 'system_default', isActive: true, name: 'Sistema' },
+      ...Object.values(TREATMENT_TYPES).map((type, i) => ({
+        id: `ctpl-treat-${i}`,
+        clinicId,
+        type: 'treatment_template',
+        treatmentType: type,
+        isActive: true,
+        name: `Treat ${type}`,
+      })),
+    ];
+    db.contractBlocks = [{ id: 'cblk-sys', clinicId, templateId: 'ctpl-sys' }];
+    db.generatedContracts = extras.generatedContracts === undefined ? [] : extras.generatedContracts;
+    db.contractAuditLogs = extras.contractAuditLogs === undefined ? [] : extras.contractAuditLogs;
+    db.contractSeqByClinic = extras.contractSeqByClinic === undefined ? {} : extras.contractSeqByClinic;
+    if (extras.omitGeneratedContracts) delete db.generatedContracts;
+    if (extras.omitAuditLogs) delete db.contractAuditLogs;
+    if (extras.omitSeq) delete db.contractSeqByClinic;
+    return db;
+  }
+
+  it('Y15 missing generatedContracts still persists when templates exist', async () => {
+    withDb((db) => putFullySeededContractStructures(db, { omitGeneratedContracts: true }));
+    await flushDbPersistence();
+    expect(loadDb().generatedContracts).toBeUndefined();
+    const rev = await persistedRevision();
+    saveSpy.mockClear();
+    ensureContractsModuleSeeded();
+    await flushDbPersistence();
+    expect(Array.isArray(loadDb().generatedContracts)).toBe(true);
+    expect(await persistedRevision()).toBe(rev + 1);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('Y16 missing contractAuditLogs still persists when templates exist', async () => {
+    withDb((db) => putFullySeededContractStructures(db, { omitAuditLogs: true }));
+    await flushDbPersistence();
+    expect(loadDb().contractAuditLogs).toBeUndefined();
+    const rev = await persistedRevision();
+    saveSpy.mockClear();
+    ensureContractsModuleSeeded();
+    await flushDbPersistence();
+    expect(Array.isArray(loadDb().contractAuditLogs)).toBe(true);
+    expect(await persistedRevision()).toBe(rev + 1);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('Y17 missing contractSeqByClinic still persists when templates exist', async () => {
+    withDb((db) => putFullySeededContractStructures(db, { omitSeq: true }));
+    await flushDbPersistence();
+    expect(loadDb().contractSeqByClinic).toBeUndefined();
+    const rev = await persistedRevision();
+    saveSpy.mockClear();
+    ensureContractsModuleSeeded();
+    await flushDbPersistence();
+    expect(loadDb().contractSeqByClinic && typeof loadDb().contractSeqByClinic === 'object').toBe(true);
+    expect(await persistedRevision()).toBe(rev + 1);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('Y18 fully seeded contract module repeated N times is zero additional persist', async () => {
+    withDb((db) => putFullySeededContractStructures(db));
+    await flushDbPersistence();
+    const epoch = getDbPersistenceStatus().saveEpoch;
+    const rev = await persistedRevision();
+    saveSpy.mockClear();
+    updatedEvents.length = 0;
+    for (let i = 0; i < 5; i += 1) {
+      ensureContractsModuleSeeded();
+    }
+    await flushDbPersistence();
+    expect(getDbPersistenceStatus().saveEpoch).toBe(epoch);
+    expect(await persistedRevision()).toBe(rev);
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(updatedEvents).toHaveLength(0);
+  });
+
+  it('Y19 missing treatment template is exactly one persistence commit', async () => {
+    withDb((db) => {
+      putFullySeededContractStructures(db);
+      db.contractTemplates = db.contractTemplates.filter((row) => row.type !== 'treatment_template');
+      return db;
+    });
+    await flushDbPersistence();
+    const beforeCount = (loadDb().contractTemplates || []).length;
+    const rev = await persistedRevision();
+    saveSpy.mockClear();
+    ensureContractsModuleSeeded();
+    await flushDbPersistence();
+    expect((loadDb().contractTemplates || []).length).toBeGreaterThan(beforeCount);
+    expect((loadDb().contractTemplates || []).some((row) => row.type === 'treatment_template')).toBe(true);
+    expect(await persistedRevision()).toBe(rev + 1);
+    expect(saveSpy).toHaveBeenCalledTimes(1);
   });
 });
