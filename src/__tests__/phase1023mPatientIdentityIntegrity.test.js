@@ -300,6 +300,7 @@ describe('POST-10.23 PATCH B patient identity integrity', () => {
     expect(audit.data.changedFields).toEqual(['full_name']);
     expect(audit.data.before).toEqual({ full_name: PATIENT_A_NAME });
     expect(audit.data.after).toEqual({ full_name: PATIENT_A_RENAMED });
+    expect(audit.data.reason).toBeNull();
     expect(audit.data).not.toHaveProperty('cpf');
     expect(JSON.stringify(audit.data)).not.toMatch(/password|token|prontuario/i);
 
@@ -352,6 +353,91 @@ describe('POST-10.23 PATCH B patient identity integrity', () => {
     const evidenceSrc = readSrc('src/contracts/remoteSignatureEvidence.js');
     expect(evidenceSrc).toContain('typedSignerName');
     expect(evidenceSrc).toContain('registeredSignerName');
+  });
+
+  it('audit reason: incident recovery persists trimmed reason on the same update-profile event', () => {
+    const created = createPatientQuick(admin, {
+      full_name: PATIENT_A_NAME,
+      sex: 'M',
+      birth_date: '1985-02-25',
+      cpf: '52998224725',
+    });
+    updatePatientProfile(admin, created.patientId, {
+      full_name: PATIENT_A_RENAMED,
+    }, {
+      source: 'patient-identity-incident-recovery',
+      dirtyIdentityFields: ['full_name'],
+      reason: 'Controlled remediation test',
+    });
+
+    const after = getPatient(created.patientId).profile;
+    expect(after.full_name).toBe(PATIENT_A_RENAMED);
+    expect(after.nickname || '').toBe('');
+    expect(after.social_name || '').toBe('');
+
+    const audit = latestProfileAudit(created.patientId);
+    expect(audit.action).toBe('patients:update-profile');
+    expect(audit.data.source).toBe('patient-identity-incident-recovery');
+    expect(audit.data.changedFields).toEqual(['full_name']);
+    expect(audit.data.before).toEqual({ full_name: PATIENT_A_NAME });
+    expect(audit.data.after).toEqual({ full_name: PATIENT_A_RENAMED });
+    expect(audit.data.reason).toBe('Controlled remediation test');
+  });
+
+  it('audit reason: omitted reason stays compatible as null', () => {
+    const created = createPatientQuick(admin, {
+      full_name: PATIENT_A_NAME,
+      sex: 'M',
+      birth_date: '1985-02-25',
+      cpf: '16203944645',
+    });
+    updatePatientProfile(admin, created.patientId, {
+      full_name: PATIENT_A_RENAMED,
+    }, {
+      source: 'patient-cadastro',
+      dirtyIdentityFields: ['full_name'],
+    });
+    const audit = latestProfileAudit(created.patientId);
+    expect(audit.data.source).toBe('patient-cadastro');
+    expect(audit.data.changedFields).toEqual(['full_name']);
+    expect(audit.data.reason).toBeNull();
+  });
+
+  it('audit reason: whitespace-only reason normalizes to null', () => {
+    const created = createPatientQuick(admin, {
+      full_name: PATIENT_A_NAME,
+      sex: 'M',
+      birth_date: '1985-02-25',
+      cpf: '39053344705',
+    });
+    updatePatientProfile(admin, created.patientId, {
+      full_name: PATIENT_A_RENAMED,
+    }, {
+      source: 'patient-identity-incident-recovery',
+      dirtyIdentityFields: ['full_name'],
+      reason: '   ',
+    });
+    const audit = latestProfileAudit(created.patientId);
+    expect(audit.data.reason).toBeNull();
+    expect(audit.data.source).toBe('patient-identity-incident-recovery');
+  });
+
+  it('audit reason: surrounding whitespace is trimmed without other transforms', () => {
+    const created = createPatientQuick(admin, {
+      full_name: PATIENT_A_NAME,
+      sex: 'M',
+      birth_date: '1985-02-25',
+      cpf: '11144477735',
+    });
+    updatePatientProfile(admin, created.patientId, {
+      full_name: PATIENT_A_RENAMED,
+    }, {
+      source: 'patient-identity-incident-recovery',
+      dirtyIdentityFields: ['full_name'],
+      reason: '  Incident recovery  ',
+    });
+    const audit = latestProfileAudit(created.patientId);
+    expect(audit.data.reason).toBe('Incident recovery');
   });
 
   it('cadastro writer initializes identity only from target patient, with load/bind gates', () => {
