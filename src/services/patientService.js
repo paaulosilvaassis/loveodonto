@@ -844,6 +844,7 @@ export const updatePatientProfile = (user, patientId, payload, options = {}) => 
       patientId,
       actorId: user.id,
       source: options.source || null,
+      reason: options.reason,
       beforePatient: basePatient,
       afterPatient: next,
     }));

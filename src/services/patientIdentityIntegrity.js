@@ -52,10 +52,17 @@ export function assertCadastroIdentitySaveAllowed({ routePatientId, draft, liveP
   }
 }
 
+export function normalizeAuditReason(reason) {
+  if (typeof reason !== 'string') return null;
+  const trimmed = reason.trim();
+  return trimmed || null;
+}
+
 export function buildIdentityChangeAudit({
   patientId,
   actorId,
   source = null,
+  reason = null,
   beforePatient,
   afterPatient,
 }) {
@@ -73,6 +80,7 @@ export function buildIdentityChangeAudit({
     actorId,
     userId: actorId,
     source: source || null,
+    reason: normalizeAuditReason(reason),
     changedFields,
     before,
     after,
