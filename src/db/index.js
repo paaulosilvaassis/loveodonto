@@ -13,7 +13,10 @@ import {
   REVISION_BROADCAST_CHANNEL,
 } from './idbRevision.js';
 
+import { DB_NO_CHANGE, isDbNoChange } from './noChange.js';
+
 export { IDB_STALE_SNAPSHOT, DB_META_KEY } from './idbRevision.js';
+export { DB_NO_CHANGE, isDbNoChange } from './noChange.js';
 
 const resolveStorageKey = () => {
   const dbUrl = import.meta?.env?.VITE_DATABASE_URL || '';
@@ -577,6 +580,7 @@ export async function initDb() {
     const db = snap.db;
     const hadEmptyCategories = !Array.isArray(db.expenseCategories) || db.expenseCategories.length === 0;
     adoptHydratedDbIfCacheEmpty(db, snap.revision);
+    // Default ausente é persistência legítima. Hidratação já preenchida = no-op.
     if (hadEmptyCategories && rt().cachedDb) saveDb(rt().cachedDb);
     return rt().cachedDb;
   })();
@@ -793,7 +797,7 @@ export async function forceSeedAdminCredentials() {
 export const seedDevDb = () => {
   if (!import.meta?.env?.DEV) return;
   withDb((db) => {
-    if (!Array.isArray(db.patients) || db.patients.length > 0) return db;
+    if (!Array.isArray(db.patients) || db.patients.length > 0) return DB_NO_CHANGE;
     const now = new Date().toISOString();
     const patientId = createId('patient');
     db.patients.push({
@@ -878,6 +882,9 @@ export const withDb = (mutator) => {
   rt().activeWriteDb = cloned;
   try {
     const result = mutator(cloned);
+    if (isDbNoChange(result)) {
+      return result;
+    }
     const next = result && typeof result === 'object' && !Array.isArray(result) && 'patients' in result
       ? result
       : cloned;

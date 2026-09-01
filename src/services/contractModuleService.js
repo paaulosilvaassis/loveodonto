@@ -1,4 +1,4 @@
-import { withDb, loadDb } from '../db/index.js';
+import { withDb, loadDb, DB_NO_CHANGE } from '../db/index.js';
 import { logSignatureAudit } from './contractSignatureAuditService.js';
 import { notifyClinicalBudgetUpdated } from './clinicalBudgetApprovedService.js';
 import { addFile } from './patientFilesService.js';
@@ -103,8 +103,15 @@ function simpleHash(text) {
 
 export function ensureContractsModuleSeeded() {
   withDb((db) => {
+    const beforeTemplates = Array.isArray(db.contractTemplates) ? db.contractTemplates.length : -1;
+    const beforeBlocks = Array.isArray(db.contractBlocks) ? db.contractBlocks.length : -1;
     seedDefaultContractsForDb(db);
     seedTreatmentContractTemplates(db, db.clinicProfile?.id || 'clinic-1');
+    const afterTemplates = Array.isArray(db.contractTemplates) ? db.contractTemplates.length : -1;
+    const afterBlocks = Array.isArray(db.contractBlocks) ? db.contractBlocks.length : -1;
+    if (beforeTemplates >= 0 && beforeBlocks >= 0 && afterTemplates === beforeTemplates && afterBlocks === beforeBlocks) {
+      return DB_NO_CHANGE;
+    }
     return db;
   });
 }

@@ -2,7 +2,7 @@
  * Aplica clinicProfile do servidor (tenant-context) no IndexedDB local.
  * Garante que convidados vejam a mesma identidade visual da clínica que o master.
  */
-import { loadDb, withDb } from '../db/index.js';
+import { loadDb, withDb, DB_NO_CHANGE } from '../db/index.js';
 import { normalizeTenantId } from './tenantIsolation.js';
 import { getClinicLogo } from '../utils/clinicLogo.js';
 import { emitStabilityLog } from './stabilityLogService.js';
@@ -52,6 +52,35 @@ export function needsClinicProfileResync(tenantId) {
   return false;
 }
 
+function sameText(left, right) {
+  return String(left || '') === String(right || '');
+}
+
+function clinicProfileHasMeaningfulChange(db, nextProfile, nextDocs, nextTenant) {
+  const prev = db.clinicProfile || {};
+  const prevDocs = db.clinicDocumentation || {};
+  const expectedTid = nextProfile.tenant_id;
+  const prevTenant = (Array.isArray(db.tenants) ? db.tenants : [])
+    .find((row) => normalizeTenantId(row?.id) === expectedTid);
+  if (!prevTenant) return true;
+  return !(
+    sameText(prev.id, nextProfile.id)
+    && normalizeTenantId(prev.tenant_id) === expectedTid
+    && sameText(prev.nomeMarca, nextProfile.nomeMarca)
+    && sameText(prev.nomeFantasia, nextProfile.nomeFantasia)
+    && sameText(prev.razaoSocial, nextProfile.razaoSocial)
+    && sameText(prev.nomeClinica, nextProfile.nomeClinica)
+    && sameText(prev.emailPrincipal, nextProfile.emailPrincipal)
+    && sameText(prev.logoUrl, nextProfile.logoUrl)
+    && sameText(prev.status, nextProfile.status)
+    && sameText(prevDocs.clinicId, nextDocs.clinicId)
+    && sameText(prevDocs.cnpj, nextDocs.cnpj)
+    && sameText(prevTenant.name, nextTenant.name)
+    && sameText(prevTenant.logo_url, nextTenant.logo_url)
+    && sameText(prevTenant.status, nextTenant.status)
+  );
+}
+
 export function syncTenantClinicProfileToLocalDb(serverProfile, expectedTenantId) {
   const expected = normalizeTenantId(expectedTenantId);
   const localProfile = mapServerClinicProfileToLocal(serverProfile);
@@ -65,45 +94,54 @@ export function syncTenantClinicProfileToLocalDb(serverProfile, expectedTenantId
     return false;
   }
 
-  const now = new Date().toISOString();
-  withDb((db) => {
+  const persisted = withDb((db) => {
     const prev = db.clinicProfile || {};
     const clinicId = localProfile.id || buildClinicId(expected);
-    db.clinicProfile = {
-      ...prev,
+    const nextProfile = {
       ...localProfile,
       id: clinicId,
       tenant_id: expected,
-      updatedAt: now,
-      createdAt: prev.createdAt || now,
-      // Não apagar logo local se o servidor ainda não trouxe logo_url.
       logoUrl: localProfile.logoUrl || prev.logoUrl || '',
     };
-
-    db.clinicDocumentation = {
-      ...(db.clinicDocumentation || {}),
+    const nextDocs = {
       clinicId,
       cnpj: String(serverProfile?.cnpj || db.clinicDocumentation?.cnpj || '').trim(),
     };
-
     const displayName = localProfile.nomeClinica || localProfile.nomeFantasia;
-    const tenants = Array.isArray(db.tenants) ? [...db.tenants] : [];
-    const tIdx = tenants.findIndex((t) => normalizeTenantId(t.id) === expected);
-    const tenantRow = {
+    const nextTenant = {
       id: expected,
       name: displayName,
-      logo_url: db.clinicProfile.logoUrl || null,
+      logo_url: nextProfile.logoUrl || null,
       status: localProfile.status === 'inativo' ? 'inactive' : 'active',
-      updated_at: now,
     };
+    if (!clinicProfileHasMeaningfulChange(db, nextProfile, nextDocs, nextTenant)) {
+      return DB_NO_CHANGE;
+    }
+
+    const now = new Date().toISOString();
+    db.clinicProfile = {
+      ...prev,
+      ...nextProfile,
+      updatedAt: now,
+      createdAt: prev.createdAt || now,
+    };
+    db.clinicDocumentation = {
+      ...(db.clinicDocumentation || {}),
+      ...nextDocs,
+    };
+
+    const tenants = Array.isArray(db.tenants) ? [...db.tenants] : [];
+    const tIdx = tenants.findIndex((t) => normalizeTenantId(t.id) === expected);
     if (tIdx >= 0) {
-      tenants[tIdx] = { ...tenants[tIdx], ...tenantRow };
+      tenants[tIdx] = { ...tenants[tIdx], ...nextTenant, updated_at: now };
     } else {
-      tenants.push({ ...tenantRow, created_at: now, saas_bootstrapped_at: now });
+      tenants.push({ ...nextTenant, created_at: now, updated_at: now, saas_bootstrapped_at: now });
     }
     db.tenants = tenants;
     return db;
   });
+
+  if (persisted === DB_NO_CHANGE) return true;
 
   try {
     sessionStorage.removeItem(CLINIC_SUMMARY_CACHE_KEY);
