@@ -1,4 +1,4 @@
-import { loadDb, loadDbAsync, withDb } from '../db/index.js';
+import { loadDb, loadDbAsync, withDb, DB_NO_CHANGE } from '../db/index.js';
 import { requirePermission } from '../permissions/permissions.js';
 import { createId, assertRequired, normalizeText } from './helpers.js';
 import { logAction } from './logService.js';
@@ -317,6 +317,137 @@ export const addClinicAddress = (user, payload) => {
     db.clinicAddresses.push(address);
     logAction('clinic:add-address', { addressId: address.id, userId: user.id });
     return db.clinicAddresses;
+  });
+};
+
+const CLINIC_ADDRESS_PATCH_FIELDS = Object.freeze([
+  'tipo',
+  'cep',
+  'logradouro',
+  'numero',
+  'complemento',
+  'bairro',
+  'cidade',
+  'uf',
+  'principal',
+]);
+
+const LEGACY_CLINIC_ADDRESS_ID = 'clinic-1';
+
+function normalizeClinicUf(value) {
+  const uf = String(value ?? '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(uf)) {
+    throw new Error('UF inválida.');
+  }
+  return uf;
+}
+
+function resolveLocalClinicIds(db) {
+  const ids = new Set([LEGACY_CLINIC_ADDRESS_ID]);
+  const profileId = String(db.clinicProfile?.id || '').trim();
+  const docClinicId = String(db.clinicDocumentation?.clinicId || '').trim();
+  if (profileId) ids.add(profileId);
+  if (docClinicId) ids.add(docClinicId);
+  return ids;
+}
+
+function assertClinicAddressOwnership(address, db, user) {
+  const sessionTenant = normalizeTenantId(user?.tenantId || user?.tenant_id);
+  const profileTenant = normalizeTenantId(db.clinicProfile?.tenant_id);
+  if (sessionTenant && profileTenant && sessionTenant !== profileTenant) {
+    throw new Error('Endereço não pertence a esta clínica.');
+  }
+  const addressTenant = normalizeTenantId(address.tenant_id || address.tenantId);
+  const expectedTenant = sessionTenant || profileTenant;
+  if (addressTenant && expectedTenant && addressTenant !== expectedTenant) {
+    throw new Error('Endereço não pertence a esta clínica.');
+  }
+  const addressClinic = String(address.clinicId || address.clinic_id || '').trim();
+  if (addressClinic && !resolveLocalClinicIds(db).has(addressClinic)) {
+    throw new Error('Endereço não pertence a esta clínica.');
+  }
+}
+
+function readClinicAddressPatch(patch = {}) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+    throw new Error('Dados de endereço inválidos.');
+  }
+  const next = {};
+  for (const field of CLINIC_ADDRESS_PATCH_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(patch, field)) continue;
+    if (field === 'uf') {
+      next.uf = normalizeClinicUf(patch.uf);
+      continue;
+    }
+    if (field === 'principal') {
+      next.principal = Boolean(patch.principal);
+      continue;
+    }
+    if (field === 'cep') {
+      const cep = normalizeText(patch.cep);
+      if (cep && !isCepValid(cep)) {
+        throw new Error('CEP inválido.');
+      }
+      next.cep = cep;
+      continue;
+    }
+    next[field] = normalizeText(patch[field]);
+  }
+  return next;
+}
+
+function clinicAddressPatchIsNoOp(current, next) {
+  return Object.keys(next).every((field) => {
+    if (field === 'principal') {
+      return Boolean(current.principal) === next.principal;
+    }
+    return String(current[field] ?? '') === String(next[field] ?? '');
+  });
+}
+
+export const updateClinicAddress = (user, addressId, patch) => {
+  requirePermission(user, 'team:write');
+  const id = String(addressId || '').trim();
+  if (!id) {
+    throw new Error('Endereço não encontrado.');
+  }
+  const next = readClinicAddressPatch(patch);
+  return withDb((db) => {
+    const arr = Array.isArray(db.clinicAddresses) ? db.clinicAddresses : [];
+    const idx = arr.findIndex((item) => item && item.id === id);
+    if (idx < 0) {
+      throw new Error('Endereço não encontrado.');
+    }
+    const current = arr[idx];
+    assertClinicAddressOwnership(current, db, user);
+    if (clinicAddressPatchIsNoOp(current, next)) {
+      return DB_NO_CHANGE;
+    }
+    if (next.principal === true) {
+      arr.forEach((item, itemIdx) => {
+        if (itemIdx !== idx) item.principal = false;
+      });
+    }
+    const now = new Date().toISOString();
+    arr[idx] = {
+      ...current,
+      ...next,
+      id: current.id,
+      clinicId: current.clinicId,
+      clinic_id: current.clinic_id,
+      tenant_id: current.tenant_id,
+      tenantId: current.tenantId,
+      createdAt: current.createdAt,
+      createdBy: current.createdBy,
+      updatedAt: now,
+      updatedBy: user?.id || null,
+    };
+    logAction('clinic:update-address', {
+      addressId: current.id,
+      userId: user.id,
+      fields: Object.keys(next),
+    });
+    return arr[idx];
   });
 };
 
