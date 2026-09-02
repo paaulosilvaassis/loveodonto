@@ -1,6 +1,7 @@
 /**
  * Shell das rotas protegidas. Carregado via lazy para não bloquear a tela de login.
  */
+export { updateClinicAddress } from './services/clinicAddressUpdateFacade.js';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import RequireRole from './auth/RequireRole.jsx';
 import RequireAdminGate from './auth/RequireAdminGate.jsx';
