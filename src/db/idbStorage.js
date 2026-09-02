@@ -16,7 +16,9 @@ import {
 
 const DB_NAME = 'appgestaoodonto';
 const STORE_NAME = 'data';
-const DB_VERSION = 1;
+/** Schema estrutural IndexedDB. v2: garante object store `data` em upgrade (sem delete). */
+const DB_VERSION = 2;
+export const IDB_SCHEMA_MISSING_STORE = 'IDB_SCHEMA_MISSING_STORE';
 
 let dbInstance = null;
 const memoryFallback = new Map();
@@ -26,23 +28,89 @@ function hasIdb() {
   return typeof indexedDB !== 'undefined';
 }
 
+function ensureDataObjectStore(db) {
+  if (!db.objectStoreNames.contains(STORE_NAME)) {
+    db.createObjectStore(STORE_NAME, { keyPath: 'k' });
+  }
+}
+
+function createMissingStoreError(db) {
+  const error = new Error(
+    `IndexedDB schema incomplete: object store "${STORE_NAME}" missing after open `
+    + `(db="${DB_NAME}", version=${db?.version ?? '?'}).`,
+  );
+  error.name = IDB_SCHEMA_MISSING_STORE;
+  return error;
+}
+
+function closeDbConnection(db) {
+  if (!db) return;
+  try {
+    db.close();
+  } catch {
+    /* ignore close races */
+  }
+  if (dbInstance === db) dbInstance = null;
+}
+
+function attachVersionChangeHandler(db) {
+  db.onversionchange = () => {
+    closeDbConnection(db);
+  };
+}
+
+function assertDataObjectStorePresent(db) {
+  if (db.objectStoreNames.contains(STORE_NAME)) return;
+  closeDbConnection(db);
+  throw createMissingStoreError(db);
+}
+
 function openDb() {
   if (!hasIdb()) return Promise.resolve(null);
-  if (dbInstance) return Promise.resolve(dbInstance);
+  if (dbInstance) {
+    if (dbInstance.objectStoreNames.contains(STORE_NAME)) {
+      return Promise.resolve(dbInstance);
+    }
+    closeDbConnection(dbInstance);
+  }
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const fail = (cause) => {
+      if (settled) return;
+      settled = true;
+      reject(cause instanceof Error ? cause : new Error(String(cause || 'IndexedDB open failed')));
+    };
+
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onerror = () => reject(req.error);
-    req.onsuccess = () => {
-      dbInstance = req.result;
-      resolve(dbInstance);
+    req.onerror = () => fail(req.error || new Error('IndexedDB open failed'));
+    req.onblocked = () => {
+      console.warn('[idb] IndexedDB open blocked — outra conexão ainda está aberta; feche abas antigas.');
     };
     req.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: 'k' });
+      // Cria `data` só se ausente. Nunca deleta stores nem regrava registros.
+      ensureDataObjectStore(e.target.result);
+    };
+    req.onsuccess = () => {
+      if (settled) return;
+      const db = req.result;
+      attachVersionChangeHandler(db);
+      try {
+        assertDataObjectStorePresent(db);
+      } catch (err) {
+        fail(err);
+        return;
       }
+      settled = true;
+      dbInstance = db;
+      resolve(db);
     };
   });
+}
+
+/** Fecha cache de conexão (testes / troca de backend IndexedDB). Sem deleteDatabase. */
+export function resetIdbConnection() {
+  closeDbConnection(dbInstance);
+  dbInstance = null;
 }
 
 function getTopLevelKeys(defaultState) {
@@ -305,22 +373,29 @@ export async function migrateFromLocalStorage(storageKey, defaultState, migrateD
 
 /**
  * Remove todos os dados do banco no IndexedDB (ou do fallback em memória).
+ * Não chama deleteDatabase.
  */
 export async function clearIdb() {
   memoryFallback.clear();
   if (!hasIdb()) {
-    dbInstance = null;
+    resetIdbConnection();
     return;
   }
   const idb = await openDb();
-  dbInstance = null;
-  if (!idb) return;
+  if (!idb) {
+    resetIdbConnection();
+    return;
+  }
   return new Promise((resolve, reject) => {
     const tx = idb.transaction(STORE_NAME, 'readwrite');
     const req = tx.objectStore(STORE_NAME).clear();
-    req.onsuccess = () => resolve();
+    req.onsuccess = () => {
+      resetIdbConnection();
+      closeDbConnection(idb);
+      resolve();
+    };
     req.onerror = () => reject(req.error);
   });
 }
 
-export { openDb };
+export { openDb, DB_NAME as IDB_DB_NAME, STORE_NAME as IDB_STORE_NAME, DB_VERSION as IDB_SCHEMA_VERSION };
