@@ -47,8 +47,14 @@ function defaultBlocksFor(type) {
  * @param {object} db
  * @param {string} clinicId
  */
-export function seedTreatmentContractTemplates(db, clinicId) {
-  if (!Array.isArray(db.contractTemplates)) db.contractTemplates = [];
+export function seedTreatmentContractTemplates(db, clinicId, { changedRef } = {}) {
+  const mark = () => {
+    if (changedRef) changedRef.changed = true;
+  };
+  if (!Array.isArray(db.contractTemplates)) {
+    db.contractTemplates = [];
+    mark();
+  }
   const now = new Date().toISOString();
   const existing = db.contractTemplates.filter(
     (t) => t.clinicId === clinicId && t.type === 'treatment_template',
@@ -60,6 +66,7 @@ export function seedTreatmentContractTemplates(db, clinicId) {
       (t) => t.clinicId === clinicId && t.treatmentType === type && t.type === 'treatment_template',
     );
     if (has) continue;
+    mark();
     const label = TREATMENT_TYPE_LABELS[type] || type;
     const blocks = defaultBlocksFor(type);
     const content = `${TREATMENT_INTRO(label)}
@@ -120,6 +127,7 @@ export function seedTreatmentContractTemplates(db, clinicId) {
       (t) => t.clinicId === clinicId && t.category === term.cat && t.type === 'consent_term',
     );
     if (has) continue;
+    mark();
     db.contractTemplates.push({
       id: createId('ctpl'),
       clinicId,

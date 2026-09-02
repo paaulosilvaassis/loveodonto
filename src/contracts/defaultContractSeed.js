@@ -39,13 +39,31 @@ const STANDARD_BLOCKS = [
  * Garante template padrão do sistema e blocos para a clínica, se ainda não existirem.
  * @param {object} db estado do IndexedDB (withDb)
  */
-export function seedDefaultContractsForDb(db) {
+export function seedDefaultContractsForDb(db, { changedRef } = {}) {
+  const mark = () => {
+    if (changedRef) changedRef.changed = true;
+  };
   const clinicId = db?.clinicProfile?.id || 'clinic-1';
-  if (!Array.isArray(db.contractTemplates)) db.contractTemplates = [];
-  if (!Array.isArray(db.contractBlocks)) db.contractBlocks = [];
-  if (!Array.isArray(db.generatedContracts)) db.generatedContracts = [];
-  if (!Array.isArray(db.contractAuditLogs)) db.contractAuditLogs = [];
-  if (!db.contractSeqByClinic || typeof db.contractSeqByClinic !== 'object') db.contractSeqByClinic = {};
+  if (!Array.isArray(db.contractTemplates)) {
+    db.contractTemplates = [];
+    mark();
+  }
+  if (!Array.isArray(db.contractBlocks)) {
+    db.contractBlocks = [];
+    mark();
+  }
+  if (!Array.isArray(db.generatedContracts)) {
+    db.generatedContracts = [];
+    mark();
+  }
+  if (!Array.isArray(db.contractAuditLogs)) {
+    db.contractAuditLogs = [];
+    mark();
+  }
+  if (!db.contractSeqByClinic || typeof db.contractSeqByClinic !== 'object') {
+    db.contractSeqByClinic = {};
+    mark();
+  }
 
   const hasSystem = db.contractTemplates.some(
     (t) => t.clinicId === clinicId && t.type === 'system_default' && t.isActive !== false
@@ -54,6 +72,7 @@ export function seedDefaultContractsForDb(db) {
 
   const now = new Date().toISOString();
   const templateId = createId('ctpl');
+  mark();
   db.contractTemplates.push({
     id: templateId,
     clinicId,

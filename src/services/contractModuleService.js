@@ -1,4 +1,4 @@
-import { withDb, loadDb } from '../db/index.js';
+import { withDb, loadDb, DB_NO_CHANGE } from '../db/index.js';
 import { logSignatureAudit } from './contractSignatureAuditService.js';
 import { notifyClinicalBudgetUpdated } from './clinicalBudgetApprovedService.js';
 import { addFile } from './patientFilesService.js';
@@ -103,8 +103,10 @@ function simpleHash(text) {
 
 export function ensureContractsModuleSeeded() {
   withDb((db) => {
-    seedDefaultContractsForDb(db);
-    seedTreatmentContractTemplates(db, db.clinicProfile?.id || 'clinic-1');
+    const changedRef = { changed: false };
+    seedDefaultContractsForDb(db, { changedRef });
+    seedTreatmentContractTemplates(db, db.clinicProfile?.id || 'clinic-1', { changedRef });
+    if (!changedRef.changed) return DB_NO_CHANGE;
     return db;
   });
 }

@@ -1,4 +1,4 @@
-import { loadDb, withDb } from '../db/index.js';
+import { loadDb, withDb, DB_NO_CHANGE } from '../db/index.js';
 import { requirePermission, can } from '../permissions/permissions.js';
 import { createId } from './helpers.js';
 import { FINANCING_INTEREST_TYPES } from './financingCalculator.js';
@@ -79,12 +79,16 @@ export function ensureFinancialPartnersSeeded() {
     if (!Array.isArray(db.financialPartners)) db.financialPartners = [];
     if (db.financialPartners.length === 0) {
       db.financialPartners = DEFAULT_FINANCIAL_PARTNERS();
-    } else {
-      const ids = new Set(db.financialPartners.map((p) => p.id));
-      for (const seed of DEFAULT_FINANCIAL_PARTNERS()) {
-        if (!ids.has(seed.id)) db.financialPartners.push(seed);
-      }
+      return db.financialPartners;
     }
+    const ids = new Set(db.financialPartners.map((p) => p.id));
+    let added = false;
+    for (const seed of DEFAULT_FINANCIAL_PARTNERS()) {
+      if (ids.has(seed.id)) continue;
+      db.financialPartners.push(seed);
+      added = true;
+    }
+    if (!added) return DB_NO_CHANGE;
     return db.financialPartners;
   });
 }

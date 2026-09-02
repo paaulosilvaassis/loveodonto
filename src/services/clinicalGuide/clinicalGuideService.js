@@ -1,6 +1,6 @@
 import { withDb, loadDb } from '../../db/index.js';
 import { createId, normalizeText } from '../helpers.js';
-import { seedClinicalGuidesForDb } from './clinicalGuideSeed.js';
+import { applyClinicalGuideSeed } from './clinicalGuideSeed.js';
 import { CLINICAL_GUIDE_CATEGORIES } from './clinicalGuideCategories.js';
 import { uploadClinicalGuideImageToStorage } from './clinicalGuideStorageService.js';
 
@@ -66,7 +66,7 @@ function canManageGuide(guide, user) {
 }
 
 export function ensureClinicalGuidesSeeded() {
-  return withDb((db) => seedClinicalGuidesForDb(db));
+  return withDb((db) => applyClinicalGuideSeed(db));
 }
 
 export function listClinicalGuideCategories() {

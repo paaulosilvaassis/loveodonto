@@ -1,4 +1,5 @@
 import { createId } from '../helpers.js';
+import { DB_NO_CHANGE } from '../../db/noChange.js';
 import {
   buildPhotoAssets,
   isLegacyGuideMedia,
@@ -360,16 +361,18 @@ function needsPhotoRefresh(guide, images) {
   return images.some((img) => isLegacyGuideMedia(img.imageUrl));
 }
 
-export function backfillClinicalGuideImages(db) {
+export function backfillClinicalGuideImages(db, { changedRef } = {}) {
   if (!Array.isArray(db.clinicalGuides)) return db;
   if (!Array.isArray(db.clinicalGuideImages)) db.clinicalGuideImages = [];
 
+  let changed = false;
   for (const guide of db.clinicalGuides) {
     if (!guide?.id || guide.deletedAt) continue;
 
     const existing = db.clinicalGuideImages.filter((img) => img.guideId === guide.id);
     if (!needsPhotoRefresh(guide, existing) && existing.length > 0) continue;
 
+    changed = true;
     const assets = buildPhotoAssets(guide.slug, guide.category, guide.title);
     db.clinicalGuideImages = db.clinicalGuideImages.filter((img) => img.guideId !== guide.id);
 
@@ -404,20 +407,42 @@ export function backfillClinicalGuideImages(db) {
     }
   }
 
-  db.clinicalGuidesMediaVersion = PHOTO_BANK_VERSION;
+  if (db.clinicalGuidesMediaVersion !== PHOTO_BANK_VERSION) {
+    db.clinicalGuidesMediaVersion = PHOTO_BANK_VERSION;
+    changed = true;
+  }
+  if (changedRef) changedRef.changed = Boolean(changedRef.changed) || changed;
   return db;
 }
 
-export function seedClinicalGuidesForDb(db) {
-  if (!Array.isArray(db.clinicalGuides)) db.clinicalGuides = [];
-  if (!Array.isArray(db.clinicalGuideImages)) db.clinicalGuideImages = [];
+function applyClinicalGuideSeed(db) {
+  const changedRef = { changed: false };
+  if (!Array.isArray(db.clinicalGuides)) {
+    db.clinicalGuides = [];
+    changedRef.changed = true;
+  }
+  if (!Array.isArray(db.clinicalGuideImages)) {
+    db.clinicalGuideImages = [];
+    changedRef.changed = true;
+  }
 
   if (db.clinicalGuides.length === 0) {
     const { guides, images } = buildClinicalGuideSeedData();
     db.clinicalGuides = guides;
     db.clinicalGuideImages = images;
+    db.clinicalGuidesMediaVersion = PHOTO_BANK_VERSION;
     return db;
   }
 
-  return backfillClinicalGuideImages(db);
+  backfillClinicalGuideImages(db, { changedRef });
+  if (!changedRef.changed) return DB_NO_CHANGE;
+  return db;
 }
+
+/** Migrations exigem sempre o db. Writers de runtime usam apply + DB_NO_CHANGE. */
+export function seedClinicalGuidesForDb(db) {
+  const result = applyClinicalGuideSeed(db);
+  return result === DB_NO_CHANGE ? db : result;
+}
+
+export { applyClinicalGuideSeed };
