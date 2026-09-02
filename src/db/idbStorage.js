@@ -391,7 +391,6 @@ export async function clearIdb() {
     const req = tx.objectStore(STORE_NAME).clear();
     req.onsuccess = () => {
       resetIdbConnection();
-      closeDbConnection(idb);
       resolve();
     };
     req.onerror = () => reject(req.error);
