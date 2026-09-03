@@ -84,8 +84,9 @@ export {
   finalizeGeneratedContract,
 } from './contractService.js';
 
-function clinicId() {
-  return loadDb().clinicProfile?.id || 'clinic-1';
+function clinicId(explicitDb = null) {
+  const db = explicitDb || loadDb();
+  return db.clinicProfile?.id || 'clinic-1';
 }
 
 function tenantIdFromUser(user) {
@@ -1043,9 +1044,9 @@ export function createContractNewVersion(_user, contractId) {
   assertInPlaceReissueBlocked(original);
 }
 
-export function hasSignedContractForQuote(quoteId, quoteSource = 'crm_budget', budgetId = null) {
-  const cid = clinicId();
-  const db = loadDb();
+export function hasSignedContractForQuote(quoteId, quoteSource = 'crm_budget', budgetId = null, explicitDb = null) {
+  const db = explicitDb || loadDb();
+  const cid = clinicId(db);
   return (db.generatedContracts || []).some(
     (c) => c.clinicId === cid
       && c.quoteId === quoteId
@@ -1055,14 +1056,22 @@ export function hasSignedContractForQuote(quoteId, quoteSource = 'crm_budget', b
   );
 }
 
+/**
+ * @param {string} quoteId
+ * @param {string} [quoteSource]
+ * @param {string|null} [budgetId]
+ * @param {string|null} [patientId]
+ * @param {object|null} [explicitDb] snapshot read-only opcional — evita loadDb/deep-clone no hot path
+ */
 export function getContractStatusForQuote(
   quoteId,
   quoteSource = 'crm_budget',
   budgetId = null,
   patientId = null,
+  explicitDb = null,
 ) {
-  const cid = clinicId();
-  const db = loadDb();
+  const db = explicitDb || loadDb();
+  const cid = clinicId(db);
   const contracts = (db.generatedContracts || []).filter(
     (c) => c.clinicId === cid && c.quoteId === quoteId && c.quoteSource === quoteSource,
   );
@@ -1077,6 +1086,7 @@ export function getContractStatusForQuote(
       appointmentId: quoteId,
       patientId,
       clinicId: cid,
+      db,
     });
     if (resolved.ok) return normalizeContract(resolved.contract);
 
