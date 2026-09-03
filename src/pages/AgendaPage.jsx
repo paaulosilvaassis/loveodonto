@@ -40,19 +40,19 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 const WEEKDAY_LABELS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 /** Garante arrays do DB mesmo com snapshot parcial ou legado (evita crash na agenda). */
-function mergeSafeAgendaSnapshot(raw) {
-  const base = loadDb();
-  if (!raw || typeof raw !== 'object') return base;
+function mergeSafeAgendaSnapshot(raw, base) {
+  const fallback = base || {};
+  if (!raw || typeof raw !== 'object') return fallback;
   const arr = (v, fallback) => (Array.isArray(v) ? v : fallback);
   return {
-    ...base,
+    ...fallback,
     ...raw,
-    patients: arr(raw.patients, base.patients),
-    patientPhones: arr(raw.patientPhones, base.patientPhones),
-    users: arr(raw.users, base.users),
-    rooms: arr(raw.rooms, base.rooms),
-    collaborators: arr(raw.collaborators, base.collaborators),
-    collaboratorWorkHours: arr(raw.collaboratorWorkHours, base.collaboratorWorkHours ?? []),
+    patients: arr(raw.patients, fallback.patients),
+    patientPhones: arr(raw.patientPhones, fallback.patientPhones),
+    users: arr(raw.users, fallback.users),
+    rooms: arr(raw.rooms, fallback.rooms),
+    collaborators: arr(raw.collaborators, fallback.collaborators),
+    collaboratorWorkHours: arr(raw.collaboratorWorkHours, fallback.collaboratorWorkHours ?? []),
   };
 }
 
@@ -81,6 +81,9 @@ export default function AgendaPage() {
   const [timelineInitialized, setTimelineInitialized] = useState(false);
   const [appointments, setAppointments] = useState([]);
   const [blocks, setBlocks] = useState([]);
+  const baseDbRef = useRef(null);
+  const didInitialAgendaRefreshRef = useRef(false);
+  const didSkipFirstAgendaRangeEffectRef = useRef(false);
   const [selectedDate, setSelectedDate] = useState(todayIso);
   const [search, setSearch] = useState('');
   const [selectedProfessionalId, setSelectedProfessionalId] = useState(() => {
@@ -126,7 +129,12 @@ export default function AgendaPage() {
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
-  const safeDb = useMemo(() => mergeSafeAgendaSnapshot(dbSnapshot), [dbSnapshot]);
+  if (!baseDbRef.current) baseDbRef.current = dbSnapshot;
+
+  const safeDb = useMemo(
+    () => mergeSafeAgendaSnapshot(dbSnapshot, baseDbRef.current),
+    [dbSnapshot],
+  );
 
   const patients = safeDb.patients;
   const patientPhones = safeDb.patientPhones;
@@ -316,9 +324,15 @@ export default function AgendaPage() {
     return workHoursConfig.activeDays.has(dayOfWeek);
   };
 
-  const refresh = () => {
-    setAppointments(listAppointments());
-    setBlocks(listBlocks());
+  const refresh = ({ reloadBlocks = true } = {}) => {
+    // Busca somente o intervalo visível (evita scan total de agendamentos).
+    setAppointments(
+      listAppointments({
+        dateFrom: rangeStartIso,
+        dateTo: rangeEndIso,
+      }),
+    );
+    if (reloadBlocks) setBlocks(listBlocks());
   };
 
   const refreshDb = () => {
@@ -326,15 +340,15 @@ export default function AgendaPage() {
   };
 
   useEffect(() => {
-    refresh();
-    refreshDb();
+    refresh({ reloadBlocks: true });
+    didInitialAgendaRefreshRef.current = true;
     let cancelled = false;
     loadDbAsync()
       .then((db) => {
         if (!cancelled) setDbSnapshot(db);
       })
       .catch(() => {
-        if (!cancelled) refreshDb();
+        // baseDbRef já possui um snapshot completo; falha no async não deve forçar reload.
       });
     return () => {
       cancelled = true;
@@ -343,8 +357,9 @@ export default function AgendaPage() {
 
   useEffect(() => {
     if (location.pathname === '/gestao/agenda') {
-      refresh();
-      refreshDb();
+      if (!didInitialAgendaRefreshRef.current) {
+        refresh({ reloadBlocks: true });
+      }
     }
   }, [location.pathname]);
 
@@ -371,8 +386,7 @@ export default function AgendaPage() {
   }, [view, timelineInitialized]);
 
   useEffect(() => {
-    if (!selectedProfessionalId) return;
-    refreshDb();
+    // Seleção de profissional não altera o snapshot do DB — evita reload redundante.
   }, [selectedProfessionalId]);
 
   // Verificar se há retorno da criação de paciente
@@ -492,6 +506,14 @@ export default function AgendaPage() {
 
   const rangeStartIso = rangeStart.toISOString().slice(0, 10);
   const rangeEndIso = rangeEnd.toISOString().slice(0, 10);
+
+  useEffect(() => {
+    if (!didSkipFirstAgendaRangeEffectRef.current) {
+      didSkipFirstAgendaRangeEffectRef.current = true;
+      return;
+    }
+    refresh({ reloadBlocks: false });
+  }, [rangeStartIso, rangeEndIso]);
 
   const filteredAppointments = useMemo(() => {
     const searchValue = debouncedSearch.trim();

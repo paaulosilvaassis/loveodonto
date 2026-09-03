@@ -397,8 +397,8 @@ export function listAllClinicalBudgetRows(filters = {}) {
   return sorted;
 }
 
-function listAllClinicalBudgetRowsRaw() {
-  const db = loadDb();
+function listAllClinicalBudgetRowsRaw(explicitDb) {
+  const db = explicitDb || loadDb();
   const rows = [];
 
   for (const ca of db.clinicalAppointments || []) {
@@ -525,19 +525,50 @@ export function computeBudgetHubKpis(rows = []) {
   };
 }
 
-export function listBudgetHubProfessionals() {
-  const db = loadDb();
+function listBudgetHubProfessionalsFromRaw(rawRows, db) {
   const ids = new Set();
-  for (const row of listAllClinicalBudgetRowsRaw()) {
+  for (const row of rawRows) {
     if (row.professionalId) ids.add(row.professionalId);
   }
-  return [...ids].map((id) => {
-    const pro = (db.collaborators || []).find((c) => c.id === id);
-    return {
-      id,
-      name: pro?.nomeCompleto || pro?.name || pro?.apelido || 'Profissional',
-    };
-  }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  const collaborators = Array.isArray(db?.collaborators) ? db.collaborators : [];
+  const collabById = new Map(collaborators.map((c) => [c?.id, c]));
+
+  return [...ids]
+    .map((id) => {
+      const pro = collabById.get(id);
+      return {
+        id,
+        name: pro?.nomeCompleto || pro?.name || pro?.apelido || 'Profissional',
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+}
+
+/**
+ * Base canônica (1 scan) para Central de Orçamentos.
+ * Evita múltiplas leituras completas (rawRows/allRows/professionals/kpis) na abertura da rota.
+ */
+export function listClinicalBudgetHubBaseData() {
+  const db = loadDb();
+  const rawRows = listAllClinicalBudgetRowsRaw(db);
+
+  return {
+    rawRows,
+    kpis: computeBudgetHubKpis(rawRows),
+    professionals: listBudgetHubProfessionalsFromRaw(rawRows, db),
+  };
+}
+
+export function listBudgetHubRowsFromBaseData(rawRows, filters = {}) {
+  const filtered = applyBudgetHubFilters(rawRows, filters);
+  return sortBudgetHubRows(filtered, filters.sortBy || 'recent');
+}
+
+export function listBudgetHubProfessionals() {
+  const db = loadDb();
+  const rawRows = listAllClinicalBudgetRowsRaw(db);
+  return listBudgetHubProfessionalsFromRaw(rawRows, db);
 }
 
 function applyBudgetHubFilters(rows, filters = {}) {

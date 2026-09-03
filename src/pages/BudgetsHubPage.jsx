@@ -1,20 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Receipt } from 'lucide-react';
 import { useAuth } from '../auth/useAuth.js';
 import { can } from '../permissions/permissions.js';
 import { ClinicalBtn } from '../components/clinical/ClinicalStageShell.jsx';
-import { StartPatientBudgetModal } from '../components/budgets/StartPatientBudgetModal.jsx';
+const StartPatientBudgetModal = lazy(() =>
+  import('../components/budgets/StartPatientBudgetModal.jsx').then((m) => ({
+    default: m.StartPatientBudgetModal,
+  })),
+);
 import { BudgetHubKpis } from '../components/budgets/BudgetHubKpis.jsx';
 import { BudgetHubFilters } from '../components/budgets/BudgetHubFilters.jsx';
 import { BudgetHubCard } from '../components/budgets/BudgetHubCard.jsx';
 import { BudgetHubListView } from '../components/budgets/BudgetHubListView.jsx';
-import OperationalContractWizard from '../components/contracts/operational/OperationalContractWizard.jsx';
+const OperationalContractWizard = lazy(() =>
+  import('../components/contracts/operational/OperationalContractWizard.jsx'),
+);
 import LocalOperationalUxTestBanner from '../components/contracts/operational/LocalOperationalUxTestBanner.jsx';
 import {
-  listAllClinicalBudgetRows,
-  listBudgetHubProfessionals,
-  computeBudgetHubKpis,
+  listClinicalBudgetHubBaseData,
+  listBudgetHubRowsFromBaseData,
   resolveRowPatientId,
   resolveRowPatientName,
   createNewBudget,
@@ -79,18 +84,18 @@ export default function BudgetsHubPage() {
     };
   }, [user]);
 
-  const allRows = useMemo(
-    () => listAllClinicalBudgetRows({}),
-    [refreshKey],
-  );
+  const baseData = useMemo(() => {
+    // 1 scan canônico para evitar leituras completas duplicadas.
+    return listClinicalBudgetHubBaseData();
+  }, [refreshKey]);
 
   const rows = useMemo(
-    () => listAllClinicalBudgetRows(filters),
-    [filters, refreshKey],
+    () => listBudgetHubRowsFromBaseData(baseData.rawRows, filters),
+    [baseData.rawRows, filters],
   );
 
-  const kpis = useMemo(() => computeBudgetHubKpis(allRows), [allRows]);
-  const professionals = useMemo(() => listBudgetHubProfessionals(), [refreshKey]);
+  const kpis = baseData.kpis;
+  const professionals = baseData.professionals;
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -258,36 +263,44 @@ export default function BudgetsHubPage() {
         />
       )}
 
-      <StartPatientBudgetModal
-        open={createOpen}
-        onOpenChange={(open) => {
-          setCreateOpen(open);
-          if (!open) setPrefillPatient(null);
-        }}
-        busy={busy}
-        patientId={prefillPatient?.id}
-        patientName={prefillPatient?.name}
-        onConfirm={handleCreateConfirm}
-      />
+      {createOpen ? (
+        <Suspense fallback={null}>
+          <StartPatientBudgetModal
+            open={createOpen}
+            onOpenChange={(open) => {
+              setCreateOpen(open);
+              if (!open) setPrefillPatient(null);
+            }}
+            busy={busy}
+            patientId={prefillPatient?.id}
+            patientName={prefillPatient?.name}
+            onConfirm={handleCreateConfirm}
+          />
+        </Suspense>
+      ) : null}
 
-      <OperationalContractWizard
-        open={Boolean(wizardRow)}
-        onOpenChange={(open) => {
-          if (!open) setWizardRow(null);
-        }}
-        user={user}
-        row={wizardRow}
-        onGoToQueue={() => {
-          recordContractsRolloutMetric('wizard_go_to_queue', user);
-          setWizardRow(null);
-          navigate('/gestao/contratos/fila');
-        }}
-        onSuccess={() => {
-          recordContractsRolloutMetric('wizard_completed', user);
-          setRefreshKey((k) => k + 1);
-          showToast('Pacote documental atualizado. Se estiver pronto, envie pela Fila de contratos.');
-        }}
-      />
+      {wizardRow ? (
+        <Suspense fallback={null}>
+          <OperationalContractWizard
+            open
+            onOpenChange={(open) => {
+              if (!open) setWizardRow(null);
+            }}
+            user={user}
+            row={wizardRow}
+            onGoToQueue={() => {
+              recordContractsRolloutMetric('wizard_go_to_queue', user);
+              setWizardRow(null);
+              navigate('/gestao/contratos/fila');
+            }}
+            onSuccess={() => {
+              recordContractsRolloutMetric('wizard_completed', user);
+              setRefreshKey((k) => k + 1);
+              showToast('Pacote documental atualizado. Se estiver pronto, envie pela Fila de contratos.');
+            }}
+          />
+        </Suspense>
+      ) : null}
 
       {toast ? (
         <div className={`toast ${toast.type}`} role="status">{toast.message}</div>
