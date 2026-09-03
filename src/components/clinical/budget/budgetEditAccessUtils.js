@@ -1,4 +1,4 @@
-import { loadDb } from '../../../db/index.js';
+import { peekDb } from '../../../db/index.js';
 import { BUDGET_STATUS } from '../../../services/clinicalBudgetConstants.js';
 import { CONTRACT_STATUS } from '../../../contracts/contractConstants.js';
 
@@ -79,9 +79,9 @@ function isActiveFinancing(row) {
   return !INACTIVE_FINANCING_STATUSES.has(status);
 }
 
-export function listFinanceRecordsLinkedToBudget(budgetId) {
+export function listFinanceRecordsLinkedToBudget(budgetId, explicitDb = null) {
   if (!budgetId) return { receivables: [], financings: [] };
-  const db = loadDb();
+  const db = explicitDb || peekDb();
   const key = String(budgetId);
   const receivables = (db.accountsReceivable || []).filter(
     (row) => matchesBudgetId(row, key) && isActiveReceivable(row),
@@ -96,27 +96,27 @@ export function listFinanceRecordsLinkedToBudget(budgetId) {
 /**
  * Conta a receber real vinculada exclusivamente ao budget.id (sem patientId).
  */
-export function hasRealReceivableLinkedToBudget(budgetId) {
+export function hasRealReceivableLinkedToBudget(budgetId, explicitDb = null) {
   if (!budgetId) return false;
-  return listFinanceRecordsLinkedToBudget(budgetId).receivables.length > 0;
+  return listFinanceRecordsLinkedToBudget(budgetId, explicitDb).receivables.length > 0;
 }
 
 /**
  * Financiamento real vinculado exclusivamente ao budget.id (sem patientId).
  */
-export function hasRealFinancingLinkedToBudget(budgetId) {
+export function hasRealFinancingLinkedToBudget(budgetId, explicitDb = null) {
   if (!budgetId) return false;
-  return listFinanceRecordsLinkedToBudget(budgetId).financings.length > 0;
+  return listFinanceRecordsLinkedToBudget(budgetId, explicitDb).financings.length > 0;
 }
 
 /**
  * Fonte única de verdade: financeiro real vinculado ao budget.id atual.
  * Não usa patientId, financingId órfão nem financeGenerated legado.
  */
-export function isRealFinanceLinkedToBudget(budgetId) {
+export function isRealFinanceLinkedToBudget(budgetId, explicitDb = null) {
   if (!budgetId) return false;
-  return hasRealReceivableLinkedToBudget(budgetId)
-    || hasRealFinancingLinkedToBudget(budgetId);
+  return hasRealReceivableLinkedToBudget(budgetId, explicitDb)
+    || hasRealFinancingLinkedToBudget(budgetId, explicitDb);
 }
 
 /** @deprecated Use isRealFinanceLinkedToBudget */
@@ -129,9 +129,9 @@ export function hasLinkedReceivablesInDb(budgetId) {
   return hasRealReceivableLinkedToBudget(budgetId);
 }
 
-function findContractById(contractId) {
+function findContractById(contractId, explicitDb = null) {
   if (!contractId) return null;
-  const db = loadDb();
+  const db = explicitDb || peekDb();
   return (db.generatedContracts || []).find((row) => row.id === contractId) || null;
 }
 
@@ -147,18 +147,18 @@ function isBlockingContractRecord(contract) {
   return CONTRACT_BLOCK_STATUSES.has(contract.status);
 }
 
-export function isRealContractLinkedToBudget(budgetId) {
+export function isRealContractLinkedToBudget(budgetId, explicitDb = null) {
   if (!budgetId) return false;
-  const db = loadDb();
+  const db = explicitDb || peekDb();
   return (db.generatedContracts || []).some(
     (contract) => contractBelongsToBudget(contract, budgetId)
       && isBlockingContractRecord(contract),
   );
 }
 
-function findContractsForBudgetInDb(budgetId) {
+function findContractsForBudgetInDb(budgetId, explicitDb = null) {
   if (!budgetId) return [];
-  const db = loadDb();
+  const db = explicitDb || peekDb();
   return (db.generatedContracts || []).filter(
     (contract) => contractBelongsToBudget(contract, budgetId)
       && isBlockingContractRecord(contract),
@@ -183,6 +183,18 @@ function resolveRealContractLink(budget, lockCtx = {}) {
     return ctxContract;
   }
 
+  // Snapshot já resolvido no hub: não reabrir DB para fallback.
+  if (lockCtx.snapshotResolved) {
+    if (
+      ctxContract?.id
+      && contractBelongsToBudget(ctxContract, budgetId)
+      && isBlockingContractRecord(ctxContract)
+    ) {
+      return ctxContract;
+    }
+    return null;
+  }
+
   const fieldIds = [
     budget.contractId,
     budget.generatedContractId,
@@ -201,7 +213,11 @@ function resolveRealContractLink(budget, lockCtx = {}) {
 }
 
 function logBudgetLockDebug(budget, lockCtx, diagnosis) {
-  if (!import.meta.env?.DEV || !budget) return;
+  // Hot path do hub: nunca logar em massa. Exige flag explícita.
+  const enabled = Boolean(
+    typeof globalThis !== 'undefined' && globalThis.__LOVE_BUDGET_LOCK_DEBUG__ === true,
+  );
+  if (!enabled || !budget) return;
 
   const budgetId = budget.id;
   const financeRecords = listFinanceRecordsLinkedToBudget(budgetId);

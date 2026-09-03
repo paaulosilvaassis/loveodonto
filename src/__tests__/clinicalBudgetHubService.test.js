@@ -17,12 +17,13 @@ describe('clinicalBudgetHubService', () => {
 
   it('listAllClinicalBudgetRows não quebra sem patientId global', () => {
     withDb((db) => {
-      db.patients = [{ id: 'p1', full_name: 'Maria Silva' }];
+      db.patients = [{ id: 'p1', full_name: 'Maria Silva', tenant_id: 'tenant-1' }];
       db.appointments = [{
         id: 'apt-1',
         patientId: 'p1',
         date: '2026-06-15',
         status: 'finalizado',
+        tenant_id: 'tenant-1',
       }];
       db.clinicalAppointments = [{
         appointmentId: 'apt-1',
@@ -46,12 +47,13 @@ describe('clinicalBudgetHubService', () => {
 
   it('getPatientBudgetOverview retorna histórico do paciente informado', () => {
     withDb((db) => {
-      db.patients = [{ id: 'p1', full_name: 'Maria Silva' }];
+      db.patients = [{ id: 'p1', full_name: 'Maria Silva', tenant_id: 'tenant-1' }];
       db.appointments = [{
         id: 'apt-1',
         patientId: 'p1',
         date: '2026-06-15',
         status: 'finalizado',
+        tenant_id: 'tenant-1',
       }];
       db.clinicalAppointments = [{
         appointmentId: 'apt-1',

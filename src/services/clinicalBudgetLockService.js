@@ -28,8 +28,8 @@ const CONTRACT_ACTIVE_STATUSES = new Set([
   CONTRACT_STATUS.DRAFT,
 ]);
 
-function hasLinkedReceivables(_db, _patientId, _appointmentId, budgetId) {
-  return hasRealReceivableLinkedToBudget(budgetId);
+function hasLinkedReceivables(db, _patientId, _appointmentId, budgetId) {
+  return hasRealReceivableLinkedToBudget(budgetId, db);
 }
 
 function resolveClinicalPatientId(ca, db) {
@@ -55,30 +55,37 @@ function pushClinicalEvent(db, appointmentId, type, data, userId) {
   });
 }
 
-function buildBudgetLockContext(appointmentId, budget, patientId) {
-  const contract = getContractStatusForQuote(
-    appointmentId,
-    'clinical_budget',
-    budget?.id || null,
-    patientId,
-  );
-  const db = loadDb();
+function buildBudgetLockContext(appointmentId, budget, patientId, explicitDb = null, precomputedContract = undefined) {
+  const db = explicitDb || loadDb();
+  const contract = precomputedContract !== undefined
+    ? precomputedContract
+    : getContractStatusForQuote(
+      appointmentId,
+      'clinical_budget',
+      budget?.id || null,
+      patientId,
+      db,
+    );
 
   const contractStatus = contract?.status || null;
   const contractApplies = isContractLinkedToBudget(contract, budget);
   const hasActiveContract = Boolean(
     contractApplies && contract && CONTRACT_ACTIVE_STATUSES.has(contractStatus),
   );
+  // Com contrato pré-resolvido (hub), não rescanear generatedContracts por row.
   const contractSigned = Boolean(
     contractApplies && (
       contractStatus === CONTRACT_STATUS.SIGNED
-      || hasSignedContractForQuote(appointmentId, 'clinical_budget', budget?.id || null)
+      || (
+        precomputedContract === undefined
+        && hasSignedContractForQuote(appointmentId, 'clinical_budget', budget?.id || null, db)
+      )
     ),
   );
   const contractCanceled = Boolean(
     contractApplies && contractStatus === CONTRACT_STATUS.CANCELED,
   );
-  const hasFinancing = hasRealFinancingLinkedToBudget(budget?.id);
+  const hasFinancing = hasRealFinancingLinkedToBudget(budget?.id, db);
   const hasReceivables = hasLinkedReceivables(db, patientId, appointmentId, budget?.id);
 
   const lockCtx = {
@@ -90,6 +97,8 @@ function buildBudgetLockContext(appointmentId, budget, patientId) {
     contractCanceled,
     hasFinancing,
     hasReceivables,
+    // Evita fallbacks com loadDb em diagnoseBudgetLock quando o snapshot já foi indexado.
+    snapshotResolved: Boolean(explicitDb),
   };
 
   const isLocked = Boolean(budget && isBudgetLocked(budget, lockCtx));
@@ -109,19 +118,33 @@ function buildBudgetLockContext(appointmentId, budget, patientId) {
   };
 }
 
-export function getBudgetLockContext(appointmentId) {
-  const db = loadDb();
+export function getBudgetLockContext(appointmentId, explicitDb = null) {
+  const db = explicitDb || loadDb();
   const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === appointmentId);
   const budget = clinical?.budget || null;
   const patientId = clinical ? resolveClinicalPatientId(clinical, db) : null;
-  return buildBudgetLockContext(appointmentId, budget, patientId);
+  return buildBudgetLockContext(appointmentId, budget, patientId, db);
 }
 
-export function getBudgetLockContextForBudget(appointmentId, budget) {
-  const db = loadDb();
-  const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === appointmentId);
-  const patientId = clinical ? resolveClinicalPatientId(clinical, db) : null;
-  return buildBudgetLockContext(appointmentId, budget, patientId);
+/**
+ * @param {object|null} [explicitDb]
+ * @param {object|null|undefined} [precomputedContract] contrato já resolvido (undefined = resolver; null = sem contrato)
+ * @param {string|null} [patientIdHint] evita scan de clinicalAppointments no hot path do hub
+ */
+export function getBudgetLockContextForBudget(
+  appointmentId,
+  budget,
+  explicitDb = null,
+  precomputedContract = undefined,
+  patientIdHint = null,
+) {
+  const db = explicitDb || loadDb();
+  let patientId = patientIdHint || null;
+  if (!patientId) {
+    const clinical = (db.clinicalAppointments || []).find((c) => c.appointmentId === appointmentId);
+    patientId = clinical ? resolveClinicalPatientId(clinical, db) : null;
+  }
+  return buildBudgetLockContext(appointmentId, budget, patientId, db, precomputedContract);
 }
 
 export function isBudgetEditable(appointmentId) {

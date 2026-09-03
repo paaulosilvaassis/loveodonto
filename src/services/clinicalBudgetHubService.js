@@ -4,12 +4,14 @@ import { BUDGET_STATUS } from './clinicalBudgetConstants.js';
 import {
   createNewBudgetForAppointment,
   getBudgetLockContext,
+  getBudgetLockContextForBudget,
   importProceduresFromPreviousBudget,
   listPatientBudgetHistory,
   getPreviousBudgetImportContext,
 } from './clinicalBudgetLockService.js';
-import { getContractStatusForQuote } from './contractModuleService.js';
+import { getContractStatusForQuote, normalizeContract } from './contractModuleService.js';
 import { listPatientContracts } from './contractModuleService.js';
+import { CONTRACT_STATUS } from '../contracts/contractConstants.js';
 import { calcPlannedValue, getAcceptedOption, formatPaymentOptionLabel } from '../components/clinical/budget/budgetUtils.js';
 import { formatFriendlyBudgetNumber, formatFriendlyContractNumber } from '../utils/friendlyNumbers.js';
 import { createId } from './helpers.js';
@@ -55,21 +57,27 @@ export class InactiveClinicalSessionError extends Error {
   }
 }
 
-function resolvePatientId(clinicalRow, db) {
+function resolvePatientId(clinicalRow, db, appointmentsById) {
   if (clinicalRow.patientId) return clinicalRow.patientId;
-  const apt = (db.appointments || []).find((a) => a.id === clinicalRow.appointmentId);
+  const apt = appointmentsById
+    ? appointmentsById.get(clinicalRow.appointmentId)
+    : (db.appointments || []).find((a) => a.id === clinicalRow.appointmentId);
   return apt?.patientId || null;
 }
 
-function resolvePatientName(patientId, db) {
+function resolvePatientName(patientId, db, patientsById) {
   if (!patientId) return 'Paciente';
-  const p = (db.patients || []).find((row) => row.id === patientId);
+  const p = patientsById
+    ? patientsById.get(patientId)
+    : (db.patients || []).find((row) => row.id === patientId);
   return p?.full_name || p?.nickname || p?.social_name || 'Paciente';
 }
 
-function resolveProfessionalName(professionalId, db) {
+function resolveProfessionalName(professionalId, db, collaboratorsById) {
   if (!professionalId) return '—';
-  const pro = (db.collaborators || []).find((c) => c.id === professionalId);
+  const pro = collaboratorsById
+    ? collaboratorsById.get(professionalId)
+    : (db.collaborators || []).find((c) => c.id === professionalId);
   return pro?.nomeCompleto || pro?.name || pro?.apelido || '—';
 }
 
@@ -79,9 +87,11 @@ function resolveBudgetTotal(budget) {
   return calcPlannedValue(budget.procedures || []);
 }
 
-function resolvePatientPhone(patientId, db) {
+function resolvePatientPhone(patientId, db, phonesByPatientId) {
   if (!patientId) return '—';
-  const phones = (db.patientPhones || []).filter((p) => p.patient_id === patientId);
+  const phones = phonesByPatientId
+    ? (phonesByPatientId.get(patientId) || [])
+    : (db.patientPhones || []).filter((p) => p.patient_id === patientId);
   const primary = phones.find((p) => p.is_primary) || phones[0];
   if (!primary) return '—';
   const ddd = primary.ddd || '';
@@ -116,12 +126,246 @@ function resolveNextAction(row) {
   return 'Abrir orçamento';
 }
 
-function enrichBudgetRow(baseRow, budget, db) {
+/** Contadores request-scoped apenas para testes de complexidade (sem cache global de dados). */
+let __budgetHubHistoryFullScans = 0;
+let __budgetHubHistoryLookups = 0;
+let __budgetHubContractCollectionScans = 0;
+let __budgetHubContractStatusCalls = 0;
+let __budgetHubLockContextCalls = 0;
+let __budgetHubLoadDbInRowLoop = 0;
+
+export function __resetBudgetHubPerfCountersForTest() {
+  __budgetHubHistoryFullScans = 0;
+  __budgetHubHistoryLookups = 0;
+  __budgetHubContractCollectionScans = 0;
+  __budgetHubContractStatusCalls = 0;
+  __budgetHubLockContextCalls = 0;
+  __budgetHubLoadDbInRowLoop = 0;
+}
+
+export function __getBudgetHubPerfCountersForTest() {
+  return {
+    historyFullScans: __budgetHubHistoryFullScans,
+    historyLookups: __budgetHubHistoryLookups,
+    contractCollectionScans: __budgetHubContractCollectionScans,
+    contractStatusCalls: __budgetHubContractStatusCalls,
+    lockContextCalls: __budgetHubLockContextCalls,
+    loadDbInRowLoop: __budgetHubLoadDbInRowLoop,
+  };
+}
+
+const CONTRACT_INACTIVE_STATUSES = new Set([
+  'replaced',
+  'canceled',
+  'cancelled',
+  'refused',
+  CONTRACT_STATUS.REPLACED,
+  CONTRACT_STATUS.CANCELED,
+]);
+
+function isActiveContractStatus(status) {
+  return !CONTRACT_INACTIVE_STATUSES.has(String(status || '').toLowerCase())
+    && !CONTRACT_INACTIVE_STATUSES.has(status);
+}
+
+/**
+ * Índice efêmero de generatedContracts no MESMO snapshot do hub.
+ * 1 scan da coleção; lookups O(1)/O(k) por row.
+ */
+function buildContractIndexes(db) {
+  __budgetHubContractCollectionScans += 1;
+  const clinicId = db.clinicProfile?.id || 'clinic-1';
+  const contractsByBudgetId = new Map();
+  const contractsByQuoteId = new Map();
+
+  for (const row of db.generatedContracts || []) {
+    if (row?.clinicId && String(row.clinicId) !== String(clinicId)) continue;
+
+    if (row.budgetId) {
+      const key = String(row.budgetId);
+      let list = contractsByBudgetId.get(key);
+      if (!list) {
+        list = [];
+        contractsByBudgetId.set(key, list);
+      }
+      list.push(row);
+    }
+
+    if (row.quoteId) {
+      const qKey = `${row.quoteSource || 'crm_budget'}:${row.quoteId}`;
+      let qList = contractsByQuoteId.get(qKey);
+      if (!qList) {
+        qList = [];
+        contractsByQuoteId.set(qKey, qList);
+      }
+      qList.push(row);
+    }
+  }
+
+  return { clinicId, contractsByBudgetId, contractsByQuoteId };
+}
+
+/**
+ * Equivalente read-only a getContractStatusForQuote(..., explicitDb)
+ * usando índices do hub (sem loadDb / sem rescan completo por row).
+ */
+function getContractStatusFromHubContext(context, quoteId, quoteSource, budgetId, patientId) {
+  __budgetHubContractStatusCalls += 1;
+  if (!quoteId) return null;
+
+  const matchesPatient = (c) => !patientId || c.patientId === patientId;
+  const sortByRecent = (list) => [...list].sort(
+    (a, b) => new Date(b.generatedAt || 0) - new Date(a.generatedAt || 0),
+  );
+
+  if (budgetId) {
+    const candidates = context.contractsByBudgetId.get(String(budgetId)) || [];
+    const invariant = candidates.filter((row) => {
+      if (quoteId && row.quoteId && String(row.quoteId) !== String(quoteId)) return false;
+      if (patientId && row.patientId && String(row.patientId) !== String(patientId)) return false;
+      return true;
+    });
+    const active = invariant.filter((row) => isActiveContractStatus(row.status));
+    const chosen = active[0] || null;
+    if (chosen) return normalizeContract(chosen);
+
+    const quoteContracts = (context.contractsByQuoteId.get(`${quoteSource}:${quoteId}`) || [])
+      .filter(matchesPatient);
+    const hasScopedBudget = quoteContracts.some((c) => c.budgetId);
+    const legacyActive = sortByRecent(
+      quoteContracts.filter(
+        (c) => c.status !== CONTRACT_STATUS.REPLACED && !c.budgetId,
+      ),
+    );
+    if (!hasScopedBudget && legacyActive.length === 1) {
+      return normalizeContract(legacyActive[0]);
+    }
+    return null;
+  }
+
+  const quoteContracts = (context.contractsByQuoteId.get(`${quoteSource}:${quoteId}`) || [])
+    .filter(matchesPatient);
+  const fallbackActive = sortByRecent(
+    quoteContracts.filter((c) => c.status !== CONTRACT_STATUS.REPLACED),
+  );
+  if (fallbackActive.length) return normalizeContract(fallbackActive[0]);
+  const fallbackAny = sortByRecent(quoteContracts);
+  return fallbackAny[0] ? normalizeContract(fallbackAny[0]) : null;
+}
+
+/**
+ * Índice efêmero/request-scoped do histórico de orçamentos por paciente.
+ * Equivale semanticamente a listPatientBudgetHistory para budgetNumber/createdAt,
+ * sem reescanear clinicalAppointments por linha.
+ */
+function buildHistoryByPatientId(db, appointmentsById) {
+  __budgetHubHistoryFullScans += 1;
+  const rawByPatient = new Map();
+
+  for (const ca of db.clinicalAppointments || []) {
+    const patientId = resolvePatientId(ca, db, appointmentsById);
+    if (!patientId) continue;
+    let list = rawByPatient.get(patientId);
+    if (!list) {
+      list = [];
+      rawByPatient.set(patientId, list);
+    }
+    for (const archived of ca.budgetHistory || []) {
+      list.push({
+        id: archived.id,
+        appointmentId: ca.appointmentId,
+        budgetNumber: archived.budgetNumber,
+        status: archived.status || BUDGET_STATUS.HISTORICO,
+        totalValue: archived.totalValue,
+        createdAt: archived.createdAt,
+        archivedAt: archived.archivedAt,
+        isHistorical: true,
+      });
+    }
+    if (ca.budget) {
+      list.push({
+        id: ca.budget.id,
+        appointmentId: ca.appointmentId,
+        budgetNumber: ca.budget.budgetNumber,
+        status: ca.budget.status,
+        totalValue: ca.budget.totalValue,
+        createdAt: ca.budget.createdAt,
+        archivedAt: null,
+        isHistorical: ca.budget.status === BUDGET_STATUS.HISTORICO,
+      });
+    }
+  }
+
+  const historyByPatientId = new Map();
+  for (const [patientId, rows] of rawByPatient) {
+    const chronological = [...rows].sort(
+      (a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0),
+    );
+    const numbered = chronological.map((row, index) => ({
+      ...row,
+      budgetNumber: formatFriendlyBudgetNumber(row.budgetNumber, index + 1),
+    }));
+    historyByPatientId.set(
+      patientId,
+      numbered.sort(
+        (a, b) => new Date(b.archivedAt || b.createdAt || 0) - new Date(a.archivedAt || a.createdAt || 0),
+      ),
+    );
+  }
+  return historyByPatientId;
+}
+
+function buildBudgetHubEnrichContext(db) {
+  const appointmentsById = new Map(
+    (db.appointments || []).map((a) => [a?.id, a]),
+  );
+  const patientsById = new Map(
+    (db.patients || []).map((p) => [p?.id, p]),
+  );
+  const collaboratorsById = new Map(
+    (db.collaborators || []).map((c) => [c?.id, c]),
+  );
+  const phonesByPatientId = new Map();
+  for (const phone of db.patientPhones || []) {
+    const pid = phone?.patient_id;
+    if (!pid) continue;
+    let list = phonesByPatientId.get(pid);
+    if (!list) {
+      list = [];
+      phonesByPatientId.set(pid, list);
+    }
+    list.push(phone);
+  }
+
+  const { clinicId, contractsByBudgetId, contractsByQuoteId } = buildContractIndexes(db);
+
+  return {
+    db,
+    clinicId,
+    appointmentsById,
+    patientsById,
+    collaboratorsById,
+    phonesByPatientId,
+    contractsByBudgetId,
+    contractsByQuoteId,
+    historyByPatientId: buildHistoryByPatientId(db, appointmentsById),
+  };
+}
+
+function enrichBudgetRow(baseRow, budget, db, context) {
   const accepted = getAcceptedOption(budget);
   const installmentLabel = accepted ? formatPaymentOptionLabel(accepted) : null;
-  const patientHistory = baseRow.patientId
-    ? listPatientBudgetHistory(baseRow.patientId)
-    : [];
+
+  let patientHistory = [];
+  if (baseRow.patientId) {
+    if (context?.historyByPatientId) {
+      __budgetHubHistoryLookups += 1;
+      patientHistory = context.historyByPatientId.get(baseRow.patientId) || [];
+    } else {
+      // Fallback legado (caminhos sem context) — evita regressão fora do hub.
+      patientHistory = listPatientBudgetHistory(baseRow.patientId);
+    }
+  }
   // listPatientBudgetHistory numera em ordem cronológica e só depois reordena
   // (mais recente primeiro). Usar findIndex nessa lista invertia ORC-001/ORC-002.
   const historyRow = patientHistory.find((row) => row.id === budget.id);
@@ -134,29 +378,25 @@ function enrichBudgetRow(baseRow, budget, db) {
       chronologicalIndex >= 0 ? chronologicalIndex + 1 : 1,
     );
 
+  const hasFinance = hasFinanceGenerated(
+    db,
+    baseRow.patientId,
+    baseRow.appointmentId,
+    budget.id,
+    baseRow.financingId,
+  );
+
   return {
     ...baseRow,
     budgetNumber: friendlyNumber,
-    patientPhone: resolvePatientPhone(baseRow.patientId, db),
+    patientPhone: resolvePatientPhone(baseRow.patientId, db, context?.phonesByPatientId),
     validityDate: budget.validityDate || null,
-    hasFinance: hasFinanceGenerated(
-      db,
-      baseRow.patientId,
-      baseRow.appointmentId,
-      budget.id,
-      baseRow.financingId,
-    ),
+    hasFinance,
     hasContract: Boolean(baseRow.contractId),
     installmentLabel,
     nextAction: resolveNextAction({
       ...baseRow,
-      hasFinance: hasFinanceGenerated(
-        db,
-        baseRow.patientId,
-        baseRow.appointmentId,
-        budget.id,
-        baseRow.financingId,
-      ),
+      hasFinance,
     }),
     contractAction: resolveHubContractAction({
       ...baseRow,
@@ -174,16 +414,45 @@ function mapBudgetRow({
   db,
   isHistorical,
   archivedAt,
+  context,
 }) {
-  const contract = getContractStatusForQuote(appointmentId, 'clinical_budget', budget.id);
-  const lockCtx = getBudgetLockContext(appointmentId);
-  const apt = (db.appointments || []).find((a) => a.id === appointmentId);
+  // Hot path do hub: 1 resolução de contrato + 1 lock context, ambos no MESMO snapshot.
+  // Sem loadDb()/deep-clone por row.
+  let contract;
+  let lockCtx;
+  if (context?.contractsByBudgetId) {
+    contract = getContractStatusFromHubContext(
+      context,
+      appointmentId,
+      'clinical_budget',
+      budget.id,
+      null,
+    );
+    __budgetHubLockContextCalls += 1;
+    lockCtx = getBudgetLockContextForBudget(
+      appointmentId,
+      budget,
+      context.db || db,
+      contract,
+      patientId,
+    );
+  } else {
+    __budgetHubLoadDbInRowLoop += 1;
+    __budgetHubContractStatusCalls += 1;
+    contract = getContractStatusForQuote(appointmentId, 'clinical_budget', budget.id);
+    __budgetHubLockContextCalls += 1;
+    lockCtx = getBudgetLockContext(appointmentId);
+  }
+
+  const apt = context?.appointmentsById
+    ? context.appointmentsById.get(appointmentId)
+    : (db.appointments || []).find((a) => a.id === appointmentId);
 
   return {
     id: budget.id,
     appointmentId,
     patientId,
-    patientName: resolvePatientName(patientId, db),
+    patientName: resolvePatientName(patientId, db, context?.patientsById),
     planName: budget.planName || '—',
     budgetNumber: budget.budgetNumber,
     status: budget.status,
@@ -191,7 +460,11 @@ function mapBudgetRow({
     createdAt: budget.createdAt,
     archivedAt: archivedAt || null,
     professionalId: budget.professionalId || apt?.professionalId || null,
-    professionalName: resolveProfessionalName(budget.professionalId || apt?.professionalId, db),
+    professionalName: resolveProfessionalName(
+      budget.professionalId || apt?.professionalId,
+      db,
+      context?.collaboratorsById,
+    ),
     contractId: contract?.id || null,
     contractStatus: contract?.status || null,
     contractNumber: contract?.contractNumber || null,
@@ -397,12 +670,13 @@ export function listAllClinicalBudgetRows(filters = {}) {
   return sorted;
 }
 
-function listAllClinicalBudgetRowsRaw() {
-  const db = loadDb();
+function listAllClinicalBudgetRowsRaw(explicitDb) {
+  const db = explicitDb || loadDb();
+  const context = buildBudgetHubEnrichContext(db);
   const rows = [];
 
   for (const ca of db.clinicalAppointments || []) {
-    const patientId = resolvePatientId(ca, db);
+    const patientId = resolvePatientId(ca, db, context.appointmentsById);
     for (const archived of ca.budgetHistory || []) {
       const base = mapBudgetRow({
         budget: archived,
@@ -411,8 +685,9 @@ function listAllClinicalBudgetRowsRaw() {
         db,
         isHistorical: true,
         archivedAt: archived.archivedAt,
+        context,
       });
-      rows.push(enrichBudgetRow(base, archived, db));
+      rows.push(enrichBudgetRow(base, archived, db, context));
     }
     if (ca.budget) {
       const base = mapBudgetRow({
@@ -422,8 +697,9 @@ function listAllClinicalBudgetRowsRaw() {
         db,
         isHistorical: ca.budget.status === BUDGET_STATUS.HISTORICO,
         archivedAt: null,
+        context,
       });
-      rows.push(enrichBudgetRow(base, ca.budget, db));
+      rows.push(enrichBudgetRow(base, ca.budget, db, context));
     }
   }
 
@@ -525,19 +801,50 @@ export function computeBudgetHubKpis(rows = []) {
   };
 }
 
-export function listBudgetHubProfessionals() {
-  const db = loadDb();
+function listBudgetHubProfessionalsFromRaw(rawRows, db) {
   const ids = new Set();
-  for (const row of listAllClinicalBudgetRowsRaw()) {
+  for (const row of rawRows) {
     if (row.professionalId) ids.add(row.professionalId);
   }
-  return [...ids].map((id) => {
-    const pro = (db.collaborators || []).find((c) => c.id === id);
-    return {
-      id,
-      name: pro?.nomeCompleto || pro?.name || pro?.apelido || 'Profissional',
-    };
-  }).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+
+  const collaborators = Array.isArray(db?.collaborators) ? db.collaborators : [];
+  const collabById = new Map(collaborators.map((c) => [c?.id, c]));
+
+  return [...ids]
+    .map((id) => {
+      const pro = collabById.get(id);
+      return {
+        id,
+        name: pro?.nomeCompleto || pro?.name || pro?.apelido || 'Profissional',
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+}
+
+/**
+ * Base canônica (1 scan) para Central de Orçamentos.
+ * Evita múltiplas leituras completas (rawRows/allRows/professionals/kpis) na abertura da rota.
+ */
+export function listClinicalBudgetHubBaseData() {
+  const db = loadDb();
+  const rawRows = listAllClinicalBudgetRowsRaw(db);
+
+  return {
+    rawRows,
+    kpis: computeBudgetHubKpis(rawRows),
+    professionals: listBudgetHubProfessionalsFromRaw(rawRows, db),
+  };
+}
+
+export function listBudgetHubRowsFromBaseData(rawRows, filters = {}) {
+  const filtered = applyBudgetHubFilters(rawRows, filters);
+  return sortBudgetHubRows(filtered, filters.sortBy || 'recent');
+}
+
+export function listBudgetHubProfessionals() {
+  const db = loadDb();
+  const rawRows = listAllClinicalBudgetRowsRaw(db);
+  return listBudgetHubProfessionalsFromRaw(rawRows, db);
 }
 
 function applyBudgetHubFilters(rows, filters = {}) {

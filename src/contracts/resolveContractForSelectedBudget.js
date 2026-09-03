@@ -26,8 +26,10 @@ export function resolveContractForSelectedBudget({
   patientId = null,
   contractId = null,
   clinicId = null,
+  /** Snapshot read-only opcional — evita peekDb/loadDb no hot path do hub. */
+  db: explicitDb = null,
 } = {}) {
-  const db = peekDb();
+  const db = explicitDb || peekDb();
   const list = Array.isArray(db.generatedContracts) ? db.generatedContracts : [];
   const cid = norm(clinicId);
   const scoped = cid
