@@ -14,6 +14,7 @@ import {
 import { patientIndexedDbRepository as defaultIdb } from './patientIndexedDbRepository.js';
 import {
   getPatientRepositoryFlags,
+  isPatientsReadPrimaryEnabled,
   shouldComparePatientsIdbVsRemote,
   type PatientRepositoryFlagsInput,
 } from './patientRepositoryFlags.js';
@@ -257,6 +258,41 @@ export class PatientRepository implements IPatientRepository {
     return upserted;
   }
 
+  /**
+   * CLOUD.6 — sync cache IDB a partir do remote quando READ_PRIMARY.
+   * Paginação completa via Admin API / Supabase. Sem clear whole DB.
+   */
+  async syncCacheFromRemote(tenantId: string): Promise<number> {
+    const flags = this.getFlags();
+    if (!(flags.PATIENTS_READ && flags.PATIENTS_READ_PRIMARY)) return 0;
+    const tid = assertRemoteTenantId(tenantId);
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return this.idb.listLegacySync({ tenantId: tid }).length;
+    }
+
+    let remoteItems: PatientCore[] = [];
+    try {
+      this.assertRemoteRead();
+      if (this.preferAdminApi()) {
+        remoteItems = await this.adminApi.listPatients(tid);
+      } else {
+        const listed = await this.supabase.listPatients(tid);
+        remoteItems = listed.items || [];
+      }
+    } catch (err) {
+      if (import.meta.env?.DEV) {
+        console.debug(
+          '[PATIENT_CACHE] sync skipped:',
+          err instanceof Error ? err.message : err,
+        );
+      }
+      return this.idb.listLegacySync({ tenantId: tid }).length;
+    }
+
+    return this.hydratePatients(remoteItems, { tenantId: tid });
+  }
+
   async compareIdbVsRemote(tenantId: string): Promise<Record<string, unknown> | null> {
     if (!shouldComparePatientsIdbVsRemote(this.flagsInput)) return null;
     const tid = assertRemoteTenantId(tenantId);
@@ -316,3 +352,16 @@ export function createPatientRepository(deps: PatientRepositoryDeps = {}): Patie
 }
 
 export const patientRepository = createPatientRepository();
+
+/**
+ * CLOUD.6 — hidratação inicial quando READ_PRIMARY ativo.
+ */
+export async function rehydratePatientCacheIfPrimary(
+  tenantId: string | null | undefined,
+  flagsInput: PatientRepositoryFlagsInput = {},
+): Promise<number> {
+  if (!isPatientsReadPrimaryEnabled(flagsInput)) return 0;
+  const normalized = String(tenantId || '').trim();
+  if (!normalized) return 0;
+  return createPatientRepository({ flagsInput }).syncCacheFromRemote(normalized);
+}

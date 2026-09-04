@@ -15,6 +15,7 @@ import {
   canonicalPatientHash,
   buildCanonicalPatientPayload,
   maskCpf,
+  normalizeBirthDate,
 } from '../domain/patients/patientBackfillDryRun.js';
 
 const TARGET = '7aba7127-409c-4ea4-8dbc-807efc5e189c';
@@ -47,6 +48,13 @@ describe('CLOUD.4 patient backfill dry-run classifier', () => {
 
   it('maskCpf hides identity', () => {
     expect(maskCpf('52998224725')).toBe('***.***.***-25');
+  });
+
+  it('normalizeBirthDate aceita DD/MM/YYYY com horário legado', () => {
+    expect(normalizeBirthDate('15/12/2002 00:00:00')).toBe('2002-12-15');
+    expect(normalizeBirthDate('15/12/2002')).toBe('2002-12-15');
+    expect(normalizeBirthDate('2002-12-15T00:00:00.000Z')).toBe('2002-12-15');
+    expect(normalizeBirthDate('')).toBe(null);
   });
 
   it('INSERT_SAFE when remote empty', () => {

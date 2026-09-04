@@ -173,12 +173,8 @@ function mapWriteResponse(json) {
 /**
  * @param {import('../repositories/patient/patientTypes.ts').PatientListFilters} [filters]
  */
-export async function fetchPatientsRemote(filters = {}) {
-  const params = buildQueryParams(filters);
-  const suffix = params.toString() ? `?${params.toString()}` : '';
-  const json = await getJson(`/internal/app/patients${suffix}`);
-  const rows = Array.isArray(json?.data) ? json.data : [];
-  return rows
+function mapPatientRows(rows) {
+  return (Array.isArray(rows) ? rows : [])
     .map((row) => {
       try {
         return mapSupabaseRowToPatientCore(row);
@@ -187,6 +183,46 @@ export async function fetchPatientsRemote(filters = {}) {
       }
     })
     .filter(Boolean);
+}
+
+/**
+ * Lista remota via Admin API.
+ * Sem `page` explícito: pagina automaticamente até cobrir meta.total (CLOUD.6).
+ * Com `page` explícito: retorna só aquela página.
+ * @param {import('../repositories/patient/patientTypes.ts').PatientListFilters} [filters]
+ */
+export async function fetchPatientsRemote(filters = {}) {
+  const explicitPage = filters.page != null;
+  const pageSize = Math.min(Number(filters.pageSize) || 500, 500);
+  if (explicitPage) {
+    const params = buildQueryParams({ ...filters, pageSize });
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    const json = await getJson(`/internal/app/patients${suffix}`);
+    return mapPatientRows(json?.data);
+  }
+
+  const all = [];
+  let page = 1;
+  let total = Infinity;
+  const maxPages = 100;
+
+  while (all.length < total && page <= maxPages) {
+    const params = buildQueryParams({ ...filters, page, pageSize });
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    const json = await getJson(`/internal/app/patients${suffix}`);
+    const rows = mapPatientRows(json?.data);
+    const metaTotal = Number(json?.meta?.total);
+    if (Number.isFinite(metaTotal) && metaTotal >= 0) {
+      total = metaTotal;
+    } else if (rows.length < pageSize) {
+      total = all.length + rows.length;
+    }
+    all.push(...rows);
+    if (rows.length === 0 || rows.length < pageSize) break;
+    page += 1;
+  }
+
+  return all;
 }
 
 /**

@@ -3,7 +3,7 @@
  * CLOUD.3 — shadow read + dual-write gated by flags (default OFF).
  */
 import { normalizeTenantId } from './tenantIsolation.js';
-import { createPatientRepository } from '../repositories/patient/patientRepository.ts';
+import { createPatientRepository, rehydratePatientCacheIfPrimary } from '../repositories/patient/patientRepository.ts';
 import {
   getPatientRepositoryFlags,
   isPatientsDualWriteEnabled,
@@ -104,6 +104,26 @@ export function schedulePatientShadowRead(tenantId) {
     void getRepository().compareIdbVsRemote(normalized).catch((err) => {
       if (import.meta.env?.DEV) {
         console.debug('[PATIENT_SHADOW] skipped:', err instanceof Error ? err.message : err);
+      }
+    });
+  });
+}
+
+/**
+ * CLOUD.6 — hidratação não bloqueante quando READ_PRIMARY.
+ * @param {string | null | undefined} tenantId
+ */
+export function schedulePatientCacheRehydrate(tenantId) {
+  if (!isPatientsReadPrimaryEnabled(bridgeFlagsInput())) return;
+  const normalized = normalizeTenantId(tenantId);
+  if (!normalized) return;
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
+    return;
+  }
+  queueMicrotask(() => {
+    void rehydratePatientCacheIfPrimary(normalized, bridgeFlagsInput()).catch((err) => {
+      if (import.meta.env?.DEV) {
+        console.debug('[PATIENT_CACHE] rehydrate skipped:', err instanceof Error ? err.message : err);
       }
     });
   });

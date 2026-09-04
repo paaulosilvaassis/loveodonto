@@ -18,7 +18,7 @@ import {
   buildIdentityChangeAudit,
   resolveIdentityFieldValue,
 } from './patientIdentityIntegrity.js';
-import { schedulePatientShadowRead } from './patientReadAdapter.js';
+import { schedulePatientShadowRead, schedulePatientCacheRehydrate } from './patientReadAdapter.js';
 
 const LEGACY_LOCAL_TENANT_ID = 'tenant-1';
 const SAAS_TENANT_UUID_RE =
@@ -26,15 +26,21 @@ const SAAS_TENANT_UUID_RE =
 
 export { resolveUserTenantId };
 
-/** Shadow read fire-and-forget — fail closed; IDB permanece primary. */
-function maybeSchedulePatientShadow(user) {
+/** Shadow + hydrate fire-and-forget — fail closed. */
+function maybeSchedulePatientRemoteReads(user) {
   try {
     const tenantId = resolveUserTenantId(user);
     if (!tenantId || !SAAS_TENANT_UUID_RE.test(String(tenantId))) return;
     schedulePatientShadowRead(tenantId);
+    schedulePatientCacheRehydrate(tenantId);
   } catch {
     /* fail closed — nunca propaga à UI */
   }
+}
+
+/** @deprecated use maybeSchedulePatientRemoteReads */
+function maybeSchedulePatientShadow(user) {
+  maybeSchedulePatientRemoteReads(user);
 }
 
 export function clearPatientSuggestCache() {

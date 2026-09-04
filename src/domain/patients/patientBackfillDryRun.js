@@ -65,7 +65,8 @@ export function normalizeBirthDate(value) {
   const raw = asText(value);
   if (!raw) return null;
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
-  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  // Aceita "DD/MM/YYYY" e sufixo de horário legado ("DD/MM/YYYY 00:00:00").
+  const br = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+.*)?$/);
   if (br) return `${br[3]}-${br[2]}-${br[1]}`;
   return raw;
 }
