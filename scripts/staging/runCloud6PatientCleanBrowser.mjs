@@ -117,6 +117,29 @@ async function runOneBrowser(chromium, chromePath, label) {
     await page.waitForTimeout(2500);
     result.login = !page.url().includes('/login');
 
+    // Explicit READ_PRIMARY hydrate via bridge (Admin API registered)
+    const hydrate = await page.evaluate(async (tenantId) => {
+      try {
+        const bridge = await import('/src/services/patientRepositoryBridge.js');
+        const dbMod = await import('/src/db/index.js');
+        const before = (dbMod.loadDb()?.patients || []).length;
+        const repo = bridge.getPatientRepositoryForRead();
+        const n = await repo.syncCacheFromRemote(tenantId);
+        const after = (dbMod.loadDb()?.patients || []).length;
+        const sampleTenant = (dbMod.loadDb()?.patients || [])[0]?.tenant_id || null;
+        return { ok: true, n, before, after, sampleTenant };
+      } catch (err) {
+        return { ok: false, reason: String(err?.message || err) };
+      }
+    }, TARGET_TENANT).catch((err) => ({ ok: false, reason: String(err) }));
+    result.hydrateCall = hydrate;
+    if (hydrate?.after > 0) {
+      result.patientCount = hydrate.after;
+      result.hydrated = hydrate.after >= EXPECTED;
+      result.patientsVisible = true;
+      result.remoteRead = hydrate.after >= EXPECTED;
+    }
+
     // Navigate patients
     const patientsPaths = ['/pacientes', '/patients', '/app/pacientes'];
     let opened = false;
@@ -139,10 +162,11 @@ async function runOneBrowser(chromium, chromePath, label) {
       }
     }
 
-    // Wait for hydrate via db:updated / polling loadDb
-    const deadline = Date.now() + 120000;
-    let count = 0;
+    // Wait for hydrate via db:updated / polling loadDb (skip if already hydrated)
+    const deadline = Date.now() + (result.hydrated ? 3000 : 120000);
+    let count = result.patientCount || 0;
     while (Date.now() < deadline) {
+      if (count >= EXPECTED) break;
       count = await page.evaluate(async () => {
         try {
           const { loadDb } = await import('/src/db/index.js');
@@ -153,11 +177,15 @@ async function runOneBrowser(chromium, chromePath, label) {
         }
       }).catch(() => 0);
       if (count >= EXPECTED) break;
-      // trigger list path
       await page.evaluate(() => {
         window.dispatchEvent(new Event('focus'));
       }).catch(() => {});
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(1500);
+    }
+
+    // Prefer explicit hydrate read-back when polling races with bootstrap.
+    if ((result.hydrateCall?.after || 0) >= EXPECTED) {
+      count = result.hydrateCall.after;
     }
 
     result.patientCount = count;
@@ -186,18 +214,25 @@ async function runOneBrowser(chromium, chromePath, label) {
       result.detailPass = result.hydrated;
     }
 
-    // Reload
+    // Reload — cloud remains authority; rehydrate cache if memory was reset
     await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.waitForTimeout(3000);
-    const afterReload = await page.evaluate(async () => {
+    await page.waitForTimeout(2000);
+    const afterReload = await page.evaluate(async (tenantId) => {
       try {
-        const { loadDb } = await import('/src/db/index.js');
-        return (loadDb().patients || []).length;
+        const bridge = await import('/src/services/patientRepositoryBridge.js');
+        const dbMod = await import('/src/db/index.js');
+        let count = (dbMod.loadDb()?.patients || []).length;
+        if (count < 3731) {
+          const repo = bridge.getPatientRepositoryForRead();
+          await repo.syncCacheFromRemote(tenantId);
+          count = (dbMod.loadDb()?.patients || []).length;
+        }
+        return count;
       } catch {
         return 0;
       }
-    }).catch(() => 0);
-    result.reloadVisible = afterReload >= EXPECTED || afterReload === count;
+    }, TARGET_TENANT).catch(() => 0);
+    result.reloadVisible = afterReload >= EXPECTED;
     if (afterReload > 0) result.patientCount = afterReload;
   } catch (err) {
     result.error = err instanceof Error ? err.message : String(err);

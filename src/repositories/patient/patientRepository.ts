@@ -355,13 +355,16 @@ export const patientRepository = createPatientRepository();
 
 /**
  * CLOUD.6 — hidratação inicial quando READ_PRIMARY ativo.
+ * Usa o repositório do bridge (Admin API registrada) quando possível.
  */
 export async function rehydratePatientCacheIfPrimary(
   tenantId: string | null | undefined,
   flagsInput: PatientRepositoryFlagsInput = {},
+  repo?: PatientRepository,
 ): Promise<number> {
   if (!isPatientsReadPrimaryEnabled(flagsInput)) return 0;
   const normalized = String(tenantId || '').trim();
   if (!normalized) return 0;
-  return createPatientRepository({ flagsInput }).syncCacheFromRemote(normalized);
+  const target = repo || createPatientRepository({ flagsInput });
+  return target.syncCacheFromRemote(normalized);
 }

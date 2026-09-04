@@ -129,18 +129,34 @@ export class PatientSupabaseRepository implements IPatientSupabaseRepository {
   async listPatients(tenantId: string, filters?: PatientListFilters): Promise<PatientListResult> {
     const tid = requireTenant(tenantId);
     const client = this.getClient();
-    const { data, error } = await client
-      .from(PATIENTS_TABLE)
-      .select('*')
-      .eq('tenant_id', tid)
-      .is('deleted_at', null)
-      .order('full_name', { ascending: true });
-    throwIfError(error);
+    const pageSize = 500;
+    let from = 0;
+    const rawRows: PatientSupabaseRow[] = [];
+    let total: number | null = null;
+
+    while (true) {
+      const to = from + pageSize - 1;
+      const { data, error, count } = await client
+        .from(PATIENTS_TABLE)
+        .select('*', { count: 'exact' })
+        .eq('tenant_id', tid)
+        .is('deleted_at', null)
+        .order('full_name', { ascending: true })
+        .range(from, to);
+      throwIfError(error);
+      if (typeof count === 'number') total = count;
+      const chunk = (data || []) as PatientSupabaseRow[];
+      rawRows.push(...chunk);
+      if (chunk.length < pageSize) break;
+      from += pageSize;
+      if (rawRows.length > 50000) break;
+    }
+
     const items = applyPatientFilters(
-      ((data || []) as PatientSupabaseRow[]).map(mapSupabaseRowToPatientCore),
+      rawRows.map(mapSupabaseRowToPatientCore),
       filters,
     );
-    return { items, total: items.length, source: 'supabase' };
+    return { items, total: total ?? items.length, source: 'supabase' };
   }
 
   async getPatientById(tenantId: string, uuid: string): Promise<PatientCore | null> {

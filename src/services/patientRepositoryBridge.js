@@ -121,7 +121,7 @@ export function schedulePatientCacheRehydrate(tenantId) {
     return;
   }
   queueMicrotask(() => {
-    void rehydratePatientCacheIfPrimary(normalized, bridgeFlagsInput()).catch((err) => {
+    void rehydratePatientCacheIfPrimary(normalized, bridgeFlagsInput(), getRepository()).catch((err) => {
       if (import.meta.env?.DEV) {
         console.debug('[PATIENT_CACHE] rehydrate skipped:', err instanceof Error ? err.message : err);
       }
