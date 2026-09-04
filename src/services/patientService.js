@@ -18,10 +18,82 @@ import {
   buildIdentityChangeAudit,
   resolveIdentityFieldValue,
 } from './patientIdentityIntegrity.js';
+import { schedulePatientShadowRead, schedulePatientCacheRehydrate } from './patientReadAdapter.js';
+import { shouldUsePatientRepositoryWritePrimary } from './patientRepositoryBridge.js';
+import {
+  commitPatientWritePrimaryCreate,
+  commitPatientWritePrimarySoftDelete,
+  commitPatientWritePrimaryUpdate,
+  schedulePatientDualWriteCreate,
+  schedulePatientDualWriteSoftDelete,
+  schedulePatientDualWriteUpdate,
+} from './patientWriteAdapter.js';
 
 const LEGACY_LOCAL_TENANT_ID = 'tenant-1';
+const SAAS_TENANT_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isSyntheticPatientPayload(payload = {}, options = {}) {
+  const tags = Array.isArray(payload.tags) ? payload.tags : [];
+  return Boolean(options.allowNullCpf) || tags.includes('cloud7-synthetic');
+}
+
+function emptySatelliteRows(patientId) {
+  return {
+    documents: {
+      patient_id: patientId,
+      rg: '',
+      pis: '',
+      municipal_registration: '',
+      personal_email: '',
+      marital_status: '',
+      responsible_name: '',
+      responsible_relation: '',
+      responsible_phone: '',
+      mother_name: '',
+      father_name: '',
+    },
+    birth: { patient_id: patientId, nationality: '', birth_city: '', birth_state: '' },
+    education: { patient_id: patientId, education_level: '', profession: '', other_profession: '' },
+    relationships: {
+      patient_id: patientId,
+      emergency_contact_name: '',
+      emergency_contact_phone: '',
+      dependents: [],
+      notes: '',
+      marital_status: '',
+      preferred_contact_period: '',
+      preferred_contact_channel: '',
+      lgpd_whatsapp_opt_in: false,
+    },
+    activity: {
+      patient_id: patientId,
+      total_appointments: 0,
+      last_appointment_at: '',
+      total_procedures: 0,
+      last_procedure_at: '',
+    },
+  };
+}
 
 export { resolveUserTenantId };
+
+/** Shadow + hydrate fire-and-forget — fail closed. */
+function maybeSchedulePatientRemoteReads(user) {
+  try {
+    const tenantId = resolveUserTenantId(user);
+    if (!tenantId || !SAAS_TENANT_UUID_RE.test(String(tenantId))) return;
+    schedulePatientShadowRead(tenantId);
+    schedulePatientCacheRehydrate(tenantId);
+  } catch {
+    /* fail closed — nunca propaga à UI */
+  }
+}
+
+/** @deprecated use maybeSchedulePatientRemoteReads */
+function maybeSchedulePatientShadow(user) {
+  maybeSchedulePatientRemoteReads(user);
+}
 
 export function clearPatientSuggestCache() {
   suggestCache.clear();
@@ -96,7 +168,11 @@ const ensureCpfUnique = (db, cpf, ignorePatientId) => {
 };
 
 
-export const listPatients = () => loadDb().patients;
+export const listPatients = (user = null) => {
+  const patients = loadDb().patients;
+  maybeSchedulePatientShadow(user);
+  return patients;
+};
 
 function buildAllowedPatientTenantIds(db, tenantId) {
   if (!tenantId) return null;
@@ -223,11 +299,11 @@ export const suggestPatients = (type, query, limit = 10, tenantId = null) => {
   return payload;
 };
 
-export const getPatient = (patientId) => {
+export const getPatient = (patientId, user = null) => {
   const db = loadDb();
   const profile = db.patients.find((item) => item.id === patientId);
   if (!profile) return null;
-  return {
+  const result = {
     profile,
     documents: (Array.isArray(db.patientDocuments) ? db.patientDocuments.find((item) => item.patient_id === patientId) : null) || {},
     birth: (Array.isArray(db.patientBirth) ? db.patientBirth.find((item) => item.patient_id === patientId) : null) || {},
@@ -239,11 +315,101 @@ export const getPatient = (patientId) => {
     access: (Array.isArray(db.patientAccess) ? db.patientAccess.find((item) => item.patient_id === patientId) : null) || {},
     activity: (Array.isArray(db.patientActivitySummary) ? db.patientActivitySummary.find((item) => item.patient_id === patientId) : null) || {},
   };
+  maybeSchedulePatientShadow(user);
+  return result;
 };
 
 
-export const createPatientQuick = (user, payload) => {
+async function createPatientQuickWritePrimary(user, payload, options = {}) {
+  const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
+  const synthetic = isSyntheticPatientPayload(payload, options);
+  const cpfDigits = normalizeCpf(payload.cpf);
+  const patient = {
+    id: createId('patient'),
+    guid: crypto.randomUUID(),
+    full_name: normalizeText(payload.full_name),
+    nickname: normalizeText(payload.nickname),
+    social_name: normalizeText(payload.social_name),
+    sex: normalizeText(payload.sex),
+    birth_date: normalizeText(payload.birth_date),
+    cpf: cpfDigits,
+    photo_url: '',
+    status: 'active',
+    blocked: false,
+    block_reason: '',
+    block_at: '',
+    tags: Array.isArray(payload.tags) ? [...payload.tags] : [],
+    lead_source: normalizeText(payload.lead_source),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    created_by_user_id: user.id,
+    updated_by_user_id: user.id,
+    tenant_id: tenantId,
+    has_financial_responsible: Boolean(payload.has_financial_responsible),
+    dependent_full_name: normalizeText(payload.dependent_full_name),
+  };
+
+  assertRequired(patient.full_name, 'Nome completo é obrigatório.');
+  if (!synthetic) {
+    assertRequired(patient.sex, 'Sexo é obrigatório.');
+    assertRequired(patient.birth_date, 'Data de nascimento é obrigatória.');
+    assertRequired(patient.cpf, 'CPF é obrigatório.');
+    if (!isCpfValid(patient.cpf)) throw new Error('CPF inválido.');
+  } else if (patient.cpf && !isCpfValid(patient.cpf)) {
+    throw new Error('CPF inválido.');
+  } else if (!patient.cpf) {
+    patient.cpf = '';
+  }
+
+  // Ordem WRITE_PRIMARY: remote commit → cache IDB → sucesso UI
+  const committed = await commitPatientWritePrimaryCreate(user, patient);
+  const profile = { ...patient, ...committed.profile, id: committed.profile.id || patient.id };
+  const sats = emptySatelliteRows(profile.id);
+  withDbResult((db) => {
+    if (!Array.isArray(db.patientDocuments)) db.patientDocuments = [];
+    if (!Array.isArray(db.patientBirth)) db.patientBirth = [];
+    if (!Array.isArray(db.patientEducation)) db.patientEducation = [];
+    if (!Array.isArray(db.patientRelationships)) db.patientRelationships = [];
+    if (!Array.isArray(db.patientActivitySummary)) db.patientActivitySummary = [];
+    if (!db.patientDocuments.some((row) => row.patient_id === profile.id)) {
+      db.patientDocuments.push(sats.documents);
+    }
+    if (!db.patientBirth.some((row) => row.patient_id === profile.id)) {
+      db.patientBirth.push(sats.birth);
+    }
+    if (!db.patientEducation.some((row) => row.patient_id === profile.id)) {
+      db.patientEducation.push(sats.education);
+    }
+    if (!db.patientRelationships.some((row) => row.patient_id === profile.id)) {
+      db.patientRelationships.push(sats.relationships);
+    }
+    if (!db.patientActivitySummary.some((row) => row.patient_id === profile.id)) {
+      db.patientActivitySummary.push(sats.activity);
+    }
+    logAction('patients:create-quick', {
+      patientId: profile.id,
+      userId: user.id,
+      writeMode: 'remote-primary',
+      cacheUpdated: committed.cacheUpdated,
+    });
+    return db;
+  });
+  clearPatientSuggestCache();
+  return {
+    patientId: profile.id,
+    profile,
+    ...sats,
+    remoteCommitted: true,
+    cacheUpdated: committed.cacheUpdated,
+  };
+}
+
+export const createPatientQuick = (user, payload, options = {}) => {
   requirePermission(user, 'patients:write');
+  if (shouldUsePatientRepositoryWritePrimary()) {
+    return createPatientQuickWritePrimary(user, payload, options);
+  }
+
   const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
   const patient = {
     id: createId('patient'),
@@ -279,55 +445,24 @@ export const createPatientQuick = (user, payload) => {
   const result = withDbResult((db) => {
     ensureCpfUnique(db, patient.cpf);
     db.patients.push(patient);
-    const documents = {
-      patient_id: patient.id,
-      rg: '',
-      pis: '',
-      municipal_registration: '',
-      personal_email: '',
-      marital_status: '',
-      responsible_name: '',
-      responsible_relation: '',
-      responsible_phone: '',
-      mother_name: '',
-      father_name: '',
-    };
-    db.patientDocuments.push(documents);
-    const birth = { patient_id: patient.id, nationality: '', birth_city: '', birth_state: '' };
-    db.patientBirth.push(birth);
-    const education = { patient_id: patient.id, education_level: '', profession: '', other_profession: '' };
-    db.patientEducation.push(education);
-    const relationships = {
-      patient_id: patient.id,
-      emergency_contact_name: '',
-      emergency_contact_phone: '',
-      dependents: [],
-      notes: '',
-      marital_status: '',
-      preferred_contact_period: '',
-      preferred_contact_channel: '',
-      lgpd_whatsapp_opt_in: false,
-    };
-    db.patientRelationships.push(relationships);
-    const activity = {
-      patient_id: patient.id,
-      total_appointments: 0,
-      last_appointment_at: '',
-      total_procedures: 0,
-      last_procedure_at: '',
-    };
-    db.patientActivitySummary.push(activity);
+    const sats = emptySatelliteRows(patient.id);
+    db.patientDocuments.push(sats.documents);
+    db.patientBirth.push(sats.birth);
+    db.patientEducation.push(sats.education);
+    db.patientRelationships.push(sats.relationships);
+    db.patientActivitySummary.push(sats.activity);
     logAction('patients:create-quick', { patientId: patient.id, userId: user.id });
     return {
       patientId: patient.id,
       profile: patient,
-      documents,
-      birth,
-      education,
-      relationships,
-      activity,
+      documents: sats.documents,
+      birth: sats.birth,
+      education: sats.education,
+      relationships: sats.relationships,
+      activity: sats.activity,
     };
   });
+  schedulePatientDualWriteCreate(user, result.profile);
   clearPatientSuggestCache();
   return result;
 };
@@ -776,6 +911,79 @@ export const updatePatientProfile = (user, patientId, payload, options = {}) => 
   requirePermission(user, 'patients:write');
   const tenantId = resolveTenantIdForWrite(user, payload?.tenant_id || payload?.tenantId);
   const dirtyIdentityFields = options.dirtyIdentityFields;
+
+  if (shouldUsePatientRepositoryWritePrimary()) {
+    return (async () => {
+      const existing = loadDb().patients.find((item) => item.id === patientId) || {
+        id: patientId,
+        guid: crypto.randomUUID(),
+        photo_url: '',
+        status: 'active',
+        blocked: false,
+        block_reason: '',
+        block_at: '',
+        tags: [],
+        lead_source: '',
+        tenant_id: tenantId,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by_user_id: user.id,
+        updated_by_user_id: user.id,
+      };
+      const next = {
+        ...existing,
+        full_name: resolveIdentityFieldValue('full_name', payload, existing, dirtyIdentityFields),
+        nickname: resolveIdentityFieldValue('nickname', payload, existing, dirtyIdentityFields),
+        social_name: resolveIdentityFieldValue('social_name', payload, existing, dirtyIdentityFields),
+        sex: normalizeText(payload.sex ?? existing.sex),
+        birth_date: normalizeText(payload.birth_date ?? existing.birth_date),
+        cpf: normalizeCpf(payload.cpf ?? existing.cpf),
+        photo_url: payload.photo_url ?? existing.photo_url,
+        tags: payload.tags ?? existing.tags ?? [],
+        lead_source: normalizeText(payload.lead_source ?? existing.lead_source),
+        has_financial_responsible:
+          payload.has_financial_responsible != null
+            ? Boolean(payload.has_financial_responsible)
+            : Boolean(existing.has_financial_responsible),
+        dependent_full_name:
+          payload.dependent_full_name != null
+            ? normalizeText(payload.dependent_full_name)
+            : normalizeText(existing.dependent_full_name),
+        updated_at: new Date().toISOString(),
+        updated_by_user_id: user.id,
+        tenant_id: existing.tenant_id || tenantId,
+      };
+      if (!next.full_name) throw new Error('Nome completo é obrigatório.');
+      const synthetic = isSyntheticPatientPayload(next, options)
+        || isSyntheticPatientPayload(payload, options);
+      if (!synthetic) {
+        if (!next.sex) throw new Error('Sexo é obrigatório.');
+        if (!next.birth_date) throw new Error('Data de nascimento é obrigatória.');
+      }
+      if (isRealPatientCpf(next.cpf)) {
+        /* uniqueness enforced remotely */
+      } else if (!normalizeCpf(next.cpf)) {
+        if (!synthetic && !existing.id) throw new Error('CPF é obrigatório.');
+        next.cpf = '';
+      } else if (!synthetic) {
+        throw new Error('CPF inválido.');
+      }
+
+      const committed = await commitPatientWritePrimaryUpdate(user, patientId, next, payload);
+      clearPatientSuggestCache();
+      logAction('patients:update-profile', buildIdentityChangeAudit({
+        patientId,
+        actorId: user.id,
+        source: options.source || null,
+        reason: options.reason,
+        beforePatient: existing,
+        afterPatient: committed.profile,
+        writeMode: 'remote-primary',
+      }));
+      return { ...committed.profile, remoteCommitted: true, cacheUpdated: committed.cacheUpdated };
+    })();
+  }
+
   const result = withDbResult((db) => {
     const existing = db.patients.find((item) => item.id === patientId);
     const basePatient = existing || {
@@ -850,6 +1058,7 @@ export const updatePatientProfile = (user, patientId, payload, options = {}) => 
     }));
     return next;
   });
+  schedulePatientDualWriteUpdate(user, result, payload);
   clearPatientSuggestCache();
   return result;
 };
@@ -1169,7 +1378,43 @@ export const updatePatientAccess = (user, patientId, payload) => {
 
 export const updatePatientStatus = (user, patientId, payload) => {
   requirePermission(user, 'patients:status');
-  return withDbResult((db) => {
+  const nextStatus = payload?.status;
+
+  if (shouldUsePatientRepositoryWritePrimary() && nextStatus === 'inactive') {
+    return softDeletePatient(user, patientId);
+  }
+
+  if (shouldUsePatientRepositoryWritePrimary()) {
+    return (async () => {
+      const existing = loadDb().patients.find((item) => item.id === patientId);
+      if (!existing) throw new Error('Paciente não encontrado.');
+      const next = {
+        ...existing,
+        status: payload.status || existing.status,
+        blocked: Boolean(payload.blocked),
+        block_reason: Boolean(payload.blocked) ? normalizeText(payload.block_reason) : '',
+        block_at: Boolean(payload.blocked)
+          ? normalizeText(payload.block_at || new Date().toISOString())
+          : '',
+        updated_at: new Date().toISOString(),
+        updated_by_user_id: user.id,
+      };
+      const committed = await commitPatientWritePrimaryUpdate(user, patientId, next, {
+        status: next.status,
+        blocked: next.blocked,
+        block_reason: next.block_reason,
+        block_at: next.block_at,
+      });
+      logAction('patients:update-status', {
+        patientId,
+        userId: user.id,
+        writeMode: 'remote-primary',
+      });
+      return { ...committed.profile, remoteCommitted: true, cacheUpdated: committed.cacheUpdated };
+    })();
+  }
+
+  const result = withDbResult((db) => {
     const patient = ensurePatient(db, patientId);
     const blocked = Boolean(payload.blocked);
     patient.status = payload.status || patient.status;
@@ -1181,6 +1426,57 @@ export const updatePatientStatus = (user, patientId, payload) => {
     logAction('patients:update-status', { patientId, userId: user.id });
     return patient;
   });
+  if (result.status === 'inactive') {
+    schedulePatientDualWriteSoftDelete(user, result);
+  } else {
+    schedulePatientDualWriteUpdate(user, result, payload);
+  }
+  return result;
+};
+
+/**
+ * Soft-delete controlado — WRITE_PRIMARY: remote-first; senão IDB + dual-write.
+ * Não faz hard-delete.
+ */
+export const softDeletePatient = (user, patientId) => {
+  requirePermission(user, 'patients:write');
+  const existing = loadDb().patients.find((item) => item.id === patientId);
+  if (!existing && !shouldUsePatientRepositoryWritePrimary()) {
+    throw new Error('Paciente não encontrado.');
+  }
+
+  if (shouldUsePatientRepositoryWritePrimary()) {
+    return (async () => {
+      const patient = existing || { id: patientId, tenant_id: resolveTenantIdForWrite(user, null) };
+      const committed = await commitPatientWritePrimarySoftDelete(user, patient);
+      clearPatientSuggestCache();
+      logAction('patients:soft-delete', {
+        patientId,
+        userId: user.id,
+        writeMode: 'remote-primary',
+        cacheUpdated: committed.cacheUpdated,
+      });
+      return {
+        id: patientId,
+        status: 'inactive',
+        remoteCommitted: true,
+        cacheUpdated: committed.cacheUpdated,
+      };
+    })();
+  }
+
+  const result = withDbResult((db) => {
+    const patient = ensurePatient(db, patientId);
+    patient.status = 'inactive';
+    patient.deleted_at = new Date().toISOString();
+    patient.updated_at = new Date().toISOString();
+    patient.updated_by_user_id = user.id;
+    logAction('patients:soft-delete', { patientId, userId: user.id });
+    return patient;
+  });
+  schedulePatientDualWriteSoftDelete(user, result);
+  clearPatientSuggestCache();
+  return result;
 };
 
 export const mergePatientActivity = (user, sourcePatientId, targetPatientId) => {

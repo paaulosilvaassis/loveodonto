@@ -108,24 +108,51 @@ function assertNoDataUri(photoUrl: string | null | undefined): string | null {
   return raw;
 }
 
+/** Placeholders legados proibidos em caminhos remotes / assertValidTenantId. */
+export const FORBIDDEN_TENANT_IDS = new Set(['tenant-1', 'tenant_1']);
+
 export function assertValidTenantId(tenantId: string | null | undefined): string {
   const normalized = asString(tenantId).trim();
   if (!normalized) {
     throw new PatientMapperValidationError('tenant_id é obrigatório.');
+  }
+  if (FORBIDDEN_TENANT_IDS.has(normalized.toLowerCase())) {
+    throw new PatientMapperValidationError(
+      `tenant_id proibido (fallback legado): ${normalized}`,
+    );
+  }
+  return normalized;
+}
+
+/**
+ * Tenant para operações remotas (Admin API / Supabase).
+ * Rejeita vazio, forbidden e IDs não-UUID.
+ */
+export function assertRemoteTenantId(tenantId: string | null | undefined): string {
+  const normalized = assertValidTenantId(tenantId);
+  if (!isPatientUuid(normalized)) {
+    throw new PatientMapperValidationError(
+      `tenant_id remoto deve ser UUID: ${normalized}`,
+    );
   }
   return normalized;
 }
 
 export function mapLegacyRowToPatientCore(
   row: PatientIndexedDbRow,
-  options: { uuid?: string | null } = {},
+  options: { uuid?: string | null; resolvedTenantId?: string | null } = {},
 ): PatientCore {
   const legacyId = asString(row.id).trim();
   if (!legacyId) {
     throw new PatientMapperValidationError('patient.id legado é obrigatório.');
   }
 
-  const tenantId = assertValidTenantId(row.tenant_id);
+  const rawTenant = asString(row.tenant_id).trim();
+  const tenantId =
+    options.resolvedTenantId
+    && FORBIDDEN_TENANT_IDS.has(rawTenant.toLowerCase())
+      ? assertValidTenantId(options.resolvedTenantId)
+      : assertValidTenantId(row.tenant_id);
   const cpfDigits = onlyDigits(row.cpf);
   const uuid = asString(options.uuid || row.uuid || '').trim() || legacyId;
 

@@ -41,6 +41,15 @@ import {
   createAppointmentUpdateHandler,
 } from './lib/appointmentsApiWrite.js';
 import {
+  createPatientGetHandler,
+  createPatientsListHandler,
+} from './lib/patientsApiList.js';
+import {
+  createPatientCreateHandler,
+  createPatientSoftDeleteHandler,
+  createPatientUpdateHandler,
+} from './lib/patientsApiWrite.js';
+import {
   createFinancingsListHandler,
   createPayablesListHandler,
   createReceivablesListHandler,
@@ -1012,6 +1021,45 @@ app.patch(
   requireAppUserCollaboratorsList,
   requireTenantMembershipCollaboratorsList,
   createAppointmentCancelHandler({ supabase }),
+);
+
+app.get(
+  '/internal/app/patients',
+  requireAppUserCollaboratorsList,
+  requireTenantMembershipCollaboratorsList,
+  createPatientsListHandler({
+    supabase,
+    resolveActiveTenantUser,
+    isActiveTenantUserRow,
+  }),
+);
+
+app.get(
+  '/internal/app/patients/:legacyId',
+  requireAppUserCollaboratorsList,
+  requireTenantMembershipCollaboratorsList,
+  createPatientGetHandler({ supabase }),
+);
+
+app.post(
+  '/internal/app/patients',
+  requireAppUserCollaboratorsList,
+  requireTenantMembershipCollaboratorsList,
+  createPatientCreateHandler({ supabase }),
+);
+
+app.put(
+  '/internal/app/patients/:legacyId',
+  requireAppUserCollaboratorsList,
+  requireTenantMembershipCollaboratorsList,
+  createPatientUpdateHandler({ supabase }),
+);
+
+app.delete(
+  '/internal/app/patients/:legacyId',
+  requireAppUserCollaboratorsList,
+  requireTenantMembershipCollaboratorsList,
+  createPatientSoftDeleteHandler({ supabase }),
 );
 
 /**

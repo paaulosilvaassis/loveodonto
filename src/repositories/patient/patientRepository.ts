@@ -1,18 +1,30 @@
 /**
  * @module repositories/patient/patientRepository
- * @description Facade pública Pacientes V3 — Phase 9.4A Wave 2.
+ * @description Facade pública Pacientes V3 — CLOUD.3 wiring.
  *
  * Defaults: IndexedDB authority. Flags off → erro explícito em paths remotos.
- * **Não importar de `patientService.js` / UI nesta wave.**
+ * Prefer Admin API registrada; fallback Supabase repo.
  */
 
+import { withDb } from '../../db/index.js';
+import {
+  getDefaultPatientAdminApiClient,
+  isPatientAdminApiRegistered,
+} from './patientAdminApiRepository.js';
 import { patientIndexedDbRepository as defaultIdb } from './patientIndexedDbRepository.js';
 import {
   getPatientRepositoryFlags,
+  isPatientsReadPrimaryEnabled,
+  shouldComparePatientsIdbVsRemote,
   type PatientRepositoryFlagsInput,
 } from './patientRepositoryFlags.js';
 import { patientSupabaseRepository as defaultSupabase } from './patientSupabaseRepository.js';
+import {
+  buildPatientShadowReport,
+  logPatientShadowReport,
+} from './patientShadowCompare.js';
 import type {
+  IPatientAdminApiClient,
   IPatientIndexedDbRepository,
   IPatientRepository,
   IPatientSupabaseRepository,
@@ -30,19 +42,27 @@ import {
   PatientRepositoryRemoteReadDisabledError,
   PatientRepositoryRemoteWriteDisabledError,
 } from './patientTypes.js';
-import { assertValidTenantId, mapCreateDtoToSupabaseUpsert, mapUpdateDtoToSupabaseUpsert } from './patientMapper.js';
+import {
+  assertRemoteTenantId,
+  assertValidTenantId,
+  mapCoreToIndexedDbMirror,
+  mapCreateDtoToSupabaseUpsert,
+  mapLegacyRowToPatientCore,
+  mapUpdateDtoToSupabaseUpsert,
+} from './patientMapper.js';
 
 export interface PatientRepositoryDeps {
   supabase?: IPatientSupabaseRepository;
   indexedDb?: IPatientIndexedDbRepository;
+  adminApi?: IPatientAdminApiClient;
   flagsInput?: PatientRepositoryFlagsInput;
 }
 
 export interface PatientRepositoryReadiness {
-  wave: '9.4A-Wave2';
+  wave: 'CLOUD.3';
   supabaseRepositoryImplemented: true;
   indexedDbSsot: true;
-  wiredToPatientService: false;
+  wiredToPatientService: true;
   dualWriteEnabled: boolean;
   readEnabled: boolean;
   writeEnabled: boolean;
@@ -65,8 +85,16 @@ export class PatientRepository implements IPatientRepository {
     return this.deps.supabase || defaultSupabase;
   }
 
+  private get adminApi(): IPatientAdminApiClient {
+    return this.deps.adminApi || getDefaultPatientAdminApiClient();
+  }
+
   private get flagsInput(): PatientRepositoryFlagsInput {
     return this.deps.flagsInput || {};
+  }
+
+  private preferAdminApi(): boolean {
+    return this.deps.adminApi != null || isPatientAdminApiRegistered();
   }
 
   getFlags() {
@@ -76,10 +104,10 @@ export class PatientRepository implements IPatientRepository {
   getReadiness(): PatientRepositoryReadiness {
     const flags = this.getFlags();
     return {
-      wave: '9.4A-Wave2',
+      wave: 'CLOUD.3',
       supabaseRepositoryImplemented: true,
       indexedDbSsot: true,
-      wiredToPatientService: false,
+      wiredToPatientService: true,
       dualWriteEnabled: flags.PATIENTS_DUAL_WRITE,
       readEnabled: flags.PATIENTS_READ,
       writeEnabled: flags.PATIENTS_WRITE,
@@ -104,14 +132,24 @@ export class PatientRepository implements IPatientRepository {
 
   async listCore(tenantId: string, filters: PatientListFilters = {}): Promise<PatientListResult> {
     this.assertRemoteRead();
-    return this.supabase.listPatients(assertValidTenantId(tenantId), filters);
+    const tid = assertRemoteTenantId(tenantId);
+    if (this.preferAdminApi()) {
+      const items = await this.adminApi.listPatients(tid, filters);
+      return { items, total: items.length, source: 'supabase' };
+    }
+    return this.supabase.listPatients(tid, filters);
   }
 
   async getCore(tenantId: string, ref: PatientRef): Promise<PatientCore | null> {
     this.assertRemoteRead();
-    const tid = assertValidTenantId(tenantId);
+    const tid = assertRemoteTenantId(tenantId);
     const needle = String(ref || '').trim();
     if (!needle) return null;
+
+    if (this.preferAdminApi()) {
+      return this.adminApi.getPatient(tid, needle);
+    }
+
     if (needle.startsWith('patient-')) {
       return this.supabase.getPatientByLegacyId(tid, needle);
     }
@@ -119,12 +157,33 @@ export class PatientRepository implements IPatientRepository {
       ?? this.supabase.getPatientByLegacyId(tid, needle);
   }
 
+  async searchCore(
+    tenantId: string,
+    query: string,
+    filters: PatientListFilters = {},
+  ): Promise<PatientCore[]> {
+    this.assertRemoteRead();
+    const tid = assertRemoteTenantId(tenantId);
+    const q = String(query || '').trim();
+    if (this.preferAdminApi()) {
+      return this.adminApi.listPatients(tid, { ...filters, search: q });
+    }
+    return this.supabase.searchPatients(tid, q, filters);
+  }
+
   async createCore(
     user: PatientRepositoryUser,
     dto: PatientCreateCoreDto,
   ): Promise<PatientCore> {
     this.assertRemoteWrite();
-    const tenantId = assertValidTenantId(user.tenantId ?? user.tenant_id);
+    const tenantId = assertRemoteTenantId(user.tenantId ?? user.tenant_id);
+
+    if (this.preferAdminApi()) {
+      const created = await this.adminApi.createPatient(tenantId, dto);
+      if (!created) throw new Error('Admin API não retornou paciente após create.');
+      return created;
+    }
+
     const upsertDto = mapCreateDtoToSupabaseUpsert(tenantId, dto);
     return this.supabase.createPatient(tenantId, upsertDto);
   }
@@ -135,8 +194,15 @@ export class PatientRepository implements IPatientRepository {
     dto: PatientUpdateCoreDto,
   ): Promise<PatientCore> {
     this.assertRemoteWrite();
-    const tenantId = assertValidTenantId(user.tenantId ?? user.tenant_id);
+    const tenantId = assertRemoteTenantId(user.tenantId ?? user.tenant_id);
     const needle = String(ref || '').trim();
+
+    if (this.preferAdminApi()) {
+      const updated = await this.adminApi.updatePatient(tenantId, needle, dto);
+      if (!updated) throw new PatientNotFoundError(ref);
+      return updated;
+    }
+
     const core = (await this.supabase.getPatientById(tenantId, needle))
       ?? (await this.supabase.getPatientByLegacyId(tenantId, needle));
     if (!core) throw new PatientNotFoundError(ref);
@@ -146,12 +212,148 @@ export class PatientRepository implements IPatientRepository {
 
   async softDeleteCore(user: PatientRepositoryUser, ref: PatientRef): Promise<void> {
     this.assertRemoteWrite();
-    const tenantId = assertValidTenantId(user.tenantId ?? user.tenant_id);
+    const tenantId = assertRemoteTenantId(user.tenantId ?? user.tenant_id);
     const needle = String(ref || '').trim();
+
+    if (this.preferAdminApi()) {
+      const ok = await this.adminApi.softDeletePatient(tenantId, needle);
+      if (!ok) throw new PatientNotFoundError(ref);
+      return;
+    }
+
     const core = (await this.supabase.getPatientById(tenantId, needle))
       ?? (await this.supabase.getPatientByLegacyId(tenantId, needle));
     if (!core) throw new PatientNotFoundError(ref);
     await this.supabase.softDeletePatient(tenantId, core.uuid);
+  }
+
+  /**
+   * Upsert IDB por legacy_id — NÃO limpa DB / outras collections.
+   * Não deve ser chamado como primary pelo service nesta phase.
+   */
+  async hydratePatients(
+    remoteRows: PatientCore[],
+    options: { tenantId: string },
+  ): Promise<number> {
+    const tid = assertValidTenantId(options.tenantId);
+    const rows = Array.isArray(remoteRows) ? remoteRows : [];
+    let upserted = 0;
+
+    withDb((db) => {
+      if (!Array.isArray(db.patients)) db.patients = [];
+      for (const core of rows) {
+        if (!core?.legacyId) continue;
+        const mirror = mapCoreToIndexedDbMirror({ ...core, tenantId: core.tenantId || tid });
+        const idx = db.patients.findIndex((row) => row?.id === mirror.id);
+        if (idx >= 0) {
+          db.patients[idx] = { ...db.patients[idx], ...mirror };
+        } else {
+          db.patients.push(mirror);
+        }
+        upserted += 1;
+      }
+      return db;
+    });
+
+    return upserted;
+  }
+
+  /**
+   * CLOUD.6 — sync cache IDB a partir do remote quando READ_PRIMARY.
+   * Paginação completa via Admin API / Supabase. Sem clear whole DB.
+   */
+  async syncCacheFromRemote(tenantId: string): Promise<number> {
+    const flags = this.getFlags();
+    if (!(flags.PATIENTS_READ && flags.PATIENTS_READ_PRIMARY)) return 0;
+    const tid = assertRemoteTenantId(tenantId);
+
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return this.idb.listLegacySync({ tenantId: tid }).length;
+    }
+
+    let remoteItems: PatientCore[] = [];
+    try {
+      this.assertRemoteRead();
+      if (this.preferAdminApi()) {
+        remoteItems = await this.adminApi.listPatients(tid);
+      } else {
+        const listed = await this.supabase.listPatients(tid);
+        remoteItems = listed.items || [];
+      }
+    } catch (err) {
+      if (import.meta.env?.DEV) {
+        console.debug(
+          '[PATIENT_CACHE] sync skipped:',
+          err instanceof Error ? err.message : err,
+        );
+      }
+      return this.idb.listLegacySync({ tenantId: tid }).length;
+    }
+
+    const upserted = await this.hydratePatients(remoteItems, { tenantId: tid });
+
+    // CLOUD.7 — cache contract: remote active list is authority.
+    // Soft-deleted remotes leave the local row as inactive (sem hard-delete / sem wipe).
+    const remoteIds = new Set(
+      remoteItems.map((item) => String(item?.legacyId || '').trim()).filter(Boolean),
+    );
+    withDb((db) => {
+      if (!Array.isArray(db.patients)) return db;
+      const now = new Date().toISOString();
+      for (const row of db.patients) {
+        if (!row?.id) continue;
+        if (row.tenant_id && row.tenant_id !== tid) continue;
+        if (remoteIds.has(row.id)) continue;
+        if (row.status === 'inactive' && row.deleted_at) continue;
+        row.status = 'inactive';
+        row.deleted_at = row.deleted_at || now;
+        row.updated_at = now;
+      }
+      return db;
+    });
+
+    return upserted;
+  }
+
+  async compareIdbVsRemote(tenantId: string): Promise<Record<string, unknown> | null> {
+    if (!shouldComparePatientsIdbVsRemote(this.flagsInput)) return null;
+    const tid = assertRemoteTenantId(tenantId);
+
+    const idbRows = this.idb.listLegacySync({ tenantId: tid });
+    const localItems = idbRows
+      .map((row) => {
+        try {
+          return mapLegacyRowToPatientCore(row, { resolvedTenantId: tid });
+        } catch {
+          return null;
+        }
+      })
+      .filter((core): core is PatientCore => Boolean(core));
+
+    let remoteItems: PatientCore[] = [];
+    try {
+      this.assertRemoteRead();
+      if (this.preferAdminApi()) {
+        remoteItems = await this.adminApi.listPatients(tid);
+      } else {
+        const listed = await this.supabase.listPatients(tid);
+        remoteItems = listed.items || [];
+      }
+    } catch (err) {
+      return {
+        tenantId: tid,
+        skipped: true,
+        reason: err instanceof Error ? err.message : String(err || 'remote-unavailable'),
+      };
+    }
+
+    const report = buildPatientShadowReport({
+      tenantId: tid,
+      localItems,
+      remoteItems,
+    });
+    logPatientShadowReport(report);
+    return report as unknown as Record<string, unknown>;
   }
 
   listLegacySync(filters: PatientListFilters = {}): PatientIndexedDbRow[] {
@@ -172,3 +374,19 @@ export function createPatientRepository(deps: PatientRepositoryDeps = {}): Patie
 }
 
 export const patientRepository = createPatientRepository();
+
+/**
+ * CLOUD.6 — hidratação inicial quando READ_PRIMARY ativo.
+ * Usa o repositório do bridge (Admin API registrada) quando possível.
+ */
+export async function rehydratePatientCacheIfPrimary(
+  tenantId: string | null | undefined,
+  flagsInput: PatientRepositoryFlagsInput = {},
+  repo?: PatientRepository,
+): Promise<number> {
+  if (!isPatientsReadPrimaryEnabled(flagsInput)) return 0;
+  const normalized = String(tenantId || '').trim();
+  if (!normalized) return 0;
+  const target = repo || createPatientRepository({ flagsInput });
+  return target.syncCacheFromRemote(normalized);
+}

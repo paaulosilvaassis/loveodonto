@@ -321,7 +321,7 @@ describe('Phase 9.4A Wave 2 — Repository + mappers (STATIC)', () => {
     }).legacyId).toBe(legacyPatient);
   });
 
-  it('facade flags off, readiness, sem wiring em patientService', async () => {
+  it('facade flags off, readiness CLOUD.3 wired, patientService só via adapter', async () => {
     const flags = getPatientRepositoryFlags({});
     expect(flags.PATIENTS_READ).toBe(false);
     expect(flags.PATIENTS_WRITE).toBe(false);
@@ -333,7 +333,8 @@ describe('Phase 9.4A Wave 2 — Repository + mappers (STATIC)', () => {
     const readiness = repo.getReadiness();
     expect(readiness.supabaseRepositoryImplemented).toBe(true);
     expect(readiness.indexedDbSsot).toBe(true);
-    expect(readiness.wiredToPatientService).toBe(false);
+    expect(readiness.wiredToPatientService).toBe(true);
+    expect(readiness.wave).toBe('CLOUD.3');
     expect(readiness.readEnabled).toBe(false);
 
     await expect(repo.listCore('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1')).rejects.toBeInstanceOf(
@@ -342,8 +343,8 @@ describe('Phase 9.4A Wave 2 — Repository + mappers (STATIC)', () => {
 
     const service = read('src/services/patientService.js');
     expect(service).not.toMatch(/repositories\/patient/);
-    expect(service).not.toMatch(/patientRepository/);
     expect(service).not.toMatch(/PATIENTS_READ|PATIENTS_WRITE|PATIENTS_DUAL_WRITE/);
+    expect(service).toMatch(/schedulePatientShadowRead|patientReadAdapter/);
   });
 
   it('Agenda/CRM/Contratos/Financeiro e Wave 3 não foram alterados nesta wave', () => {

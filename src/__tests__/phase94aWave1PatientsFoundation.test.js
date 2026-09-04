@@ -119,7 +119,7 @@ describe('Phase 9.4A Wave 1 — Artefatos SQL (STATIC)', () => {
 });
 
 describe('Phase 9.4A Wave 1 — Repository scaffold (STATIC)', () => {
-  it('scaffold patient existe e não está wired em patientService', () => {
+  it('scaffold patient existe; patientService wired só via adapter (sem import direto do repo)', () => {
     const files = [
       'src/repositories/patient/index.ts',
       'src/repositories/patient/patientTypes.ts',
@@ -138,8 +138,9 @@ describe('Phase 9.4A Wave 1 — Repository scaffold (STATIC)', () => {
       'utf8',
     );
     expect(service).not.toMatch(/repositories\/patient/);
-    expect(service).not.toMatch(/patientRepository/);
+    expect(service).not.toMatch(/patientRepository(?!Bridge)/);
     expect(service).not.toMatch(/PATIENTS_READ|PATIENTS_WRITE|PATIENTS_DUAL_WRITE/);
+    expect(service).toMatch(/schedulePatientShadowRead|patientReadAdapter/);
   });
 
   it('flags default-off e produção trava cutover', () => {

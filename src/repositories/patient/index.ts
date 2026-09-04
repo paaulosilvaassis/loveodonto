@@ -2,24 +2,17 @@
  * @module repositories/patient
  * @description Barrel **público controlado** — Repository Pacientes Love Odonto V3.
  *
- * ## Phase 9.4A Wave 1 — uso restrito
+ * ## CLOUD.3 — wiring controlado
  *
- * Este módulo é scaffold de fundação. **Telas, services, hooks e contexts
- * atuais NÃO devem importar daqui** até ticket explícito de integração
- * (dual-write / read cutover).
+ * Facade + shadow helpers exportados. IndexedDB permanece SSOT.
+ * Flags default = false + production lock. Dual-write off.
  *
- * IndexedDB permanece SSOT. Flags default = false.
- *
- * ## O que exportar (consumidores futuros autorizados)
+ * ## O que exportar
  *
  * - Facade: `patientRepository`, `createPatientRepository`
  * - Tipos: `PatientCore`, DTOs, `IPatientRepository`
+ * - Shadow: compare helpers
  * - Erros públicos de domínio
- *
- * ## O que NÃO é exportado (implementação interna)
- *
- * - Flags (`patientRepositoryFlags.ts`)
- * - Mapper, IndexedDB/Supabase sub-repositories
  *
  * @see supabase/migrations/025_app_patients_core.sql
  * @see supabase/migrations/027_app_patient_details.sql
@@ -31,6 +24,13 @@ export {
 } from './patientRepository.js';
 
 export type { PatientRepositoryReadiness } from './patientRepository.js';
+
+export {
+  buildPatientShadowReport,
+  comparePatientPair,
+  logPatientShadowReport,
+  normalizePatientForCompare,
+} from './patientShadowCompare.js';
 
 export type {
   PatientBundleCore,
@@ -49,6 +49,7 @@ export type {
   PatientStatus,
   PatientUpdateCoreDto,
   IPatientRepository,
+  IPatientAdminApiClient,
 } from './patientTypes.js';
 
 export {
