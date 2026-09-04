@@ -290,7 +290,29 @@ export class PatientRepository implements IPatientRepository {
       return this.idb.listLegacySync({ tenantId: tid }).length;
     }
 
-    return this.hydratePatients(remoteItems, { tenantId: tid });
+    const upserted = await this.hydratePatients(remoteItems, { tenantId: tid });
+
+    // CLOUD.7 — cache contract: remote active list is authority.
+    // Soft-deleted remotes leave the local row as inactive (sem hard-delete / sem wipe).
+    const remoteIds = new Set(
+      remoteItems.map((item) => String(item?.legacyId || '').trim()).filter(Boolean),
+    );
+    withDb((db) => {
+      if (!Array.isArray(db.patients)) return db;
+      const now = new Date().toISOString();
+      for (const row of db.patients) {
+        if (!row?.id) continue;
+        if (row.tenant_id && row.tenant_id !== tid) continue;
+        if (remoteIds.has(row.id)) continue;
+        if (row.status === 'inactive' && row.deleted_at) continue;
+        row.status = 'inactive';
+        row.deleted_at = row.deleted_at || now;
+        row.updated_at = now;
+      }
+      return db;
+    });
+
+    return upserted;
   }
 
   async compareIdbVsRemote(tenantId: string): Promise<Record<string, unknown> | null> {

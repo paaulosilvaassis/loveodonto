@@ -297,6 +297,14 @@ export function isPatientsDualWriteEnabled(
   return flags.PATIENTS_READ && flags.PATIENTS_WRITE && flags.PATIENTS_DUAL_WRITE;
 }
 
+/** Dual-write shadow only — desliga quando WRITE_PRIMARY está ativo. */
+export function isPatientsDualWriteOnlyEnabled(
+  input: PatientRepositoryFlagsInput = {},
+): boolean {
+  const flags = getPatientRepositoryFlags(input);
+  return isPatientsDualWriteEnabled(input) && !flags.PATIENTS_WRITE_PRIMARY;
+}
+
 export function isPatientsWritePrimaryEnabled(
   input: PatientRepositoryFlagsInput = {},
 ): boolean {

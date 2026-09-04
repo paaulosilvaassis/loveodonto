@@ -6,9 +6,9 @@ import { normalizeTenantId } from './tenantIsolation.js';
 import { createPatientRepository, rehydratePatientCacheIfPrimary } from '../repositories/patient/patientRepository.ts';
 import {
   getPatientRepositoryFlags,
-  isPatientsDualWriteEnabled,
+  isPatientsDualWriteOnlyEnabled,
   isPatientsReadPrimaryEnabled,
-  isPatientsWriteEnabled,
+  isPatientsWritePrimaryEnabled,
   shouldRunPatientsShadowRead,
 } from '../repositories/patient/patientRepositoryFlags.ts';
 import {
@@ -79,9 +79,14 @@ export function shouldUsePatientRepositoryRead() {
   return isPatientsReadPrimaryEnabled(bridgeFlagsInput());
 }
 
+/** Dual-write fire-and-forget — OFF quando WRITE_PRIMARY. */
 export function shouldUsePatientRepositoryWrite() {
-  return isPatientsWriteEnabled(bridgeFlagsInput())
-    && isPatientsDualWriteEnabled(bridgeFlagsInput());
+  return isPatientsDualWriteOnlyEnabled(bridgeFlagsInput());
+}
+
+/** Remote-first commit — await cloud antes de sucesso UI. */
+export function shouldUsePatientRepositoryWritePrimary() {
+  return isPatientsWritePrimaryEnabled(bridgeFlagsInput());
 }
 
 export function shouldRunPatientShadowRead() {

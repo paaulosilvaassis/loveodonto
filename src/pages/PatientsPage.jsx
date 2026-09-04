@@ -445,13 +445,15 @@ export default function PatientsPage() {
     refreshSelected();
   };
 
-  const saveSection = (section) => {
+  const saveSection = async (section) => {
     setError('');
     setSuccess('');
     try {
       if (!selectedId) throw new Error('ID do paciente inválido.');
       if (isDev) console.debug('[patients] update', { id: selectedId, section });
-      if (section === 'Dados Principais') updatePatientProfile(user, selectedId, draft.profile);
+      if (section === 'Dados Principais') {
+        await Promise.resolve(updatePatientProfile(user, selectedId, draft.profile));
+      }
       if (section === 'Documentações') {
         updatePatientDocuments(user, selectedId, draft.documents);
         updatePatientRelationships(user, selectedId, { ...draft.relationships, marital_status: draft.documents.marital_status });
@@ -466,7 +468,9 @@ export default function PatientsPage() {
         updatePatientDocuments(user, selectedId, { ...draft.documents, marital_status: draft.relationships.marital_status });
       }
       if (section === 'Dados de Acesso') updatePatientAccess(user, selectedId, draft.access);
-      if (section === 'Situação do Cadastro') updatePatientStatus(user, selectedId, draft.profile);
+      if (section === 'Situação do Cadastro') {
+        await Promise.resolve(updatePatientStatus(user, selectedId, draft.profile));
+      }
       setEditingSection('');
       refreshSelected();
       setSuccess('Dados salvos com sucesso.');

@@ -521,7 +521,7 @@ export default function PatientCadastroPage() {
         return;
       }
       const createdFromScratch = !patientId;
-      const committed = commitPatientCadastroProfile(user, {
+      const committed = await commitPatientCadastroProfile(user, {
         routePatientId: patientId || null,
         draft,
         originalProfile: originalRef.current?.profile || null,
