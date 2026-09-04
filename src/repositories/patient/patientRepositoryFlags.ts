@@ -1,9 +1,7 @@
 /**
  * @module repositories/patient/patientRepositoryFlags
- * @description Feature flags Pacientes V3 — Phase 9.4A Wave 1 foundation.
+ * @description Feature flags Pacientes V3 — Phase 9.4A / CLOUD.3.
  * Defaults: IndexedDB authority. Produção trava flags perigosas.
- *
- * **Sem wiring:** `patientService.js` / UI não consomem este módulo nesta wave.
  */
 
 import {
@@ -29,6 +27,29 @@ export const PATIENTS_FLAG_KEYS = {
 
 export type PatientRepositoryFlagKey = keyof typeof PATIENTS_FLAG_KEYS;
 
+/**
+ * Aliases documentais PATIENT_REMOTE_* → PATIENTS_* (mesmas chaves canônicas).
+ * Env opcional: VITE_PATIENT_REMOTE_* também é lido como fallback.
+ */
+export const PATIENT_REMOTE_FLAG_ALIASES = {
+  PATIENT_REMOTE_READ: PATIENTS_FLAG_KEYS.PATIENTS_READ,
+  PATIENT_REMOTE_READ_SHADOW: PATIENTS_FLAG_KEYS.PATIENTS_SHADOW,
+  PATIENT_REMOTE_READ_PRIMARY: PATIENTS_FLAG_KEYS.PATIENTS_READ_PRIMARY,
+  PATIENT_REMOTE_WRITE: PATIENTS_FLAG_KEYS.PATIENTS_WRITE,
+  PATIENT_REMOTE_WRITE_PRIMARY: PATIENTS_FLAG_KEYS.PATIENTS_WRITE_PRIMARY,
+} as const;
+
+/** @deprecated Prefer PATIENTS_READ — alias documental. */
+export const PATIENT_REMOTE_READ = PATIENT_REMOTE_FLAG_ALIASES.PATIENT_REMOTE_READ;
+/** @deprecated Prefer PATIENTS_SHADOW — alias documental. */
+export const PATIENT_REMOTE_READ_SHADOW = PATIENT_REMOTE_FLAG_ALIASES.PATIENT_REMOTE_READ_SHADOW;
+/** @deprecated Prefer PATIENTS_READ_PRIMARY — alias documental. */
+export const PATIENT_REMOTE_READ_PRIMARY = PATIENT_REMOTE_FLAG_ALIASES.PATIENT_REMOTE_READ_PRIMARY;
+/** @deprecated Prefer PATIENTS_WRITE — alias documental. */
+export const PATIENT_REMOTE_WRITE = PATIENT_REMOTE_FLAG_ALIASES.PATIENT_REMOTE_WRITE;
+/** @deprecated Prefer PATIENTS_WRITE_PRIMARY — alias documental. */
+export const PATIENT_REMOTE_WRITE_PRIMARY = PATIENT_REMOTE_FLAG_ALIASES.PATIENT_REMOTE_WRITE_PRIMARY;
+
 export interface PatientRepositoryFlags {
   PATIENTS_READ: boolean;
   PATIENTS_READ_PRIMARY: boolean;
@@ -45,7 +66,7 @@ export interface PatientRepositoryFlagsInput {
   overrides?: Partial<PatientRepositoryFlags>;
 }
 
-/** Defaults seguros — IndexedDB permanece SSOT (Wave 1). */
+/** Defaults seguros — IndexedDB permanece SSOT. */
 export const PATIENTS_REPOSITORY_FLAG_DEFAULTS: Readonly<PatientRepositoryFlags> = {
   PATIENTS_READ: false,
   PATIENTS_READ_PRIMARY: false,
@@ -89,6 +110,24 @@ const ENV_KEY_MAP: Record<PatientRepositoryFlagKey, string> = {
   PATIENTS_DUAL_WRITE: 'VITE_PATIENTS_DUAL_WRITE',
   PATIENTS_WRITE_COMPARE: 'VITE_PATIENTS_WRITE_COMPARE',
 };
+
+/** Env aliases VITE_PATIENT_REMOTE_* (fallback quando VITE_PATIENTS_* ausente). */
+const ENV_ALIAS_KEY_MAP: Partial<Record<PatientRepositoryFlagKey, string>> = {
+  PATIENTS_READ: 'VITE_PATIENT_REMOTE_READ',
+  PATIENTS_READ_PRIMARY: 'VITE_PATIENT_REMOTE_READ_PRIMARY',
+  PATIENTS_SHADOW: 'VITE_PATIENT_REMOTE_READ_SHADOW',
+  PATIENTS_WRITE: 'VITE_PATIENT_REMOTE_WRITE',
+  PATIENTS_WRITE_PRIMARY: 'VITE_PATIENT_REMOTE_WRITE_PRIMARY',
+};
+
+function readFlagEnv(key: PatientRepositoryFlagKey, fallback: boolean): boolean {
+  const primary = readEnvFlag(ENV_KEY_MAP[key], fallback);
+  const aliasKey = ENV_ALIAS_KEY_MAP[key];
+  if (!aliasKey) return primary;
+  // Aceita VITE_PATIENT_REMOTE_* como OR quando a chave canônica não está true
+  if (primary) return true;
+  return readEnvFlag(aliasKey, fallback);
+}
 
 export function lockDangerousPatientRepositoryFlags(
   flags: PatientRepositoryFlags,
@@ -169,42 +208,42 @@ function resolveRawFlags(input: PatientRepositoryFlagsInput = {}): PatientReposi
     PATIENTS_READ: readTenantFlag(
       tenantFlags,
       'PATIENTS_READ',
-      readEnvFlag(ENV_KEY_MAP.PATIENTS_READ, base.PATIENTS_READ),
+      readFlagEnv('PATIENTS_READ', base.PATIENTS_READ),
     ),
     PATIENTS_READ_PRIMARY: readTenantFlag(
       tenantFlags,
       'PATIENTS_READ_PRIMARY',
-      readEnvFlag(ENV_KEY_MAP.PATIENTS_READ_PRIMARY, base.PATIENTS_READ_PRIMARY),
+      readFlagEnv('PATIENTS_READ_PRIMARY', base.PATIENTS_READ_PRIMARY),
     ),
     PATIENTS_SHADOW: readTenantFlag(
       tenantFlags,
       'PATIENTS_SHADOW',
-      readEnvFlag(ENV_KEY_MAP.PATIENTS_SHADOW, base.PATIENTS_SHADOW),
+      readFlagEnv('PATIENTS_SHADOW', base.PATIENTS_SHADOW),
     ),
     PATIENTS_COMPARE: readTenantFlag(
       tenantFlags,
       'PATIENTS_COMPARE',
-      readEnvFlag(ENV_KEY_MAP.PATIENTS_COMPARE, base.PATIENTS_COMPARE),
+      readFlagEnv('PATIENTS_COMPARE', base.PATIENTS_COMPARE),
     ),
     PATIENTS_WRITE: readTenantFlag(
       tenantFlags,
       'PATIENTS_WRITE',
-      readEnvFlag(ENV_KEY_MAP.PATIENTS_WRITE, base.PATIENTS_WRITE),
+      readFlagEnv('PATIENTS_WRITE', base.PATIENTS_WRITE),
     ),
     PATIENTS_WRITE_PRIMARY: readTenantFlag(
       tenantFlags,
       'PATIENTS_WRITE_PRIMARY',
-      readEnvFlag(ENV_KEY_MAP.PATIENTS_WRITE_PRIMARY, base.PATIENTS_WRITE_PRIMARY),
+      readFlagEnv('PATIENTS_WRITE_PRIMARY', base.PATIENTS_WRITE_PRIMARY),
     ),
     PATIENTS_DUAL_WRITE: readTenantFlag(
       tenantFlags,
       'PATIENTS_DUAL_WRITE',
-      readEnvFlag(ENV_KEY_MAP.PATIENTS_DUAL_WRITE, base.PATIENTS_DUAL_WRITE),
+      readFlagEnv('PATIENTS_DUAL_WRITE', base.PATIENTS_DUAL_WRITE),
     ),
     PATIENTS_WRITE_COMPARE: readTenantFlag(
       tenantFlags,
       'PATIENTS_WRITE_COMPARE',
-      readEnvFlag(ENV_KEY_MAP.PATIENTS_WRITE_COMPARE, base.PATIENTS_WRITE_COMPARE),
+      readFlagEnv('PATIENTS_WRITE_COMPARE', base.PATIENTS_WRITE_COMPARE),
     ),
   };
 
@@ -241,7 +280,8 @@ export function shouldRunPatientsShadowRead(
 export function shouldComparePatientsIdbVsRemote(
   input: PatientRepositoryFlagsInput = {},
 ): boolean {
-  return getPatientRepositoryFlags(input).PATIENTS_COMPARE;
+  const flags = getPatientRepositoryFlags(input);
+  return flags.PATIENTS_COMPARE || flags.PATIENTS_SHADOW;
 }
 
 export function isPatientsWriteEnabled(

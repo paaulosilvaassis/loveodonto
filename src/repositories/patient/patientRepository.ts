@@ -1,18 +1,29 @@
 /**
  * @module repositories/patient/patientRepository
- * @description Facade pública Pacientes V3 — Phase 9.4A Wave 2.
+ * @description Facade pública Pacientes V3 — CLOUD.3 wiring.
  *
  * Defaults: IndexedDB authority. Flags off → erro explícito em paths remotos.
- * **Não importar de `patientService.js` / UI nesta wave.**
+ * Prefer Admin API registrada; fallback Supabase repo.
  */
 
+import { withDb } from '../../db/index.js';
+import {
+  getDefaultPatientAdminApiClient,
+  isPatientAdminApiRegistered,
+} from './patientAdminApiRepository.js';
 import { patientIndexedDbRepository as defaultIdb } from './patientIndexedDbRepository.js';
 import {
   getPatientRepositoryFlags,
+  shouldComparePatientsIdbVsRemote,
   type PatientRepositoryFlagsInput,
 } from './patientRepositoryFlags.js';
 import { patientSupabaseRepository as defaultSupabase } from './patientSupabaseRepository.js';
+import {
+  buildPatientShadowReport,
+  logPatientShadowReport,
+} from './patientShadowCompare.js';
 import type {
+  IPatientAdminApiClient,
   IPatientIndexedDbRepository,
   IPatientRepository,
   IPatientSupabaseRepository,
@@ -30,19 +41,27 @@ import {
   PatientRepositoryRemoteReadDisabledError,
   PatientRepositoryRemoteWriteDisabledError,
 } from './patientTypes.js';
-import { assertValidTenantId, mapCreateDtoToSupabaseUpsert, mapUpdateDtoToSupabaseUpsert } from './patientMapper.js';
+import {
+  assertRemoteTenantId,
+  assertValidTenantId,
+  mapCoreToIndexedDbMirror,
+  mapCreateDtoToSupabaseUpsert,
+  mapLegacyRowToPatientCore,
+  mapUpdateDtoToSupabaseUpsert,
+} from './patientMapper.js';
 
 export interface PatientRepositoryDeps {
   supabase?: IPatientSupabaseRepository;
   indexedDb?: IPatientIndexedDbRepository;
+  adminApi?: IPatientAdminApiClient;
   flagsInput?: PatientRepositoryFlagsInput;
 }
 
 export interface PatientRepositoryReadiness {
-  wave: '9.4A-Wave2';
+  wave: 'CLOUD.3';
   supabaseRepositoryImplemented: true;
   indexedDbSsot: true;
-  wiredToPatientService: false;
+  wiredToPatientService: true;
   dualWriteEnabled: boolean;
   readEnabled: boolean;
   writeEnabled: boolean;
@@ -65,8 +84,16 @@ export class PatientRepository implements IPatientRepository {
     return this.deps.supabase || defaultSupabase;
   }
 
+  private get adminApi(): IPatientAdminApiClient {
+    return this.deps.adminApi || getDefaultPatientAdminApiClient();
+  }
+
   private get flagsInput(): PatientRepositoryFlagsInput {
     return this.deps.flagsInput || {};
+  }
+
+  private preferAdminApi(): boolean {
+    return this.deps.adminApi != null || isPatientAdminApiRegistered();
   }
 
   getFlags() {
@@ -76,10 +103,10 @@ export class PatientRepository implements IPatientRepository {
   getReadiness(): PatientRepositoryReadiness {
     const flags = this.getFlags();
     return {
-      wave: '9.4A-Wave2',
+      wave: 'CLOUD.3',
       supabaseRepositoryImplemented: true,
       indexedDbSsot: true,
-      wiredToPatientService: false,
+      wiredToPatientService: true,
       dualWriteEnabled: flags.PATIENTS_DUAL_WRITE,
       readEnabled: flags.PATIENTS_READ,
       writeEnabled: flags.PATIENTS_WRITE,
@@ -104,14 +131,24 @@ export class PatientRepository implements IPatientRepository {
 
   async listCore(tenantId: string, filters: PatientListFilters = {}): Promise<PatientListResult> {
     this.assertRemoteRead();
-    return this.supabase.listPatients(assertValidTenantId(tenantId), filters);
+    const tid = assertRemoteTenantId(tenantId);
+    if (this.preferAdminApi()) {
+      const items = await this.adminApi.listPatients(tid, filters);
+      return { items, total: items.length, source: 'supabase' };
+    }
+    return this.supabase.listPatients(tid, filters);
   }
 
   async getCore(tenantId: string, ref: PatientRef): Promise<PatientCore | null> {
     this.assertRemoteRead();
-    const tid = assertValidTenantId(tenantId);
+    const tid = assertRemoteTenantId(tenantId);
     const needle = String(ref || '').trim();
     if (!needle) return null;
+
+    if (this.preferAdminApi()) {
+      return this.adminApi.getPatient(tid, needle);
+    }
+
     if (needle.startsWith('patient-')) {
       return this.supabase.getPatientByLegacyId(tid, needle);
     }
@@ -119,12 +156,33 @@ export class PatientRepository implements IPatientRepository {
       ?? this.supabase.getPatientByLegacyId(tid, needle);
   }
 
+  async searchCore(
+    tenantId: string,
+    query: string,
+    filters: PatientListFilters = {},
+  ): Promise<PatientCore[]> {
+    this.assertRemoteRead();
+    const tid = assertRemoteTenantId(tenantId);
+    const q = String(query || '').trim();
+    if (this.preferAdminApi()) {
+      return this.adminApi.listPatients(tid, { ...filters, search: q });
+    }
+    return this.supabase.searchPatients(tid, q, filters);
+  }
+
   async createCore(
     user: PatientRepositoryUser,
     dto: PatientCreateCoreDto,
   ): Promise<PatientCore> {
     this.assertRemoteWrite();
-    const tenantId = assertValidTenantId(user.tenantId ?? user.tenant_id);
+    const tenantId = assertRemoteTenantId(user.tenantId ?? user.tenant_id);
+
+    if (this.preferAdminApi()) {
+      const created = await this.adminApi.createPatient(tenantId, dto);
+      if (!created) throw new Error('Admin API não retornou paciente após create.');
+      return created;
+    }
+
     const upsertDto = mapCreateDtoToSupabaseUpsert(tenantId, dto);
     return this.supabase.createPatient(tenantId, upsertDto);
   }
@@ -135,8 +193,15 @@ export class PatientRepository implements IPatientRepository {
     dto: PatientUpdateCoreDto,
   ): Promise<PatientCore> {
     this.assertRemoteWrite();
-    const tenantId = assertValidTenantId(user.tenantId ?? user.tenant_id);
+    const tenantId = assertRemoteTenantId(user.tenantId ?? user.tenant_id);
     const needle = String(ref || '').trim();
+
+    if (this.preferAdminApi()) {
+      const updated = await this.adminApi.updatePatient(tenantId, needle, dto);
+      if (!updated) throw new PatientNotFoundError(ref);
+      return updated;
+    }
+
     const core = (await this.supabase.getPatientById(tenantId, needle))
       ?? (await this.supabase.getPatientByLegacyId(tenantId, needle));
     if (!core) throw new PatientNotFoundError(ref);
@@ -146,12 +211,91 @@ export class PatientRepository implements IPatientRepository {
 
   async softDeleteCore(user: PatientRepositoryUser, ref: PatientRef): Promise<void> {
     this.assertRemoteWrite();
-    const tenantId = assertValidTenantId(user.tenantId ?? user.tenant_id);
+    const tenantId = assertRemoteTenantId(user.tenantId ?? user.tenant_id);
     const needle = String(ref || '').trim();
+
+    if (this.preferAdminApi()) {
+      const ok = await this.adminApi.softDeletePatient(tenantId, needle);
+      if (!ok) throw new PatientNotFoundError(ref);
+      return;
+    }
+
     const core = (await this.supabase.getPatientById(tenantId, needle))
       ?? (await this.supabase.getPatientByLegacyId(tenantId, needle));
     if (!core) throw new PatientNotFoundError(ref);
     await this.supabase.softDeletePatient(tenantId, core.uuid);
+  }
+
+  /**
+   * Upsert IDB por legacy_id — NÃO limpa DB / outras collections.
+   * Não deve ser chamado como primary pelo service nesta phase.
+   */
+  async hydratePatients(
+    remoteRows: PatientCore[],
+    options: { tenantId: string },
+  ): Promise<number> {
+    const tid = assertValidTenantId(options.tenantId);
+    const rows = Array.isArray(remoteRows) ? remoteRows : [];
+    let upserted = 0;
+
+    withDb((db) => {
+      if (!Array.isArray(db.patients)) db.patients = [];
+      for (const core of rows) {
+        if (!core?.legacyId) continue;
+        const mirror = mapCoreToIndexedDbMirror({ ...core, tenantId: core.tenantId || tid });
+        const idx = db.patients.findIndex((row) => row?.id === mirror.id);
+        if (idx >= 0) {
+          db.patients[idx] = { ...db.patients[idx], ...mirror };
+        } else {
+          db.patients.push(mirror);
+        }
+        upserted += 1;
+      }
+      return db;
+    });
+
+    return upserted;
+  }
+
+  async compareIdbVsRemote(tenantId: string): Promise<Record<string, unknown> | null> {
+    if (!shouldComparePatientsIdbVsRemote(this.flagsInput)) return null;
+    const tid = assertRemoteTenantId(tenantId);
+
+    const idbRows = this.idb.listLegacySync({ tenantId: tid });
+    const localItems = idbRows
+      .map((row) => {
+        try {
+          return mapLegacyRowToPatientCore(row, { resolvedTenantId: tid });
+        } catch {
+          return null;
+        }
+      })
+      .filter((core): core is PatientCore => Boolean(core));
+
+    let remoteItems: PatientCore[] = [];
+    try {
+      this.assertRemoteRead();
+      if (this.preferAdminApi()) {
+        remoteItems = await this.adminApi.listPatients(tid);
+      } else {
+        const listed = await this.supabase.listPatients(tid);
+        remoteItems = listed.items || [];
+      }
+    } catch (err) {
+      return {
+        tenantId: tid,
+        skipped: true,
+        reason: err instanceof Error ? err.message : String(err || 'remote-unavailable'),
+      };
+    }
+
+    const report = buildPatientShadowReport({
+      tenantId: tid,
+      localItems,
+      remoteItems,
+    });
+    logPatientShadowReport(report);
+    return report as unknown as Record<string, unknown>;
   }
 
   listLegacySync(filters: PatientListFilters = {}): PatientIndexedDbRow[] {

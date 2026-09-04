@@ -728,9 +728,22 @@ export interface IPatientSupabaseRepository {
   getPatientBundle(tenantId: string, patientUuid: string): Promise<PatientBundleFull | null>;
 }
 
+export interface IPatientAdminApiClient {
+  listPatients(tenantId: string, filters?: PatientListFilters): Promise<PatientCore[]>;
+  getPatient(tenantId: string, legacyId: string): Promise<PatientCore | null>;
+  createPatient(tenantId: string, dto: PatientCreateCoreDto): Promise<PatientCore | null>;
+  updatePatient(
+    tenantId: string,
+    legacyId: string,
+    dto: PatientUpdateCoreDto,
+  ): Promise<PatientCore | null>;
+  softDeletePatient(tenantId: string, legacyId: string): Promise<boolean>;
+}
+
 export interface IPatientRepository {
   listCore(tenantId: string, filters?: PatientListFilters): Promise<PatientListResult>;
   getCore(tenantId: string, ref: PatientRef): Promise<PatientCore | null>;
+  searchCore(tenantId: string, query: string, filters?: PatientListFilters): Promise<PatientCore[]>;
   createCore(user: PatientRepositoryUser, dto: PatientCreateCoreDto): Promise<PatientCore>;
   updateCore(
     user: PatientRepositoryUser,
@@ -740,6 +753,11 @@ export interface IPatientRepository {
   softDeleteCore(user: PatientRepositoryUser, ref: PatientRef): Promise<void>;
   listLegacySync(filters?: PatientListFilters): PatientIndexedDbRow[];
   getLegacyProfileSync(patientId: string): PatientIndexedDbRow | null;
+  hydratePatients(
+    remoteRows: PatientCore[],
+    options: { tenantId: string },
+  ): Promise<number>;
+  compareIdbVsRemote(tenantId: string): Promise<Record<string, unknown> | null>;
 }
 
 // ---------------------------------------------------------------------------

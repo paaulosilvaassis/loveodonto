@@ -18,10 +18,24 @@ import {
   buildIdentityChangeAudit,
   resolveIdentityFieldValue,
 } from './patientIdentityIntegrity.js';
+import { schedulePatientShadowRead } from './patientReadAdapter.js';
 
 const LEGACY_LOCAL_TENANT_ID = 'tenant-1';
+const SAAS_TENANT_UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export { resolveUserTenantId };
+
+/** Shadow read fire-and-forget — fail closed; IDB permanece primary. */
+function maybeSchedulePatientShadow(user) {
+  try {
+    const tenantId = resolveUserTenantId(user);
+    if (!tenantId || !SAAS_TENANT_UUID_RE.test(String(tenantId))) return;
+    schedulePatientShadowRead(tenantId);
+  } catch {
+    /* fail closed — nunca propaga à UI */
+  }
+}
 
 export function clearPatientSuggestCache() {
   suggestCache.clear();
@@ -96,7 +110,11 @@ const ensureCpfUnique = (db, cpf, ignorePatientId) => {
 };
 
 
-export const listPatients = () => loadDb().patients;
+export const listPatients = (user = null) => {
+  const patients = loadDb().patients;
+  maybeSchedulePatientShadow(user);
+  return patients;
+};
 
 function buildAllowedPatientTenantIds(db, tenantId) {
   if (!tenantId) return null;
@@ -223,11 +241,11 @@ export const suggestPatients = (type, query, limit = 10, tenantId = null) => {
   return payload;
 };
 
-export const getPatient = (patientId) => {
+export const getPatient = (patientId, user = null) => {
   const db = loadDb();
   const profile = db.patients.find((item) => item.id === patientId);
   if (!profile) return null;
-  return {
+  const result = {
     profile,
     documents: (Array.isArray(db.patientDocuments) ? db.patientDocuments.find((item) => item.patient_id === patientId) : null) || {},
     birth: (Array.isArray(db.patientBirth) ? db.patientBirth.find((item) => item.patient_id === patientId) : null) || {},
@@ -239,6 +257,8 @@ export const getPatient = (patientId) => {
     access: (Array.isArray(db.patientAccess) ? db.patientAccess.find((item) => item.patient_id === patientId) : null) || {},
     activity: (Array.isArray(db.patientActivitySummary) ? db.patientActivitySummary.find((item) => item.patient_id === patientId) : null) || {},
   };
+  maybeSchedulePatientShadow(user);
+  return result;
 };
 
 
