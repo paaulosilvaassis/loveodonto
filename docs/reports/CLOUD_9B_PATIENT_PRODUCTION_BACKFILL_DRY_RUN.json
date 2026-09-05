@@ -1,0 +1,84 @@
+{
+  "phase": "CLOUD.9B",
+  "final_gate": "PASS_CLOUD9B_PATIENT_PRODUCTION_BACKFILL_DRY_RUN_READY",
+  "pr17": {
+    "state_before": "OPEN",
+    "head": "b2e6ffdcbf883b6c90a5c6eecf583d3b297c09ec",
+    "merged": true,
+    "merge_sha": "6b936b67c116253514750ce0595865ba4d8d6a63"
+  },
+  "production_project_ref": "uoepkwhqztmsjnzirpev",
+  "production_project_confirmed": true,
+  "source_file": "PHASE_PATIENT_IMPORT_RECOVERY_06_post_reimport_3731_20260813_185537.pkl.gz",
+  "source_sha256": "ce158979ef7e67e95bd17458ddf033e477e073266d7a5942897ceffb442329e9",
+  "source_counts": {
+    "patients": 3731,
+    "documents": 3731,
+    "records": 3731,
+    "addresses": 2921,
+    "insurances": 2176,
+    "phones": 0
+  },
+  "before": {
+    "patients": 0,
+    "documents": 0,
+    "records": 0,
+    "addresses": 0,
+    "insurances": 0,
+    "phones": 0
+  },
+  "parent": {
+    "INSERT_SAFE": 3731,
+    "MATCH_EXISTING": 0,
+    "CONFLICT": 0,
+    "INVALID": 0,
+    "MISSING_TENANT": 0
+  },
+  "identity": {
+    "duplicate_legacy_ids": 0,
+    "duplicate_cpfs_requiring_review": 0,
+    "schema_invalid_rows": 0,
+    "tenant_mapping_failures": 0
+  },
+  "satellites": {
+    "document_insert_after_parent": 3731,
+    "document_conflict": 0,
+    "document_orphan": 0,
+    "record_insert_after_parent": 3731,
+    "record_conflict": 0,
+    "record_orphan": 0,
+    "address_insert_after_parent": 2921,
+    "address_conflict": 0,
+    "address_orphan": 0,
+    "insurance_insert_after_parent": 2176,
+    "insurance_conflict": 0,
+    "insurance_orphan": 0,
+    "phone_insert_after_parent": 0,
+    "phone_conflict": 0,
+    "phone_orphan": 0
+  },
+  "record_number_collision_count": 1,
+  "record_number_collision_strategy": "sort_by_record_legacy_id_keep_first_others_suffix__legacy_id",
+  "expected_final": {
+    "patients": 3731,
+    "documents": 3731,
+    "records": 3731,
+    "addresses": 2921,
+    "insurances": 2176,
+    "phones": 0,
+    "source_match": 3731,
+    "mismatch": 0
+  },
+  "flags": {
+    "PATIENT_REMOTE_READ": false,
+    "PATIENT_REMOTE_READ_SHADOW": false,
+    "PATIENT_REMOTE_READ_PRIMARY": false,
+    "PATIENT_REMOTE_WRITE": false,
+    "PATIENT_REMOTE_WRITE_PRIMARY": false
+  },
+  "production_rows_after_dry_run": 0,
+  "production_write": "ZERO",
+  "production_env_change": "NONE",
+  "agenda_touched": false,
+  "cloud9c_apply_plan_ready": true
+}
