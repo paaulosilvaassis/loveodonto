@@ -371,6 +371,47 @@ export function classifyAllPatients(localPatients, remotePatients, tenantMapping
   return { results, counters, conflictReasons };
 }
 
+/**
+ * CLOUD.5 / CLOUD.9B — deterministic record_number collision plan.
+ * Group by non-empty record_number; sort by record legacy id; keep first;
+ * losers get `${number}__${loser.legacy_id}`. Never discards a row.
+ */
+export function planRecordNumberCollisions(records = []) {
+  const byNum = new Map();
+  for (const r of records) {
+    const n = asText(r?.record_number);
+    if (!n) continue;
+    if (!byNum.has(n)) byNum.set(n, []);
+    byNum.get(n).push(r);
+  }
+  const overrides = {};
+  const report = [];
+  for (const [n, rs] of byNum.entries()) {
+    if (rs.length < 2) continue;
+    const sorted = [...rs].sort((a, b) => asText(a.id).localeCompare(asText(b.id)));
+    const keep = sorted[0];
+    for (const loser of sorted.slice(1)) {
+      const newN = `${n}__${loser.id}`;
+      overrides[loser.id] = newN;
+      report.push({
+        record_number: n,
+        kept_legacy_id: keep.id,
+        kept_patient_id: keep.patient_id,
+        adjusted_legacy_id: loser.id,
+        adjusted_patient_id: loser.patient_id,
+        adjusted_record_number: newN,
+        reason: 'SCHEMA_UNIQUE_tenant_record_number',
+      });
+    }
+  }
+  return {
+    collisionGroups: [...byNum.entries()].filter(([, rs]) => rs.length > 1).length,
+    collisionAdjustments: report.length,
+    overrides,
+    report,
+  };
+}
+
 export function classifySatelliteRows({
   rows = [],
   localPatientIds = new Set(),
