@@ -1,0 +1,63 @@
+{
+  "phase": "CLOUD.9A",
+  "final_gate": "PASS_CLOUD9A_SCHEMA_READY_SOURCE_RECOVERY_DECISION_REQUIRED",
+  "main_sha": "ccf0f18ffb1529b85dbd756f2d37d528bc7d249f",
+  "main_sha_pr15_merge": "757a97714256861dd3df7eeb400f8875298758ce",
+  "production_project_ref": "uoepkwhqztmsjnzirpev",
+  "production_project_confirmed": true,
+  "production_project_name": "love-odonto-prod",
+  "target_is_staging": false,
+  "production_target_tenant_uuid": "b721c2c9-d924-41ee-8911-dc00c8208326",
+  "source": {
+    "candidates_found": 2,
+    "newest_valid_source": "PHASE_PATIENT_IMPORT_RECOVERY_06_post_reimport_3731_20260813_185537.pkl.gz",
+    "newest_valid_source_sha256": "ce158979ef7e67e95bd17458ddf033e477e073266d7a5942897ceffb442329e9",
+    "newest_valid_source_timestamp": "2026-08-13T18:55:37",
+    "newest_valid_source_patient_count": 3731,
+    "post_snapshot_change_evidence": "INCONCLUSIVE",
+    "production_backfill_source_status": "BEST_RECOVERABLE_SOURCE",
+    "source_gate": "SOURCE_BEST_RECOVERABLE",
+    "newer_source_found": false,
+    "comparison_recovery06_vs_03": {
+      "source_a_count": 3731,
+      "source_b_count": 7474,
+      "common": 0,
+      "only_a": 3731,
+      "only_b": 7474,
+      "changed": 0
+    }
+  },
+  "schema": {
+    "before": "MISSING",
+    "after": "READY",
+    "migrations_applied": [
+      "025_app_patients_core_patients",
+      "025_app_patients_core_phones",
+      "025_app_patients_core_documents_records",
+      "027_app_patient_details_wave2a",
+      "027_app_patient_details_wave2b",
+      "027_app_patient_details_wave2c",
+      "027_app_patient_details_activity_and_rls_finalize"
+    ],
+    "schema_gate": "PASS_CLOUD9A_PRODUCTION_PATIENT_SCHEMA_READY",
+    "patients_after_schema": 0,
+    "documents_after_schema": 0,
+    "records_after_schema": 0,
+    "addresses_after_schema": 0,
+    "insurances_after_schema": 0,
+    "phones_after_schema": 0
+  },
+  "flags": {
+    "PATIENT_REMOTE_READ": false,
+    "PATIENT_REMOTE_READ_SHADOW": false,
+    "PATIENT_REMOTE_READ_PRIMARY": false,
+    "PATIENT_REMOTE_WRITE": false,
+    "PATIENT_REMOTE_WRITE_PRIMARY": false
+  },
+  "production_patient_data_write": false,
+  "production_backfill_executed": false,
+  "production_runtime_cutover": false,
+  "agenda_touched": false,
+  "tests": "PASS (patient schema/repo/guard/Admin suites; wave2 re-run PASS)",
+  "build": "PASS"
+}
