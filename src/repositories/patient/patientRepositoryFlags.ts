@@ -1,7 +1,8 @@
 /**
  * @module repositories/patient/patientRepositoryFlags
- * @description Feature flags Pacientes V3 — Phase 9.4A / CLOUD.3.
- * Defaults: IndexedDB authority. Produção trava flags perigosas.
+ * @description Feature flags Pacientes V3 — Phase 9.4A / CLOUD.3 / CLOUD.9D.1.
+ * Defaults: IndexedDB authority. Produção trava apenas flags de WRITE.
+ * READ/SHADOW/COMPARE/READ_PRIMARY são configuráveis via env (default false).
  */
 
 import {
@@ -78,11 +79,11 @@ export const PATIENTS_REPOSITORY_FLAG_DEFAULTS: Readonly<PatientRepositoryFlags>
   PATIENTS_WRITE_COMPARE: false,
 };
 
+/**
+ * CLOUD.9D.1 — production runtime lock aplica-se somente a mutação remota.
+ * Flags de leitura remota permanecem default-false e configuráveis via env.
+ */
 export const PATIENTS_PRODUCTION_LOCKED_FLAGS: readonly PatientRepositoryFlagKey[] = [
-  'PATIENTS_READ',
-  'PATIENTS_READ_PRIMARY',
-  'PATIENTS_SHADOW',
-  'PATIENTS_COMPARE',
   'PATIENTS_WRITE',
   'PATIENTS_WRITE_PRIMARY',
   'PATIENTS_DUAL_WRITE',
@@ -145,8 +146,8 @@ export function applyProductionSafeLocks(
     flags as unknown as Record<string, boolean>,
     PATIENTS_PRODUCTION_LOCKED_FLAGS as readonly string[],
     {
+      // Host de produção bloqueia apenas mutação; READ_PRIMARY é env-gated (CLOUD.9D.1).
       supabaseHostLockedKeys: [
-        'PATIENTS_READ_PRIMARY',
         'PATIENTS_WRITE',
         'PATIENTS_WRITE_PRIMARY',
         'PATIENTS_DUAL_WRITE',
