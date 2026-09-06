@@ -97,7 +97,7 @@ describe('CLOUD.3 patient repository wiring', () => {
     expect(PATIENT_REMOTE_FLAG_ALIASES.PATIENT_REMOTE_WRITE_PRIMARY).toBe('PATIENTS_WRITE_PRIMARY');
   });
 
-  it('production lock força flags perigosas false', () => {
+  it('production lock força apenas flags de WRITE false (CLOUD.9D.1)', () => {
     const locked = lockDangerousPatientRepositoryFlags({
       PATIENTS_READ: true,
       PATIENTS_READ_PRIMARY: true,
@@ -108,10 +108,14 @@ describe('CLOUD.3 patient repository wiring', () => {
       PATIENTS_DUAL_WRITE: true,
       PATIENTS_WRITE_COMPARE: true,
     });
-    expect(locked.PATIENTS_READ).toBe(false);
+    expect(locked.PATIENTS_READ).toBe(true);
+    expect(locked.PATIENTS_READ_PRIMARY).toBe(true);
+    expect(locked.PATIENTS_SHADOW).toBe(true);
+    expect(locked.PATIENTS_COMPARE).toBe(true);
     expect(locked.PATIENTS_WRITE).toBe(false);
+    expect(locked.PATIENTS_WRITE_PRIMARY).toBe(false);
     expect(locked.PATIENTS_DUAL_WRITE).toBe(false);
-    expect(locked.PATIENTS_SHADOW).toBe(false);
+    expect(locked.PATIENTS_WRITE_COMPARE).toBe(false);
   });
 
   it('mapper round-trip preserva legacy_id', () => {
