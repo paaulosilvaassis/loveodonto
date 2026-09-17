@@ -51,7 +51,7 @@ import {
   findPathBObligationReceivable,
 } from './receivablesService.js';
 import { createBoletoCharge, listBoletoCharges, BOLETO_CHARGE_STATUS } from './boletoChargesService.js';
-import { BOLETO_RESEND_PERMISSION, resolveListTenantId, deriveBoletoChargeTenantId } from './financialChargeOwnership.js';
+import { BOLETO_RESEND_PERMISSION, resolveListTenantId as resolveChargeListTenantId, deriveBoletoChargeTenantId } from './financialChargeOwnership.js';
 import {
   createFinancingPaymentAllocation,
   listFinancingPaymentAllocations,
@@ -1034,7 +1034,7 @@ export const runBoletoReminderRule = (user, referenceDate = todayIso()) => {
 export const listBoletoReminderEvents = (filters = {}) => {
   const db = loadDb();
   let items = Array.isArray(db.boletoReminderEvents) ? [...db.boletoReminderEvents] : [];
-  const tenantId = resolveListTenantId(filters);
+  const tenantId = resolveChargeListTenantId(filters);
   if (tenantId) {
     const chargeById = new Map((db.boletoCharges || []).map((row) => [row.id, row]));
     const tid = String(tenantId).trim();
