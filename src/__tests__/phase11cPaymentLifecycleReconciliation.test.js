@@ -1,7 +1,7 @@
 /**
  * PHASE 11.C — payment lifecycle, idempotency, reversal and reconciliation.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initDb, loadDb, peekDb, resetDb, withDb } from '../db/index.js';
 import {
   createReceivable,
@@ -104,6 +104,8 @@ function pay(user, receivableId, amount, operationId, extra = {}) {
 
 describe('PHASE 11.C — payment lifecycle', () => {
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-31T12:00:00Z'));
     localStorage.clear();
     await resetDb();
     await initDb();
@@ -112,6 +114,7 @@ describe('PHASE 11.C — payment lifecycle', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     __setPaymentWriteFaultForTest(null);
   });
 
