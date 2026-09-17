@@ -164,6 +164,8 @@ function pay(user, receivableId, amount, operationId) {
 
 describe('PHASE 11.F financial write surface tenant integrity', () => {
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-31T12:00:00Z'));
     localStorage.clear();
     await resetDb();
     await initDb();
@@ -171,6 +173,7 @@ describe('PHASE 11.F financial write surface tenant integrity', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
