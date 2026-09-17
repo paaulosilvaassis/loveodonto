@@ -1,7 +1,7 @@
 /**
  * PHASE 11.G — monetary model and global financial reconciliation in cents.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initDb, loadDb, peekDb, resetDb, withDb } from '../db/index.js';
 import { APPOINTMENT_STATUS } from '../services/appointmentService.js';
 import { BUDGET_STATUS, getBudget, saveBudget } from '../services/clinicalService.js';
@@ -144,13 +144,15 @@ function centsSum(rows, field) {
 
 describe('PHASE 11.G monetary model global reconciliation', () => {
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-31T12:00:00Z'));
     localStorage.clear();
     await resetDb();
     await initDb();
     seed();
   });
 
-  afterEach(() => {});
+  afterEach(() => { vi.useRealTimers(); });
 
   it('T1 canonical cents conversion', () => {
     expect(toCents(10.1)).toBe(1010);
