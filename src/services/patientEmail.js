@@ -24,3 +24,6 @@ export function resolvePatientEmail(bundle) {
 }
 
 export const PATIENT_EMAIL_REQUIRED_MSG = 'Informe o e-mail do paciente para enviar o link de assinatura.';
+export const PATIENT_EMAIL_NOT_REGISTERED_MSG = 'E-mail do paciente não cadastrado';
+export const PATIENT_EMAIL_NOT_SAVED_HINT =
+  'Este e-mail será usado somente neste envio. Ele não será salvo no cadastro do paciente.';

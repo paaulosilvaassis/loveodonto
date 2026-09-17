@@ -18,7 +18,11 @@ import {
   resolveRequiredSignatureType,
   sendContractForDigitalSignature,
 } from '../../services/contractSignatureFlowService.js';
-import { PATIENT_EMAIL_REQUIRED_MSG } from '../../services/patientEmail.js';
+import {
+  PATIENT_EMAIL_REQUIRED_MSG,
+  PATIENT_EMAIL_NOT_REGISTERED_MSG,
+  PATIENT_EMAIL_NOT_SAVED_HINT,
+} from '../../services/patientEmail.js';
 import { formatFriendlyContractNumber } from '../../utils/friendlyNumbers.js';
 
 const FORM_ID = 'send-contract-signature-form';
@@ -137,6 +141,12 @@ export default function SendContractSignatureModal({
                   required
                   aria-required="true"
                 />
+                {!form.patientEmailOnFile ? (
+                  <span className="block mt-1 text-xs text-[var(--color-error)]">{PATIENT_EMAIL_NOT_REGISTERED_MSG}</span>
+                ) : null}
+                {!form.patientEmailOnFile ? (
+                  <span className="block mt-1 text-xs text-slate-500">{PATIENT_EMAIL_NOT_SAVED_HINT}</span>
+                ) : null}
                 {!String(form.patientEmail || '').trim() ? (
                   <span className="block mt-1 text-xs text-[var(--color-error)]">{PATIENT_EMAIL_REQUIRED_MSG}</span>
                 ) : null}
