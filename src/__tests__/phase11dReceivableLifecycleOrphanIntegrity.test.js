@@ -1,7 +1,7 @@
 /**
  * PHASE 11.D — receivable lifecycle, budget cancellation and orphan integrity.
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initDb, loadDb, peekDb, resetDb, withDb } from '../db/index.js';
 import {
   cancelReceivable,
@@ -141,10 +141,16 @@ function pay(user, receivableId, amount, operationId) {
 
 describe('PHASE 11.D — receivable lifecycle', () => {
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-31T12:00:00Z'));
     localStorage.clear();
     await resetDb();
     await initDb();
     seed();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('T1 unpaid receivable is cancelled with approved budget cancel', () => {
