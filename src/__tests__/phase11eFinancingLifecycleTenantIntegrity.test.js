@@ -1,7 +1,7 @@
 /**
  * PHASE 11.E — financing lifecycle, tenant ownership and PATH B integrity.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initDb, loadDb, peekDb, resetDb, withDb } from '../db/index.js';
 import { APPOINTMENT_STATUS } from '../services/appointmentService.js';
 import { BUDGET_STATUS, getBudget, saveBudget } from '../services/clinicalService.js';
@@ -164,6 +164,8 @@ function payReceivable(user, receivableId, amount, operationId) {
 
 describe('PHASE 11.E financing lifecycle tenant integrity', () => {
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-31T12:00:00Z'));
     localStorage.clear();
     await resetDb();
     await initDb();
@@ -171,6 +173,7 @@ describe('PHASE 11.E financing lifecycle tenant integrity', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     __setFinancingApproveFaultForTest(null);
   });
 
