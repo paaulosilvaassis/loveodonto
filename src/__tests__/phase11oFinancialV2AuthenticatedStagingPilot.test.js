@@ -4,7 +4,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initDb, loadDb, resetDb, withDb } from '../db/index.js';
 import { APPOINTMENT_STATUS } from '../services/appointmentService.js';
 import { cancelUnsignedContract } from '../services/contractLifecycleCommandService.js';
@@ -111,6 +111,8 @@ function financeSnapshot() {
 
 describe('PHASE 11.O authenticated staging tenant pilot', () => {
   beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-31T12:00:00Z'));
     localStorage.clear();
     __resetFinancialV2RuntimeShadowForTest();
     await resetDb();
@@ -118,6 +120,7 @@ describe('PHASE 11.O authenticated staging tenant pilot', () => {
     seed();
   });
   afterEach(() => {
+    vi.useRealTimers();
     __resetFinancialV2RuntimeShadowForTest();
   });
 
