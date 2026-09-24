@@ -470,12 +470,22 @@ export function validateResolvedVariables(map, meta = {}) {
   return missing;
 }
 
+/** Tags cujo valor já é HTML montado com escape interno (tabelas / texto pré-escapado). */
+const TRUSTED_HTML_TAGS = new Set([
+  '#procedimentos',
+  '#parcelas',
+  '#tratamento_nome',
+  '#orcamentoObservacoes',
+]);
+
 export function applyContractHashtags(html, map) {
   let out = String(html || '');
   for (const [k, v] of Object.entries(map || {})) {
     if (!k.startsWith('#')) continue;
     const re = new RegExp(k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-    out = out.replace(re, v == null ? '' : String(v));
+    const raw = v == null ? '' : String(v);
+    const value = TRUSTED_HTML_TAGS.has(k) ? raw : escapeHtml(raw);
+    out = out.replace(re, () => value);
   }
   return out;
 }

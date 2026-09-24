@@ -6,7 +6,14 @@ import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+  buildCorsOptions,
+  createRateLimiter,
+  onlyForPaths,
+  securityHeaders,
+  SENSITIVE_ROUTE_PATTERNS,
+} from './lib/httpHardening.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -188,27 +195,50 @@ console.log(
 );
 
 const app = express();
-app.use(
-  cors({
-    origin: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Platform-Key'],
-  }),
-);
+app.disable('x-powered-by');
+app.set('trust proxy', 1);
+app.use(securityHeaders);
+app.use(cors(buildCorsOptions(process.env)));
 app.use(express.json({ limit: '1mb' }));
+app.use(onlyForPaths(
+  SENSITIVE_ROUTE_PATTERNS,
+  createRateLimiter({ name: 'sensitive-write', windowMs: 10 * 60 * 1000, max: 30 }),
+));
+app.use('/internal/app', createRateLimiter({ name: 'internal-app', windowMs: 60 * 1000, max: 600 }));
 
-/** Health check leve (sem Supabase) â€” usado pelo script `npm run console:stack` para saber quando a API estÃ¡ escutando. */
+const HEALTH_BASE = {
+  ok: true,
+  service: 'saas-admin-api',
+  version: '2026-06-26-identity-unified',
+  build: { identityModule: true },
+};
+
+/** Health público mínimo — sem detalhes de infraestrutura (host SMTP, provedores, códigos de erro). */
 app.get('/health', (_req, res) => {
+  res.status(200).json({
+    ...HEALTH_BASE,
+    features: {
+      identityService: true,
+      supabaseAuthPublicClient: Boolean(process.env.SUPABASE_ANON_KEY),
+    },
+  });
+});
+
+/** Health detalhado (e-mail/SMTP/storage) — exige header X-Platform-Key. */
+app.get('/internal/platform/health', (req, res) => {
+  const expected = String(process.env.PLATFORM_API_KEY || process.env.ADMIN_API_KEY || '');
+  const given = String(req.get('X-Platform-Key') || '');
+  const valid = expected.length > 0
+    && given.length === expected.length
+    && timingSafeEqual(Buffer.from(given), Buffer.from(expected));
+  if (!valid) return res.status(401).json({ ok: false, error: 'unauthorized' });
   const contractsV2Storage = toPublicStorageBindingPayload(
     resolveContractsV2PrivateStorageBinding(process.env),
   );
   const inventory = getEmailTransportInventory();
   const smtpVerify = getPublicSmtpVerifyHealth();
-  res.status(200).json({
-    ok: true,
-    service: 'saas-admin-api',
-    version: '2026-06-26-identity-unified',
-    build: { identityModule: true },
+  return res.status(200).json({
+    ...HEALTH_BASE,
     features: {
       identityService: true,
       supabaseAuthPublicClient: Boolean(process.env.SUPABASE_ANON_KEY),
