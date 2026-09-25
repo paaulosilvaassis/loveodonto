@@ -1,0 +1,252 @@
+/**
+ * SPF.1A.1 — guard compartilhado de alvo Supabase (fail-closed).
+ *
+ * assertSupabaseTarget: prova que o alvo declarado (LOVE_ODONTO_TARGET_ENV) bate com o
+ *   project ref da URL e, quando possível, com o ref embutido na credencial.
+ * evaluateOperationGate: decide read / dry-run / apply. Escrita sem apply = dry-run;
+ *   escrita em production exige autorização versionada; destrutivo em production = sempre negado.
+ *
+ * Regras de sigilo: erros e relatórios carregam só códigos, classes e refs públicos.
+ * Nenhum valor de credencial, JWT ou URL completa é incluído.
+ *
+ * Reaproveita a semântica de assertStagingSupabaseUrl (nega vazio / exige ref esperado) e
+ * extractSupabaseProjectRef (ref explícito via SUPABASE_PROJECT_REF) já existentes no repo.
+ */
+import {
+  LOCAL_PROJECT_REF,
+  TARGET_ENVS,
+  classifyProjectRef,
+  expectedRefForTargetEnv,
+} from './projectRefs.js';
+import { PRODUCTION_OPERATION_AUTHORIZATIONS } from './productionAuthorizations.js';
+
+export const TARGET_ENV_VAR = 'LOVE_ODONTO_TARGET_ENV';
+export const PRODUCTION_AUTHORIZATION_VAR = 'LOVE_ODONTO_PRODUCTION_AUTHORIZATION';
+export const DESTRUCTIVE_CONFIRMATION_VAR = 'LOVE_ODONTO_DESTRUCTIVE_CONFIRMATION';
+export const EXPLICIT_PROJECT_REF_VAR = 'SUPABASE_PROJECT_REF';
+
+/** Operações destrutivas em production ficam desligadas no código; só um PR revisado muda isto. */
+export const DESTRUCTIVE_PRODUCTION_ENABLED = false;
+
+export const OPERATIONS = Object.freeze(['read', 'write', 'destructive']);
+
+const SUPABASE_HOST_RE = /^([a-z0-9]{20})\.supabase\.(co|in)$/;
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0', 'host.docker.internal']);
+const REF_RE = /^[a-z0-9]{20}$/;
+const SAFE_DETAIL_KEYS = new Set([
+  'targetEnv', 'expectedRefClass', 'expectedRef', 'urlRefClass', 'urlRef', 'urlKind',
+  'credentialPresence', 'credentialRefStatus', 'credentialRefClass', 'explicitRefStatus',
+  'operation', 'operationId', 'mode', 'allowed', 'expectedFormat', 'reason',
+]);
+
+function sanitizeDetails(details) {
+  const out = {};
+  for (const [k, v] of Object.entries(details || {})) {
+    if (!SAFE_DETAIL_KEYS.has(k)) continue;
+    if (v == null || typeof v === 'boolean' || typeof v === 'number') out[k] = v;
+    else if (Array.isArray(v)) out[k] = v.map((x) => String(x)).slice(0, 10);
+    else out[k] = String(v).slice(0, 120);
+  }
+  return out;
+}
+
+export class SupabaseTargetGuardError extends Error {
+  constructor(code, details = {}) {
+    super(`[SUPABASE_TARGET_GUARD] DENY ${code}`);
+    this.name = 'SupabaseTargetGuardError';
+    this.code = code;
+    this.details = sanitizeDetails(details);
+  }
+
+  toJSON() {
+    return { ok: false, guard: 'SUPABASE_TARGET_GUARD', decision: 'DENY', code: this.code, ...this.details };
+  }
+}
+
+function deny(code, details) {
+  throw new SupabaseTargetGuardError(code, details);
+}
+
+function readRaw(env, key) {
+  const v = env?.[key];
+  return v == null ? '' : String(v).trim();
+}
+
+export function readTargetEnv(env = process.env) {
+  const raw = readRaw(env, TARGET_ENV_VAR).toLowerCase();
+  if (!raw) deny('TARGET_ENV_MISSING', { reason: `${TARGET_ENV_VAR} obrigatório: ${TARGET_ENVS.join('|')}` });
+  if (!TARGET_ENVS.includes(raw)) {
+    deny('TARGET_ENV_INVALID', { reason: `${TARGET_ENV_VAR} deve ser ${TARGET_ENVS.join('|')}` });
+  }
+  return raw;
+}
+
+/** Extrai o ref de uma URL Supabase; localhost vira LOCAL_PROJECT_REF. Qualquer outra coisa = negar. */
+export function parseSupabaseUrlRef(url) {
+  const raw = String(url ?? '').trim();
+  if (!raw) deny('URL_MISSING');
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    deny('URL_INVALID');
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') deny('URL_INVALID');
+  const host = parsed.hostname.toLowerCase();
+  const m = host.match(SUPABASE_HOST_RE);
+  if (m) return { kind: 'supabase', ref: m[1] };
+  if (LOCAL_HOSTS.has(host)) return { kind: 'local', ref: LOCAL_PROJECT_REF };
+  return deny('URL_UNRECOGNIZED_HOST', { reason: 'host não é <ref>.supabase.co nem local' });
+}
+
+/**
+ * Inspeciona a credencial sem nunca devolvê-la.
+ * JWT legado (anon/service_role) carrega o claim `ref`; chaves sb_secret_/sb_publishable_/sbp_ são opacas.
+ */
+export function inspectCredential(credential) {
+  const raw = String(credential ?? '').trim();
+  if (!raw) return { presence: 'ABSENT', verifiable: false, ref: null };
+  const parts = raw.split('.');
+  if (raw.startsWith('eyJ') && parts.length === 3) {
+    try {
+      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+      const ref = typeof payload?.ref === 'string' ? payload.ref.toLowerCase() : '';
+      if (REF_RE.test(ref)) return { presence: 'PRESENT', verifiable: true, ref };
+      return { presence: 'PRESENT', verifiable: false, ref: null, reason: 'JWT_WITHOUT_REF' };
+    } catch {
+      return { presence: 'PRESENT', verifiable: false, ref: null, reason: 'JWT_UNPARSEABLE' };
+    }
+  }
+  return { presence: 'PRESENT', verifiable: false, ref: null, reason: 'OPAQUE_KEY' };
+}
+
+/**
+ * @param {object} opts
+ * @param {Record<string,string|undefined>} [opts.env] ambiente do shell (process.env) — fonte do TARGET_ENV
+ * @param {string} opts.url URL Supabase que a ferramenta realmente vai usar
+ * @param {string} [opts.credential] chave que a ferramenta vai usar (só inspecionada, nunca exposta)
+ * @param {string} [opts.explicitProjectRef] ref explícito (senão env.SUPABASE_PROJECT_REF)
+ */
+export function assertSupabaseTarget({ env = process.env, url, credential, explicitProjectRef } = {}) {
+  const targetEnv = readTargetEnv(env);
+  const expectedRef = expectedRefForTargetEnv(targetEnv);
+  const base = { targetEnv, expectedRefClass: classifyProjectRef(expectedRef) };
+
+  const parsed = parseSupabaseUrlRef(url);
+  const urlInfo = { urlKind: parsed.kind, urlRefClass: classifyProjectRef(parsed.ref) };
+  if (parsed.ref !== expectedRef) {
+    deny('TARGET_REF_MISMATCH', { ...base, ...urlInfo, expectedRef, urlRef: parsed.ref });
+  }
+
+  const explicit = String(explicitProjectRef ?? readRaw(env, EXPLICIT_PROJECT_REF_VAR)).trim().toLowerCase();
+  let explicitRefStatus = 'ABSENT';
+  if (explicit) {
+    if (explicit !== expectedRef) {
+      deny('EXPLICIT_REF_MISMATCH', { ...base, ...urlInfo, explicitRefStatus: 'MISMATCH' });
+    }
+    explicitRefStatus = 'MATCH';
+  }
+
+  const cred = inspectCredential(credential);
+  let credentialRefStatus;
+  if (cred.presence === 'ABSENT') {
+    credentialRefStatus = 'ABSENT';
+  } else if (cred.verifiable) {
+    if (cred.ref !== expectedRef) {
+      deny('CREDENTIAL_REF_MISMATCH', {
+        ...base, ...urlInfo, credentialRefStatus: 'MISMATCH', credentialRefClass: classifyProjectRef(cred.ref),
+      });
+    }
+    credentialRefStatus = 'MATCH';
+  } else if (targetEnv === 'local') {
+    // Chaves do Supabase local (demo JWT sem ref) não carregam project ref.
+    credentialRefStatus = 'UNVERIFIABLE';
+  } else if (explicitRefStatus === 'MATCH') {
+    credentialRefStatus = 'UNVERIFIABLE_EXPLICIT_REF_MATCH';
+  } else {
+    deny('CREDENTIAL_REF_UNVERIFIABLE', {
+      ...base, ...urlInfo, credentialRefStatus: 'UNVERIFIABLE',
+      reason: `credencial sem ref verificável: defina ${EXPLICIT_PROJECT_REF_VAR} com o ref esperado`,
+    });
+  }
+
+  return Object.freeze({
+    ...base,
+    expectedRef,
+    urlRef: parsed.ref,
+    urlKind: parsed.kind,
+    urlRefClass: urlInfo.urlRefClass,
+    urlRefStatus: 'MATCH',
+    credentialPresence: cred.presence,
+    credentialRefStatus,
+    explicitRefStatus,
+  });
+}
+
+function findProductionAuthorization(authId, operationId, now) {
+  return PRODUCTION_OPERATION_AUTHORIZATIONS.find((entry) => entry
+    && entry.id === authId
+    && entry.operationId === operationId
+    && Number.isFinite(Date.parse(entry.expiresAt))
+    && Date.parse(entry.expiresAt) > now.getTime());
+}
+
+/**
+ * @param {object} opts
+ * @param {ReturnType<typeof assertSupabaseTarget>} opts.target resultado de assertSupabaseTarget
+ * @param {'read'|'write'|'destructive'} opts.operation
+ * @param {string} [opts.operationId] identificador estável da ferramenta (obrigatório para write/destructive)
+ * @param {boolean} [opts.apply] pedido explícito de aplicar; ausente = dry-run
+ */
+export function evaluateOperationGate({
+  target, operation, operationId, apply = false, env = process.env, now = new Date(),
+} = {}) {
+  if (!target || !target.targetEnv || target.urlRefStatus !== 'MATCH') deny('TARGET_NOT_ASSERTED');
+  if (!OPERATIONS.includes(operation)) deny('OPERATION_INVALID', { reason: `operation: ${OPERATIONS.join('|')}` });
+  const base = { targetEnv: target.targetEnv, expectedRefClass: target.expectedRefClass, operation, operationId };
+
+  if (operation === 'read') return Object.freeze({ ...base, allowed: true, mode: 'read' });
+
+  if (!operationId || typeof operationId !== 'string') deny('OPERATION_ID_REQUIRED', base);
+  const isProduction = target.targetEnv === 'production';
+
+  if (operation === 'destructive') {
+    if (isProduction && !DESTRUCTIVE_PRODUCTION_ENABLED) deny('PRODUCTION_DESTRUCTIVE_DISABLED', base);
+    if (apply !== true) return Object.freeze({ ...base, allowed: true, mode: 'dry-run' });
+    const expected = `DESTROY:${target.expectedRef}:${operationId}`;
+    if (readRaw(env, DESTRUCTIVE_CONFIRMATION_VAR) !== expected) {
+      deny('DESTRUCTIVE_CONFIRMATION_REQUIRED', {
+        ...base, expectedFormat: `${DESTRUCTIVE_CONFIRMATION_VAR}=DESTROY:<ref>:<operationId>`,
+      });
+    }
+    return Object.freeze({ ...base, allowed: true, mode: 'apply' });
+  }
+
+  // write
+  if (apply !== true) return Object.freeze({ ...base, allowed: true, mode: 'dry-run' });
+  if (isProduction) {
+    const authId = readRaw(env, PRODUCTION_AUTHORIZATION_VAR);
+    if (!authId || !findProductionAuthorization(authId, operationId, now)) {
+      deny('PRODUCTION_WRITE_NOT_AUTHORIZED', {
+        ...base, reason: 'nenhuma autorização versionada válida em productionAuthorizations.js',
+      });
+    }
+  }
+  return Object.freeze({ ...base, allowed: true, mode: 'apply' });
+}
+
+/** Atalho: assert do alvo + gate da operação. Lança SupabaseTargetGuardError em qualquer negação. */
+export function guardSupabaseOperation({
+  env = process.env, url, credential, explicitProjectRef, operation, operationId, apply = false, now,
+} = {}) {
+  const target = assertSupabaseTarget({ env, url, credential, explicitProjectRef });
+  const gate = evaluateOperationGate({ target, operation, operationId, apply, env, now });
+  return Object.freeze({ target, gate });
+}
+
+/** Linha de log segura (sem segredos) para registrar a decisão. */
+export function describeGuardDecision({ target, gate }) {
+  return `[SUPABASE_TARGET_GUARD] ALLOW env=${target.targetEnv} ref=${target.urlRefClass}`
+    + ` credential=${target.credentialRefStatus} op=${gate.operation}`
+    + `${gate.operationId ? `:${gate.operationId}` : ''} mode=${gate.mode}`;
+}

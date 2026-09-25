@@ -14,6 +14,7 @@
  *   node scripts/collaborator-id-backfill.mjs --rollback ./scripts/reports/collaborator-id-backfill-backup-*.json
  *
  * Requer: server/.env ou raiz .env com SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY
+ * SPF.1A.1: exige LOVE_ODONTO_TARGET_ENV=staging|local (production: escrita negada sem autorização versionada).
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,6 +31,7 @@ import {
   rollbackFromBackup,
 } from '../server/lib/collaboratorIdBackfill.js';
 import { parseEnvFile, REPO_ROOT, getBackendSupabaseUrl } from './preflight-local.mjs';
+import { gateCollaboratorIdBackfill, runScriptGateOrExit } from '../server/lib/supabaseTarget/scriptGates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(REPO_ROOT, 'scripts', 'reports');
@@ -101,13 +103,17 @@ function loadRhExport(filePath) {
   throw new Error('RH export inválido: esperado { collaborators: [...] } ou array.');
 }
 
-function createSupabaseAdmin() {
+/** SPF.1A.1 — todo client passa pelo gate de alvo (LOVE_ODONTO_TARGET_ENV + ref) antes de existir. */
+function createSupabaseAdmin({ apply = false, rollback = false } = {}) {
   const env = loadMergedEnv();
   const url = getBackendSupabaseUrl() || String(env.SUPABASE_URL || '').trim();
   const key = String(env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
   if (!url || !key) {
     throw new Error('SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios (server/.env ou raiz .env).');
   }
+  runScriptGateOrExit(() => gateCollaboratorIdBackfill({
+    env: process.env, url, credential: key, apply, rollback,
+  }));
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
@@ -243,7 +249,7 @@ async function runApply(args) {
     );
   }
 
-  const supabase = createSupabaseAdmin();
+  const supabase = createSupabaseAdmin({ apply: true });
   const { tenantUsers, invitations, identities, identityEvents } = await fetchTenantData(supabase, args.tenantId);
 
   process.stdout.write(`\nAplicando ${applicable.length} atualização(ões)...\n`);
@@ -290,7 +296,7 @@ async function runRollback(backupPath) {
   if (!Array.isArray(entries) || entries.length === 0) {
     throw new Error('Backup vazio ou formato inválido.');
   }
-  const supabase = createSupabaseAdmin();
+  const supabase = createSupabaseAdmin({ rollback: true });
   const result = await rollbackFromBackup(supabase, entries);
   process.stdout.write(`Restaurados: ${result.restored.length}\n`);
   if (result.errors.length) {

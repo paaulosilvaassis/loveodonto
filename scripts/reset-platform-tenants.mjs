@@ -3,14 +3,17 @@
  * Remove todas as clínicas (tenants) e usuários de acesso do Supabase.
  * Preserva platform_admin_users (ex.: admin da Console).
  *
- * Uso:
- *   node scripts/reset-platform-tenants.mjs           # dry-run
- *   node scripts/reset-platform-tenants.mjs --confirm
+ * Uso (SPF.1A.1 — alvo explícito obrigatório; PRODUCTION sempre negado, inclusive dry-run):
+ *   LOVE_ODONTO_TARGET_ENV=staging|local node scripts/reset-platform-tenants.mjs            # dry-run
+ *   LOVE_ODONTO_TARGET_ENV=staging|local \
+ *   LOVE_ODONTO_DESTRUCTIVE_CONFIRMATION=DESTROY:<ref>:scripts.reset-platform-tenants \
+ *     node scripts/reset-platform-tenants.mjs --confirm
  */
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { getBackendSupabaseUrl, parseEnvFile, REPO_ROOT } from './preflight-local.mjs';
+import { gateResetPlatformTenants, runScriptGateOrExit } from '../server/lib/supabaseTarget/scriptGates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -81,7 +84,6 @@ async function deleteByTenantIds(supabase, table, tenantIds) {
 }
 
 async function main() {
-  const confirm = process.argv.includes('--confirm');
   const env = loadEnv();
   const supabaseUrl = getBackendSupabaseUrl();
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -90,6 +92,11 @@ async function main() {
     console.error('Configure SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY em server/.env');
     process.exit(1);
   }
+
+  const guard = runScriptGateOrExit(() => gateResetPlatformTenants({
+    env: process.env, url: supabaseUrl, credential: serviceKey, argv: process.argv,
+  }));
+  const confirm = guard.gate.mode === 'apply';
 
   const supabase = createClient(supabaseUrl, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },

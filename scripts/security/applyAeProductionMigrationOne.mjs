@@ -8,17 +8,25 @@
  *   - only allowed ids: 028,029,030,031,032,034,036
  *   - refuses 033/035
  *   - refuses db push
- *   - target fixed to uoepkwhqztmsjnzirpev
+ *   - target fixed to PRODUCTION (supabaseTarget/projectRefs.js)
  *   - never prints token
+ *   - SPF.1A.1: exige LOVE_ODONTO_TARGET_ENV=production + --apply + autorização versionada
+ *     (productionAuthorizations.js); sem isso nada é executado.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { PRODUCTION_PROJECT_REF } from '../../server/lib/supabaseTarget/projectRefs.js';
+import {
+  SCRIPT_OPERATION_IDS,
+  gateManagementApiMigrationScript,
+  runScriptGateOrExit,
+} from '../../server/lib/supabaseTarget/scriptGates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
-const REF = 'uoepkwhqztmsjnzirpev';
+const REF = PRODUCTION_PROJECT_REF;
 
 const ALLOWED = {
   '028': {
@@ -86,6 +94,14 @@ if (/db push/i.test(sql)) {
   console.error(JSON.stringify({ ok: false, error: 'REFUSE_DB_PUSH_IN_SQL' }));
   process.exit(2);
 }
+
+runScriptGateOrExit(() => gateManagementApiMigrationScript({
+  env: process.env,
+  operationId: SCRIPT_OPERATION_IDS.applyAeProductionMigrationOne,
+  managementRef: REF,
+  supabaseUrl: process.env.SUPABASE_URL || undefined,
+  argv: process.argv,
+}));
 
 const token = process.env.SUPABASE_ACCESS_TOKEN;
 if (!token) {

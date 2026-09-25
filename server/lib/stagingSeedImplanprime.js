@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { PRODUCTION_PROJECT_REF, STAGING_PROJECT_REF as CENTRAL_STAGING_PROJECT_REF } from './supabaseTarget/projectRefs.js';
 
-/** @readonly */
-export const STAGING_PROJECT_REF = 'tckdjyunwmdpqmewrwvt';
-/** @readonly */
-export const PROD_PROJECT_REF = 'uoepkwhqztmsjnzirpev';
+/** @readonly — fonte: supabaseTarget/projectRefs.js */
+export const STAGING_PROJECT_REF = CENTRAL_STAGING_PROJECT_REF;
+/** @readonly — fonte: supabaseTarget/projectRefs.js */
+export const PROD_PROJECT_REF = PRODUCTION_PROJECT_REF;
 /** @readonly UUID produção Implanprime — nunca reutilizar em staging. */
 export const PROD_IMPLANPRIME_TENANT_ID = 'b2f95268-101c-42cb-8a8e-8d3681aa7dfa';
 /** @readonly */

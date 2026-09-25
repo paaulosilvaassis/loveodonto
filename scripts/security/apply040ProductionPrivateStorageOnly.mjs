@@ -8,10 +8,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { PRODUCTION_PROJECT_REF } from '../../server/lib/supabaseTarget/projectRefs.js';
+import {
+  SCRIPT_OPERATION_IDS,
+  gateManagementApiMigrationScript,
+  runScriptGateOrExit,
+} from '../../server/lib/supabaseTarget/scriptGates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
-const REF = 'uoepkwhqztmsjnzirpev';
+const REF = PRODUCTION_PROJECT_REF;
 const MIGRATION = path.join(
   ROOT,
   'supabase/migrations/040_app_contract_private_storage_production.sql',
@@ -71,6 +77,14 @@ async function managementSql(accessToken, query) {
 }
 
 async function main() {
+  const gateEnvFile = loadDotEnvLocal();
+  runScriptGateOrExit(() => gateManagementApiMigrationScript({
+    env: process.env,
+    operationId: SCRIPT_OPERATION_IDS.apply040ProductionPrivateStorageOnly,
+    managementRef: REF,
+    supabaseUrl: process.env.SUPABASE_URL || gateEnvFile.SUPABASE_URL || undefined,
+    argv: process.argv,
+  }));
   const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
   if (!accessToken) {
     console.error(JSON.stringify({ ok: false, error: 'SUPABASE_ACCESS_TOKEN_MISSING_IN_THIS_SHELL' }));

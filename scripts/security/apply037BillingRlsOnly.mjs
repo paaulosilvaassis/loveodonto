@@ -9,10 +9,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PRODUCTION_PROJECT_REF } from '../../server/lib/supabaseTarget/projectRefs.js';
+import {
+  SCRIPT_OPERATION_IDS,
+  gateManagementApiMigrationScript,
+  runScriptGateOrExit,
+} from '../../server/lib/supabaseTarget/scriptGates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
-const REF = 'uoepkwhqztmsjnzirpev';
+const REF = PRODUCTION_PROJECT_REF;
 const PILOT = 'b721c2c9-d924-41ee-8911-dc00c8208326';
 const MIGRATION = path.join(ROOT, 'supabase/migrations/037_platform_billing_rls_security_fix.sql');
 const OUT = path.join(ROOT, 'docs/reports/_security01d_apply_result.json');
@@ -84,6 +90,15 @@ async function probe(url, key, role, table) {
 }
 
 async function main() {
+  const gateEnvFile = loadDotEnvLocal();
+  runScriptGateOrExit(() => gateManagementApiMigrationScript({
+    env: process.env,
+    operationId: SCRIPT_OPERATION_IDS.apply037BillingRlsOnly,
+    managementRef: REF,
+    supabaseUrl: process.env.SUPABASE_URL || gateEnvFile.SUPABASE_URL || undefined,
+    credential: process.env.SUPABASE_SERVICE_ROLE_KEY || gateEnvFile.SUPABASE_SERVICE_ROLE_KEY || undefined,
+    argv: process.argv,
+  }));
   const accessToken = process.env.SUPABASE_ACCESS_TOKEN;
   if (!accessToken) {
     console.error(JSON.stringify({

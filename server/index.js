@@ -7,6 +7,8 @@ import express from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
+import { PRODUCTION_PROJECT_REF, STAGING_PROJECT_REF } from './lib/supabaseTarget/projectRefs.js';
+import { applyServerStartupGuard } from './lib/supabaseTarget/serverStartupGuard.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -162,8 +164,8 @@ function stagingTestModeActive() {
 }
 
 if (stagingTestModeActive()) {
-  const STAGING_REF = 'tckdjyunwmdpqmewrwvt';
-  const PRODUCTION_REF = 'uoepkwhqztmsjnzirpev';
+  const STAGING_REF = STAGING_PROJECT_REF;
+  const PRODUCTION_REF = PRODUCTION_PROJECT_REF;
   const url = String(process.env.SUPABASE_URL || '').trim();
   let ref = '';
   try {
@@ -410,6 +412,8 @@ try {
   console.error('[SaaS Admin API] SUPABASE_SERVICE_ROLE_KEY invÃ¡lida:', e?.message || e);
   process.exit(1);
 }
+/** SPF.1A.1 — fail-closed quando EXPECTED_SUPABASE_PROJECT_REF está definido; report-only caso contrário. */
+applyServerStartupGuard({ env: process.env });
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },

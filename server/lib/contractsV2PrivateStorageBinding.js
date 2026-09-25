@@ -7,8 +7,10 @@ export const CONTRACTS_V2_PRIVATE_LOCAL_BUCKET = 'contracts-v2-private-local';
 export const CONTRACTS_V2_PRIVATE_STAGING_BUCKET = 'contracts-v2-private-staging';
 export const CONTRACTS_V2_PRIVATE_PRODUCTION_BUCKET = 'contracts-v2-private-production';
 
-export const CONTRACTS_V2_PRODUCTION_PROJECT_REF = 'uoepkwhqztmsjnzirpev';
-export const CONTRACTS_V2_STAGING_PROJECT_REF = 'tckdjyunwmdpqmewrwvt';
+import { PRODUCTION_PROJECT_REF, STAGING_PROJECT_REF } from './supabaseTarget/projectRefs.js';
+
+export const CONTRACTS_V2_PRODUCTION_PROJECT_REF = PRODUCTION_PROJECT_REF;
+export const CONTRACTS_V2_STAGING_PROJECT_REF = STAGING_PROJECT_REF;
 
 const STORAGE_MODES = new Set([
   'unavailable',

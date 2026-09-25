@@ -2,8 +2,10 @@
  * Shared fail-closed guards for staging browser scripts (plain ESM).
  * Keep in sync with src/domain/contracts/staging/staging-browser-test-mode.ts
  */
-export const STAGING_REF = 'tckdjyunwmdpqmewrwvt';
-export const PRODUCTION_REF = 'uoepkwhqztmsjnzirpev';
+import { PRODUCTION_PROJECT_REF, STAGING_PROJECT_REF } from '../../server/lib/supabaseTarget/projectRefs.js';
+
+export const STAGING_REF = STAGING_PROJECT_REF;
+export const PRODUCTION_REF = PRODUCTION_PROJECT_REF;
 
 export function parseTruthy(value) {
   const v = String(value ?? '').trim().toLowerCase();

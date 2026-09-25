@@ -3,6 +3,7 @@
  * Backfill RH: IndexedDB export → Supabase (collaborators + tenant_users.collaborator_uuid).
  *
  * SEMPRE dry-run por padrão. Mutações somente com --apply --confirm APPLY.
+ * SPF.1A.1: exige LOVE_ODONTO_TARGET_ENV=staging|local (production: escrita negada sem autorização versionada).
  * Não cria tenant_users. Não apaga dados. Não altera collaborator_id text.
  *
  * Uso dry-run:
@@ -36,11 +37,11 @@ import {
 } from '../server/lib/rhBackfillToSupabase.js';
 import { parseEnvFile, REPO_ROOT, getBackendSupabaseUrl } from './preflight-local.mjs';
 import {
-  PROD_PROJECT_REF,
   assertStagingSupabaseUrl,
   extractProjectRef,
   remapRhExportForStaging,
 } from '../server/lib/stagingSeedImplanprime.js';
+import { gateRhBackfill, runScriptGateOrExit } from '../server/lib/supabaseTarget/scriptGates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPORTS_DIR = path.join(REPO_ROOT, 'scripts', 'reports');
@@ -157,14 +158,19 @@ function resolveSupabaseConfig(args) {
     throw new Error('SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY são obrigatórios (server/.env ou raiz .env).');
   }
   const projectRef = extractProjectRef(url);
-  if (projectRef === PROD_PROJECT_REF) {
-    return { url, key, projectRef, prod_touched: false };
-  }
   return { url, key, projectRef, prod_touched: false };
 }
 
-function createSupabaseAdmin(args = {}) {
+/** SPF.1A.1 — todo client passa pelo gate de alvo (LOVE_ODONTO_TARGET_ENV + ref) antes de existir. */
+function createSupabaseAdmin(args = {}, { rollback = false } = {}) {
   const config = resolveSupabaseConfig(args);
+  runScriptGateOrExit(() => gateRhBackfill({
+    env: process.env,
+    url: config.url,
+    credential: config.key,
+    apply: args.apply === true && args.confirm === 'APPLY',
+    rollback,
+  }));
   return {
     client: createClient(config.url, config.key, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -366,7 +372,7 @@ async function runRollback(backupPath, args = {}) {
     throw new Error('Backup vazio ou formato inválido (campo backup[]).');
   }
 
-  const supabase = createSupabaseAdmin(args).client;
+  const supabase = createSupabaseAdmin(args, { rollback: true }).client;
   const result = await rollbackRhBackfillFromBackup(supabase, entries);
   process.stdout.write(`Restaurados: ${result.restored.length}\n`);
   if (result.errors.length) {

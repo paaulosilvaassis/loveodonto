@@ -4,12 +4,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PRODUCTION_PROJECT_REF, STAGING_PROJECT_REF } from '../../server/lib/supabaseTarget/projectRefs.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(__dirname, '../..');
 
-export const STAGING_REF = 'tckdjyunwmdpqmewrwvt';
-export const PRODUCTION_REF = 'uoepkwhqztmsjnzirpev';
+export const STAGING_REF = STAGING_PROJECT_REF;
+export const PRODUCTION_REF = PRODUCTION_PROJECT_REF;
 export const LOCAL_PROJECT_ID = 'love-odonto-local-disposable';
 
 export const APP_SUPABASE_DIR = path.join(REPO_ROOT, 'supabase');

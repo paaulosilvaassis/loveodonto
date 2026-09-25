@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 /**
  * Teste manual guiado — fluxo colaborador + RBAC menu + access-bundle.
- * Uso: node scripts/manual-collaborator-access-guided.mjs
+ * Uso (SPF.1A.1 — altera senhas e apaga usuários: tratado como destrutivo; PRODUCTION sempre negado):
+ *   LOVE_ODONTO_TARGET_ENV=staging|local \
+ *   LOVE_ODONTO_DESTRUCTIVE_CONFIRMATION=DESTROY:<ref>:scripts.manual-collaborator-access-guided \
+ *     node scripts/manual-collaborator-access-guided.mjs --apply
+ *   Sem --apply o script para após o gate (não há dry-run real).
  *
  * Requer: server/.env (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
  *         .env ou .env.local (VITE_SUPABASE_PLATFORM_ANON_KEY)
@@ -14,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { parseEnvFile, REPO_ROOT, probeApiHealth, getBackendSupabaseUrl, getAppPlatformSupabaseUrl } from './preflight-local.mjs';
+import { gateManualCollaboratorAccess, runScriptGateOrExit } from '../server/lib/supabaseTarget/scriptGates.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.ADMIN_API_PORT || 3001);
@@ -351,6 +356,15 @@ async function main() {
     record('env', 'FAIL', 'Anon key ausente (.env.development / .env.local)', 'VITE_SUPABASE_PLATFORM_ANON_KEY');
     printReport();
     process.exit(1);
+  }
+
+  const guard = runScriptGateOrExit(() => gateManualCollaboratorAccess({
+    env: process.env, url: supabaseUrl, credential: serviceKey, argv: process.argv,
+  }));
+  if (guard.gate.mode !== 'apply') {
+    record('guard', 'SKIP', 'Sem --apply: nenhuma alteração executada (script não possui dry-run).');
+    printReport();
+    process.exit(0);
   }
 
   const apiOk = await restartApi();
