@@ -14,10 +14,14 @@
  *   - query set: SHA-256 fixado + estrutura exata BEGIN READ ONLY / SET LOCAL statement_timeout /
  *     N consultas SELECT|WITH / ROLLBACK + varredura de comandos proibidos (inclusive dentro de $tag$…$tag$)
  *     + meta-comandos psql (\) proibidos
- *   - psql com -X -w -v ON_ERROR_STOP=1 -f <arquivo>; ambiente do filho mínimo, sem PG*; sem retry
+ *   - psql com -X -w -v ON_ERROR_STOP=1 -f <arquivo>; ambiente do filho mínimo, sem PG* herdado; sem retry
+ *   - SPF.1B.0A: a senha NUNCA vai no argv. O psql recebe um alvo sem senha; a senha vai num PGPASSFILE
+ *     efêmero (mkdtemp 0700 fora do repositório, arquivo 0600 criado com 'wx'), exposto só ao filho via
+ *     PGPASSFILE e removido em finally (sucesso, exit != 0, falha de spawn, sinal tratável)
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -252,6 +256,70 @@ function sanitizeSsl(url) {
   if (mode === 'disable' || mode === 'allow') deny('SSL_NOT_ENFORCED', 'sslmode=disable/allow não é aceito');
 }
 
+const REPO_ROOT = path.resolve(SAFETY_DIR, '..', '..');
+
+/** Formato .pgpass do libpq: '\' e ':' dentro de um campo são escapados com '\'. */
+export function escapePgpassField(value) {
+  return String(value).replace(/\\/g, '\\\\').replace(/:/g, '\\:');
+}
+
+/**
+ * Separa a connection string JÁ VALIDADA pelo guard em:
+ *   - passwordlessTarget: URI sem senha (vai no argv do psql)
+ *   - pgpassLine: host:port:database:username:password (vai só para o PGPASSFILE efêmero)
+ * Nunca registra nem devolve a URL original.
+ */
+export function splitConnectionCredential(url) {
+  let parsed;
+  let user;
+  let password;
+  let database;
+  try {
+    parsed = new URL(url);
+    user = decodeURIComponent(parsed.username || '');
+    password = decodeURIComponent(parsed.password || '');
+    database = decodeURIComponent(parsed.pathname.replace(/^\//, '')) || 'postgres';
+  } catch {
+    return deny('CONNECTION_STRING_DECODE_FAILED');
+  }
+  if (!user) deny('CONNECTION_USER_MISSING');
+  if (!password) deny('CONNECTION_PASSWORD_MISSING', 'senha ausente na connection string');
+  if ([user, password, database].some((v) => /[\r\n\0]/.test(v))) {
+    deny('CONNECTION_CREDENTIAL_UNSUPPORTED', 'caracteres de controle não são suportados pelo formato .pgpass');
+  }
+  const host = parsed.hostname;
+  const port = parsed.port || '5432';
+  const target = new URL(url);
+  target.password = '';
+  const passwordlessTarget = target.toString();
+  if (new URL(passwordlessTarget).password) deny('CONNECTION_PASSWORD_NOT_STRIPPED');
+  const pgpassLine = `${[host, port, database, user, password].map(escapePgpassField).join(':')}\n`;
+  return { passwordlessTarget, pgpassLine };
+}
+
+/** Cria o PGPASSFILE efêmero: diretório mkdtemp (0700) fora do repositório + arquivo 0600 criado com 'wx'. */
+export function createEphemeralPgpass(line, { tmpRoot = os.tmpdir(), fsImpl = fs } = {}) {
+  const root = fsImpl.realpathSync(tmpRoot);
+  const repo = fsImpl.realpathSync(REPO_ROOT);
+  if (root === repo || root.startsWith(`${repo}${path.sep}`)) deny('PGPASSFILE_DIR_INSIDE_REPOSITORY');
+  const dir = fsImpl.mkdtempSync(path.join(root, 'lo-pgpass-'));
+  const file = path.join(dir, crypto.randomBytes(12).toString('hex'));
+  try {
+    fsImpl.writeFileSync(file, line, { mode: 0o600, flag: 'wx' });
+    if ((fsImpl.statSync(file).mode & 0o777) !== 0o600) deny('PGPASSFILE_MODE_INVALID');
+  } catch (err) {
+    fsImpl.rmSync(dir, { recursive: true, force: true });
+    if (err instanceof SupabaseTargetGuardError) throw err;
+    deny('PGPASSFILE_CREATE_FAILED');
+  }
+  return { dir, file };
+}
+
+export function removeEphemeralPgpass(handle, { fsImpl = fs } = {}) {
+  fsImpl.rmSync(handle.dir, { recursive: true, force: true });
+  if (fsImpl.existsSync(handle.dir)) throw new Error('cleanup incomplete');
+}
+
 /**
  * Executa o query set aprovado. Retorna { ok, exitCode, code? } e nunca lança para o chamador.
  * Dependências injetáveis para testes (spawn, resolvePsql, readFile, saídas).
@@ -262,6 +330,8 @@ export function runReadOnlyDbProof({
   spawn = spawnSync,
   resolvePsql = resolvePsqlPath,
   readFile = fs.readFileSync,
+  tmpRoot = os.tmpdir(),
+  fsImpl = fs,
   stdout = (line) => process.stdout.write(`${line}\n`),
   stderr = (line) => process.stderr.write(`${line}\n`),
 } = {}) {
@@ -292,6 +362,7 @@ export function runReadOnlyDbProof({
     if (guard.target.urlKind !== 'postgres') deny('NOT_A_POSTGRES_CONNECTION', 'esperada connection string postgres(ql)://');
     if (guard.gate.mode !== 'read') deny('OPERATION_NOT_READ');
     sanitizeSsl(url);
+    const credential = splitConnectionCredential(url);
 
     const qs = loadApprovedQuerySet(querySet, { readFile });
 
@@ -312,11 +383,40 @@ export function runReadOnlyDbProof({
       sha256: qs.sha256,
       psql: psqlPath,
       psqlVersion: String(version.stdout || '').trim().slice(0, 80),
+      credentialTransport: 'ephemeral_pgpassfile',
     }));
 
-    const args = ['-X', '-w', '-v', 'ON_ERROR_STOP=1', '-P', 'pager=off', '-f', qs.file, '-d', url];
-    const result = spawn(psqlPath, args, { env: childEnv, stdio: 'inherit' });
-    const exitCode = result && Number.isInteger(result.status) ? result.status : 1;
+    const args = ['-X', '-w', '-v', 'ON_ERROR_STOP=1', '-P', 'pager=off', '-f', qs.file, '-d', credential.passwordlessTarget];
+    let passfile = null;
+    let result = null;
+    let spawnThrew = false;
+    let cleanupFailed = false;
+    try {
+      passfile = createEphemeralPgpass(credential.pgpassLine, { tmpRoot, fsImpl });
+      try {
+        result = spawn(psqlPath, args, { env: { ...childEnv, PGPASSFILE: passfile.file }, stdio: 'inherit' });
+      } catch {
+        spawnThrew = true;
+      }
+    } finally {
+      if (passfile) {
+        try {
+          removeEphemeralPgpass(passfile, { fsImpl });
+        } catch {
+          cleanupFailed = true;
+        }
+      }
+    }
+    if (cleanupFailed) {
+      stderr(JSON.stringify({ ok: false, guard: 'READ_ONLY_DB_PROOF', code: 'PGPASSFILE_CLEANUP_FAILED' }));
+      return { ok: false, exitCode: 3, code: 'PGPASSFILE_CLEANUP_FAILED' };
+    }
+    if (spawnThrew || !result || result.error) {
+      stderr(JSON.stringify({ ok: false, guard: 'READ_ONLY_DB_PROOF', code: 'PSQL_SPAWN_FAILED', retry: false }));
+      return { ok: false, exitCode: 1, code: 'PSQL_SPAWN_FAILED' };
+    }
+    let exitCode = Number.isInteger(result.status) ? result.status : 1;
+    if (result.signal) exitCode = result.signal === 'SIGINT' ? 130 : 1;
     if (exitCode !== 0) {
       stderr(JSON.stringify({ guard: 'READ_ONLY_DB_PROOF', decision: 'FAILED', exitCode, retry: false }));
       return { ok: false, exitCode, code: 'PSQL_FAILED' };

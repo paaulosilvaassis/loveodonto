@@ -44,9 +44,13 @@ const POSTGRES_PORTS = new Set(['', '5432', '6543']);
  * que SOBRESCREVEM o alvo da URI. Só parâmetros que não mudam o destino são aceitos.
  */
 const POSTGRES_ALLOWED_QUERY_PARAMS = new Set(['sslmode', 'sslrootcert', 'connect_timeout', 'application_name']);
-/** Variáveis de ambiente do libpq que podem redirecionar/alterar a conexão fora da URI. */
+/**
+ * Variáveis de ambiente do libpq que podem redirecionar/alterar a conexão fora da URI
+ * ou trocar a fonte da credencial (PGPASSWORD/PGPASSFILE: o runner cria o seu próprio passfile efêmero).
+ */
 export const POSTGRES_CLIENT_OVERRIDE_ENV_VARS = Object.freeze([
   'PGHOST', 'PGHOSTADDR', 'PGPORT', 'PGUSER', 'PGDATABASE', 'PGSERVICE', 'PGSERVICEFILE', 'PGOPTIONS',
+  'PGPASSWORD', 'PGPASSFILE',
 ]);
 const SAFE_DETAIL_KEYS = new Set([
   'targetEnv', 'expectedRefClass', 'expectedRef', 'urlRefClass', 'urlRef', 'urlKind',

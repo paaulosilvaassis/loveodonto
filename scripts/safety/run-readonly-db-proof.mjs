@@ -11,5 +11,9 @@
  */
 import { runReadOnlyDbProof } from './readOnlyDbProof.mjs';
 
+// Interrupções tratáveis não derrubam o pai antes do finally que remove o PGPASSFILE efêmero:
+// o psql (mesmo grupo de processos) recebe o sinal e encerra; o runner limpa e só então sai.
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => {});
+
 const result = runReadOnlyDbProof({ env: process.env, argv: process.argv.slice(2) });
 process.exit(result.exitCode);

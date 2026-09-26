@@ -82,10 +82,17 @@ LOVE_ODONTO_TARGET_ENV=staging STAGING_DATABASE_URL=<no shell, nunca em arquivo>
   Qualquer mudança no SQL exige nova revisão e um hash novo.
   `spf1b-patient-state-proof` → `scripts/safety/sql/spf1b-patient-state-proof.sql`,
   SHA-256 `225ef0e70c4499a2c43c9df38815be8ba0cb7fdad3ac66e1ca260e1d5e37cd16`.
-- **psql:** executado com `-X -w -v ON_ERROR_STOP=1 -P pager=off -f <arquivo> -d <url validada>`. O processo filho recebe só
-  `PATH`, `HOME` e locale (nenhuma `PG*`). Não há retry; o exit code do psql é propagado.
-- **Limitação conhecida:** a connection string, com a senha, vai como argumento `-d` do psql e fica visível
-  para processos do mesmo usuário local (`ps`) durante a execução. Não é gravada em arquivo nem em log.
+- **psql:** executado com `-X -w -v ON_ERROR_STOP=1 -P pager=off -f <arquivo> -d <alvo SEM senha>`. O processo filho recebe só
+  `PATH`, `HOME`, locale e o `PGPASSFILE` criado pelo runner. Nenhuma `PG*` é herdada; `PGPASSWORD` e `PGPASSFILE` presentes no
+  processo pai → DENY. Não há retry; o exit code do psql é propagado (sinal SIGINT → 130).
+- **Credencial (SPF.1B.0A):** a senha **nunca** vai no argv. Depois da validação, a URL é separada em alvo sem senha
+  (argv) e uma linha `host:porta:banco:usuário:senha` no formato `.pgpass`, com `\` e `:` escapados. Essa linha é gravada num
+  PGPASSFILE efêmero: diretório `mkdtemp` 0700 no tmp do sistema (DENY se estiver dentro do repositório), arquivo com nome
+  aleatório criado com modo 0600 e `flag: 'wx'`. O arquivo é exposto só ao filho e removido em `finally` (sucesso, exit≠0,
+  falha de spawn, sinal tratável). Falha na remoção → erro sanitizado `PGPASSFILE_CLEANUP_FAILED` (exit 3).
+  `~/.pgpass` nunca é usado. Senhas com caracteres de controle (`\n`, `\r`, `\0`) → DENY.
+- **Risco residual:** um encerramento não tratável (`SIGKILL`, queda de energia) durante a execução pode deixar o arquivo
+  0600 no diretório 0700 do tmp do usuário até a limpeza do sistema.
 
 ## Admin API (Railway): guard de startup
 
