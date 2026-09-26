@@ -37,6 +37,28 @@ Fonte única de refs: `server/lib/supabaseTarget/projectRefs.js`
 Protegidos nesta fase: `reset-platform-tenants`, `security/applyAeProductionMigrationOne`, `apply037`, `apply038`,
 `apply039`, `apply040`, `manual-collaborator-access-guided`, `rh-backfill-to-supabase`, `collaborator-id-backfill`.
 
+## Connection strings Postgres (SPF.1A.2)
+
+`assertSupabaseTarget` também aceita `postgres://` e `postgresql://`:
+
+| Formato | Fonte do ref | `connection` |
+|---|---|---|
+| `…@db.<ref>.supabase.co:5432` | host | `direct` |
+| `…@db.<ref>.supabase.co:6543` | host | `dedicated_pooler` |
+| `<role>.<ref>@<região>.pooler.supabase.com:5432` | usuário | `session_pooler` |
+| `<role>.<ref>@<região>.pooler.supabase.com:6543` | usuário | `transaction_pooler` |
+
+- Host e usuário com refs diferentes → `HOST_USERNAME_REF_CONFLICT`. Pooler sem `<role>.<ref>` → `REF_UNDETERMINED`.
+  Sufixo de usuário que não é um ref válido → `USERNAME_REF_INVALID`.
+- Só as portas 5432 e 6543 são aceitas.
+- Parâmetros de query: só `sslmode`, `sslrootcert`, `connect_timeout` e `application_name`. O libpq deixa
+  `?host=`, `?hostaddr=`, `?user=`, `?options=`, `?service=` etc. sobrescreverem o alvo, então qualquer outro → DENY.
+- Antes de rodar `psql`, chamar `assertPostgresClientEnvClean`. `PGHOST`, `PGHOSTADDR`, `PGPORT`, `PGUSER`, `PGDATABASE`,
+  `PGSERVICE`, `PGSERVICEFILE` e `PGOPTIONS` também podem redirecionar a conexão.
+- **Não** passar a senha como `credential`: o ref é provado pelo host ou pelo usuário. Senha, usuário e URL nunca aparecem
+  em resultado, erro ou log.
+- O cliente é `libpq` (keg-only): `/opt/homebrew/opt/libpq/bin/psql`. Nenhum servidor Postgres local é instalado.
+
 ## Admin API (Railway): guard de startup
 
 `server/lib/supabaseTarget/serverStartupGuard.js`, chamado em `server/index.js` antes do `createClient`.

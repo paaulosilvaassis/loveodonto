@@ -31,12 +31,28 @@ export const DESTRUCTIVE_PRODUCTION_ENABLED = false;
 export const OPERATIONS = Object.freeze(['read', 'write', 'destructive']);
 
 const SUPABASE_HOST_RE = /^([a-z0-9]{20})\.supabase\.(co|in)$/;
+const SUPABASE_DB_HOST_RE = /^db\.([a-z0-9]{20})\.supabase\.(co|in)$/;
+const SUPABASE_POOLER_HOST_RE = /^[a-z0-9-]+\.pooler\.supabase\.com$/;
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0', 'host.docker.internal']);
 const REF_RE = /^[a-z0-9]{20}$/;
+const HTTP_PROTOCOLS = new Set(['https:', 'http:']);
+const POSTGRES_PROTOCOLS = new Set(['postgres:', 'postgresql:']);
+/** 5432 = direto / session pooler; 6543 = transaction pooler (compartilhado ou dedicado). */
+const POSTGRES_PORTS = new Set(['', '5432', '6543']);
+/**
+ * libpq aceita parâmetros de conexão na query (?host=, ?hostaddr=, ?user=, ?options=, ?service=…)
+ * que SOBRESCREVEM o alvo da URI. Só parâmetros que não mudam o destino são aceitos.
+ */
+const POSTGRES_ALLOWED_QUERY_PARAMS = new Set(['sslmode', 'sslrootcert', 'connect_timeout', 'application_name']);
+/** Variáveis de ambiente do libpq que podem redirecionar/alterar a conexão fora da URI. */
+export const POSTGRES_CLIENT_OVERRIDE_ENV_VARS = Object.freeze([
+  'PGHOST', 'PGHOSTADDR', 'PGPORT', 'PGUSER', 'PGDATABASE', 'PGSERVICE', 'PGSERVICEFILE', 'PGOPTIONS',
+]);
 const SAFE_DETAIL_KEYS = new Set([
   'targetEnv', 'expectedRefClass', 'expectedRef', 'urlRefClass', 'urlRef', 'urlKind',
   'credentialPresence', 'credentialRefStatus', 'credentialRefClass', 'explicitRefStatus',
   'operation', 'operationId', 'mode', 'allowed', 'expectedFormat', 'reason',
+  'connection', 'refSources', 'hostRefClass', 'usernameRefClass', 'queryParam', 'envVars',
 ]);
 
 function sanitizeDetails(details) {
@@ -81,7 +97,79 @@ export function readTargetEnv(env = process.env) {
   return raw;
 }
 
-/** Extrai o ref de uma URL Supabase; localhost vira LOCAL_PROJECT_REF. Qualquer outra coisa = negar. */
+/** Ref embutido no usuário do pooler (`<role>.<ref>`); `postgres` sem sufixo → null. Sufixo inválido → negar. */
+function usernameRefOf(parsed) {
+  let user;
+  try {
+    user = decodeURIComponent(parsed.username || '');
+  } catch {
+    return deny('URL_INVALID', { reason: 'usuário com percent-encoding inválido' });
+  }
+  const dot = user.lastIndexOf('.');
+  if (dot < 0) return null;
+  const suffix = user.slice(dot + 1).toLowerCase();
+  if (dot === 0 || !REF_RE.test(suffix)) {
+    return deny('USERNAME_REF_INVALID', { reason: 'sufixo do usuário não é um project ref inequívoco' });
+  }
+  return suffix;
+}
+
+function assertPostgresQueryParams(parsed) {
+  for (const key of parsed.searchParams.keys()) {
+    if (!POSTGRES_ALLOWED_QUERY_PARAMS.has(key.toLowerCase())) {
+      deny('QUERY_PARAM_NOT_ALLOWED', {
+        queryParam: key.slice(0, 40),
+        reason: `permitidos: ${[...POSTGRES_ALLOWED_QUERY_PARAMS].join(',')}`,
+      });
+    }
+  }
+}
+
+function parsePostgresConnection(parsed) {
+  if (parsed.hash) deny('URL_INVALID');
+  const host = parsed.hostname.toLowerCase();
+  if (!host) deny('URL_INVALID');
+  if (!POSTGRES_PORTS.has(parsed.port)) deny('PORT_UNEXPECTED', { reason: 'portas aceitas: 5432, 6543' });
+  assertPostgresQueryParams(parsed);
+
+  const userRef = usernameRefOf(parsed);
+  const direct = host.match(SUPABASE_DB_HOST_RE);
+  let hostRef = null;
+  let connection;
+  if (direct) {
+    hostRef = direct[1];
+    connection = parsed.port === '6543' ? 'dedicated_pooler' : 'direct';
+  } else if (SUPABASE_POOLER_HOST_RE.test(host)) {
+    connection = parsed.port === '6543' ? 'transaction_pooler' : 'session_pooler';
+  } else if (LOCAL_HOSTS.has(host)) {
+    if (userRef) {
+      deny('HOST_USERNAME_REF_CONFLICT', { hostRefClass: 'LOCAL', usernameRefClass: classifyProjectRef(userRef) });
+    }
+    return { kind: 'local', connection: 'local_postgres', ref: LOCAL_PROJECT_REF, refSources: ['host'] };
+  } else {
+    deny('URL_UNRECOGNIZED_HOST', { reason: 'host não é db.<ref>.supabase.co, *.pooler.supabase.com nem local' });
+  }
+
+  if (hostRef && userRef && hostRef !== userRef) {
+    deny('HOST_USERNAME_REF_CONFLICT', {
+      connection, hostRefClass: classifyProjectRef(hostRef), usernameRefClass: classifyProjectRef(userRef),
+    });
+  }
+  const ref = hostRef || userRef;
+  if (!ref) deny('REF_UNDETERMINED', { connection, reason: 'pooler sem usuário <role>.<ref>' });
+  const refSources = [hostRef && 'host', userRef && 'username'].filter(Boolean);
+  return { kind: 'postgres', connection, ref, refSources };
+}
+
+/**
+ * Extrai o ref do alvo Supabase. Aceita:
+ *   REST      https://<ref>.supabase.co
+ *   direto    postgres(ql)://<user>@db.<ref>.supabase.co:5432/…   (6543 = pooler dedicado)
+ *   pooler    postgres(ql)://<role>.<ref>@<região>.pooler.supabase.com:5432|6543/…
+ *   local     http(s)/postgres(ql) em localhost
+ * Host e usuário, quando ambos carregam ref, precisam concordar. Qualquer ambiguidade = negar.
+ * Nunca devolve senha, usuário ou a URL.
+ */
 export function parseSupabaseUrlRef(url) {
   const raw = String(url ?? '').trim();
   if (!raw) deny('URL_MISSING');
@@ -91,12 +179,25 @@ export function parseSupabaseUrlRef(url) {
   } catch {
     deny('URL_INVALID');
   }
-  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') deny('URL_INVALID');
+  if (POSTGRES_PROTOCOLS.has(parsed.protocol)) return parsePostgresConnection(parsed);
+  if (!HTTP_PROTOCOLS.has(parsed.protocol)) deny('URL_INVALID');
   const host = parsed.hostname.toLowerCase();
   const m = host.match(SUPABASE_HOST_RE);
-  if (m) return { kind: 'supabase', ref: m[1] };
-  if (LOCAL_HOSTS.has(host)) return { kind: 'local', ref: LOCAL_PROJECT_REF };
+  if (m) return { kind: 'supabase', connection: 'rest', ref: m[1], refSources: ['host'] };
+  if (LOCAL_HOSTS.has(host)) return { kind: 'local', connection: 'local_rest', ref: LOCAL_PROJECT_REF, refSources: ['host'] };
   return deny('URL_UNRECOGNIZED_HOST', { reason: 'host não é <ref>.supabase.co nem local' });
+}
+
+/**
+ * Antes de rodar psql/libpq: variáveis PG* podem sobrescrever o alvo validado na URI → negar se presentes.
+ * Só nomes são reportados, nunca valores.
+ */
+export function assertPostgresClientEnvClean(env = process.env) {
+  const present = POSTGRES_CLIENT_OVERRIDE_ENV_VARS.filter((k) => readRaw(env, k) !== '');
+  if (present.length) {
+    deny('POSTGRES_CLIENT_ENV_OVERRIDE', { envVars: present, reason: 'remova estas variáveis do ambiente do psql' });
+  }
+  return true;
 }
 
 /**
@@ -123,8 +224,9 @@ export function inspectCredential(credential) {
 /**
  * @param {object} opts
  * @param {Record<string,string|undefined>} [opts.env] ambiente do shell (process.env) — fonte do TARGET_ENV
- * @param {string} opts.url URL Supabase que a ferramenta realmente vai usar
- * @param {string} [opts.credential] chave que a ferramenta vai usar (só inspecionada, nunca exposta)
+ * @param {string} opts.url URL Supabase (REST ou connection string Postgres) que a ferramenta realmente vai usar
+ * @param {string} [opts.credential] chave API que a ferramenta vai usar (só inspecionada, nunca exposta).
+ *   Para Postgres NÃO passar a senha: o ref é provado pelo host/usuário da connection string.
  * @param {string} [opts.explicitProjectRef] ref explícito (senão env.SUPABASE_PROJECT_REF)
  */
 export function assertSupabaseTarget({ env = process.env, url, credential, explicitProjectRef } = {}) {
@@ -133,7 +235,12 @@ export function assertSupabaseTarget({ env = process.env, url, credential, expli
   const base = { targetEnv, expectedRefClass: classifyProjectRef(expectedRef) };
 
   const parsed = parseSupabaseUrlRef(url);
-  const urlInfo = { urlKind: parsed.kind, urlRefClass: classifyProjectRef(parsed.ref) };
+  const urlInfo = {
+    urlKind: parsed.kind,
+    connection: parsed.connection,
+    refSources: parsed.refSources,
+    urlRefClass: classifyProjectRef(parsed.ref),
+  };
   if (parsed.ref !== expectedRef) {
     deny('TARGET_REF_MISMATCH', { ...base, ...urlInfo, expectedRef, urlRef: parsed.ref });
   }
@@ -175,6 +282,8 @@ export function assertSupabaseTarget({ env = process.env, url, credential, expli
     expectedRef,
     urlRef: parsed.ref,
     urlKind: parsed.kind,
+    connection: parsed.connection,
+    refSources: Object.freeze([...parsed.refSources]),
     urlRefClass: urlInfo.urlRefClass,
     urlRefStatus: 'MATCH',
     credentialPresence: cred.presence,
