@@ -59,6 +59,34 @@ Protegidos nesta fase: `reset-platform-tenants`, `security/applyAeProductionMigr
   em resultado, erro ou log.
 - O cliente é `libpq` (keg-only): `/opt/homebrew/opt/libpq/bin/psql`. Nenhum servidor Postgres local é instalado.
 
+## Runner READ ONLY de prova (SPF.1B.0)
+
+É a única porta para executar consultas de prova com `psql`:
+`scripts/safety/run-readonly-db-proof.mjs`, com o núcleo em `scripts/safety/readOnlyDbProof.mjs`.
+
+```
+LOVE_ODONTO_TARGET_ENV=staging STAGING_DATABASE_URL=<no shell, nunca em arquivo> \
+  node scripts/safety/run-readonly-db-proof.mjs
+```
+
+- **Alvo:** só `staging` ou `production`. A connection string vem **apenas** de `STAGING_DATABASE_URL` ou `PRODUCTION_DATABASE_URL`,
+  sem fallback para `DATABASE_URL` ou `SUPABASE_URL`. Se a variável do outro ambiente estiver presente → DENY.
+  Connection string como argumento → DENY.
+- **Validação:** reutiliza o guard central (`operation=read`, ref do host ou do usuário), `assertPostgresClientEnvClean`,
+  exige URL `postgres(ql)://` e recusa `sslmode=disable` ou `allow`.
+- **PRODUCTION:** recusado por padrão (`PRODUCTION_READ_EXECUTION_ENABLED = false`). A autorização de WRITE
+  (`productionAuthorizations.js`) **não** libera READ; só um PR autorizado pode mudar a constante.
+- **Query set:** só os aprovados em `APPROVED_QUERY_SETS`. O runner valida o SHA-256 fixado e a estrutura exata
+  (`BEGIN READ ONLY` → `SET LOCAL statement_timeout` → N consultas `SELECT`/`WITH` → `ROLLBACK`), procura comandos proibidos
+  (inclusive dentro de blocos `$tag$`), bloqueia meta-comandos `\` do psql e recusa indícios de credencial ou URL.
+  Qualquer mudança no SQL exige nova revisão e um hash novo.
+  `spf1b-patient-state-proof` → `scripts/safety/sql/spf1b-patient-state-proof.sql`,
+  SHA-256 `225ef0e70c4499a2c43c9df38815be8ba0cb7fdad3ac66e1ca260e1d5e37cd16`.
+- **psql:** executado com `-X -w -v ON_ERROR_STOP=1 -P pager=off -f <arquivo> -d <url validada>`. O processo filho recebe só
+  `PATH`, `HOME` e locale (nenhuma `PG*`). Não há retry; o exit code do psql é propagado.
+- **Limitação conhecida:** a connection string, com a senha, vai como argumento `-d` do psql e fica visível
+  para processos do mesmo usuário local (`ps`) durante a execução. Não é gravada em arquivo nem em log.
+
 ## Admin API (Railway): guard de startup
 
 `server/lib/supabaseTarget/serverStartupGuard.js`, chamado em `server/index.js` antes do `createClient`.
